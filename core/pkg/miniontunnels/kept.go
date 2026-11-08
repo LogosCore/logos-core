@@ -120,6 +120,8 @@ func (s *Service) keepBytes(ctx context.Context, tunnels []*tunnel) {
 	for _, d := range dues {
 		var err error
 		switch {
+		case d.t.vpn != nil:
+			err = s.vpnTunnels.SetCounts(ctx, d.t.task, d.up, d.down, d.opened)
 		case !d.t.reverse:
 			err = s.ports.SetCounts(ctx, d.t.task, d.up, d.down, d.opened)
 		case s.listeners != nil:

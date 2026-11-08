@@ -113,6 +113,23 @@ export const MinionTaskFields = graphql(`
       kept
       up
       down
+      routes
+      vpnClients {
+        id
+        name
+        user
+        machine
+        os
+        arch
+        version
+        from
+        since
+        connected
+        open
+        streams
+        up
+        down
+      }
     }
   }
 `)
@@ -246,6 +263,36 @@ export const CancelMinionTaskMutation = graphql(`
 export const SetMinionTunnelCapMutation = graphql(`
   mutation SetMinionTunnelCap($taskId: ID!, $cap: Int!) {
     setMinionTunnelCap(taskId: $taskId, cap: $cap) {
+      id
+    }
+  }
+`)
+
+// A running VPN tunnel's routes (docs: contracts/vpn-front): its clients
+// take them at once; the task's live updates bring them.
+export const SetMinionTunnelRoutesMutation = graphql(`
+  mutation SetMinionTunnelRoutes($taskId: ID!, $routes: [String!]!) {
+    setMinionTunnelRoutes(taskId: $taskId, routes: $routes) {
+      id
+    }
+  }
+`)
+
+// A key for one client of a running VPN tunnel, the caller's: logos-vpn
+// connects with it once, within lapsesAt.
+export const CreateMinionVPNKeyMutation = graphql(`
+  mutation CreateMinionVPNKey($taskId: ID!) {
+    createMinionVPNKey(taskId: $taskId) {
+      key
+      lapsesAt
+    }
+  }
+`)
+
+// Ends a client of a VPN tunnel.
+export const DisconnectMinionVPNClientMutation = graphql(`
+  mutation DisconnectMinionVPNClient($taskId: ID!, $client: ID!) {
+    disconnectMinionVPNClient(taskId: $taskId, client: $client) {
       id
     }
   }

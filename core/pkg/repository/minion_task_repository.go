@@ -126,6 +126,9 @@ type IMinionTaskRepository interface {
 	// closes; TunnelOf reads it back: nil before. Neither counts as a
 	// change of the task's (no Rev).
 	SetTunnel(ctx context.Context, taskID uuid.UUID, totals models.MinionTaskTunnel) error
+	// SetArg sets one of the task's args, changed while it runs (a VPN
+	// tunnel's routes).
+	SetArg(ctx context.Context, taskID uuid.UUID, key string, value any) error
 	TunnelOf(ctx context.Context, taskID uuid.UUID) (*models.MinionTaskTunnel, error)
 	// CancelsToSend returns the session's tasks an operator asked to stop
 	// that are not over, and counts a cancel sent for each; one never acked
@@ -267,6 +270,10 @@ func (r *minionTaskRepository) SetTunnel(ctx context.Context, taskID uuid.UUID, 
 		return nil
 	}
 	return err
+}
+
+func (r *minionTaskRepository) SetArg(ctx context.Context, taskID uuid.UUID, key string, value any) error {
+	return r.tasks.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$set": bson.M{"args." + key: value}})
 }
 
 func (r *minionTaskRepository) TunnelOf(ctx context.Context, taskID uuid.UUID) (*models.MinionTaskTunnel, error) {

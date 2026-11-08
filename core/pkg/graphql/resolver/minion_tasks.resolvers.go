@@ -82,6 +82,21 @@ func (r *mutationResolver) SetMinionTunnelCap(ctx context.Context, taskID string
 	return r.MinionTaskResolver.SetMinionTunnelCap(ctx, taskID, cap)
 }
 
+// SetMinionTunnelRoutes is the resolver for the setMinionTunnelRoutes field.
+func (r *mutationResolver) SetMinionTunnelRoutes(ctx context.Context, taskID string, routes []string) (*model.MinionTask, error) {
+	return r.MinionTaskResolver.SetMinionTunnelRoutes(ctx, taskID, routes)
+}
+
+// CreateMinionVPNKey is the resolver for the createMinionVPNKey field.
+func (r *mutationResolver) CreateMinionVPNKey(ctx context.Context, taskID string) (*model.MinionVPNKey, error) {
+	return r.MinionTaskResolver.CreateMinionVPNKey(ctx, taskID)
+}
+
+// DisconnectMinionVPNClient is the resolver for the disconnectMinionVPNClient field.
+func (r *mutationResolver) DisconnectMinionVPNClient(ctx context.Context, taskID string, client string) (*model.MinionTask, error) {
+	return r.MinionTaskResolver.DisconnectMinionVPNClient(ctx, taskID, client)
+}
+
 // MinionStreamLink is the resolver for the minionStreamLink field.
 func (r *mutationResolver) MinionStreamLink(ctx context.Context, taskID string) (*model.MinionStreamLink, error) {
 	return r.MinionTaskResolver.MinionStreamLink(ctx, taskID)

@@ -298,6 +298,9 @@ type fakeMinion struct {
 	out     []cbor.RawMessage
 	lose    func(n int) bool
 	swap    bool
+	// redirect sends what core names at a host (a VPN's routed address)
+	// to another (127.0.0.1).
+	redirect map[string]string
 	// closed are core's closes the minion took.
 	closed []protocol.TunnelCloseItem
 	// opens are core's opens it took; ctls core's ctls, in the order taken;
@@ -312,6 +315,8 @@ type fakeMinion struct {
 
 type minionStream struct {
 	conn net.Conn
+	// icmp: a VPN's pings, answered as their host would.
+	icmp bool
 	// A UDP association's socket, and its datagrams for core.
 	pc     net.PacketConn
 	dgrams []protocol.TunnelDatagramItem
@@ -415,11 +420,11 @@ func (m *fakeMinion) collect() []cbor.RawMessage {
 		}
 	}
 	for id, st := range m.streams {
-		if st.conn == nil && st.pc == nil {
+		if st.conn == nil && st.pc == nil && !st.icmp {
 			// An accept no one came to yet.
 			continue
 		}
-		if st.pc != nil {
+		if st.pc != nil || st.icmp {
 			for _, d := range st.dgrams {
 				// Each twice: core takes it once.
 				items = append(items, m.marshal(d), m.marshal(d))
@@ -493,6 +498,11 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 				Bound: bound}))
 			return
 		}
+		if it.Kind == protocol.TunnelKindICMP {
+			m.streams[it.Stream] = &minionStream{icmp: true}
+			m.out = append(m.out, m.marshal(protocol.TunnelReplyItem{T: protocol.ItemTunnelReply, Task: task, Stream: it.Stream, Result: protocol.TunnelOpen}))
+			return
+		}
 		if it.UDP {
 			pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 			if err != nil {
@@ -514,7 +524,7 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 			m.startAccept(it)
 			return
 		}
-		network, address := "tcp", net.JoinHostPort(it.Host, strconv.Itoa(int(it.Port)))
+		network, address := "tcp", net.JoinHostPort(m.host(it.Host), strconv.Itoa(int(it.Port)))
 		if it.Kind == protocol.TunnelKindUnix {
 			network, address = "unix", it.Path
 		}
@@ -617,13 +627,30 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 			m.t.Errorf("a datagram that does not read: %v", err)
 			return
 		}
+		if st := m.streams[d.Stream]; st != nil && st.icmp {
+			// The host answers its echo.
+			if e, err := protocol.ReadICMP(d.Data, false); err == nil {
+				reply := protocol.ICMPMessage{Type: protocol.ICMPEchoReply, ID: e.ID, Seq: e.Seq, Payload: e.Payload}
+				st.dgrams = append(st.dgrams, protocol.TunnelDatagramItem{T: protocol.ItemTunnelDatagram, Task: task, Stream: d.Stream, Seq: st.dseq,
+					Host: d.Host, Data: reply.Bytes(false)})
+				st.dseq++
+			}
+		}
 		if st := m.streams[d.Stream]; st != nil && st.pc != nil {
-			to, err := net.ResolveUDPAddr("udp", net.JoinHostPort(d.Host, strconv.Itoa(int(d.Port))))
+			to, err := net.ResolveUDPAddr("udp", net.JoinHostPort(m.host(d.Host), strconv.Itoa(int(d.Port))))
 			if err == nil {
 				_, _ = st.pc.WriteTo(d.Data, to)
 			}
 		}
 	}
+}
+
+// host is where the minion reaches what core names host.
+func (m *fakeMinion) host(host string) string {
+	if h, ok := m.redirect[host]; ok {
+		return h
+	}
+	return host
 }
 
 // readUDP takes what comes to an association's socket, for collect.

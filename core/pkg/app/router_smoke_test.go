@@ -63,6 +63,8 @@ func TestRouteTable(t *testing.T) {
 		"GET /api/v1/minion-tasks/:id/terminal",
 		"GET /api/v1/skills/:name/download",
 		"GET /api/v1/status",
+		"GET /api/v1/vpn",
+		"GET /api/v1/vpn/client/:platform",
 		"GET /api/v1/wiki/files/:id",
 		"GET /api/v1/wiki/images/:id",
 		"GET /api/v1/wiki/transfer/jobs",
@@ -130,6 +132,7 @@ func TestRouteAuthTiers(t *testing.T) {
 		"GET /api/v1/minion-tasks/:id/output":         401,
 		"GET /api/v1/minion-tasks/:id/terminal":       401,
 		"GET /api/v1/skills/:name/download":           401,
+		"GET /api/v1/vpn/client/:platform":            401,
 		"GET /api/v1/wiki/files/:id":                  401,
 		"GET /api/v1/wiki/images/:id":                 401,
 		"GET /api/v1/wiki/transfer/jobs":              401,
@@ -158,9 +161,11 @@ func TestRouteAuthTiers(t *testing.T) {
 		// Reached a handler — deliberately outside the v1 auth chain because
 		// they initiate the session, are HMAC-validated, or are
 		// machine-to-machine.
-		"GET /api/v1/":                       200,
-		"GET /swagger/*any":                  200,
-		"GET /api/v1/status":                 500,
+		"GET /api/v1/":       200,
+		"GET /swagger/*any":  200,
+		"GET /api/v1/status": 500,
+		// Its VPN key is its sign-in: a plain GET is no WebSocket.
+		"GET /api/v1/vpn":                    400,
 		"POST /api/v1/enroll":                500,
 		"POST /api/v1/login":                 403,
 		"POST /api/v1/internal/wiki/webhook": 400,

@@ -1,0 +1,62 @@
+# A VPN tunnel (docs: contracts/vpn-front): its task's routes, which its
+# clients (logos-vpn on operators' machines) route while the task runs. It
+# takes no operational port.
+type VPNTunnel {
+  # The task's id: a VPN tunnel serves one task.
+  id: ID!
+  # Its networks, CIDRs.
+  routes: [String!]!
+  sessionId: ID!
+  # The session's number when it opened.
+  sessionNumber: Int!
+  taskId: ID!
+  openedBy: ID!
+  # Who opened it, by name when it opened; null for one gone.
+  openedByName: String
+  openedAt: String!
+  # Its task runs: core holds it, and clients may connect.
+  listening: Boolean!
+  # Its machines connected now.
+  clients: Int!
+  # Its streams now, and how many it has had.
+  open: Int!
+  streams: Int!
+  # When core stops its task unless a stream opens or a machine connects
+  # first; null for none.
+  stopsAt: String
+}
+
+type VPNTunnelEdge {
+  node: VPNTunnel!
+  cursor: String!
+}
+
+type VPNTunnelConnection {
+  edges: [VPNTunnelEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+# A VPN tunnel changing: opened (CREATED), its clients or streams' numbers
+# (UPDATED), closed with its task (DELETED: no tunnel).
+type VPNTunnelEvent {
+  action: EventAction!
+  # The tunnel's id: its task's.
+  id: ID!
+  operationId: ID!
+  tunnel: VPNTunnel
+}
+
+extend type Subscription {
+  # An operation's VPN tunnels as they change. Needs at least viewer.
+  vpnTunnelChanged(operationId: ID!): VPNTunnelEvent!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Query {
+  # An operation's VPN tunnels, the latest opened first, a page at a time;
+  # search matches the session's number, who opened it and the routes.
+  # Needs at least viewer.
+  vpnTunnels(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): VPNTunnelConnection!
+    @hasPermission(permission: "operation:member")
+}

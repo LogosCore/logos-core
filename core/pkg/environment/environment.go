@@ -118,6 +118,10 @@ type EnvironmentSettings struct {
 	// OperationalAddress is the host operators reach them at, as the web
 	// app shows it; empty: the host the web app is reached at.
 	OperationalAddress string
+	// VPNClientDir holds this core's logos-vpn builds
+	// (logos-vpn-{os}-{arch}, .exe on Windows), which the VPN tab offers
+	// (docs: contracts/vpn-front).
+	VPNClientDir string
 
 	// Wiki transfer (export/import jobs)
 	WikiImportZipMaxSize    int64         // bytes; cap on an uploaded import archive
@@ -216,6 +220,7 @@ func init() {
 	viper.SetDefault("OPERATIONAL_PORTS", "")
 	viper.SetDefault("OPERATIONAL_BIND", "0.0.0.0")
 	viper.SetDefault("OPERATIONAL_ADDRESS", "")
+	viper.SetDefault("VPN_CLIENT_DIR", "/app/vpn-clients")
 	viper.SetDefault("WIKI_FILE_BUCKET", "wiki-files")
 	viper.SetDefault("WIKI_FILE_MAX_SIZE", int64(50*1024*1024))
 	viper.SetDefault("WIKI_FILE_DENIED_CONTENT_TYPES", "")
@@ -328,6 +333,7 @@ func init() {
 		OperationalPorts:   portsOrFatal("OPERATIONAL_PORTS", viper.GetString("OPERATIONAL_PORTS")),
 		OperationalBind:    bindOrFatal("OPERATIONAL_BIND", viper.GetString("OPERATIONAL_BIND")),
 		OperationalAddress: strings.TrimSpace(viper.GetString("OPERATIONAL_ADDRESS")),
+		VPNClientDir:       strings.TrimSpace(viper.GetString("VPN_CLIENT_DIR")),
 
 		// Wiki transfer
 		WikiImportZipMaxSize:    viper.GetInt64("WIKI_IMPORT_ZIP_MAX_SIZE"),

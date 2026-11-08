@@ -353,6 +353,10 @@ func (s *Service) endIdleUDP() {
 	defer s.mu.Unlock()
 	now := s.now()
 	for _, t := range s.tunnels {
+		if t.vpn != nil {
+			s.endIdleVPN(t, now)
+			continue
+		}
 		if !t.reverseUDP {
 			continue
 		}

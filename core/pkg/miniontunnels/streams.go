@@ -138,6 +138,9 @@ type tunnel struct {
 	// counted: its streams' numbers did (the Ports page's).
 	changed bool
 	counted bool
+	// vpn is a VPN tunnel's (vpn.go): its routes and clients; nil for any
+	// other.
+	vpn *vpnTunnel
 }
 
 func newTunnel(rec *models.OperationalPort, ln net.Listener, acked bool) *tunnel {
@@ -293,6 +296,9 @@ type stream struct {
 	srcHost    string
 	srcPort    int
 	lastActive time.Time
+	// leg is a VPN client's stream this one carries (vpn.go); nil for
+	// any other.
+	leg *vpnLeg
 }
 
 func signal(ch chan struct{}) {
@@ -499,7 +505,13 @@ func (s *Service) nextNumber(t *tunnel) (uint64, error) {
 		return id, nil
 	}
 	s.mu.Unlock()
-	end, err := s.ports.ReserveStreams(context.Background(), t.task, StreamBlock)
+	var end uint64
+	var err error
+	if t.vpn != nil {
+		end, err = s.vpnTunnels.ReserveStreams(context.Background(), t.task, StreamBlock)
+	} else {
+		end, err = s.ports.ReserveStreams(context.Background(), t.task, StreamBlock)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -978,6 +990,10 @@ func (st *stream) openDue(now time.Time, resend time.Duration) bool {
 }
 
 func (st *stream) openItem() protocol.TunnelItem {
+	if st.kind == protocol.TunnelKindICMP {
+		// A VPN client's pings: each datagram names its host.
+		return protocol.TunnelItem{T: protocol.ItemTunnel, Task: st.t.task[:], Stream: st.id, Kind: st.kind}
+	}
 	if st.udp != nil {
 		return protocol.TunnelItem{T: protocol.ItemTunnel, Task: st.t.task[:], Stream: st.id, UDP: true}
 	}

@@ -256,6 +256,45 @@ type MinionTunnel {
   # The bytes its tools sent through it (up), and got back (down).
   up: Int!
   down: Int!
+  # A VPN's (front vpn, docs: contracts/vpn-front): the networks its
+  # clients route, CIDRs (setMinionTunnelRoutes changes them while it
+  # runs), and its clients, logos-vpn on operators' machines, while it
+  # runs. Null and empty for any other tunnel.
+  routes: [String!]
+  vpnClients: [MinionVPNClient!]!
+}
+
+# A client of a VPN tunnel: logos-vpn on one operator's machine, connected
+# with a key of theirs, or kept a while since its link dropped.
+type MinionVPNClient {
+  # Its instance: what disconnectMinionVPNClient names.
+  id: ID!
+  # What its streams say they came from: vpn: user@machine.
+  name: String!
+  user: String!
+  # Its machine's name, its system (GOOS, GOARCH) and its release.
+  machine: String!
+  os: String!
+  arch: String!
+  version: String!
+  # The address it connected from, as core saw it, and since when.
+  from: String!
+  since: String!
+  # Its link is up; else core keeps it a while for another.
+  connected: Boolean!
+  # Its streams now, how many it opened, and its bytes each way.
+  open: Int!
+  streams: Int!
+  up: Int!
+  down: Int!
+}
+
+# A key for one client of a VPN tunnel: one operator's, for one task. It
+# lapses unused at lapsesAt; a client that took it has it until it
+# disconnects.
+type MinionVPNKey {
+  key: String!
+  lapsesAt: String!
 }
 
 # One stream of a tunnel task: a connection a tool made through its proxy,
@@ -276,7 +315,8 @@ type MinionTunnelStream {
   path: String
   udp: Boolean!
   # What it opens past a TCP connection or a UDP association: unix, pipe,
-  # process (a terminal's) or accept (a SOCKS BIND); null for those.
+  # process (a terminal's), accept (a SOCKS BIND) or icmp (a VPN client's
+  # pings); null for those.
   kind: String
   # A process's: its program (null: the host's shell), whether it runs in
   # a terminal (false: on pipes; null until it started), and its exit code
@@ -397,6 +437,21 @@ extend type Mutation {
   # Changes a running tunnel task's bandwidth cap: bytes a second each way,
   # over all of its streams, 0 for none. Needs operator.
   setMinionTunnelCap(taskId: ID!, cap: Int!): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # Changes a running VPN tunnel's routes, CIDRs (1 to 64; no default
+  # route): its clients take them at once. Needs operator.
+  setMinionTunnelRoutes(taskId: ID!, routes: [String!]!): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # A key for a client of a running VPN tunnel, for the caller: logos-vpn
+  # connects with it (sudo logos-vpn <core> <key>). Needs operator.
+  createMinionVPNKey(taskId: ID!): MinionVPNKey!
+    @hasPermission(permission: "operation:member")
+
+  # Ends a client of a VPN tunnel (its id), saying who did. Needs
+  # operator.
+  disconnectMinionVPNClient(taskId: ID!, client: ID!): MinionTask!
     @hasPermission(permission: "operation:member")
 
   # A signed link to download a stream_file task's stream (for curl).

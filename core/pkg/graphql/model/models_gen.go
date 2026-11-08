@@ -1108,31 +1108,33 @@ type MinionTaskUpload struct {
 }
 
 type MinionTunnel struct {
-	Port      int     `json:"port"`
-	Address   *string `json:"address,omitempty"`
-	Front     string  `json:"front"`
-	Reverse   bool    `json:"reverse"`
-	To        *string `json:"to,omitempty"`
-	Path      *string `json:"path,omitempty"`
-	Source    *string `json:"source,omitempty"`
-	TLS       bool    `json:"tls"`
-	Program   *string `json:"program,omitempty"`
-	Args      *string `json:"args,omitempty"`
-	Rows      *int    `json:"rows,omitempty"`
-	Cols      *int    `json:"cols,omitempty"`
-	SocksBind bool    `json:"socksBind"`
-	Cap       int     `json:"cap"`
-	Bind      *string `json:"bind,omitempty"`
-	Listen    *int    `json:"listen,omitempty"`
-	Bound     *string `json:"bound,omitempty"`
-	UDP       *bool   `json:"udp,omitempty"`
-	Listening bool    `json:"listening"`
-	StopsAt   *string `json:"stopsAt,omitempty"`
-	Open      int     `json:"open"`
-	Streams   int     `json:"streams"`
-	Kept      int     `json:"kept"`
-	Up        int     `json:"up"`
-	Down      int     `json:"down"`
+	Port       int                `json:"port"`
+	Address    *string            `json:"address,omitempty"`
+	Front      string             `json:"front"`
+	Reverse    bool               `json:"reverse"`
+	To         *string            `json:"to,omitempty"`
+	Path       *string            `json:"path,omitempty"`
+	Source     *string            `json:"source,omitempty"`
+	TLS        bool               `json:"tls"`
+	Program    *string            `json:"program,omitempty"`
+	Args       *string            `json:"args,omitempty"`
+	Rows       *int               `json:"rows,omitempty"`
+	Cols       *int               `json:"cols,omitempty"`
+	SocksBind  bool               `json:"socksBind"`
+	Cap        int                `json:"cap"`
+	Bind       *string            `json:"bind,omitempty"`
+	Listen     *int               `json:"listen,omitempty"`
+	Bound      *string            `json:"bound,omitempty"`
+	UDP        *bool              `json:"udp,omitempty"`
+	Listening  bool               `json:"listening"`
+	StopsAt    *string            `json:"stopsAt,omitempty"`
+	Open       int                `json:"open"`
+	Streams    int                `json:"streams"`
+	Kept       int                `json:"kept"`
+	Up         int                `json:"up"`
+	Down       int                `json:"down"`
+	Routes     []string           `json:"routes,omitempty"`
+	VpnClients []*MinionVPNClient `json:"vpnClients"`
 }
 
 type MinionTunnelStream struct {
@@ -1161,6 +1163,28 @@ type MinionTunnelStream struct {
 type MinionTunnelStreamPage struct {
 	Streams []*MinionTunnelStream `json:"streams"`
 	Before  *string               `json:"before,omitempty"`
+}
+
+type MinionVPNClient struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	User      string `json:"user"`
+	Machine   string `json:"machine"`
+	Os        string `json:"os"`
+	Arch      string `json:"arch"`
+	Version   string `json:"version"`
+	From      string `json:"from"`
+	Since     string `json:"since"`
+	Connected bool   `json:"connected"`
+	Open      int    `json:"open"`
+	Streams   int    `json:"streams"`
+	Up        int    `json:"up"`
+	Down      int    `json:"down"`
+}
+
+type MinionVPNKey struct {
+	Key      string `json:"key"`
+	LapsesAt string `json:"lapsesAt"`
 }
 
 type ModuleAction struct {
@@ -1671,6 +1695,40 @@ type UserEvent struct {
 type UserSuggestion struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
+}
+
+type VPNTunnel struct {
+	ID            string   `json:"id"`
+	Routes        []string `json:"routes"`
+	SessionID     string   `json:"sessionId"`
+	SessionNumber int      `json:"sessionNumber"`
+	TaskID        string   `json:"taskId"`
+	OpenedBy      string   `json:"openedBy"`
+	OpenedByName  *string  `json:"openedByName,omitempty"`
+	OpenedAt      string   `json:"openedAt"`
+	Listening     bool     `json:"listening"`
+	Clients       int      `json:"clients"`
+	Open          int      `json:"open"`
+	Streams       int      `json:"streams"`
+	StopsAt       *string  `json:"stopsAt,omitempty"`
+}
+
+type VPNTunnelConnection struct {
+	Edges      []*VPNTunnelEdge     `json:"edges"`
+	PageInfo   *pagination.PageInfo `json:"pageInfo"`
+	TotalCount int                  `json:"totalCount"`
+}
+
+type VPNTunnelEdge struct {
+	Node   *VPNTunnel `json:"node"`
+	Cursor string     `json:"cursor"`
+}
+
+type VPNTunnelEvent struct {
+	Action      EventAction `json:"action"`
+	ID          string      `json:"id"`
+	OperationID string      `json:"operationId"`
+	Tunnel      *VPNTunnel  `json:"tunnel,omitempty"`
 }
 
 type WikiDocumentAncestor struct {

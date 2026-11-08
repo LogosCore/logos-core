@@ -242,6 +242,8 @@ func extractOperationID(event eventbus.Event) string {
 		return p.OperationID
 	case eventbus.MinionListenerEventPayload:
 		return p.OperationID
+	case eventbus.VPNTunnelEventPayload:
+		return p.OperationID
 	case eventbus.MinionTaskEventPayload:
 		return p.OperationID
 	case eventbus.FileBrowserEventPayload:
@@ -959,6 +961,30 @@ func (r *subscriptionResolver) minionListenerEvent(ctx context.Context, event ev
 	}
 	if evt.Listener == nil {
 		// Gone meanwhile: closed.
+		evt.Action = model.EventActionDeleted
+	}
+	return evt
+}
+
+// vpnTunnelEvent is a VPN tunnel changing: the tunnel as it is now, none
+// once it closed.
+func (r *subscriptionResolver) vpnTunnelEvent(ctx context.Context, event eventbus.Event) *model.VPNTunnelEvent {
+	p, ok := event.Payload.(eventbus.VPNTunnelEventPayload)
+	if !ok {
+		return nil
+	}
+	evt := &model.VPNTunnelEvent{Action: model.EventActionUpdated, ID: p.TaskID, OperationID: p.OperationID}
+	switch {
+	case p.Closed:
+		evt.Action = model.EventActionDeleted
+		return evt
+	case p.Opened:
+		evt.Action = model.EventActionCreated
+	}
+	if r.MinionTaskResolver != nil {
+		evt.Tunnel = r.MinionTaskResolver.LoadVPNTunnel(ctx, p.TaskID)
+	}
+	if evt.Tunnel == nil {
 		evt.Action = model.EventActionDeleted
 	}
 	return evt

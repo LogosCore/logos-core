@@ -111,6 +111,10 @@ const (
 	// numbers changed, or it closed (pkg/miniontunnels). Powers the Ports
 	// page's minions' list.
 	TopicMinionListenerChanged Topic = "minion_listener.changed"
+	// TopicVPNTunnelChanged: a VPN tunnel opened for its task, its clients
+	// or its streams' numbers changed, or it closed (pkg/miniontunnels).
+	// Powers the Ports page's VPN list.
+	TopicVPNTunnelChanged Topic = "vpn_tunnel.changed"
 	// TopicFileBrowserChanged: a machine's file system snapshot changed
 	// (docs: contracts/file-browser.md); subscribers re-read its folders.
 	TopicFileBrowserChanged Topic = "file_browser.changed"

@@ -129,6 +129,8 @@ export const FRONT_HTTP = "http"
 export const FRONT_FORWARD = "forward"
 /** A terminal: a process on the minion's host for each connection, raw on the port, or the web app's. */
 export const FRONT_TERMINAL = "terminal"
+/** A VPN: logos-vpn routes operators' machines into the minion's networks (docs: contracts/vpn-front). */
+export const FRONT_VPN = "vpn"
 
 /** What a tunnel is, for a person: its front, and which way it goes. */
 export function frontLabel(front: string, reverse = false): string {
@@ -142,6 +144,8 @@ export function frontLabel(front: string, reverse = false): string {
       return "HTTP proxy"
     case FRONT_TERMINAL:
       return "Terminal"
+    case FRONT_VPN:
+      return "VPN"
   }
   return front.replaceAll("_", " ")
 }
@@ -217,5 +221,73 @@ export function stopIdleOf(args: unknown): string | null {
 
 /** The version a task's live updates bring: the streams list is read again when it changes. */
 export function tunnelVersion(t: Tunnel): string {
-  return [t.listening, t.open, t.streams, t.up, t.down, t.bound ?? ""].join(":")
+  const clients = t.vpnClients.map((c) => `${c.id}/${c.open}/${c.streams}/${c.connected}`).join(",")
+  return [t.listening, t.open, t.streams, t.up, t.down, t.bound ?? "", clients].join(":")
+}
+
+export type VPNClient = Tunnel["vpnClients"][number]
+
+/** Where a VPN stands: open while its task runs, its machines connected. */
+export function vpnState(t: Tunnel, taskState: string): { label: string; tone: Tone; detail: string | null } {
+  if (!t.listening) return { label: "Closed", tone: "muted", detail: "its task ended: its machines were disconnected" }
+  if (taskState === "QUEUED" || taskState === "SENT") {
+    return { label: "Open", tone: "pending", detail: "machines connect; their connections wait until the minion has the task" }
+  }
+  const n = t.vpnClients.filter((c) => c.connected).length
+  return { label: "Open", tone: "good", detail: n === 0 ? "no machine connected" : n === 1 ? "1 machine connected" : `${n} machines connected` }
+}
+
+/** The systems core serves logos-vpn for (GET /api/v1/vpn/client/{os}-{arch}). */
+export const VPN_PLATFORMS = [
+  { id: "linux-amd64", label: "Linux, x86-64" },
+  { id: "linux-arm64", label: "Linux, ARM64" },
+  { id: "darwin-arm64", label: "macOS, Apple silicon" },
+  { id: "darwin-amd64", label: "macOS, Intel" },
+  { id: "windows-amd64", label: "Windows, x86-64" },
+  { id: "windows-arm64", label: "Windows, ARM64" },
+] as const
+
+/** This browser's system, as a guess at the machine to connect: Linux on x86-64 when it says nothing clearer. */
+export function guessPlatform(userAgent: string): string {
+  const ua = userAgent.toLowerCase()
+  const arm = /arm64|aarch64/.test(ua)
+  if (ua.includes("windows")) return arm ? "windows-arm64" : "windows-amd64"
+  if (ua.includes("mac os") || ua.includes("macintosh")) return "darwin-arm64"
+  return arm ? "linux-arm64" : "linux-amd64"
+}
+
+/** Where logos-vpn's link is: the origin core's API is served from (absolute, or this page's). */
+export function coreOrigin(apiURL: string, pageOrigin: string): string {
+  try {
+    return new URL(apiURL, pageOrigin).origin
+  } catch {
+    return pageOrigin
+  }
+}
+
+/** The command that connects a machine with a key: as root (sudo), or in an elevated PowerShell on Windows. */
+export function vpnCommand(origin: string, key: string, platform: string): string {
+  return platform.startsWith("windows-") ? `.\\logos-vpn.exe ${origin} ${key}` : `sudo logos-vpn ${origin} ${key}`
+}
+
+/** What a client runs on, for a person: its machine's system and release. */
+export function clientSystem(c: Pick<VPNClient, "os" | "arch" | "version">): string {
+  const os: Record<string, string> = { linux: "Linux", darwin: "macOS", windows: "Windows" }
+  return `${os[c.os] ?? c.os} ${c.arch} · logos-vpn ${c.version}`
+}
+
+const CIDR = /^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-f:]*:[0-9a-f:.]*)\/\d{1,3}$/i
+
+/**
+ * Routes as an operator types them: networks as CIDRs, one a line or
+ * separated by commas or spaces. Core checks each fully (a network, no
+ * default route); this says what is plainly not one.
+ */
+export function parseRoutes(text: string): { ok: true; value: string[] } | { ok: false; error: string } {
+  const routes = text.split(/[\s,]+/).filter((r) => r !== "")
+  if (routes.length === 0) return { ok: false, error: "A network at least, as a CIDR: 10.0.0.0/24" }
+  if (routes.length > 64) return { ok: false, error: "64 at most" }
+  const bad = routes.find((r) => !CIDR.test(r))
+  if (bad) return { ok: false, error: `${bad} is not a network as a CIDR (10.0.0.0/24, fd00:1::/64)` }
+  return { ok: true, value: routes }
 }

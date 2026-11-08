@@ -348,6 +348,19 @@ func NewMinionListenerChangedEvent(p MinionListenerEventPayload) Event {
 	return NewEvent(TopicMinionListenerChanged, SystemActor(), p)
 }
 
+// VPNTunnelEventPayload is a VPN tunnel changing: opened (Opened), its
+// clients or streams' numbers, or closed (Closed).
+type VPNTunnelEventPayload struct {
+	TaskID      string
+	OperationID string
+	Opened      bool
+	Closed      bool
+}
+
+func NewVPNTunnelChangedEvent(p VPNTunnelEventPayload) Event {
+	return NewEvent(TopicVPNTunnelChanged, SystemActor(), p)
+}
+
 // FileBrowserEventPayload is a machine's snapshot changing: its operation,
 // its key (models.FsMachineKey), and the folder that changed most.
 type FileBrowserEventPayload struct {

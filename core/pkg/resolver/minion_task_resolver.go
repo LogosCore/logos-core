@@ -38,6 +38,9 @@ type IMinionTaskResolver interface {
 	QueueMinionTask(ctx context.Context, sessionID, command string, args any) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
 	SetMinionTunnelCap(ctx context.Context, taskID string, limit int) (*model.MinionTask, error)
+	SetMinionTunnelRoutes(ctx context.Context, taskID string, routes []string) (*model.MinionTask, error)
+	CreateMinionVPNKey(ctx context.Context, taskID string) (*model.MinionVPNKey, error)
+	DisconnectMinionVPNClient(ctx context.Context, taskID, client string) (*model.MinionTask, error)
 	MinionTask(ctx context.Context, id string) (*model.MinionTask, error)
 	// Output is a task's output parts joined, as the minion sent them, and
 	// Data their data merged: read only when a query asks (the selected
@@ -70,6 +73,10 @@ type IMinionTaskResolver interface {
 	// listeners; LoadListener a task's, for a subscriber: nil for none.
 	MinionListeners(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error)
 	LoadListener(ctx context.Context, taskID string) *model.MinionListener
+	// VPNTunnels is a page of an operation's VPN tunnels; LoadVPNTunnel a
+	// task's, for a subscriber: nil for none.
+	VPNTunnels(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.VPNTunnelConnection, error)
+	LoadVPNTunnel(ctx context.Context, taskID string) *model.VPNTunnel
 	// Load is one task as GraphQL, for a subscriber: nil when it cannot be
 	// read.
 	Load(ctx context.Context, taskID string) *model.MinionTask
@@ -153,6 +160,22 @@ type TaskTunnels interface {
 	CountListeners(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
 	// SetCap changes a running tunnel's bandwidth cap (0: none).
 	SetCap(ctx context.Context, task uuid.UUID, limit int64) error
+	// OpenVPN keeps a VPN tunnel for a task about to be queued (docs:
+	// contracts/vpn-front); SetRoutes changes a running one's routes, VPN
+	// reads its routes and clients, NewVPNKey makes a key for a client of
+	// it, and DisconnectVPN ends one.
+	OpenVPN(ctx context.Context, o miniontunnels.Opening) error
+	SetRoutes(ctx context.Context, task uuid.UUID, routes []string) ([]string, error)
+	VPN(task uuid.UUID) ([]string, []miniontunnels.VPNClientInfo, bool)
+	NewVPNKey(ctx context.Context, task, user uuid.UUID, username string) (string, time.Time, error)
+	DisconnectVPN(task uuid.UUID, instance, by string) error
+	// VPNTunnel is a task's VPN tunnel as kept, VPNTunnels a page of an
+	// operation's and CountVPNTunnels how many; VPNConnected its machines
+	// connected now.
+	VPNTunnel(ctx context.Context, task uuid.UUID) (*models.VPNTunnel, error)
+	VPNTunnels(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.VPNTunnel, error)
+	CountVPNTunnels(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
+	VPNConnected(task uuid.UUID) int
 }
 
 // TaskCredentials resolves the credentials a task's args name (credential
@@ -375,9 +398,14 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 			values["bind"] = wire["bind"]
 		} else {
 			// What core puts in front, as it took it, and the port it
-			// serves on. A reverse tunnel's one front no param names.
+			// serves on (a VPN's none: its routes). A reverse tunnel's one
+			// front no param names.
 			values[protocol.ParamFront] = front
-			values[protocol.ParamPort] = port
+			if front == protocol.FrontVPN {
+				values[protocol.ParamRoutes] = wire[protocol.ParamRoutes]
+			} else {
+				values[protocol.ParamPort] = port
+			}
 		}
 		for _, key := range []string{protocol.ParamHost, protocol.ParamPath, protocol.ParamSource} {
 			// As core read them: trimmed, a source as an address.
@@ -586,6 +614,9 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("tls: %s's minion speaks no TLS to a destination", cmd.ID))
 	}
 	o.TLS = useTLS
+	if front == protocol.FrontVPN {
+		return r.openVPN(ctx, cmd, o, wire)
+	}
 	program, _ := protocol.ArgString(wire, protocol.ParamProgram)
 	argsLine, _ := protocol.ArgString(wire, protocol.ParamArgs)
 	program, argsLine = strings.TrimSpace(program), strings.TrimSpace(argsLine)
@@ -614,6 +645,57 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 	}
 	wire[protocol.ParamPort] = int64(port)
 	return port, front, nil
+}
+
+// openVPN keeps a VPN tunnel for the task (docs: contracts/vpn-front): its
+// routes, checked and written as networks, and what its clients may open
+// besides TCP, as its command opens udp and icmp. No operational port.
+func (r *minionTaskResolver) openVPN(ctx context.Context, cmd protocol.BuildCommand, o miniontunnels.Opening, wire map[string]any) (int, string, error) {
+	routes, err := protocol.TunnelRoutes(argStrings(wire[protocol.ParamRoutes]))
+	if err != nil {
+		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+	}
+	o.Routes = make([]string, len(routes))
+	for i, p := range routes {
+		o.Routes[i] = p.String()
+	}
+	wire[protocol.ParamRoutes] = o.Routes
+	o.Purpose, o.Port = models.OperationalPurposeVPN, 0
+	o.UDP, o.ICMP = cmd.CanOpen(protocol.OpenUDP), cmd.CanOpen(protocol.OpenICMP)
+	if err := r.tunnels.OpenVPN(ctx, o); err != nil {
+		if errors.Is(err, miniontunnels.ErrNoVPN) {
+			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+		}
+		return 0, "", err
+	}
+	return 0, protocol.FrontVPN, nil
+}
+
+// argStrings is a list arg's strings (a string_list's, as JSON or Go has
+// it).
+func argStrings(v any) []string {
+	switch items := v.(type) {
+	case []string:
+		return items
+	case []any:
+		out := make([]string, 0, len(items))
+		for _, it := range items {
+			if s, ok := it.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		// A command line's: comma-separated.
+		var out []string
+		for _, s := range strings.Split(items, ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 // terminal makes o a terminal's: the minion runs program (none: its

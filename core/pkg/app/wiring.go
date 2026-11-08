@@ -31,6 +31,7 @@ type controllers struct {
 	task     *controller.MinionTaskController
 	stream   *controller.MinionStreamController
 	terminal *controller.MinionTerminalController
+	vpn      *controller.VPNController
 	wiki     *controller.WikiController
 	transfer *controller.WikiTransferController
 	webhook  *wiki.WebhookHandler
@@ -105,6 +106,7 @@ func (a *App) buildControllers() *controllers {
 		stream:  controller.NewMinionStreamController(a.minionStreams, a.repos.Operation, a.logger),
 		terminal: controller.NewMinionTerminalController(a.minionTunnels, a.repos.MinionTask, a.repos.Operation,
 			gql.WSOriginCheck(a.env.CORSAllowedOrigins), a.logger),
+		vpn:  controller.NewVPNController(a.minionTunnels, a.env.VPNClientDir, a.logger),
 		wiki: controller.NewWikiController(a.repos.WikiDocument, a.repos.Operation, a.env.HocuspocusTicketSecret, a.logger),
 
 		// The runner and its pipeline are built in NewApp; this controller only

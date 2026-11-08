@@ -13,6 +13,9 @@ import { isOlder } from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
 import {
   CancelMinionTaskDocument,
+  CreateMinionVpnKeyDocument,
+  DisconnectMinionVpnClientDocument,
+  SetMinionTunnelRoutesDocument,
   MinionFileStringsDocument,
   MinionSessionCommandsDocument,
   MinionStreamLinkDocument,
@@ -244,6 +247,27 @@ export function useCancelMinionTask() {
 export function useSetMinionTunnelCap() {
   return useMutation({
     mutationFn: (vars: { taskId: string; cap: number }) => graphqlClient(SetMinionTunnelCapDocument, vars),
+  })
+}
+
+/** Changes a running VPN tunnel's routes: its clients take them at once. */
+export function useSetMinionTunnelRoutes() {
+  return useMutation({
+    mutationFn: (vars: { taskId: string; routes: string[] }) => graphqlClient(SetMinionTunnelRoutesDocument, vars),
+  })
+}
+
+/** Makes the caller a key for one client of a running VPN tunnel. */
+export function useCreateMinionVPNKey() {
+  return useMutation({
+    mutationFn: (vars: { taskId: string }) => graphqlClient(CreateMinionVpnKeyDocument, vars),
+  })
+}
+
+/** Ends a client of a VPN tunnel. */
+export function useDisconnectMinionVPNClient() {
+  return useMutation({
+    mutationFn: (vars: { taskId: string; client: string }) => graphqlClient(DisconnectMinionVpnClientDocument, vars),
   })
 }
 

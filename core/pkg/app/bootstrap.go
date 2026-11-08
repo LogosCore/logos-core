@@ -98,6 +98,8 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		MinionIdentity:     repository.NewMinionIdentityRepository(db),
 		OperationalPort:    repository.NewOperationalPortRepository(db),
 		MinionListener:     repository.NewMinionListenerRepository(db),
+		VPNTunnel:          repository.NewVPNTunnelRepository(db),
+		VPNKey:             repository.NewVPNKeyRepository(db),
 		FsListing:          repository.NewFsListingRepository(db),
 	}
 

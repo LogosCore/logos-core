@@ -99,6 +99,21 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 			m.Cols = &n
 		}
 	}
+	m.VpnClients = []*model.MinionVPNClient{}
+	if front == protocol.FrontVPN {
+		// No operational port: its clients come over core's own address.
+		m.Port, m.Address = 0, nil
+		routes := argStrings(args[protocol.ParamRoutes])
+		if live, clients, ok := r.tunnels.VPN(id); ok {
+			routes = live
+			for _, c := range clients {
+				m.VpnClients = append(m.VpnClients, &model.MinionVPNClient{ID: c.ID, Name: c.Name, User: c.User, Machine: c.Machine, Os: c.OS,
+					Arch: c.Arch, Version: c.Version, From: c.From, Since: c.Since.UTC().Format(time.RFC3339Nano), Connected: c.Connected,
+					Open: c.Open, Streams: int(c.Streams), Up: int(c.Up), Down: int(c.Down)})
+			}
+		}
+		m.Routes = routes
+	}
 	if reverse {
 		// No operational port: the minion listens, where its args ask and
 		// where it says it does.
@@ -149,6 +164,98 @@ func (r *minionTaskResolver) SetMinionTunnelCap(ctx context.Context, taskID stri
 		return nil, fmt.Errorf("set the tunnel's cap: %w", err)
 	}
 	r.publish(t)
+	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+}
+
+// vpnTask is a VPN tunnel task, for an operator of its session's
+// operation.
+func (r *minionTaskResolver) vpnTask(ctx context.Context, taskID string) (*models.MinionTask, uuid.UUID, error) {
+	tid, err := uuid.Parse(taskID)
+	if err != nil {
+		return nil, tid, moduleGQLError(ctx, errCodeBadUserInput, "invalid task ID")
+	}
+	t, err := r.tasks.FindByTaskID(ctx, tid)
+	if err != nil {
+		if repository.IsNotFound(err) {
+			return nil, tid, moduleGQLError(ctx, errCodeNotFound, "task not found")
+		}
+		return nil, tid, err
+	}
+	if _, err := r.session(ctx, t.SessionID.String(), models.OperationRoleOperator); err != nil {
+		return nil, tid, err
+	}
+	front, _ := protocol.ArgString(t.Args, protocol.ParamFront)
+	switch {
+	case t.Action != protocol.ActionTunnel || front != protocol.FrontVPN:
+		return nil, tid, moduleGQLError(ctx, errCodeBadUserInput, "not a VPN tunnel task")
+	case r.tunnels == nil:
+		return nil, tid, moduleGQLError(ctx, errCodeBadUserInput, "core opens no tunnels")
+	}
+	return t, tid, nil
+}
+
+// notRunning is a VPN tunnel's error when core holds none of it.
+func notRunning(ctx context.Context, err error, what string) error {
+	if repository.IsNotFound(err) {
+		return moduleGQLError(ctx, errCodeBadUserInput, "the VPN tunnel is not running")
+	}
+	return fmt.Errorf("%s: %w", what, err)
+}
+
+// SetMinionTunnelRoutes changes a running VPN tunnel's routes, for an
+// operator of its session's operation: kept with the task's args too.
+func (r *minionTaskResolver) SetMinionTunnelRoutes(ctx context.Context, taskID string, routes []string) (*model.MinionTask, error) {
+	t, tid, err := r.vpnTask(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := protocol.TunnelRoutes(routes); err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+	}
+	kept, err := r.tunnels.SetRoutes(ctx, tid, routes)
+	if err != nil {
+		return nil, notRunning(ctx, err, "set the VPN's routes")
+	}
+	if err := r.tasks.SetArg(ctx, tid, protocol.ParamRoutes, kept); err != nil {
+		return nil, fmt.Errorf("keep the VPN's routes: %w", err)
+	}
+	t.Args[protocol.ParamRoutes] = kept
+	r.publish(t)
+	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+}
+
+// CreateMinionVPNKey makes the caller a key for a client of a running VPN
+// tunnel, for an operator of its session's operation.
+func (r *minionTaskResolver) CreateMinionVPNKey(ctx context.Context, taskID string) (*model.MinionVPNKey, error) {
+	_, tid, err := r.vpnTask(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+	auth := gqlctx.AuthFromContext(ctx)
+	uid, err := uuid.Parse(auth.UserID)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid user")
+	}
+	key, lapses, err := r.tunnels.NewVPNKey(ctx, tid, uid, auth.Username)
+	if err != nil {
+		return nil, notRunning(ctx, err, "make a VPN key")
+	}
+	return &model.MinionVPNKey{Key: key, LapsesAt: lapses.UTC().Format(time.RFC3339Nano)}, nil
+}
+
+// DisconnectMinionVPNClient ends a client of a VPN tunnel, for an operator
+// of its session's operation, saying who did.
+func (r *minionTaskResolver) DisconnectMinionVPNClient(ctx context.Context, taskID, client string) (*model.MinionTask, error) {
+	t, tid, err := r.vpnTask(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.tunnels.DisconnectVPN(tid, client, gqlctx.AuthFromContext(ctx).Username); err != nil {
+		if repository.IsNotFound(err) {
+			return nil, moduleGQLError(ctx, errCodeNotFound, "no such client")
+		}
+		return nil, err
+	}
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
 }
 
@@ -217,6 +324,7 @@ func (r *minionTaskResolver) MinionTunnelStreams(ctx context.Context, taskID str
 // them.
 var tunnelKindNames = map[int]string{
 	protocol.TunnelKindUnix: "unix", protocol.TunnelKindPipe: "pipe", protocol.TunnelKindProcess: "process", protocol.TunnelKindAccept: "accept",
+	protocol.TunnelKindICMP: "icmp",
 }
 
 // tunnelStreamModel is a stream as GraphQL has it.
@@ -409,4 +517,80 @@ func (r *minionTaskResolver) LoadPort(ctx context.Context, taskID string) *model
 		return nil
 	}
 	return r.portModel(p)
+}
+
+// VPNTunnels is a page of an operation's VPN tunnels, for a member of it:
+// each one's task's tunnel as it is now.
+func (r *minionTaskResolver) VPNTunnels(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.VPNTunnelConnection, error) {
+	opID, err := uuid.Parse(operationID)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid operation ID")
+	}
+	op, err := gqlctx.LoadOperation(ctx, r.operationRepo, opID)
+	if err != nil {
+		return nil, fmt.Errorf("operation not found: %w", err)
+	}
+	if err := authorization.AuthorizeOperationRole(ctx, &op, models.OperationRoleViewer); err != nil {
+		return nil, err
+	}
+	empty := &model.VPNTunnelConnection{Edges: []*model.VPNTunnelEdge{}, PageInfo: &pagination.PageInfo{}}
+	if r.tunnels == nil {
+		return empty, nil
+	}
+	args, err := pagination.ParseArgs(first, after, last, before)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("invalid pagination args: %v", err))
+	}
+	q := ""
+	if search != nil {
+		q = strings.TrimSpace(*search)
+	}
+	total, err := r.tunnels.CountVPNTunnels(ctx, opID, q)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.tunnels.VPNTunnels(ctx, opID, q, args.Cursor, args.Limit+1, args.Forward)
+	if err != nil {
+		return nil, err
+	}
+	edges, pageInfo := pagination.BuildEdges(rows, args,
+		func(v *models.VPNTunnel) string { return repository.VPNTunnelCursor(v) },
+		func(v *models.VPNTunnel, cursor string) *model.VPNTunnelEdge {
+			return &model.VPNTunnelEdge{Node: r.vpnTunnelModel(v), Cursor: cursor}
+		})
+	return &model.VPNTunnelConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
+}
+
+// vpnTunnelModel is a VPN tunnel as GraphQL has it: its task's tunnel as
+// it is now.
+func (r *minionTaskResolver) vpnTunnelModel(v *models.VPNTunnel) *model.VPNTunnel {
+	node := &model.VPNTunnel{ID: v.TaskID.String(), Routes: v.Routes, SessionID: v.SessionID.String(), SessionNumber: v.SessionNumber,
+		TaskID: v.TaskID.String(), OpenedBy: v.OpenedBy.String(), OpenedByName: strPtr(v.OpenedByName),
+		OpenedAt: v.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(v.Opened)}
+	if node.Routes == nil {
+		node.Routes = []string{}
+	}
+	if sum, ok := r.tunnels.Summary(v.TaskID); ok {
+		node.Listening, node.Open, node.Streams = true, sum.Open, int(max(sum.Streams, v.Opened))
+		node.StopsAt = taskTime(stopsAt(sum))
+		node.Clients = r.tunnels.VPNConnected(v.TaskID)
+		if routes, _, ok := r.tunnels.VPN(v.TaskID); ok {
+			node.Routes = routes
+		}
+	}
+	return node
+}
+
+// LoadVPNTunnel is a task's VPN tunnel as GraphQL has it, for a subscriber
+// (whose operation the subscription checked): nil when it has none.
+func (r *minionTaskResolver) LoadVPNTunnel(ctx context.Context, taskID string) *model.VPNTunnel {
+	id, err := uuid.Parse(taskID)
+	if err != nil || r.tunnels == nil {
+		return nil
+	}
+	v, err := r.tunnels.VPNTunnel(ctx, id)
+	if err != nil {
+		return nil
+	}
+	return r.vpnTunnelModel(v)
 }

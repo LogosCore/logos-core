@@ -158,8 +158,9 @@ describe("words in the form's order", () => {
     id: "tunnel",
     label: "Tunnel",
     params: [
-      { key: "front", type: "enum", label: "Front", required: false, default: "socks", options: ["socks", "http", "forward", "terminal"] },
-      { key: "port", type: "int", label: "Port", required: false, default: 0 },
+      { key: "front", type: "enum", label: "Front", required: false, default: "socks", options: ["socks", "http", "forward", "terminal", "vpn"] },
+      { key: "port", type: "int", label: "Port", required: false, default: 0, when: { key: "front", values: ["socks", "http", "forward", "terminal"] } },
+      { key: "routes", type: "string_list", label: "Routes", required: true, when: { key: "front", values: ["vpn"] } },
       { key: "host", type: "string", label: "Destination", required: false, when: forward },
       { key: "to", type: "int", label: "Destination port", required: false, when: forward },
       { key: "program", type: "string", label: "Program", required: false, when: terminal },
@@ -210,6 +211,13 @@ describe("words in the form's order", () => {
       ok: true,
       args: { front: "forward", port: 8080, host: "db.local", to: 5432 },
     })
+    // A VPN's routes, one word, comma-separated: no port of core's.
+    expect(parseCommandLine("tunnel vpn 10.0.0.0/24,10.0.5.0/24", cmds)).toEqual({
+      ok: true,
+      command: tunnel,
+      args: { front: "vpn", routes: ["10.0.0.0/24", "10.0.5.0/24"] },
+    })
+    expect(parseCommandLine("tunnel vpn", cmds)).toMatchObject({ ok: false, error: expect.stringContaining("Missing routes") })
     expect(parseCommandLine("tunnel terminal 2222 bash -l", cmds)).toEqual({
       ok: true,
       command: tunnel,

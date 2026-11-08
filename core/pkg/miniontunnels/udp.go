@@ -192,6 +192,14 @@ func (s *Service) takeDatagram(session uuid.UUID, d protocol.TunnelDatagramItem)
 		s.takeReverseDatagram(st, d)
 		return nil, nil
 	}
+	if st.leg != nil {
+		// A VPN client's: it goes to the client, within the cap.
+		if a := st.udp; a != nil && st.opened && a.in.take(d.Seq) && st.t.inAllows(len(d.Data), s.now()) {
+			s.vpnDatagram(st, d)
+		}
+		s.mu.Unlock()
+		return nil, nil
+	}
 	a := st.udp
 	if a == nil || !st.opened || !a.in.take(d.Seq) || a.from == nil || st.t.relay == nil || !st.t.inAllows(len(d.Data), s.now()) {
 		s.mu.Unlock()

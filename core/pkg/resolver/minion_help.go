@@ -140,7 +140,9 @@ func commandUsage(c protocol.BuildCommand) string {
 	parts := []string{c.ID}
 	for _, p := range formOrder(c.Params) {
 		switch {
-		case p.Required:
+		case p.Required && p.When == nil:
+			// One required only where it applies (a VPN's routes) is not
+			// always typed.
 			parts = append(parts, "<"+p.Key+">")
 		case p.Default != nil:
 			parts = append(parts, fmt.Sprintf("[%s=%v]", p.Key, p.Default))

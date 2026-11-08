@@ -18,6 +18,11 @@ import {
   streamState,
   terminalProgram,
   tunnelVersion,
+  coreOrigin,
+  guessPlatform,
+  parseRoutes,
+  vpnCommand,
+  vpnState,
   type Tunnel,
   type TunnelStream,
 } from "./tunnel-values"
@@ -57,6 +62,7 @@ const tunnel = (t: Partial<Tunnel>): Tunnel => ({
   kept: 1000,
   up: 0,
   down: 0,
+  vpnClients: [],
   ...t,
 })
 
@@ -237,5 +243,38 @@ describe("terminals", () => {
     expect(streamState(bind).detail).toBe("listening at 0.0.0.0:40001")
     expect(streamState({ ...bind, came: "10.0.0.9:20" }).detail).toBe("10.0.0.9:20 came")
     expect(streamState(stream({ state: "ENDED", result: "in_use", end: "not_opened" })).detail).toBe("in use: something listens there already")
+  })
+})
+
+describe("a VPN", () => {
+  const client = {
+    id: "00112233445566778899aabbccddeeff", name: "vpn: alice@kali", user: "alice", machine: "kali", os: "linux", arch: "amd64",
+    version: "0.1.0", from: "203.0.113.5", since: "2026-11-08T10:00:00Z", connected: true, open: 1, streams: 3, up: 10, down: 20,
+  }
+  it("is open while its task runs, its machines counted", () => {
+    expect(vpnState(tunnel({ front: "vpn", vpnClients: [client] }), "RUNNING")).toEqual({ label: "Open", tone: "good", detail: "1 machine connected" })
+    expect(vpnState(tunnel({ front: "vpn" }), "SENT").tone).toBe("pending")
+    expect(vpnState(tunnel({ front: "vpn", listening: false }), "SUCCEEDED").label).toBe("Closed")
+    expect(frontLabel("vpn")).toBe("VPN")
+  })
+  it("gives the command for the machine's system", () => {
+    expect(vpnCommand("https://logos.example.com", "lgv_k", "linux-amd64")).toBe("sudo logos-vpn https://logos.example.com lgv_k")
+    expect(vpnCommand("https://logos.example.com", "lgv_k", "windows-amd64")).toBe(".\\logos-vpn.exe https://logos.example.com lgv_k")
+    expect(guessPlatform("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("windows-amd64")
+    expect(guessPlatform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")).toBe("darwin-arm64")
+    expect(guessPlatform("Mozilla/5.0 (X11; Linux aarch64)")).toBe("linux-arm64")
+  })
+  it("connects to the origin core's API is at", () => {
+    expect(coreOrigin("/api/v1", "https://logos.example.com")).toBe("https://logos.example.com")
+    expect(coreOrigin("http://localhost:8080/api/v1", "http://localhost:5173")).toBe("http://localhost:8080")
+  })
+  it("reads routes one a line or separated", () => {
+    expect(parseRoutes("10.0.0.0/24\n fd00:1::/64, 172.16.0.0/12")).toEqual({ ok: true, value: ["10.0.0.0/24", "fd00:1::/64", "172.16.0.0/12"] })
+    expect(parseRoutes("").ok).toBe(false)
+    expect(parseRoutes("db.local").ok).toBe(false)
+    expect(parseRoutes("10.0.0.5").ok).toBe(false)
+  })
+  it("reads the streams again as its machines change", () => {
+    expect(tunnelVersion(tunnel({ vpnClients: [client] }))).not.toBe(tunnelVersion(tunnel({ vpnClients: [{ ...client, open: 2 }] })))
   })
 })

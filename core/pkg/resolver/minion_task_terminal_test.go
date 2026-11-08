@@ -115,7 +115,7 @@ func TestOpenTerminal(t *testing.T) {
 		"a SOCKS program": {map[string]any{"program": "sh"}, "program", "only when front is terminal"},
 		"forward args":    {map[string]any{"front": "forward", "host": "h", "to": int64(1), "args": "-x"}, "args", "only when front is terminal"},
 		"a SOCKS size":    {map[string]any{"rows": int64(30)}, "rows", "only when front is terminal"},
-		"a source":        {map[string]any{"front": "terminal", "source": "10.0.0.7"}, "source", "only when front is socks, http or forward"},
+		"a source":        {map[string]any{"front": "terminal", "source": "10.0.0.7"}, "source", "only when front is socks, http, forward or vpn"},
 	} {
 		if _, problems := protocol.TaskArgs(params, c.values); problems[c.key] != c.want || len(problems) != 1 {
 			t.Errorf("%s: %v", name, problems)

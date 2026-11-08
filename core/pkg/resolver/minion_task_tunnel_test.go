@@ -27,7 +27,44 @@ type fakeTaskTunnels struct {
 	live    map[uuid.UUID]miniontunnels.Summary
 	ended   miniontunnels.Summary
 	caps    []int64
+	vpns    []miniontunnels.Opening
 }
+
+func (f *fakeTaskTunnels) OpenVPN(_ context.Context, o miniontunnels.Opening) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.vpns = append(f.vpns, o)
+	return nil
+}
+
+func (f *fakeTaskTunnels) SetRoutes(_ context.Context, _ uuid.UUID, routes []string) ([]string, error) {
+	return routes, nil
+}
+
+func (f *fakeTaskTunnels) VPN(uuid.UUID) ([]string, []miniontunnels.VPNClientInfo, bool) {
+	return nil, nil, false
+}
+
+func (f *fakeTaskTunnels) NewVPNKey(context.Context, uuid.UUID, uuid.UUID, string) (string, time.Time, error) {
+	return "lgv_x", time.Now(), nil
+}
+
+func (f *fakeTaskTunnels) DisconnectVPN(uuid.UUID, string, string) error { return nil }
+
+func (f *fakeTaskTunnels) VPNTunnel(context.Context, uuid.UUID) (*models.VPNTunnel, error) {
+	return nil, repository.ErrNotFound
+}
+
+func (f *fakeTaskTunnels) VPNTunnels(context.Context, uuid.UUID, string, *pagination.Cursor, int64, bool) ([]models.VPNTunnel, error) {
+	return nil, nil
+}
+
+func (f *fakeTaskTunnels) CountVPNTunnels(context.Context, uuid.UUID, string) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeTaskTunnels) VPNConnected(uuid.UUID) int { return 0 }
 
 func (f *fakeTaskTunnels) Open(_ context.Context, o miniontunnels.Opening) (int, error) {
 	if f.err != nil {
@@ -178,7 +215,7 @@ func TestOpenTunnel(t *testing.T) {
 	if o := f.opened[1]; o.Port != 41007 || o.MaxStreams != 8 || o.Timeout != 3*time.Second || o.StopIdle != time.Hour || o.UDP || o.Cap != 1<<20 {
 		t.Errorf("opened %+v", o)
 	}
-	if _, _, err := r.openTunnel(ctx, s, uid, uuid.New(), tunnelCmd, map[string]any{"front": "vpn"}); err == nil || !strings.Contains(err.Error(), "front: one of socks, http, forward") {
+	if _, _, err := r.openTunnel(ctx, s, uid, uuid.New(), tunnelCmd, map[string]any{"front": "wireguard"}); err == nil || !strings.Contains(err.Error(), "front: one of socks, http, forward, terminal, vpn") {
 		t.Errorf("a front the action has not: %v", err)
 	}
 	f.err = fmt.Errorf("%w: all 64 are in use", miniontunnels.ErrNoPort)
@@ -191,6 +228,40 @@ func TestOpenTunnel(t *testing.T) {
 	}
 	if _, _, err := (&minionTaskResolver{}).openTunnel(ctx, s, uid, uuid.New(), tunnelCmd, map[string]any{}); err == nil || !strings.Contains(err.Error(), "core opens no tunnels") {
 		t.Errorf("no tunnels: %v", err)
+	}
+}
+
+// A VPN tunnel takes no port: its routes, written as networks, go with
+// what its command opens; routes that are no networks, or a default route,
+// are the operator's to fix.
+func TestOpenVPNTunnel(t *testing.T) {
+	ctx := context.Background()
+	s := &models.MinionSession{SessionID: uuid.New(), OperationID: uuid.New()}
+	f := &fakeTaskTunnels{}
+	r := &minionTaskResolver{tunnels: f}
+	icmpCmd := protocol.BuildCommand{ID: "tunnel", Op: 15, Action: protocol.ActionTunnel,
+		Opens: []string{protocol.OpenTCP, protocol.OpenUDP, protocol.OpenICMP, protocol.OpenSource}}
+	wire := map[string]any{"front": "vpn", protocol.ParamRoutes: []any{"10.0.0.0/24", " fd00:1::/64"}, protocol.ParamSource: "10.0.0.9"}
+	port, front, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), icmpCmd, wire)
+	if err != nil || port != 0 || front != protocol.FrontVPN || len(f.opened) != 0 {
+		t.Fatalf("a VPN: %d %s %v", port, front, err)
+	}
+	o := f.vpns[0]
+	if strings.Join(o.Routes, ",") != "10.0.0.0/24,fd00:1::/64" || !o.UDP || !o.ICMP || o.Source != "10.0.0.9" || o.Purpose != models.OperationalPurposeVPN {
+		t.Errorf("opened %+v", o)
+	}
+	if routes, _ := wire[protocol.ParamRoutes].([]string); len(routes) != 2 {
+		t.Errorf("the args' routes: %v", wire[protocol.ParamRoutes])
+	}
+	if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tcpTunnelCmd, map[string]any{"front": "vpn", protocol.ParamRoutes: []string{"10.0.0.0/24"}}); err != nil ||
+		f.vpns[1].UDP || f.vpns[1].ICMP {
+		t.Errorf("a TCP-only command's VPN: %v %+v", err, f.vpns)
+	}
+	for _, bad := range [][]string{{"0.0.0.0/0"}, {"10.0.0.5/24"}, {"db.local"}, nil} {
+		if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tunnelCmd, map[string]any{"front": "vpn", protocol.ParamRoutes: bad}); err == nil ||
+			!strings.Contains(err.Error(), "routes") {
+			t.Errorf("routes %v: %v", bad, err)
+		}
 	}
 }
 
@@ -417,7 +488,7 @@ func TestCommandsHaveCoreParams(t *testing.T) {
 	for _, p := range commands[0].Params {
 		keys = append(keys, p.Key)
 	}
-	if strings.Join(keys, ",") != "timeout,front,port,host,to,stop_idle,cap" || len(commands[1].Params) != 1 || len(sc.Commands[0].Params) != 1 {
+	if strings.Join(keys, ",") != "timeout,front,port,routes,host,to,stop_idle,cap" || len(commands[1].Params) != 1 || len(sc.Commands[0].Params) != 1 {
 		t.Errorf("tunnel %v; ls %d; the schema's own %d", keys, len(commands[1].Params), len(sc.Commands[0].Params))
 	}
 	wire, problems := protocol.TaskArgs(commands[0].Params, map[string]any{"front": "http"})
@@ -443,13 +514,13 @@ func TestCommandsByTarget(t *testing.T) {
 		return strings.Join(out, ",")
 	}
 	linux := tunnelCommand(sc, full, "linux-elf")
-	if strings.Join(linux.Opens, ",") != "tcp,udp,unix,source,tls" || keys(linux) != "front,port,host,to,path,source,tls,stop_idle,cap" {
+	if strings.Join(linux.Opens, ",") != "tcp,udp,unix,source,tls" || keys(linux) != "front,port,routes,host,to,path,source,tls,stop_idle,cap" {
 		t.Errorf("linux: opens %v, params %s", linux.Opens, keys(linux))
 	}
 	if win := tunnelCommand(sc, full, "windows-exe"); !win.CanOpen(protocol.OpenPipe) {
 		t.Errorf("windows: opens %v", win.Opens)
 	}
-	if plain := tunnelCommand(sc, tunnelCmd, "linux-elf"); keys(plain) != "front,port,host,to,stop_idle,cap" {
+	if plain := tunnelCommand(sc, tunnelCmd, "linux-elf"); keys(plain) != "front,port,routes,host,to,stop_idle,cap" {
 		t.Errorf("a command that opens tcp and udp: %s", keys(plain))
 	}
 }

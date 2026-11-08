@@ -68,6 +68,9 @@ type Config struct {
 	// streams come, go and carry bytes: its task's view and the Ports page
 	// follow.
 	Tell time.Duration
+	// VPNGrace is how long a VPN client whose link dropped is kept for
+	// another (protocol.VPNLinkGrace).
+	VPNGrace time.Duration
 }
 
 // DefaultConfig is the service's usual pace; the ports are the
@@ -75,7 +78,8 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{HandshakeWait: 10 * time.Second, ConnectSlack: 30 * time.Second, ResendAfter: 5 * time.Second,
 		UDPIdle: protocol.TunnelUDPIdle + time.Minute,
-		Sweep:   15 * time.Second, IdlePoll: 250 * time.Millisecond, TaskPoll: time.Second, Tell: time.Second}
+		Sweep:   15 * time.Second, IdlePoll: 250 * time.Millisecond, TaskPoll: time.Second, Tell: time.Second,
+		VPNGrace: protocol.VPNLinkGrace}
 }
 
 // Tasks is what the service reads and keeps of tasks (the minion task
@@ -107,11 +111,17 @@ type Service struct {
 	// listeners keeps reverse port forwards' (WithListeners): none, and
 	// core opens none.
 	listeners repository.IMinionListenerRepository
-	tasks     Tasks
-	bus       eventbus.IEventBus
-	waker     Waker
-	logger    *zap.Logger
-	now       func() time.Time
+	// vpnTunnels and vpnKeys keep VPN tunnels and their clients' keys
+	// (WithVPN): none, and core opens none; roles reads a client's
+	// operator's role.
+	vpnTunnels repository.IVPNTunnelRepository
+	vpnKeys    repository.IVPNKeyRepository
+	roles      VPNRoles
+	tasks      Tasks
+	bus        eventbus.IEventBus
+	waker      Waker
+	logger     *zap.Logger
+	now        func() time.Time
 
 	mu sync.Mutex
 	// tunnels by task.
@@ -195,6 +205,10 @@ type Opening struct {
 	Program    string
 	Args       []string
 	Rows, Cols int
+	// Routes are a VPN's networks (OpenVPN), CIDRs; ICMP: its command opens
+	// icmp (UDP: udp).
+	Routes []string
+	ICMP   bool
 }
 
 // Open takes an operational port for a tunnel task about to be queued, and
@@ -296,8 +310,10 @@ func (s *Service) Close(ctx context.Context, task uuid.UUID) {
 	}
 	var waiting []net.Conn
 	var totals models.MinionTaskTunnel
+	endVPN := func() {}
 	if t != nil {
 		t.closing = true
+		endVPN = s.endVPN(t, "the tunnel's task ended")
 		for _, st := range t.streams {
 			s.drop(st, models.TunnelEndTaskEnded, false)
 		}
@@ -305,6 +321,7 @@ func (s *Service) Close(ctx context.Context, task uuid.UUID) {
 		totals = models.MinionTaskTunnel{Streams: t.opened, Up: t.up, Down: t.down}
 	}
 	s.mu.Unlock()
+	endVPN()
 	if t != nil {
 		// Its totals are kept before it goes: its task never shows it
 		// without them.
@@ -328,13 +345,16 @@ func (s *Service) Close(ctx context.Context, task uuid.UUID) {
 		for _, c := range waiting {
 			_ = c.Close()
 		}
-		if t.reverse {
+		switch {
+		case t.reverse:
 			s.logger.Info("tunnels: reverse port forward ended", zap.String("task_id", task.String()))
-		} else {
+		case t.vpn != nil:
+			s.logger.Info("tunnels: VPN tunnel ended", zap.String("task_id", task.String()))
+		default:
 			s.logger.Info("tunnels: port closed", zap.Int("port", t.port), zap.String("task_id", task.String()))
 		}
 	}
-	if t == nil || !t.reverse {
+	if t == nil || (t.vpn == nil && !t.reverse) {
 		if err := s.ports.Release(ctx, task); err != nil {
 			s.logger.Warn("tunnels: give back a task's port", zap.String("task_id", task.String()), zap.Error(err))
 		}
@@ -344,9 +364,14 @@ func (s *Service) Close(ctx context.Context, task uuid.UUID) {
 			s.logger.Warn("tunnels: forget a task's reverse port forward", zap.String("task_id", task.String()), zap.Error(err))
 		}
 	}
+	if t == nil || t.vpn != nil {
+		s.releaseVPN(ctx, task)
+	}
 	switch {
 	case t != nil && t.reverse:
 		s.listenerChanged(task, t.operation, false, true)
+	case t != nil && t.vpn != nil:
+		s.vpnChanged(task, t.operation, false, true)
 	case t != nil:
 		s.portChanged(task, t.operation, false, true)
 	}
@@ -389,6 +414,15 @@ func (s *Service) Start(ctx context.Context) {
 		}
 		for i := range listeners {
 			s.reopenReverse(ctx, &listeners[i])
+		}
+	}
+	if s.vpnTunnels != nil {
+		vpns, err := s.vpnTunnels.All(ctx)
+		if err != nil {
+			s.logger.Error("tunnels: read the VPN tunnels", zap.Error(err))
+		}
+		for i := range vpns {
+			s.reopenVPN(ctx, &vpns[i])
 		}
 	}
 	if s.bus != nil {
@@ -469,7 +503,9 @@ func (s *Service) Stop() {
 	s.mu.Lock()
 	var all []*tunnel
 	var waiting []net.Conn
+	var links []*vpnLinkState
 	for id, t := range s.tunnels {
+		links = append(links, s.stopVPN(t)...)
 		all = append(all, t)
 		t.closing = true
 		for _, st := range t.streams {
@@ -487,6 +523,10 @@ func (s *Service) Stop() {
 	}
 	for _, c := range waiting {
 		_ = c.Close()
+	}
+	for _, ls := range links {
+		// The clients connect again once core is back: their keys stay.
+		ls.close(1001, "core is restarting")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	s.keepBytes(ctx, all)
@@ -571,6 +611,7 @@ func (s *Service) sweep() {
 			s.check(context.Background(), id)
 		}
 		s.endIdleUDP()
+		s.vpnSweep(context.Background())
 		s.keepBytes(context.Background(), nil)
 	}
 }
@@ -607,9 +648,12 @@ func (s *Service) tell() {
 			s.bus.Publish(eventbus.NewMinionTaskChangedEvent(p))
 		}
 		for _, t := range counted {
-			if t.reverse {
+			switch {
+			case t.reverse:
 				s.listenerChanged(t.task, t.operation, false, false)
-			} else {
+			case t.vpn != nil:
+				s.vpnChanged(t.task, t.operation, false, false)
+			default:
 				s.portChanged(t.task, t.operation, false, false)
 			}
 		}

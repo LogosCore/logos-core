@@ -21,7 +21,8 @@ import (
 // once none is open (the clock running), and not while one is.
 func (t *tunnel) streamsChanged(now time.Time) {
 	switch {
-	case len(t.streams) > 0:
+	case len(t.streams) > 0 || (t.vpn != nil && len(t.vpn.clients) > 0):
+		// A VPN's connected client holds the clock, as an open stream does.
 		t.idleSince = time.Time{}
 	case t.idleArmed && t.idleSince.IsZero():
 		t.idleSince = now

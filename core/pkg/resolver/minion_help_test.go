@@ -99,7 +99,8 @@ func TestMinionHelpConditions(t *testing.T) {
 	tunnel := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{tunnelCmd}}, tunnelCmd, "")
 	one := helpText([]protocol.BuildCommand{tunnel}, "tunnel")
 	for _, want := range []string{
-		"  front      enum, default socks, one of socks, http, forward\n",
+		"  front      enum, default socks, one of socks, http, forward, vpn\n",
+		"  routes     string_list, required, only when front is vpn\n",
 		"  host       string, only when front is forward\n",
 		"  stop_idle  duration, default 1h\n",
 	} {
@@ -118,7 +119,7 @@ func TestMinionHelpFormOrder(t *testing.T) {
 		{Key: "max_streams", Num: 3, Type: protocol.FieldInt, Label: "Connections at once", Default: 256, Order: 11, Advanced: true},
 	}
 	tunnel := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{cmd}}, cmd, "")
-	if got, want := commandUsage(tunnel), "tunnel [front=socks] [port=0] [host] [to] [timeout=10s] [max_streams=256] [stop_idle=1h] [cap=0]"; got != want {
+	if got, want := commandUsage(tunnel), "tunnel [front=socks] [port=0] [routes] [host] [to] [timeout=10s] [max_streams=256] [stop_idle=1h] [cap=0]"; got != want {
 		t.Errorf("usage %q, want %q", got, want)
 	}
 	feedback := protocol.BuildCommand{ID: "feedback", Params: []protocol.FieldSpec{

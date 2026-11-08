@@ -141,9 +141,12 @@ func (s *Service) SetCap(ctx context.Context, task uuid.UUID, limit int64) error
 			st.capHeld, st.ackDue = false, true
 		}
 	}
-	reverse, session := t.reverse, t.session
+	reverse, vpn, session := t.reverse, t.vpn != nil, t.session
 	s.mu.Unlock()
 	s.wake(session)
+	if vpn {
+		return s.vpnTunnels.SetCap(ctx, task, limit)
+	}
 	if reverse {
 		if s.listeners == nil {
 			return nil

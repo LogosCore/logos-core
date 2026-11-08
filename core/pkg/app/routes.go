@@ -33,6 +33,9 @@ func (a *App) mountPublicRoutes(v1 *gin.RouterGroup, c *controllers) {
 	v1.GET("/status", c.status.Status)
 	v1.POST("/enroll", c.enroll.Enroll)
 	v1.POST("/login", c.auth.Login)
+	// logos-vpn's link (docs: contracts/vpn-front): its key, a VPN key of
+	// one operator's for one task, is its sign-in, checked by the tunnels.
+	v1.GET("/vpn", c.vpn.Link)
 
 	// SSO start + provider callback. Both are top-level GET navigations with
 	// no cookie-authenticated state to protect, so they sit outside AuthN and
@@ -173,6 +176,8 @@ func (a *App) mountBuildRoutes(v1 *gin.RouterGroup, c *controllers) {
 	v1.GET("/minion-tasks/:id/data", c.task.DownloadData)
 	// A terminal task's web terminal: a WebSocket, for an operator.
 	v1.GET("/minion-tasks/:id/terminal", c.terminal.Terminal)
+	// This core's logos-vpn for a system, for anyone signed in.
+	v1.GET("/vpn/client/:platform", c.vpn.Client)
 	v1.GET("/minion-files/:id", c.task.DownloadFile)
 	v1.POST("/minion-files", c.task.UploadFile)
 }

@@ -1042,31 +1042,33 @@ type ComplexityRoot struct {
 	}
 
 	MinionTunnel struct {
-		Address   func(childComplexity int) int
-		Args      func(childComplexity int) int
-		Bind      func(childComplexity int) int
-		Bound     func(childComplexity int) int
-		Cap       func(childComplexity int) int
-		Cols      func(childComplexity int) int
-		Down      func(childComplexity int) int
-		Front     func(childComplexity int) int
-		Kept      func(childComplexity int) int
-		Listen    func(childComplexity int) int
-		Listening func(childComplexity int) int
-		Open      func(childComplexity int) int
-		Path      func(childComplexity int) int
-		Port      func(childComplexity int) int
-		Program   func(childComplexity int) int
-		Reverse   func(childComplexity int) int
-		Rows      func(childComplexity int) int
-		SocksBind func(childComplexity int) int
-		Source    func(childComplexity int) int
-		StopsAt   func(childComplexity int) int
-		Streams   func(childComplexity int) int
-		TLS       func(childComplexity int) int
-		To        func(childComplexity int) int
-		UDP       func(childComplexity int) int
-		Up        func(childComplexity int) int
+		Address    func(childComplexity int) int
+		Args       func(childComplexity int) int
+		Bind       func(childComplexity int) int
+		Bound      func(childComplexity int) int
+		Cap        func(childComplexity int) int
+		Cols       func(childComplexity int) int
+		Down       func(childComplexity int) int
+		Front      func(childComplexity int) int
+		Kept       func(childComplexity int) int
+		Listen     func(childComplexity int) int
+		Listening  func(childComplexity int) int
+		Open       func(childComplexity int) int
+		Path       func(childComplexity int) int
+		Port       func(childComplexity int) int
+		Program    func(childComplexity int) int
+		Reverse    func(childComplexity int) int
+		Routes     func(childComplexity int) int
+		Rows       func(childComplexity int) int
+		SocksBind  func(childComplexity int) int
+		Source     func(childComplexity int) int
+		StopsAt    func(childComplexity int) int
+		Streams    func(childComplexity int) int
+		TLS        func(childComplexity int) int
+		To         func(childComplexity int) int
+		UDP        func(childComplexity int) int
+		Up         func(childComplexity int) int
+		VpnClients func(childComplexity int) int
 	}
 
 	MinionTunnelStream struct {
@@ -1095,6 +1097,28 @@ type ComplexityRoot struct {
 	MinionTunnelStreamPage struct {
 		Before  func(childComplexity int) int
 		Streams func(childComplexity int) int
+	}
+
+	MinionVPNClient struct {
+		Arch      func(childComplexity int) int
+		Connected func(childComplexity int) int
+		Down      func(childComplexity int) int
+		From      func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Machine   func(childComplexity int) int
+		Name      func(childComplexity int) int
+		Open      func(childComplexity int) int
+		Os        func(childComplexity int) int
+		Since     func(childComplexity int) int
+		Streams   func(childComplexity int) int
+		Up        func(childComplexity int) int
+		User      func(childComplexity int) int
+		Version   func(childComplexity int) int
+	}
+
+	MinionVPNKey struct {
+		Key      func(childComplexity int) int
+		LapsesAt func(childComplexity int) int
 	}
 
 	Module struct {
@@ -1304,6 +1328,7 @@ type ComplexityRoot struct {
 		CreateHash                    func(childComplexity int, operationID string, input model.CreateHashInput) int
 		CreateHost                    func(childComplexity int, operationID string, input model.CreateHostInput) int
 		CreateMinionSessionFolder     func(childComplexity int, operationID string, input model.MinionSessionFolderInput) int
+		CreateMinionVPNKey            func(childComplexity int, taskID string) int
 		CreateMyAPIKey                func(childComplexity int) int
 		CreateOperation               func(childComplexity int, input model.CreateOperationInput) int
 		CreateTask                    func(childComplexity int, input model.CreateTaskInput) int
@@ -1330,6 +1355,7 @@ type ComplexityRoot struct {
 		DeleteWikiDocument            func(childComplexity int, id string) int
 		DeleteWikiDocumentBackup      func(childComplexity int, id string) int
 		DisconnectMinionTarget        func(childComplexity int, id string) int
+		DisconnectMinionVPNClient     func(childComplexity int, taskID string, client string) int
 		DuplicateWikiDocument         func(childComplexity int, id string, withChildren *bool) int
 		EmptyWikiDocumentTrash        func(childComplexity int, operationID string) int
 		ImportLocalPreferences        func(childComplexity int, input model.ImportLocalPreferencesInput) int
@@ -1367,6 +1393,7 @@ type ComplexityRoot struct {
 		SetMinionSessionsLayout       func(childComplexity int, layout *model.MinionSessionsLayoutInput) int
 		SetMinionSessionsMark         func(childComplexity int, operationID string, ids []string, matching *model.MinionSessionMatchInput, mark *model.MinionSessionMarkInput) int
 		SetMinionTunnelCap            func(childComplexity int, taskID string, cap int) int
+		SetMinionTunnelRoutes         func(childComplexity int, taskID string, routes []string) int
 		SetMyAPIKeyEnabled            func(childComplexity int, enabled bool) int
 		SetTaskAssignees              func(childComplexity int, taskID string, assigneeIds []string) int
 		SetTaskCredentialReferences   func(childComplexity int, taskID string, credentialIds []string) int
@@ -1575,6 +1602,7 @@ type ComplexityRoot struct {
 		User                               func(childComplexity int, id string) int
 		UserSuggestions                    func(childComplexity int, search string, first *int) int
 		Users                              func(childComplexity int, search *string, sortBy *model.UserSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
+		VpnTunnels                         func(childComplexity int, operationID string, search *string, first *int, after *string, last *int, before *string) int
 		WikiDocument                       func(childComplexity int, id string) int
 		WikiDocumentBacklinks              func(childComplexity int, documentID string) int
 		WikiDocumentBackup                 func(childComplexity int, id string) int
@@ -1711,6 +1739,7 @@ type ComplexityRoot struct {
 		TaskChanged                 func(childComplexity int, operationID string) int
 		TimelineEventAdded          func(childComplexity int, operationID string) int
 		UserChanged                 func(childComplexity int) int
+		VpnTunnelChanged            func(childComplexity int, operationID string) int
 		WikiDocumentChanged         func(childComplexity int, operationID string) int
 		WikiDocumentPresenceChanged func(childComplexity int, operationID string) int
 	}
@@ -1836,6 +1865,40 @@ type ComplexityRoot struct {
 	UserSuggestion struct {
 		ID       func(childComplexity int) int
 		Username func(childComplexity int) int
+	}
+
+	VPNTunnel struct {
+		Clients       func(childComplexity int) int
+		ID            func(childComplexity int) int
+		Listening     func(childComplexity int) int
+		Open          func(childComplexity int) int
+		OpenedAt      func(childComplexity int) int
+		OpenedBy      func(childComplexity int) int
+		OpenedByName  func(childComplexity int) int
+		Routes        func(childComplexity int) int
+		SessionID     func(childComplexity int) int
+		SessionNumber func(childComplexity int) int
+		StopsAt       func(childComplexity int) int
+		Streams       func(childComplexity int) int
+		TaskID        func(childComplexity int) int
+	}
+
+	VPNTunnelConnection struct {
+		Edges      func(childComplexity int) int
+		PageInfo   func(childComplexity int) int
+		TotalCount func(childComplexity int) int
+	}
+
+	VPNTunnelEdge struct {
+		Cursor func(childComplexity int) int
+		Node   func(childComplexity int) int
+	}
+
+	VPNTunnelEvent struct {
+		Action      func(childComplexity int) int
+		ID          func(childComplexity int) int
+		OperationID func(childComplexity int) int
+		Tunnel      func(childComplexity int) int
 	}
 
 	WikiDocument struct {
@@ -2189,6 +2252,9 @@ type MutationResolver interface {
 	QueueMinionTask(ctx context.Context, sessionID string, command string, args any) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
 	SetMinionTunnelCap(ctx context.Context, taskID string, cap int) (*model.MinionTask, error)
+	SetMinionTunnelRoutes(ctx context.Context, taskID string, routes []string) (*model.MinionTask, error)
+	CreateMinionVPNKey(ctx context.Context, taskID string) (*model.MinionVPNKey, error)
+	DisconnectMinionVPNClient(ctx context.Context, taskID string, client string) (*model.MinionTask, error)
 	MinionStreamLink(ctx context.Context, taskID string) (*model.MinionStreamLink, error)
 	UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
 	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
@@ -2315,6 +2381,7 @@ type QueryResolver interface {
 	TasksReferencingCredential(ctx context.Context, credentialID string) ([]*models.Task, error)
 	TimelineBuckets(ctx context.Context, operationID string, granularity *repository.TimelineGranularity, timezone string, from *string, to *string, types []string, actorIds []string) ([]*model.TimelineBucket, error)
 	TimelineEventsByDay(ctx context.Context, operationID string, date string, timezone string, granularity *repository.TimelineGranularity, types []string, actorIds []string, first *int, after *string) (*model.TimelineEventConnection, error)
+	VpnTunnels(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.VPNTunnelConnection, error)
 	WikiDocument(ctx context.Context, id string) (*models.WikiDocument, error)
 	WikiDocuments(ctx context.Context, operationID string, parentDocumentID *string, search *string, sort *model.WikiDocumentSort, first *int, after *string, last *int, before *string) (*model.WikiDocumentConnection, error)
 	WikiDocumentTree(ctx context.Context, operationID string) ([]*models.WikiDocument, error)
@@ -2373,6 +2440,7 @@ type SubscriptionResolver interface {
 	SkillChanged(ctx context.Context) (<-chan *model.SkillEvent, error)
 	TaskChanged(ctx context.Context, operationID string) (<-chan *model.TaskEvent, error)
 	TimelineEventAdded(ctx context.Context, operationID string) (<-chan *models.OperationEvent, error)
+	VpnTunnelChanged(ctx context.Context, operationID string) (<-chan *model.VPNTunnelEvent, error)
 	WikiDocumentChanged(ctx context.Context, operationID string) (<-chan *model.WikiDocumentEvent, error)
 	WikiDocumentPresenceChanged(ctx context.Context, operationID string) (<-chan *model.WikiDocumentPresenceEvent, error)
 }
@@ -6787,6 +6855,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Reverse(childComplexity), true
+	case "MinionTunnel.routes":
+		if e.ComplexityRoot.MinionTunnel.Routes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Routes(childComplexity), true
 	case "MinionTunnel.rows":
 		if e.ComplexityRoot.MinionTunnel.Rows == nil {
 			break
@@ -6841,6 +6915,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Up(childComplexity), true
+	case "MinionTunnel.vpnClients":
+		if e.ComplexityRoot.MinionTunnel.VpnClients == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.VpnClients(childComplexity), true
 
 	case "MinionTunnelStream.bound":
 		if e.ComplexityRoot.MinionTunnelStream.Bound == nil {
@@ -6975,6 +7055,104 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnelStreamPage.Streams(childComplexity), true
+
+	case "MinionVPNClient.arch":
+		if e.ComplexityRoot.MinionVPNClient.Arch == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.Arch(childComplexity), true
+	case "MinionVPNClient.connected":
+		if e.ComplexityRoot.MinionVPNClient.Connected == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.Connected(childComplexity), true
+	case "MinionVPNClient.down":
+		if e.ComplexityRoot.MinionVPNClient.Down == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.Down(childComplexity), true
+	case "MinionVPNClient.from":
+		if e.ComplexityRoot.MinionVPNClient.From == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.From(childComplexity), true
+	case "MinionVPNClient.id":
+		if e.ComplexityRoot.MinionVPNClient.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.ID(childComplexity), true
+	case "MinionVPNClient.machine":
+		if e.ComplexityRoot.MinionVPNClient.Machine == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.Machine(childComplexity), true
+	case "MinionVPNClient.name":
+		if e.ComplexityRoot.MinionVPNClient.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.Name(childComplexity), true
+	case "MinionVPNClient.open":
+		if e.ComplexityRoot.MinionVPNClient.Open == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.Open(childComplexity), true
+	case "MinionVPNClient.os":
+		if e.ComplexityRoot.MinionVPNClient.Os == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.Os(childComplexity), true
+	case "MinionVPNClient.since":
+		if e.ComplexityRoot.MinionVPNClient.Since == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.Since(childComplexity), true
+	case "MinionVPNClient.streams":
+		if e.ComplexityRoot.MinionVPNClient.Streams == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.Streams(childComplexity), true
+	case "MinionVPNClient.up":
+		if e.ComplexityRoot.MinionVPNClient.Up == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.Up(childComplexity), true
+	case "MinionVPNClient.user":
+		if e.ComplexityRoot.MinionVPNClient.User == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.User(childComplexity), true
+	case "MinionVPNClient.version":
+		if e.ComplexityRoot.MinionVPNClient.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNClient.Version(childComplexity), true
+
+	case "MinionVPNKey.key":
+		if e.ComplexityRoot.MinionVPNKey.Key == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNKey.Key(childComplexity), true
+	case "MinionVPNKey.lapsesAt":
+		if e.ComplexityRoot.MinionVPNKey.LapsesAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionVPNKey.LapsesAt(childComplexity), true
 
 	case "Module.blockReason":
 		if e.ComplexityRoot.Module.BlockReason == nil {
@@ -7999,6 +8177,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateMinionSessionFolder(childComplexity, args["operationId"].(string), args["input"].(model.MinionSessionFolderInput)), true
+	case "Mutation.createMinionVPNKey":
+		if e.ComplexityRoot.Mutation.CreateMinionVPNKey == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createMinionVPNKey_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateMinionVPNKey(childComplexity, args["taskId"].(string)), true
 	case "Mutation.createMyAPIKey":
 		if e.ComplexityRoot.Mutation.CreateMyAPIKey == nil {
 			break
@@ -8275,6 +8464,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DisconnectMinionTarget(childComplexity, args["id"].(string)), true
+	case "Mutation.disconnectMinionVPNClient":
+		if e.ComplexityRoot.Mutation.DisconnectMinionVPNClient == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_disconnectMinionVPNClient_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DisconnectMinionVPNClient(childComplexity, args["taskId"].(string), args["client"].(string)), true
 	case "Mutation.duplicateWikiDocument":
 		if e.ComplexityRoot.Mutation.DuplicateWikiDocument == nil {
 			break
@@ -8672,6 +8872,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetMinionTunnelCap(childComplexity, args["taskId"].(string), args["cap"].(int)), true
+	case "Mutation.setMinionTunnelRoutes":
+		if e.ComplexityRoot.Mutation.SetMinionTunnelRoutes == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setMinionTunnelRoutes_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetMinionTunnelRoutes(childComplexity, args["taskId"].(string), args["routes"].([]string)), true
 	case "Mutation.setMyAPIKeyEnabled":
 		if e.ComplexityRoot.Mutation.SetMyAPIKeyEnabled == nil {
 			break
@@ -10123,6 +10334,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Users(childComplexity, args["search"].(*string), args["sortBy"].(*model.UserSortField), args["sortDirection"].(*model.SortDirection), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
+	case "Query.vpnTunnels":
+		if e.ComplexityRoot.Query.VpnTunnels == nil {
+			break
+		}
+
+		args, err := ec.field_Query_vpnTunnels_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.VpnTunnels(childComplexity, args["operationId"].(string), args["search"].(*string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.wikiDocument":
 		if e.ComplexityRoot.Query.WikiDocument == nil {
 			break
@@ -10940,6 +11162,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.UserChanged(childComplexity), true
+	case "Subscription.vpnTunnelChanged":
+		if e.ComplexityRoot.Subscription.VpnTunnelChanged == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_vpnTunnelChanged_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Subscription.VpnTunnelChanged(childComplexity, args["operationId"].(string)), true
 	case "Subscription.wikiDocumentChanged":
 		if e.ComplexityRoot.Subscription.WikiDocumentChanged == nil {
 			break
@@ -11462,6 +11695,142 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.UserSuggestion.Username(childComplexity), true
+
+	case "VPNTunnel.clients":
+		if e.ComplexityRoot.VPNTunnel.Clients == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.Clients(childComplexity), true
+	case "VPNTunnel.id":
+		if e.ComplexityRoot.VPNTunnel.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.ID(childComplexity), true
+	case "VPNTunnel.listening":
+		if e.ComplexityRoot.VPNTunnel.Listening == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.Listening(childComplexity), true
+	case "VPNTunnel.open":
+		if e.ComplexityRoot.VPNTunnel.Open == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.Open(childComplexity), true
+	case "VPNTunnel.openedAt":
+		if e.ComplexityRoot.VPNTunnel.OpenedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.OpenedAt(childComplexity), true
+	case "VPNTunnel.openedBy":
+		if e.ComplexityRoot.VPNTunnel.OpenedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.OpenedBy(childComplexity), true
+	case "VPNTunnel.openedByName":
+		if e.ComplexityRoot.VPNTunnel.OpenedByName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.OpenedByName(childComplexity), true
+	case "VPNTunnel.routes":
+		if e.ComplexityRoot.VPNTunnel.Routes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.Routes(childComplexity), true
+	case "VPNTunnel.sessionId":
+		if e.ComplexityRoot.VPNTunnel.SessionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.SessionID(childComplexity), true
+	case "VPNTunnel.sessionNumber":
+		if e.ComplexityRoot.VPNTunnel.SessionNumber == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.SessionNumber(childComplexity), true
+	case "VPNTunnel.stopsAt":
+		if e.ComplexityRoot.VPNTunnel.StopsAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.StopsAt(childComplexity), true
+	case "VPNTunnel.streams":
+		if e.ComplexityRoot.VPNTunnel.Streams == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.Streams(childComplexity), true
+	case "VPNTunnel.taskId":
+		if e.ComplexityRoot.VPNTunnel.TaskID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.TaskID(childComplexity), true
+
+	case "VPNTunnelConnection.edges":
+		if e.ComplexityRoot.VPNTunnelConnection.Edges == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnelConnection.Edges(childComplexity), true
+	case "VPNTunnelConnection.pageInfo":
+		if e.ComplexityRoot.VPNTunnelConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnelConnection.PageInfo(childComplexity), true
+	case "VPNTunnelConnection.totalCount":
+		if e.ComplexityRoot.VPNTunnelConnection.TotalCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnelConnection.TotalCount(childComplexity), true
+
+	case "VPNTunnelEdge.cursor":
+		if e.ComplexityRoot.VPNTunnelEdge.Cursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnelEdge.Cursor(childComplexity), true
+	case "VPNTunnelEdge.node":
+		if e.ComplexityRoot.VPNTunnelEdge.Node == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnelEdge.Node(childComplexity), true
+
+	case "VPNTunnelEvent.action":
+		if e.ComplexityRoot.VPNTunnelEvent.Action == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnelEvent.Action(childComplexity), true
+	case "VPNTunnelEvent.id":
+		if e.ComplexityRoot.VPNTunnelEvent.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnelEvent.ID(childComplexity), true
+	case "VPNTunnelEvent.operationId":
+		if e.ComplexityRoot.VPNTunnelEvent.OperationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnelEvent.OperationID(childComplexity), true
+	case "VPNTunnelEvent.tunnel":
+		if e.ComplexityRoot.VPNTunnelEvent.Tunnel == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnelEvent.Tunnel(childComplexity), true
 
 	case "WikiDocument.ancestors":
 		if e.ComplexityRoot.WikiDocument.Ancestors == nil {
@@ -15441,6 +15810,45 @@ type MinionTunnel {
   # The bytes its tools sent through it (up), and got back (down).
   up: Int!
   down: Int!
+  # A VPN's (front vpn, docs: contracts/vpn-front): the networks its
+  # clients route, CIDRs (setMinionTunnelRoutes changes them while it
+  # runs), and its clients, logos-vpn on operators' machines, while it
+  # runs. Null and empty for any other tunnel.
+  routes: [String!]
+  vpnClients: [MinionVPNClient!]!
+}
+
+# A client of a VPN tunnel: logos-vpn on one operator's machine, connected
+# with a key of theirs, or kept a while since its link dropped.
+type MinionVPNClient {
+  # Its instance: what disconnectMinionVPNClient names.
+  id: ID!
+  # What its streams say they came from: vpn: user@machine.
+  name: String!
+  user: String!
+  # Its machine's name, its system (GOOS, GOARCH) and its release.
+  machine: String!
+  os: String!
+  arch: String!
+  version: String!
+  # The address it connected from, as core saw it, and since when.
+  from: String!
+  since: String!
+  # Its link is up; else core keeps it a while for another.
+  connected: Boolean!
+  # Its streams now, how many it opened, and its bytes each way.
+  open: Int!
+  streams: Int!
+  up: Int!
+  down: Int!
+}
+
+# A key for one client of a VPN tunnel: one operator's, for one task. It
+# lapses unused at lapsesAt; a client that took it has it until it
+# disconnects.
+type MinionVPNKey {
+  key: String!
+  lapsesAt: String!
 }
 
 # One stream of a tunnel task: a connection a tool made through its proxy,
@@ -15461,7 +15869,8 @@ type MinionTunnelStream {
   path: String
   udp: Boolean!
   # What it opens past a TCP connection or a UDP association: unix, pipe,
-  # process (a terminal's) or accept (a SOCKS BIND); null for those.
+  # process (a terminal's), accept (a SOCKS BIND) or icmp (a VPN client's
+  # pings); null for those.
   kind: String
   # A process's: its program (null: the host's shell), whether it runs in
   # a terminal (false: on pipes; null until it started), and its exit code
@@ -15582,6 +15991,21 @@ extend type Mutation {
   # Changes a running tunnel task's bandwidth cap: bytes a second each way,
   # over all of its streams, 0 for none. Needs operator.
   setMinionTunnelCap(taskId: ID!, cap: Int!): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # Changes a running VPN tunnel's routes, CIDRs (1 to 64; no default
+  # route): its clients take them at once. Needs operator.
+  setMinionTunnelRoutes(taskId: ID!, routes: [String!]!): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # A key for a client of a running VPN tunnel, for the caller: logos-vpn
+  # connects with it (sudo logos-vpn <core> <key>). Needs operator.
+  createMinionVPNKey(taskId: ID!): MinionVPNKey!
+    @hasPermission(permission: "operation:member")
+
+  # Ends a client of a VPN tunnel (its id), saying who did. Needs
+  # operator.
+  disconnectMinionVPNClient(taskId: ID!, client: ID!): MinionTask!
     @hasPermission(permission: "operation:member")
 
   # A signed link to download a stream_file task's stream (for curl).
@@ -17393,6 +17817,69 @@ extend type Mutation {
     @hasPermission(permission: "operation:member")
 }
 `, BuiltIn: false},
+	{Name: "../schema/vpn_tunnels.graphql", Input: `# A VPN tunnel (docs: contracts/vpn-front): its task's routes, which its
+# clients (logos-vpn on operators' machines) route while the task runs. It
+# takes no operational port.
+type VPNTunnel {
+  # The task's id: a VPN tunnel serves one task.
+  id: ID!
+  # Its networks, CIDRs.
+  routes: [String!]!
+  sessionId: ID!
+  # The session's number when it opened.
+  sessionNumber: Int!
+  taskId: ID!
+  openedBy: ID!
+  # Who opened it, by name when it opened; null for one gone.
+  openedByName: String
+  openedAt: String!
+  # Its task runs: core holds it, and clients may connect.
+  listening: Boolean!
+  # Its machines connected now.
+  clients: Int!
+  # Its streams now, and how many it has had.
+  open: Int!
+  streams: Int!
+  # When core stops its task unless a stream opens or a machine connects
+  # first; null for none.
+  stopsAt: String
+}
+
+type VPNTunnelEdge {
+  node: VPNTunnel!
+  cursor: String!
+}
+
+type VPNTunnelConnection {
+  edges: [VPNTunnelEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+# A VPN tunnel changing: opened (CREATED), its clients or streams' numbers
+# (UPDATED), closed with its task (DELETED: no tunnel).
+type VPNTunnelEvent {
+  action: EventAction!
+  # The tunnel's id: its task's.
+  id: ID!
+  operationId: ID!
+  tunnel: VPNTunnel
+}
+
+extend type Subscription {
+  # An operation's VPN tunnels as they change. Needs at least viewer.
+  vpnTunnelChanged(operationId: ID!): VPNTunnelEvent!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Query {
+  # An operation's VPN tunnels, the latest opened first, a page at a time;
+  # search matches the session's number, who opened it and the routes.
+  # Needs at least viewer.
+  vpnTunnels(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): VPNTunnelConnection!
+    @hasPermission(permission: "operation:member")
+}
+`, BuiltIn: false},
 	{Name: "../schema/wiki.graphql", Input: `# =============================================================================
 # Wiki — Operation-Scoped Knowledge Base with Real-Time Collaborative Editing
 # =============================================================================
@@ -18345,6 +18832,17 @@ func (ec *executionContext) field_Mutation_createMinionSessionFolder_args(ctx co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createMinionVPNKey_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "taskId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["taskId"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createOperation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -18631,6 +19129,22 @@ func (ec *executionContext) field_Mutation_disconnectMinionTarget_args(ctx conte
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_disconnectMinionVPNClient_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "taskId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["taskId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "client", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["client"] = arg1
 	return args, nil
 }
 
@@ -19176,6 +19690,22 @@ func (ec *executionContext) field_Mutation_setMinionTunnelCap_args(ctx context.C
 		return nil, err
 	}
 	args["cap"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setMinionTunnelRoutes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "taskId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["taskId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "routes", ec.unmarshalNString2ᚕstringᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["routes"] = arg1
 	return args, nil
 }
 
@@ -21208,6 +21738,42 @@ func (ec *executionContext) field_Query_users_args(ctx context.Context, rawArgs 
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_vpnTunnels_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["last"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg5
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_wikiDocumentBacklinks_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -21769,6 +22335,17 @@ func (ec *executionContext) field_Subscription_taskChanged_args(ctx context.Cont
 }
 
 func (ec *executionContext) field_Subscription_timelineEventAdded_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_vpnTunnelChanged_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
@@ -43401,6 +43978,10 @@ func (ec *executionContext) fieldContext_MinionTask_tunnel(_ context.Context, fi
 				return ec.fieldContext_MinionTunnel_up(ctx, field)
 			case "down":
 				return ec.fieldContext_MinionTunnel_down(ctx, field)
+			case "routes":
+				return ec.fieldContext_MinionTunnel_routes(ctx, field)
+			case "vpnClients":
+				return ec.fieldContext_MinionTunnel_vpnClients(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionTunnel", field.Name)
 		},
@@ -45339,6 +45920,94 @@ func (ec *executionContext) fieldContext_MinionTunnel_down(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTunnel_routes(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_routes,
+		func(ctx context.Context) (any, error) {
+			return obj.Routes, nil
+		},
+		nil,
+		ec.marshalOString2ᚕstringᚄ,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_routes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_vpnClients(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_vpnClients,
+		func(ctx context.Context) (any, error) {
+			return obj.VpnClients, nil
+		},
+		nil,
+		ec.marshalNMinionVPNClient2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionVPNClientᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_vpnClients(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionVPNClient_id(ctx, field)
+			case "name":
+				return ec.fieldContext_MinionVPNClient_name(ctx, field)
+			case "user":
+				return ec.fieldContext_MinionVPNClient_user(ctx, field)
+			case "machine":
+				return ec.fieldContext_MinionVPNClient_machine(ctx, field)
+			case "os":
+				return ec.fieldContext_MinionVPNClient_os(ctx, field)
+			case "arch":
+				return ec.fieldContext_MinionVPNClient_arch(ctx, field)
+			case "version":
+				return ec.fieldContext_MinionVPNClient_version(ctx, field)
+			case "from":
+				return ec.fieldContext_MinionVPNClient_from(ctx, field)
+			case "since":
+				return ec.fieldContext_MinionVPNClient_since(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionVPNClient_connected(ctx, field)
+			case "open":
+				return ec.fieldContext_MinionVPNClient_open(ctx, field)
+			case "streams":
+				return ec.fieldContext_MinionVPNClient_streams(ctx, field)
+			case "up":
+				return ec.fieldContext_MinionVPNClient_up(ctx, field)
+			case "down":
+				return ec.fieldContext_MinionVPNClient_down(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionVPNClient", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTunnelStream_stream(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -46009,6 +46678,470 @@ func (ec *executionContext) _MinionTunnelStreamPage_before(ctx context.Context, 
 func (ec *executionContext) fieldContext_MinionTunnelStreamPage_before(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MinionTunnelStreamPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_id(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_name(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_user(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_user,
+		func(ctx context.Context) (any, error) {
+			return obj.User, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_user(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_machine(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_machine,
+		func(ctx context.Context) (any, error) {
+			return obj.Machine, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_machine(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_os(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_os,
+		func(ctx context.Context) (any, error) {
+			return obj.Os, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_os(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_arch(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_arch,
+		func(ctx context.Context) (any, error) {
+			return obj.Arch, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_arch(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_version(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_version,
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_from(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_from,
+		func(ctx context.Context) (any, error) {
+			return obj.From, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_from(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_since(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_since,
+		func(ctx context.Context) (any, error) {
+			return obj.Since, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_since(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_connected(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_connected,
+		func(ctx context.Context) (any, error) {
+			return obj.Connected, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_connected(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_open(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_open,
+		func(ctx context.Context) (any, error) {
+			return obj.Open, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_open(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_streams(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_streams,
+		func(ctx context.Context) (any, error) {
+			return obj.Streams, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_streams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_up(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_up,
+		func(ctx context.Context) (any, error) {
+			return obj.Up, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_up(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNClient_down(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNClient) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNClient_down,
+		func(ctx context.Context) (any, error) {
+			return obj.Down, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNClient_down(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNClient",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNKey_key(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNKey_key,
+		func(ctx context.Context) (any, error) {
+			return obj.Key, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNKey_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNKey",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionVPNKey_lapsesAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionVPNKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionVPNKey_lapsesAt,
+		func(ctx context.Context) (any, error) {
+			return obj.LapsesAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionVPNKey_lapsesAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionVPNKey",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -56809,6 +57942,361 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelCap(ctx context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_setMinionTunnelCap_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setMinionTunnelRoutes(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_setMinionTunnelRoutes,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetMinionTunnelRoutes(ctx, fc.Args["taskId"].(string), fc.Args["routes"].([]string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionTask
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionTask
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionTask2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTask,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_setMinionTunnelRoutes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionTask_id(ctx, field)
+			case "feedback":
+				return ec.fieldContext_MinionTask_feedback(ctx, field)
+			case "feedbackErrors":
+				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
+			case "feedbackWarnings":
+				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionTask_rev(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_MinionTask_sessionId(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionTask_operationId(ctx, field)
+			case "command":
+				return ec.fieldContext_MinionTask_command(ctx, field)
+			case "args":
+				return ec.fieldContext_MinionTask_args(ctx, field)
+			case "as":
+				return ec.fieldContext_MinionTask_as(ctx, field)
+			case "issuedBy":
+				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
+			case "issuedByName":
+				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionTask_state(ctx, field)
+			case "queuedAt":
+				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "sentAt":
+				return ec.fieldContext_MinionTask_sentAt(ctx, field)
+			case "sendCount":
+				return ec.fieldContext_MinionTask_sendCount(ctx, field)
+			case "ackedAt":
+				return ec.fieldContext_MinionTask_ackedAt(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_MinionTask_startedAt(ctx, field)
+			case "doneAt":
+				return ec.fieldContext_MinionTask_doneAt(ctx, field)
+			case "cancelReason":
+				return ec.fieldContext_MinionTask_cancelReason(ctx, field)
+			case "cancelRequestedAt":
+				return ec.fieldContext_MinionTask_cancelRequestedAt(ctx, field)
+			case "ok":
+				return ec.fieldContext_MinionTask_ok(ctx, field)
+			case "exit":
+				return ec.fieldContext_MinionTask_exit(ctx, field)
+			case "err":
+				return ec.fieldContext_MinionTask_err(ctx, field)
+			case "output":
+				return ec.fieldContext_MinionTask_output(ctx, field)
+			case "outputSize":
+				return ec.fieldContext_MinionTask_outputSize(ctx, field)
+			case "outputUtf8":
+				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputTruncated":
+				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
+			case "parts":
+				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "dataParts":
+				return ec.fieldContext_MinionTask_dataParts(ctx, field)
+			case "result":
+				return ec.fieldContext_MinionTask_result(ctx, field)
+			case "action":
+				return ec.fieldContext_MinionTask_action(ctx, field)
+			case "tunnel":
+				return ec.fieldContext_MinionTask_tunnel(ctx, field)
+			case "data":
+				return ec.fieldContext_MinionTask_data(ctx, field)
+			case "dataSize":
+				return ec.fieldContext_MinionTask_dataSize(ctx, field)
+			case "dataTruncated":
+				return ec.fieldContext_MinionTask_dataTruncated(ctx, field)
+			case "dataProblem":
+				return ec.fieldContext_MinionTask_dataProblem(ctx, field)
+			case "missingParts":
+				return ec.fieldContext_MinionTask_missingParts(ctx, field)
+			case "file":
+				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "upload":
+				return ec.fieldContext_MinionTask_upload(ctx, field)
+			case "stream":
+				return ec.fieldContext_MinionTask_stream(ctx, field)
+			case "document":
+				return ec.fieldContext_MinionTask_document(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setMinionTunnelRoutes_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createMinionVPNKey(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_createMinionVPNKey,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateMinionVPNKey(ctx, fc.Args["taskId"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionVPNKey
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionVPNKey
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionVPNKey2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionVPNKey,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createMinionVPNKey(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_MinionVPNKey_key(ctx, field)
+			case "lapsesAt":
+				return ec.fieldContext_MinionVPNKey_lapsesAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionVPNKey", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createMinionVPNKey_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_disconnectMinionVPNClient(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_disconnectMinionVPNClient,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DisconnectMinionVPNClient(ctx, fc.Args["taskId"].(string), fc.Args["client"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionTask
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionTask
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionTask2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTask,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_disconnectMinionVPNClient(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionTask_id(ctx, field)
+			case "feedback":
+				return ec.fieldContext_MinionTask_feedback(ctx, field)
+			case "feedbackErrors":
+				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
+			case "feedbackWarnings":
+				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionTask_rev(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_MinionTask_sessionId(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionTask_operationId(ctx, field)
+			case "command":
+				return ec.fieldContext_MinionTask_command(ctx, field)
+			case "args":
+				return ec.fieldContext_MinionTask_args(ctx, field)
+			case "as":
+				return ec.fieldContext_MinionTask_as(ctx, field)
+			case "issuedBy":
+				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
+			case "issuedByName":
+				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionTask_state(ctx, field)
+			case "queuedAt":
+				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "sentAt":
+				return ec.fieldContext_MinionTask_sentAt(ctx, field)
+			case "sendCount":
+				return ec.fieldContext_MinionTask_sendCount(ctx, field)
+			case "ackedAt":
+				return ec.fieldContext_MinionTask_ackedAt(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_MinionTask_startedAt(ctx, field)
+			case "doneAt":
+				return ec.fieldContext_MinionTask_doneAt(ctx, field)
+			case "cancelReason":
+				return ec.fieldContext_MinionTask_cancelReason(ctx, field)
+			case "cancelRequestedAt":
+				return ec.fieldContext_MinionTask_cancelRequestedAt(ctx, field)
+			case "ok":
+				return ec.fieldContext_MinionTask_ok(ctx, field)
+			case "exit":
+				return ec.fieldContext_MinionTask_exit(ctx, field)
+			case "err":
+				return ec.fieldContext_MinionTask_err(ctx, field)
+			case "output":
+				return ec.fieldContext_MinionTask_output(ctx, field)
+			case "outputSize":
+				return ec.fieldContext_MinionTask_outputSize(ctx, field)
+			case "outputUtf8":
+				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputTruncated":
+				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
+			case "parts":
+				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "dataParts":
+				return ec.fieldContext_MinionTask_dataParts(ctx, field)
+			case "result":
+				return ec.fieldContext_MinionTask_result(ctx, field)
+			case "action":
+				return ec.fieldContext_MinionTask_action(ctx, field)
+			case "tunnel":
+				return ec.fieldContext_MinionTask_tunnel(ctx, field)
+			case "data":
+				return ec.fieldContext_MinionTask_data(ctx, field)
+			case "dataSize":
+				return ec.fieldContext_MinionTask_dataSize(ctx, field)
+			case "dataTruncated":
+				return ec.fieldContext_MinionTask_dataTruncated(ctx, field)
+			case "dataProblem":
+				return ec.fieldContext_MinionTask_dataProblem(ctx, field)
+			case "missingParts":
+				return ec.fieldContext_MinionTask_missingParts(ctx, field)
+			case "file":
+				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "upload":
+				return ec.fieldContext_MinionTask_upload(ctx, field)
+			case "stream":
+				return ec.fieldContext_MinionTask_stream(ctx, field)
+			case "document":
+				return ec.fieldContext_MinionTask_document(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_disconnectMinionVPNClient_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -68046,6 +69534,73 @@ func (ec *executionContext) fieldContext_Query_timelineEventsByDay(ctx context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_vpnTunnels(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_vpnTunnels,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().VpnTunnels(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.VPNTunnelConnection
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.VPNTunnelConnection
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNVPNTunnelConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnelConnection,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_vpnTunnels(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "edges":
+				return ec.fieldContext_VPNTunnelConnection_edges(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_VPNTunnelConnection_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_VPNTunnelConnection_totalCount(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type VPNTunnelConnection", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_vpnTunnels_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_wikiDocument(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -73397,6 +74952,75 @@ func (ec *executionContext) fieldContext_Subscription_timelineEventAdded(ctx con
 	return fc, nil
 }
 
+func (ec *executionContext) _Subscription_vpnTunnelChanged(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	return graphql.ResolveFieldStream(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Subscription_vpnTunnelChanged,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Subscription().VpnTunnelChanged(ctx, fc.Args["operationId"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.VPNTunnelEvent
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.VPNTunnelEvent
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNVPNTunnelEvent2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnelEvent,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Subscription_vpnTunnelChanged(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "action":
+				return ec.fieldContext_VPNTunnelEvent_action(ctx, field)
+			case "id":
+				return ec.fieldContext_VPNTunnelEvent_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_VPNTunnelEvent_operationId(ctx, field)
+			case "tunnel":
+				return ec.fieldContext_VPNTunnelEvent_tunnel(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type VPNTunnelEvent", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_vpnTunnelChanged_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Subscription_wikiDocumentChanged(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
 	return graphql.ResolveFieldStream(
 		ctx,
@@ -76415,6 +78039,716 @@ func (ec *executionContext) fieldContext_UserSuggestion_username(_ context.Conte
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_id(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_routes(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_routes,
+		func(ctx context.Context) (any, error) {
+			return obj.Routes, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_routes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_sessionId(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_sessionId,
+		func(ctx context.Context) (any, error) {
+			return obj.SessionID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_sessionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_sessionNumber(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_sessionNumber,
+		func(ctx context.Context) (any, error) {
+			return obj.SessionNumber, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_sessionNumber(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_taskId(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_taskId,
+		func(ctx context.Context) (any, error) {
+			return obj.TaskID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_taskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_openedBy(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_openedBy,
+		func(ctx context.Context) (any, error) {
+			return obj.OpenedBy, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_openedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_openedByName(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_openedByName,
+		func(ctx context.Context) (any, error) {
+			return obj.OpenedByName, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_openedByName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_openedAt(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_openedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.OpenedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_openedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_listening(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_listening,
+		func(ctx context.Context) (any, error) {
+			return obj.Listening, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_listening(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_clients(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_clients,
+		func(ctx context.Context) (any, error) {
+			return obj.Clients, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_clients(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_open(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_open,
+		func(ctx context.Context) (any, error) {
+			return obj.Open, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_open(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_streams(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_streams,
+		func(ctx context.Context) (any, error) {
+			return obj.Streams, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_streams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_stopsAt(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_stopsAt,
+		func(ctx context.Context) (any, error) {
+			return obj.StopsAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_stopsAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnelConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnelConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnelConnection_edges,
+		func(ctx context.Context) (any, error) {
+			return obj.Edges, nil
+		},
+		nil,
+		ec.marshalNVPNTunnelEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnelEdgeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnelConnection_edges(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnelConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "node":
+				return ec.fieldContext_VPNTunnelEdge_node(ctx, field)
+			case "cursor":
+				return ec.fieldContext_VPNTunnelEdge_cursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type VPNTunnelEdge", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnelConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnelConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnelConnection_pageInfo,
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		ec.marshalNPageInfo2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋpaginationᚐPageInfo,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnelConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnelConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "hasNextPage":
+				return ec.fieldContext_PageInfo_hasNextPage(ctx, field)
+			case "hasPreviousPage":
+				return ec.fieldContext_PageInfo_hasPreviousPage(ctx, field)
+			case "startCursor":
+				return ec.fieldContext_PageInfo_startCursor(ctx, field)
+			case "endCursor":
+				return ec.fieldContext_PageInfo_endCursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PageInfo", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnelConnection_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnelConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnelConnection_totalCount,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalCount, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnelConnection_totalCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnelConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnelEdge_node(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnelEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnelEdge_node,
+		func(ctx context.Context) (any, error) {
+			return obj.Node, nil
+		},
+		nil,
+		ec.marshalNVPNTunnel2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnel,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnelEdge_node(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnelEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_VPNTunnel_id(ctx, field)
+			case "routes":
+				return ec.fieldContext_VPNTunnel_routes(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_VPNTunnel_sessionId(ctx, field)
+			case "sessionNumber":
+				return ec.fieldContext_VPNTunnel_sessionNumber(ctx, field)
+			case "taskId":
+				return ec.fieldContext_VPNTunnel_taskId(ctx, field)
+			case "openedBy":
+				return ec.fieldContext_VPNTunnel_openedBy(ctx, field)
+			case "openedByName":
+				return ec.fieldContext_VPNTunnel_openedByName(ctx, field)
+			case "openedAt":
+				return ec.fieldContext_VPNTunnel_openedAt(ctx, field)
+			case "listening":
+				return ec.fieldContext_VPNTunnel_listening(ctx, field)
+			case "clients":
+				return ec.fieldContext_VPNTunnel_clients(ctx, field)
+			case "open":
+				return ec.fieldContext_VPNTunnel_open(ctx, field)
+			case "streams":
+				return ec.fieldContext_VPNTunnel_streams(ctx, field)
+			case "stopsAt":
+				return ec.fieldContext_VPNTunnel_stopsAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type VPNTunnel", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnelEdge_cursor(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnelEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnelEdge_cursor,
+		func(ctx context.Context) (any, error) {
+			return obj.Cursor, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnelEdge_cursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnelEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnelEvent_action(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnelEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnelEvent_action,
+		func(ctx context.Context) (any, error) {
+			return obj.Action, nil
+		},
+		nil,
+		ec.marshalNEventAction2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐEventAction,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnelEvent_action(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnelEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type EventAction does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnelEvent_id(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnelEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnelEvent_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnelEvent_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnelEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnelEvent_operationId(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnelEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnelEvent_operationId,
+		func(ctx context.Context) (any, error) {
+			return obj.OperationID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnelEvent_operationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnelEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnelEvent_tunnel(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnelEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnelEvent_tunnel,
+		func(ctx context.Context) (any, error) {
+			return obj.Tunnel, nil
+		},
+		nil,
+		ec.marshalOVPNTunnel2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnel,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnelEvent_tunnel(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnelEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_VPNTunnel_id(ctx, field)
+			case "routes":
+				return ec.fieldContext_VPNTunnel_routes(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_VPNTunnel_sessionId(ctx, field)
+			case "sessionNumber":
+				return ec.fieldContext_VPNTunnel_sessionNumber(ctx, field)
+			case "taskId":
+				return ec.fieldContext_VPNTunnel_taskId(ctx, field)
+			case "openedBy":
+				return ec.fieldContext_VPNTunnel_openedBy(ctx, field)
+			case "openedByName":
+				return ec.fieldContext_VPNTunnel_openedByName(ctx, field)
+			case "openedAt":
+				return ec.fieldContext_VPNTunnel_openedAt(ctx, field)
+			case "listening":
+				return ec.fieldContext_VPNTunnel_listening(ctx, field)
+			case "clients":
+				return ec.fieldContext_VPNTunnel_clients(ctx, field)
+			case "open":
+				return ec.fieldContext_VPNTunnel_open(ctx, field)
+			case "streams":
+				return ec.fieldContext_VPNTunnel_streams(ctx, field)
+			case "stopsAt":
+				return ec.fieldContext_VPNTunnel_stopsAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type VPNTunnel", field.Name)
 		},
 	}
 	return fc, nil
@@ -92613,6 +94947,13 @@ func (ec *executionContext) _MinionTunnel(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "routes":
+			out.Values[i] = ec._MinionTunnel_routes(ctx, field, obj)
+		case "vpnClients":
+			out.Values[i] = ec._MinionTunnel_vpnClients(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -92755,6 +95096,154 @@ func (ec *executionContext) _MinionTunnelStreamPage(ctx context.Context, sel ast
 			}
 		case "before":
 			out.Values[i] = ec._MinionTunnelStreamPage_before(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionVPNClientImplementors = []string{"MinionVPNClient"}
+
+func (ec *executionContext) _MinionVPNClient(ctx context.Context, sel ast.SelectionSet, obj *model.MinionVPNClient) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionVPNClientImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionVPNClient")
+		case "id":
+			out.Values[i] = ec._MinionVPNClient_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._MinionVPNClient_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "user":
+			out.Values[i] = ec._MinionVPNClient_user(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "machine":
+			out.Values[i] = ec._MinionVPNClient_machine(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "os":
+			out.Values[i] = ec._MinionVPNClient_os(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "arch":
+			out.Values[i] = ec._MinionVPNClient_arch(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._MinionVPNClient_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "from":
+			out.Values[i] = ec._MinionVPNClient_from(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "since":
+			out.Values[i] = ec._MinionVPNClient_since(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "connected":
+			out.Values[i] = ec._MinionVPNClient_connected(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "open":
+			out.Values[i] = ec._MinionVPNClient_open(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "streams":
+			out.Values[i] = ec._MinionVPNClient_streams(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "up":
+			out.Values[i] = ec._MinionVPNClient_up(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "down":
+			out.Values[i] = ec._MinionVPNClient_down(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionVPNKeyImplementors = []string{"MinionVPNKey"}
+
+func (ec *executionContext) _MinionVPNKey(ctx context.Context, sel ast.SelectionSet, obj *model.MinionVPNKey) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionVPNKeyImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionVPNKey")
+		case "key":
+			out.Values[i] = ec._MinionVPNKey_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lapsesAt":
+			out.Values[i] = ec._MinionVPNKey_lapsesAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -94703,6 +97192,27 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "setMinionTunnelCap":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setMinionTunnelCap(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setMinionTunnelRoutes":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setMinionTunnelRoutes(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createMinionVPNKey":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createMinionVPNKey(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "disconnectMinionVPNClient":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_disconnectMinionVPNClient(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -97472,6 +99982,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "vpnTunnels":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_vpnTunnels(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "wikiDocument":
 			field := field
 
@@ -98923,6 +101455,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_taskChanged(ctx, fields[0])
 	case "timelineEventAdded":
 		return ec._Subscription_timelineEventAdded(ctx, fields[0])
+	case "vpnTunnelChanged":
+		return ec._Subscription_vpnTunnelChanged(ctx, fields[0])
 	case "wikiDocumentChanged":
 		return ec._Subscription_wikiDocumentChanged(ctx, fields[0])
 	case "wikiDocumentPresenceChanged":
@@ -100777,6 +103311,243 @@ func (ec *executionContext) _UserSuggestion(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var vPNTunnelImplementors = []string{"VPNTunnel"}
+
+func (ec *executionContext) _VPNTunnel(ctx context.Context, sel ast.SelectionSet, obj *model.VPNTunnel) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, vPNTunnelImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VPNTunnel")
+		case "id":
+			out.Values[i] = ec._VPNTunnel_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "routes":
+			out.Values[i] = ec._VPNTunnel_routes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sessionId":
+			out.Values[i] = ec._VPNTunnel_sessionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sessionNumber":
+			out.Values[i] = ec._VPNTunnel_sessionNumber(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "taskId":
+			out.Values[i] = ec._VPNTunnel_taskId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "openedBy":
+			out.Values[i] = ec._VPNTunnel_openedBy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "openedByName":
+			out.Values[i] = ec._VPNTunnel_openedByName(ctx, field, obj)
+		case "openedAt":
+			out.Values[i] = ec._VPNTunnel_openedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "listening":
+			out.Values[i] = ec._VPNTunnel_listening(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clients":
+			out.Values[i] = ec._VPNTunnel_clients(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "open":
+			out.Values[i] = ec._VPNTunnel_open(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "streams":
+			out.Values[i] = ec._VPNTunnel_streams(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "stopsAt":
+			out.Values[i] = ec._VPNTunnel_stopsAt(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var vPNTunnelConnectionImplementors = []string{"VPNTunnelConnection"}
+
+func (ec *executionContext) _VPNTunnelConnection(ctx context.Context, sel ast.SelectionSet, obj *model.VPNTunnelConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, vPNTunnelConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VPNTunnelConnection")
+		case "edges":
+			out.Values[i] = ec._VPNTunnelConnection_edges(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._VPNTunnelConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalCount":
+			out.Values[i] = ec._VPNTunnelConnection_totalCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var vPNTunnelEdgeImplementors = []string{"VPNTunnelEdge"}
+
+func (ec *executionContext) _VPNTunnelEdge(ctx context.Context, sel ast.SelectionSet, obj *model.VPNTunnelEdge) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, vPNTunnelEdgeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VPNTunnelEdge")
+		case "node":
+			out.Values[i] = ec._VPNTunnelEdge_node(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cursor":
+			out.Values[i] = ec._VPNTunnelEdge_cursor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var vPNTunnelEventImplementors = []string{"VPNTunnelEvent"}
+
+func (ec *executionContext) _VPNTunnelEvent(ctx context.Context, sel ast.SelectionSet, obj *model.VPNTunnelEvent) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, vPNTunnelEventImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VPNTunnelEvent")
+		case "action":
+			out.Values[i] = ec._VPNTunnelEvent_action(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "id":
+			out.Values[i] = ec._VPNTunnelEvent_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "operationId":
+			out.Values[i] = ec._VPNTunnelEvent_operationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tunnel":
+			out.Values[i] = ec._VPNTunnelEvent_tunnel(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -105361,6 +108132,46 @@ func (ec *executionContext) marshalNMinionTunnelStreamPage2ᚖgithubᚗcomᚋlog
 	return ec._MinionTunnelStreamPage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNMinionVPNClient2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionVPNClientᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionVPNClient) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionVPNClient2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionVPNClient(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionVPNClient2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionVPNClient(ctx context.Context, sel ast.SelectionSet, v *model.MinionVPNClient) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionVPNClient(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionVPNKey2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionVPNKey(ctx context.Context, sel ast.SelectionSet, v model.MinionVPNKey) graphql.Marshaler {
+	return ec._MinionVPNKey(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNMinionVPNKey2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionVPNKey(ctx context.Context, sel ast.SelectionSet, v *model.MinionVPNKey) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionVPNKey(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNModule2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule(ctx context.Context, sel ast.SelectionSet, v models.Module) graphql.Marshaler {
 	return ec._Module(ctx, sel, &v)
 }
@@ -106684,6 +109495,70 @@ func (ec *executionContext) marshalNUserSuggestion2ᚖgithubᚗcomᚋlogoscore�
 		return graphql.Null
 	}
 	return ec._UserSuggestion(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNVPNTunnel2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnel(ctx context.Context, sel ast.SelectionSet, v *model.VPNTunnel) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VPNTunnel(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNVPNTunnelConnection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnelConnection(ctx context.Context, sel ast.SelectionSet, v model.VPNTunnelConnection) graphql.Marshaler {
+	return ec._VPNTunnelConnection(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNVPNTunnelConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnelConnection(ctx context.Context, sel ast.SelectionSet, v *model.VPNTunnelConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VPNTunnelConnection(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNVPNTunnelEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnelEdgeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.VPNTunnelEdge) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNVPNTunnelEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnelEdge(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNVPNTunnelEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnelEdge(ctx context.Context, sel ast.SelectionSet, v *model.VPNTunnelEdge) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VPNTunnelEdge(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNVPNTunnelEvent2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnelEvent(ctx context.Context, sel ast.SelectionSet, v model.VPNTunnelEvent) graphql.Marshaler {
+	return ec._VPNTunnelEvent(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNVPNTunnelEvent2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnelEvent(ctx context.Context, sel ast.SelectionSet, v *model.VPNTunnelEvent) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VPNTunnelEvent(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNWikiDocument2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐWikiDocument(ctx context.Context, sel ast.SelectionSet, v models.WikiDocument) graphql.Marshaler {
@@ -108418,6 +111293,13 @@ func (ec *executionContext) marshalOUserSortField2ᚖgithubᚗcomᚋlogoscoreᚋ
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) marshalOVPNTunnel2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐVPNTunnel(ctx context.Context, sel ast.SelectionSet, v *model.VPNTunnel) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._VPNTunnel(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOWikiDocument2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐWikiDocument(ctx context.Context, sel ast.SelectionSet, v *models.WikiDocument) graphql.Marshaler {

@@ -50,6 +50,7 @@ import {
   FRONT_FORWARD,
   FRONT_HTTP,
   FRONT_TERMINAL,
+  FRONT_VPN,
   capLabel,
   forwardTo,
   frontLabel,
@@ -68,10 +69,12 @@ import {
   streamState,
   terminalProgram,
   tunnelVersion,
+  vpnState,
   type Tone,
   type Tunnel,
   type TunnelStream,
 } from "./tunnel-values";
+import { ChangeRoutes, ConnectMachine, VPNClients } from "./vpn-parts";
 
 // A tunnel task's proxy (docs: contracts/minion-messages/tunnels.md, What
 // core keeps and shows): what core puts in front of one of its operational
@@ -110,13 +113,23 @@ export function TunnelView({
   const front = tunnel.front;
   const http = !reverse && front === FRONT_HTTP;
   const terminal = !reverse && front === FRONT_TERMINAL;
+  // A VPN: no port; its machines connect over this web app's address, and
+  // route its networks.
+  const vpn = !reverse && front === FRONT_VPN;
+  const routes = tunnel.routes ?? [];
   // Core's address for its ports, else the host this page came from; a
   // reverse port forward's, where its minion listens.
   const host = tunnel.address ?? window.location.hostname;
-  const address = reverse ? listenAddress(tunnel) : hostPort(host, tunnel.port);
+  const address = reverse
+    ? listenAddress(tunnel)
+    : vpn
+      ? routes.join(", ")
+      : hostPort(host, tunnel.port);
   const state = reverse
     ? reverseState(tunnel, t.state)
-    : proxyState(tunnel, t.state);
+    : vpn
+      ? vpnState(tunnel, t.state)
+      : proxyState(tunnel, t.state);
   // A forward (either way): every connection goes to its destination (a
   // host and port, or a unix socket's or a pipe's path); a proxy: where each
   // tool says.
@@ -185,7 +198,12 @@ export function TunnelView({
             {state.label}
           </span>
         </span>
-        {tunnel.listening && (
+        {tunnel.listening && vpn && keeps && (
+          <div className="ml-auto flex items-center gap-1">
+            <ConnectMachine taskId={t.id} />
+          </div>
+        )}
+        {tunnel.listening && !vpn && (
           <div className="ml-auto flex items-center gap-1">
             <Button
               variant="ghost"
@@ -264,6 +282,18 @@ export function TunnelView({
         )}
         <div className="grid shrink-0 items-start gap-3 @3xl:grid-cols-2">
           <InfoCard labelWidth="w-28">
+            {vpn ? (
+              <>
+                <LabelRow label="Routes">
+                  <span className="font-mono text-xs break-all">{routes.join(", ") || "none"}</span>
+                  {tunnel.listening && keeps && <ChangeRoutes taskId={t.id} routes={routes} />}
+                </LabelRow>
+                <LabelRow label="Carries">
+                  each connection, UDP flow and ping a connected machine makes to them, as the command opens them; over
+                  this web app&apos;s address
+                </LabelRow>
+              </>
+            ) : (
             <LabelRow label={reverse ? "Listens on" : "Address"}>
               <span className="font-mono text-xs break-all">{address}</span>
               {reverse ? (
@@ -281,6 +311,7 @@ export function TunnelView({
                 )
               )}
             </LabelRow>
+            )}
             {forward ? (
               <LabelRow label="Forwards to">
                 <span className="font-mono text-xs break-all">
@@ -310,7 +341,7 @@ export function TunnelView({
                   {laggy && <span className="text-amber-600 dark:text-amber-400"> · {laggy}</span>}
                 </LabelRow>
               </>
-            ) : reverse ? null : (
+            ) : reverse || vpn ? null : (
               <LabelRow label="Speaks">
                 {http
                   ? "HTTP: CONNECT, and plain requests (one a connection); no credentials"
@@ -338,7 +369,7 @@ export function TunnelView({
             <LabelRow label="Stops when idle">
               {stopIdle ? (
                 <>
-                  after {stopIdle} with no stream open
+                  after {stopIdle} with no stream open{vpn && " and no machine connected"}
                   {tunnel.stopsAt ? (
                     <span className="text-muted-foreground">
                       {" "}
@@ -348,7 +379,7 @@ export function TunnelView({
                     tunnel.open > 0 && (
                       <span className="text-muted-foreground">
                         {" "}
-                        · not while a stream is open
+                        · not while a stream is open{vpn && " or a machine connected"}
                       </span>
                     )
                   )}
@@ -392,6 +423,8 @@ export function TunnelView({
           </InfoCard>
         </div>
 
+        {vpn && <VPNClients taskId={t.id} clients={tunnel.vpnClients} running={tunnel.listening && keeps} />}
+
         {keeps && (
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <SearchInput
@@ -402,7 +435,9 @@ export function TunnelView({
                   ? "Search who connected, or the destination..."
                   : terminal
                     ? "Search who opened it, or the program..."
-                    : "Search the tool or the destination..."
+                    : vpn
+                      ? "Search the machine or the destination..."
+                      : "Search the tool or the destination..."
               }
             />
             <Select
@@ -443,7 +478,7 @@ export function TunnelView({
               header={
                 <>
                   <div>#</div>
-                  <div>{reverse ? "From" : terminal ? "Opened by" : "Tool"}</div>
+                  <div>{reverse ? "From" : terminal ? "Opened by" : vpn ? "Machine" : "Tool"}</div>
                   <div>{terminal ? "Runs" : "Destination"}</div>
                   <div>State</div>
                   <div>Opened</div>
@@ -477,7 +512,9 @@ export function TunnelView({
                         ? `Each address that sends datagrams to ${address} on the minion's host is one: core sends them on to ${tunnel.to ?? "the destination"} from its own network.`
                         : reverse
                           ? `Each connection to ${address} on the minion's host is one: core connects it to ${tunnel.to ?? "the destination"} from its own network.`
-                          : !tunnel.listening
+                          : vpn
+                            ? "Each connection, UDP flow and ping a connected machine makes to the routes is one: the minion makes it from its host."
+                            : !tunnel.listening
                             ? "No tool connected through it."
                             : terminal
                               ? `Each connection to ${address}, and each terminal opened here, is one: a process on the minion's host.`
