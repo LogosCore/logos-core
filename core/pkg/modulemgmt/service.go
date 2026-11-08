@@ -715,6 +715,14 @@ func validateParams(action protocol.ActionSpec, raw any) (send map[string]any, s
 		if ok {
 			v = normalizeValue(v)
 		}
+		// A param by a condition (When) takes no value where it does not
+		// apply, and is not required there.
+		if !protocol.FieldApplies(p, action.Params, in) {
+			if ok && v != nil {
+				return nil, nil, invalid("param %s: only when %s", p.Key, p.When.String())
+			}
+			continue
+		}
 		if err := protocol.ValidateValue(p, v); err != nil {
 			return nil, nil, invalid("param %s: %v", p.Key, err)
 		}

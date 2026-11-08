@@ -92,3 +92,44 @@ func TestCommandKinds(t *testing.T) {
 		t.Errorf("a command for every kind: %v", err)
 	}
 }
+
+// A param that applies by another's value says so: a tunnel's destination
+// is a forward's.
+func TestMinionHelpConditions(t *testing.T) {
+	tunnel := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{tunnelCmd}}, tunnelCmd, "")
+	one := helpText([]protocol.BuildCommand{tunnel}, "tunnel")
+	for _, want := range []string{
+		"  front      enum, default socks, one of socks, http, forward\n",
+		"  host       string, only when front is forward\n",
+		"  stop_idle  duration, default 1h\n",
+	} {
+		if !strings.Contains(one, want) {
+			t.Errorf("help tunnel lacks %q:\n%s", want, one)
+		}
+	}
+}
+
+// help shows a command's params as its form does, the order the console
+// takes words in: its own, then those under More options, each by order.
+func TestMinionHelpFormOrder(t *testing.T) {
+	cmd := tunnelCmd
+	cmd.Params = []protocol.FieldSpec{
+		{Key: "timeout", Num: 2, Type: protocol.FieldDuration, Label: "Connect timeout", Default: "10s", Order: 10, Advanced: true},
+		{Key: "max_streams", Num: 3, Type: protocol.FieldInt, Label: "Connections at once", Default: 256, Order: 11, Advanced: true},
+	}
+	tunnel := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{cmd}}, cmd, "")
+	if got, want := commandUsage(tunnel), "tunnel [front=socks] [port=0] [host] [to] [timeout=10s] [max_streams=256] [stop_idle=1h] [cap=0]"; got != want {
+		t.Errorf("usage %q, want %q", got, want)
+	}
+	feedback := protocol.BuildCommand{ID: "feedback", Params: []protocol.FieldSpec{
+		{Key: "message", Type: protocol.FieldString, Label: "Message", Required: true, Order: 2},
+		{Key: "level", Type: protocol.FieldEnum, Label: "Level", Default: "warning", Order: 1, Options: []protocol.EnumOption{{Value: "warning"}}},
+	}}
+	if got := commandUsage(feedback); got != "feedback [level=warning] <message>" {
+		t.Errorf("usage %q", got)
+	}
+	if one := helpText([]protocol.BuildCommand{feedback}, "feedback"); !strings.Contains(one, "  level    enum, default warning, one of warning\n  ") ||
+		strings.Index(one, "  level ") > strings.Index(one, "  message ") {
+		t.Errorf("help feedback:\n%s", one)
+	}
+}

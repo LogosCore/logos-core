@@ -91,6 +91,20 @@ type ModuleField {
   accept: [String!]
   # file: the largest file in bytes; null when there is no limit.
   maxSize: JSON
+  # An action's or a command's param: when it applies (the form shows it,
+  # and takes it) — while the param key of the same form, an enum, holds
+  # one of values. Null: always.
+  when: ModuleFieldCondition
+  # An action's or a command's param seldom changed: the form shows it
+  # under More options, folded.
+  advanced: Boolean!
+}
+
+# When a param applies (ModuleField.when): while the param key of its form
+# holds one of values (given, or its default).
+type ModuleFieldCondition {
+  key: String!
+  values: [String!]!
 }
 
 type ModuleProperty {

@@ -5,6 +5,7 @@ import {
   durationMs,
   evaluateForm,
   evaluateParams,
+  fieldApplies,
   formatElapsed,
   formatValue,
   groupByField,
@@ -420,5 +421,39 @@ describe("datetime, enum_list and file fields", () => {
     expect(checkDraft(file, { kind: "file", id: "f-1" })).toEqual({ ok: true, value: "f-1" })
     expect(checkDraft(file, { kind: "file", id: null })).toEqual({ ok: true, value: null })
     expect(checkDraft({ ...file, required: true }, { kind: "file", id: null })).toEqual({ ok: false, error: "Required" })
+  })
+})
+
+describe("params by a condition", () => {
+  const params = [
+    field({ key: "front", type: "enum", default: "socks", options: [{ value: "socks" }, { value: "forward" }, { value: "terminal" }] }),
+    field({ key: "host", type: "string", when: { key: "front", values: ["forward"] } }),
+    field({ key: "rows", type: "int", default: 24, when: { key: "front", values: ["terminal"] } }),
+    field({ key: "cap", type: "bytes", default: 0, advanced: true }),
+  ]
+
+  it("applies while the enum it names holds one of its values, else by its default", () => {
+    const drafts = initialParamDrafts(params)
+    expect(params.map((f) => fieldApplies(f, params, drafts))).toEqual([true, false, false, true])
+    const forward = { ...drafts, front: initialDraft(params[0], "forward") }
+    expect(fieldApplies(params[1], params, forward)).toBe(true)
+    expect(fieldApplies(params[2], params, forward)).toBe(false)
+    // An emptied enum is its default.
+    expect(fieldApplies(params[1], params, { ...drafts, front: emptyDraft(params[0]) })).toBe(false)
+    // One naming a param the form lacks never applies.
+    expect(fieldApplies(field({ key: "x", type: "string", when: { key: "mode", values: ["a"] } }), params, drafts)).toBe(false)
+  })
+
+  it("is neither sent nor checked where it does not apply", () => {
+    const drafts: Record<string, Draft> = {
+      ...initialParamDrafts(params),
+      host: initialDraft(params[1], "10.0.0.5"),
+      rows: { kind: "text", text: "many" },
+    }
+    expect(evaluateParams(params, drafts)).toEqual({ values: { front: "socks", cap: 0 }, errors: {} })
+    const terminal = { ...drafts, front: initialDraft(params[0], "terminal") }
+    expect(evaluateParams(params, terminal)).toEqual({ values: { front: "terminal", cap: 0 }, errors: { rows: "Must be a whole number" } })
+    const forward = { ...drafts, front: initialDraft(params[0], "forward") }
+    expect(evaluateParams(params, forward).values).toEqual({ front: "forward", host: "10.0.0.5", cap: 0 })
   })
 })

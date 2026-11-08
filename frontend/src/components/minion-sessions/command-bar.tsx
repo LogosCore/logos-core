@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 import { BrowseButton } from "./browse-button"
 import { TaskFilesProvider } from "./task-files"
 import { startStreamUpload } from "@/lib/stream-upload"
-import { commandOf, lineOf, lineTexts, parseCommandLine, usage, valueCompletion, words, type CommandDef } from "./command-line"
+import { commandOf, lineOf, lineTexts, paramApplies, parseCommandLine, usage, valueCompletion, words, type CommandDef } from "./command-line"
 import { CONNECTION_FORMAT, choiceDetail, connectionText, type ConnectionChoice } from "./connection-choices"
 import { ConnectionChoicesProvider } from "./session-connection-choices"
 import { useSessionConnectionChoices } from "./use-connection-choices"
@@ -197,7 +197,7 @@ export function CommandBar({
     }
     // A file is picked in the form: a line for a command that sends one,
     // without it, opens there.
-    const lt = lineTexts(text, commands)
+    const lt = lineTexts(text, commands, connections)
     const c = lt.command ? commands.find((x) => x.id === lt.command!.id) : undefined
     // (A stream needs none: uploaded with curl, the path names it.)
     const file = c?.fields.find((f) => f.type === "file")
@@ -286,7 +286,7 @@ export function CommandBar({
       setFormOpen(true)
       return
     }
-    const lt = lineTexts(line, commands)
+    const lt = lineTexts(line, commands, connections)
     const c = lt.command ? commands.find((x) => x.id === lt.command!.id) : undefined
     if (!c) {
       setError(`No command "${words(line)[0].text}": ${commands.map((x) => x.id).join(", ") || "none"}`)
@@ -599,9 +599,10 @@ export function CommandBar({
   )
 }
 
-/** How a parsed line reads: each param's value, defaults marked; a connection's with its name. */
+/** How a parsed line reads: each param's value that applies, defaults marked; a connection's with its name. */
 function readsAs(command: CommandDef, args: Record<string, unknown>, connections: readonly ConnectionChoice[]): string {
   const parts = command.params.map((p) => {
+    if (!paramApplies(p, command.params, args)) return null
     if (p.key in args && p.format === CONNECTION_FORMAT) {
       const c = connections.find((x) => x.place === args[p.key])
       return `${p.key}=${JSON.stringify(args[p.key])}${c ? ` (${c.name}, ${choiceDetail(c)}${c.inUse ? ", in use" : ""})` : ""}`

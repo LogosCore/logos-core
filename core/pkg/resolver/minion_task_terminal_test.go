@@ -92,13 +92,10 @@ func TestOpenTerminal(t *testing.T) {
 		wire map[string]any
 		want string
 	}{
-		"no processes":    {tunnelCmd, map[string]any{"front": "terminal"}, "runs no processes"},
-		"an open quote":   {shellTunnelCmd, map[string]any{"front": "terminal", "args": `-c 'echo`}, "quote"},
-		"no rows":         {shellTunnelCmd, map[string]any{"front": "terminal", "rows": int64(0)}, "the terminal"},
-		"too many cols":   {shellTunnelCmd, map[string]any{"front": "terminal", "cols": int64(5000)}, "the terminal"},
-		"a SOCKS program": {shellTunnelCmd, map[string]any{"program": "sh"}, "a terminal's"},
-		"forward args":    {shellTunnelCmd, map[string]any{"front": "forward", "host": "h", "to": int64(1), "args": "-x"}, "a terminal's"},
-		"a source":        {all, map[string]any{"front": "terminal", "source": "10.0.0.7"}, "not a terminal's"},
+		"no processes":  {tunnelCmd, map[string]any{"front": "terminal"}, "runs no processes"},
+		"an open quote": {shellTunnelCmd, map[string]any{"front": "terminal", "args": `-c 'echo`}, "quote"},
+		"no rows":       {shellTunnelCmd, map[string]any{"front": "terminal", "rows": int64(0)}, "the terminal"},
+		"too many cols": {shellTunnelCmd, map[string]any{"front": "terminal", "cols": int64(5000)}, "the terminal"},
 	} {
 		if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), c.cmd, c.wire); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: %v", name, err)
@@ -106,6 +103,27 @@ func TestOpenTerminal(t *testing.T) {
 	}
 	if len(f.opened) != 4 {
 		t.Errorf("a bad one opened: %d", len(f.opened))
+	}
+	// A terminal's params with another front, and a source with a terminal,
+	// are refused as the task's args are read, before anything opens: each
+	// applies by the front (FieldSpec.When).
+	params := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{all}}, all, "").Params
+	for name, c := range map[string]struct {
+		values    map[string]any
+		key, want string
+	}{
+		"a SOCKS program": {map[string]any{"program": "sh"}, "program", "only when front is terminal"},
+		"forward args":    {map[string]any{"front": "forward", "host": "h", "to": int64(1), "args": "-x"}, "args", "only when front is terminal"},
+		"a SOCKS size":    {map[string]any{"rows": int64(30)}, "rows", "only when front is terminal"},
+		"a source":        {map[string]any{"front": "terminal", "source": "10.0.0.7"}, "source", "only when front is socks, http or forward"},
+	} {
+		if _, problems := protocol.TaskArgs(params, c.values); problems[c.key] != c.want || len(problems) != 1 {
+			t.Errorf("%s: %v", name, problems)
+		}
+	}
+	// A SOCKS proxy's args take no terminal's defaults.
+	if args, problems := protocol.TaskArgs(params, map[string]any{}); problems != nil || args[protocol.ParamRows] != nil || args[protocol.ParamCols] != nil {
+		t.Errorf("a SOCKS proxy's args: %v %v", args, problems)
 	}
 }
 

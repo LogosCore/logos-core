@@ -369,14 +369,14 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 		if err != nil {
 			return nil, err
 		}
-		// What core puts in front, as it took it.
-		values[protocol.ParamFront] = front
 		if commands[i].Action == protocol.ActionReverseTunnel {
 			// Where the minion listens, as core checked it (its port its
 			// own: no operational port).
 			values["bind"] = wire["bind"]
 		} else {
-			// The task shows the port it serves on.
+			// What core puts in front, as it took it, and the port it
+			// serves on. A reverse tunnel's one front no param names.
+			values[protocol.ParamFront] = front
 			values[protocol.ParamPort] = port
 		}
 		for _, key := range []string{protocol.ParamHost, protocol.ParamPath, protocol.ParamSource} {
@@ -546,10 +546,9 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 		case udp && !cmd.CanOpen(protocol.OpenUDP):
 			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("%s's minion listens for TCP alone (its opens)", cmd.ID))
 		}
-		if front == protocol.FrontForward {
-			if err := destination(); err != nil {
-				return 0, "", err
-			}
+		// Its one front: a forward to host:to.
+		if err := destination(); err != nil {
+			return 0, "", err
 		}
 		o.Purpose, o.Front, o.Bind, o.Listen, o.UDP, o.Port = models.OperationalPurposeReverse, front, bind, int(listen), udp, 0
 		wire["bind"] = bind
@@ -562,7 +561,9 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 		return 0, front, nil
 	}
 	// Where its TCP streams go from, and TLS to a forward's destination,
-	// where the minion opens them.
+	// where the minion opens them. Each param applies by the front
+	// (FieldSpec.When): TaskArgs refused it for another, and filled no
+	// default.
 	source, _ := protocol.ArgString(wire, protocol.ParamSource)
 	useTLS, _ := protocol.ArgBool(wire, protocol.ParamTLS)
 	if source = strings.TrimSpace(source); source != "" {
@@ -574,17 +575,13 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "source: an address of the minion's host, an IP")
 		case path != "":
 			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "source: a TCP connection's, not a path's")
-		case front == protocol.FrontTerminal:
-			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "source: a TCP connection's, not a terminal's")
 		}
 		o.Source = ip.String()
 		wire[protocol.ParamSource] = o.Source
 	}
 	switch {
-	case path != "" && front != protocol.FrontForward:
-		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "path: a forward's destination")
-	case useTLS && (front != protocol.FrontForward || path != ""):
-		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "tls: a forward's to a host and a port")
+	case useTLS && path != "":
+		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "tls: a forward's to a host and a port, not a path's")
 	case useTLS && !cmd.CanOpen(protocol.OpenTLS):
 		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("tls: %s's minion speaks no TLS to a destination", cmd.ID))
 	}
@@ -592,9 +589,6 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 	program, _ := protocol.ArgString(wire, protocol.ParamProgram)
 	argsLine, _ := protocol.ArgString(wire, protocol.ParamArgs)
 	program, argsLine = strings.TrimSpace(program), strings.TrimSpace(argsLine)
-	if front != protocol.FrontTerminal && (program != "" || argsLine != "") {
-		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "program, args: a terminal's")
-	}
 	switch front {
 	case protocol.FrontTerminal:
 		if err := terminal(&o, cmd, wire, program, argsLine); err != nil {

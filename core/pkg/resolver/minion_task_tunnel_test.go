@@ -341,9 +341,7 @@ func TestOpenReverse(t *testing.T) {
 		"listen 70000":  {reverseCmd, map[string]any{"bind": "0.0.0.0", "listen": int64(70000), "host": "h", "to": int64(1)}, "where the minion listens"},
 		"no host":       {reverseCmd, map[string]any{"bind": "0.0.0.0", "listen": int64(1), "to": int64(1)}, "destination"},
 		"to 0":          {reverseCmd, map[string]any{"bind": "0.0.0.0", "listen": int64(1), "host": "h"}, "destination"},
-		"socks":         {reverseCmd, map[string]any{"front": "socks", "bind": "0.0.0.0", "listen": int64(1080)}, "front: one of forward"},
 		"udp, tcp only": {tcpOnly, map[string]any{"bind": "0.0.0.0", "listen": int64(1), "udp": true, "host": "h", "to": int64(1)}, "TCP alone"},
-		"http":          {reverseCmd, map[string]any{"front": "http", "bind": "0.0.0.0", "listen": int64(1)}, "front: one of forward"},
 	} {
 		if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), c.cmd, c.wire); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: %v", name, err)
@@ -351,6 +349,13 @@ func TestOpenReverse(t *testing.T) {
 	}
 	if len(f.opened) != 1 {
 		t.Errorf("a bad reverse tunnel kept: %+v", f.opened)
+	}
+	// A reverse tunnel's one front no param names: one given is refused as
+	// its args are read, and its destination is required.
+	params := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{reverseCmd}}, reverseCmd, "").Params
+	_, problems := protocol.TaskArgs(params, map[string]any{"front": "socks", "listen": int64(1080)})
+	if problems["front"] != "not a declared field" || problems["host"] != "value is required" || problems["to"] != "value is required" {
+		t.Errorf("a reverse SOCKS proxy: %v", problems)
 	}
 	f.err = miniontunnels.ErrNoListeners
 	if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), reverseCmd,
@@ -488,16 +493,14 @@ func TestOpenPathsAndOptions(t *testing.T) {
 		wire map[string]any
 		want string
 	}{
-		"no pipes":          {tcpOnly, map[string]any{"front": "forward", "path": `\\.\pipe\x`}, "opens no named pipes"},
-		"no unix sockets":   {tcpOnly, map[string]any{"front": "forward", "path": "/run/x.sock"}, "opens no unix sockets"},
-		"a bad pipe":        {all, map[string]any{"front": "forward", "path": `\\.\nopipe`}, "the forward's path"},
-		"a SOCKS path":      {all, map[string]any{"path": "/run/x.sock"}, "a forward's destination"},
-		"no source taken":   {tcpOnly, map[string]any{"source": "10.0.0.7"}, "takes no source address"},
-		"a source name":     {all, map[string]any{"source": "eth0"}, "an IP"},
-		"a path's source":   {all, map[string]any{"front": "forward", "path": "/run/x.sock", "source": "10.0.0.7"}, "not a path's"},
-		"no TLS spoken":     {tcpOnly, map[string]any{"front": "forward", "host": "h", "to": int64(443), "tls": true}, "speaks no TLS"},
-		"TLS through SOCKS": {all, map[string]any{"tls": true}, "a forward's to a host and a port"},
-		"TLS to a path":     {all, map[string]any{"front": "forward", "path": "/run/x.sock", "tls": true}, "a forward's to a host and a port"},
+		"no pipes":        {tcpOnly, map[string]any{"front": "forward", "path": `\\.\pipe\x`}, "opens no named pipes"},
+		"no unix sockets": {tcpOnly, map[string]any{"front": "forward", "path": "/run/x.sock"}, "opens no unix sockets"},
+		"a bad pipe":      {all, map[string]any{"front": "forward", "path": `\\.\nopipe`}, "the forward's path"},
+		"no source taken": {tcpOnly, map[string]any{"source": "10.0.0.7"}, "takes no source address"},
+		"a source name":   {all, map[string]any{"source": "eth0"}, "an IP"},
+		"a path's source": {all, map[string]any{"front": "forward", "path": "/run/x.sock", "source": "10.0.0.7"}, "not a path's"},
+		"no TLS spoken":   {tcpOnly, map[string]any{"front": "forward", "host": "h", "to": int64(443), "tls": true}, "speaks no TLS"},
+		"TLS to a path":   {all, map[string]any{"front": "forward", "path": "/run/x.sock", "tls": true}, "a forward's to a host and a port"},
 	} {
 		if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), c.cmd, c.wire); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: %v", name, err)
@@ -505,6 +508,21 @@ func TestOpenPathsAndOptions(t *testing.T) {
 	}
 	if len(f.opened) != 4 {
 		t.Errorf("a bad one opened: %d", len(f.opened))
+	}
+	// A path and TLS are a forward's: with another front they are refused
+	// as the task's args are read (FieldSpec.When).
+	params := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{all}}, all, "").Params
+	for name, values := range map[string]map[string]any{
+		"a SOCKS path":      {"path": "/run/x.sock"},
+		"TLS through SOCKS": {"tls": true},
+		"an HTTP host":      {"front": "http", "host": "h", "to": int64(1)},
+	} {
+		_, problems := protocol.TaskArgs(params, values)
+		for key := range values {
+			if key != protocol.ParamFront && problems[key] != "only when front is forward" {
+				t.Errorf("%s: %v", name, problems)
+			}
+		}
 	}
 	// The tunnel says its path, its source and TLS.
 	tunnel := protocol.ActionTunnel

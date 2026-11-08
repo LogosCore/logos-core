@@ -110,6 +110,11 @@ export const ModuleFieldDefFields = graphql(`
     }
     accept
     maxSize
+    when {
+      key
+      values
+    }
+    advanced
   }
 `)
 

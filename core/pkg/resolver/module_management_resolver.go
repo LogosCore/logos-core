@@ -297,6 +297,10 @@ func toFieldModel(f protocol.FieldSpec) *model.ModuleField {
 			out.Options[i] = &model.ModuleEnumOption{Value: o.Value, Label: strPtr(o.Label), Description: strPtr(o.Description)}
 		}
 	}
+	if f.When != nil {
+		out.When = &model.ModuleFieldCondition{Key: f.When.Key, Values: append([]string{}, f.When.Values...)}
+	}
+	out.Advanced = f.Advanced
 	return out
 }
 

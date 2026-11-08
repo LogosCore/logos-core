@@ -1251,26 +1251,33 @@ type ModuleEvent struct {
 }
 
 type ModuleField struct {
-	Key         string              `json:"key"`
-	Type        string              `json:"type"`
-	Label       string              `json:"label"`
-	Description *string             `json:"description,omitempty"`
-	Group       *string             `json:"group,omitempty"`
-	Order       int                 `json:"order"`
-	Unit        *string             `json:"unit,omitempty"`
-	Placeholder *string             `json:"placeholder,omitempty"`
-	Format      *string             `json:"format,omitempty"`
-	Required    bool                `json:"required"`
-	Default     any                 `json:"default,omitempty"`
-	Min         any                 `json:"min,omitempty"`
-	Max         any                 `json:"max,omitempty"`
-	Pattern     *string             `json:"pattern,omitempty"`
-	MaxLength   *int                `json:"maxLength,omitempty"`
-	KeyPattern  *string             `json:"keyPattern,omitempty"`
-	MaxItems    *int                `json:"maxItems,omitempty"`
-	Options     []*ModuleEnumOption `json:"options,omitempty"`
-	Accept      []string            `json:"accept,omitempty"`
-	MaxSize     any                 `json:"maxSize,omitempty"`
+	Key         string                `json:"key"`
+	Type        string                `json:"type"`
+	Label       string                `json:"label"`
+	Description *string               `json:"description,omitempty"`
+	Group       *string               `json:"group,omitempty"`
+	Order       int                   `json:"order"`
+	Unit        *string               `json:"unit,omitempty"`
+	Placeholder *string               `json:"placeholder,omitempty"`
+	Format      *string               `json:"format,omitempty"`
+	Required    bool                  `json:"required"`
+	Default     any                   `json:"default,omitempty"`
+	Min         any                   `json:"min,omitempty"`
+	Max         any                   `json:"max,omitempty"`
+	Pattern     *string               `json:"pattern,omitempty"`
+	MaxLength   *int                  `json:"maxLength,omitempty"`
+	KeyPattern  *string               `json:"keyPattern,omitempty"`
+	MaxItems    *int                  `json:"maxItems,omitempty"`
+	Options     []*ModuleEnumOption   `json:"options,omitempty"`
+	Accept      []string              `json:"accept,omitempty"`
+	MaxSize     any                   `json:"maxSize,omitempty"`
+	When        *ModuleFieldCondition `json:"when,omitempty"`
+	Advanced    bool                  `json:"advanced"`
+}
+
+type ModuleFieldCondition struct {
+	Key    string   `json:"key"`
+	Values []string `json:"values"`
 }
 
 type ModuleLogEvent struct {

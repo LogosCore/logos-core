@@ -6,15 +6,16 @@ const RC = "reverse-call"
 const RP = "reverse-persistent"
 
 const callFields: Kind["kinds"][number]["fields"] = [
-  { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
-  { key: "tls_verify", type: "bool", label: "Verify TLS certificate", order: 2, required: false, default: false },
-  { key: "retries", type: "int", label: "Retries", order: 3, required: false, min: 0, max: 5 },
+  { key: "base_url", type: "url", label: "Base URL", order: 1, required: true, advanced: false },
+  { key: "tls_verify", type: "bool", label: "Verify TLS certificate", order: 2, required: false, default: false, advanced: false },
+  { key: "retries", type: "int", label: "Retries", order: 3, required: false, min: 0, max: 5, advanced: false },
   {
     key: "mode",
     type: "enum",
     label: "Mode",
     order: 4,
     required: false,
+    advanced: false,
     options: [
       { value: "fast", label: "Fast" },
       { value: "safe", label: "Safe" },
@@ -31,8 +32,8 @@ const kind: Kind = {
     {
       kind: RP,
       fields: [
-        { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
-        { key: "backoff", type: "duration", label: "Back-off", order: 2, required: false, default: "1m" },
+        { key: "base_url", type: "url", label: "Base URL", order: 1, required: true, advanced: false },
+        { key: "backoff", type: "duration", label: "Back-off", order: 2, required: false, default: "1m", advanced: false },
       ],
     },
   ],
@@ -149,9 +150,9 @@ describe("empty lists and maps", () => {
         kind: RC,
         fields: [
           ...callFields,
-          { key: "extra", type: "string_list", label: "Extra", order: 5, required: false },
-          { key: "tags", type: "string_list", label: "Tags", order: 6, required: false, default: ["a"] },
-          { key: "headers", type: "string_map", label: "Headers", order: 7, required: false },
+          { key: "extra", type: "string_list", label: "Extra", order: 5, required: false, advanced: false },
+          { key: "tags", type: "string_list", label: "Tags", order: 6, required: false, default: ["a"], advanced: false },
+          { key: "headers", type: "string_map", label: "Headers", order: 7, required: false, advanced: false },
         ],
       },
     ],

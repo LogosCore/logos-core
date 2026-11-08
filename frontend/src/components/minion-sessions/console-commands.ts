@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { compareFormOrder } from "@/components/modules/management/field-values"
 import { useMinionSessionCommands } from "@/graphql/hooks/minion-tasks"
 import type { ConsoleCommand } from "./command-bar"
 
@@ -15,7 +16,17 @@ export function useConsoleCommands(sessionId: string) {
         action: c.action,
         kinds: c.kinds,
         fields: c.params,
-        params: c.params.map((p) => ({ key: p.key, type: p.type, label: p.label, required: p.required, default: p.default, format: p.format })),
+        // In the form's order: the order words fill them in.
+        params: [...c.params].sort(compareFormOrder).map((p) => ({
+          key: p.key,
+          type: p.type,
+          label: p.label,
+          required: p.required,
+          default: p.default,
+          format: p.format,
+          when: p.when,
+          options: p.options?.map((o) => o.value) ?? null,
+        })),
       })),
     [q.data],
   )

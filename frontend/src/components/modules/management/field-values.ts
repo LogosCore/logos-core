@@ -597,6 +597,15 @@ export function compareFields(a: FieldDef, b: FieldDef): number {
 }
 
 /**
+ * The order a params form shows its fields in: its own, then those under
+ * More options (advanced), each by order and label. A session's console
+ * takes words in it too.
+ */
+export function compareFormOrder(a: FieldDef, b: FieldDef): number {
+  return Number(!!a.advanced) - Number(!!b.advanced) || compareFields(a, b)
+}
+
+/**
  * Items grouped by `field.group`, each group sorted by order then label.
  * Groups are ordered by their first field in that sort; ungrouped fields form
  * the "General" group.
@@ -734,7 +743,26 @@ export function initialParamDrafts(params: readonly FieldDef[]): Record<string, 
   return out
 }
 
-/** Params object for invokeModuleAction (unset params omitted) plus per-key errors. */
+/**
+ * Whether a param applies, given its form's drafts: always without a
+ * condition (`when`); with one, while the enum it names holds one of its
+ * values, as drafted or else by its default. One that does not is neither
+ * shown nor sent: core refuses it (a tunnel's host, a forward's alone).
+ */
+export function fieldApplies(field: FieldDef, params: readonly FieldDef[], drafts: Record<string, Draft>): boolean {
+  const when = field.when
+  if (!when) return true
+  const on = params.find((p) => p.key === when.key)
+  if (!on) return false
+  const parsed = parseDraft(on, drafts[on.key] ?? emptyDraft(on, { secretAsText: true }))
+  const value = parsed.ok && parsed.value !== null && parsed.value !== undefined ? parsed.value : on.default
+  return typeof value === "string" && when.values.includes(value)
+}
+
+/**
+ * Params object for invokeModuleAction (unset params omitted) plus per-key
+ * errors; a param that does not apply (fieldApplies) is neither.
+ */
 export function evaluateParams(
   params: readonly FieldDef[],
   drafts: Record<string, Draft>,
@@ -742,6 +770,7 @@ export function evaluateParams(
   const values: Record<string, unknown> = {}
   const errors: Record<string, string> = {}
   for (const f of params) {
+    if (!fieldApplies(f, params, drafts)) continue
     const draft = drafts[f.key] ?? emptyDraft(f, { secretAsText: true })
     const res = checkDraft(f, draft)
     if (!res.ok) errors[f.key] = res.error

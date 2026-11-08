@@ -1,7 +1,9 @@
 package resolver
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -85,7 +87,7 @@ func writeCommandHelp(b *strings.Builder, c protocol.BuildCommand) {
 	for _, p := range c.Params {
 		width = max(width, len(p.Key))
 	}
-	for _, p := range c.Params {
+	for _, p := range formOrder(c.Params) {
 		var facts []string
 		facts = append(facts, string(p.Type))
 		if p.Required {
@@ -100,19 +102,43 @@ func writeCommandHelp(b *strings.Builder, c protocol.BuildCommand) {
 			}
 			facts = append(facts, "one of "+strings.Join(values, ", "))
 		}
+		if p.When != nil {
+			// Given otherwise, it is refused (protocol.TaskArgs).
+			facts = append(facts, "only when "+p.When.String())
+		}
 		fmt.Fprintf(b, "  %-*s  %s\n", width, p.Key, strings.Join(facts, ", "))
 		about := strings.TrimSpace(strings.Join(nonEmpty(p.Label, p.Description), ": "))
 		if about != "" {
 			fmt.Fprintf(b, "  %-*s  %s\n", width, "", about)
 		}
 	}
-	b.WriteString("\nParams go in order, or as --param=value anywhere.\n")
+	b.WriteString("\nParams go in this order, or as --param=value anywhere. An optional one takes a word only\n" +
+		"when it is one of its values and words are left for the required ones after it; the last\n" +
+		"required one, when it is text, takes the rest of the line.\n")
+}
+
+// formOrder is the order a command's form shows its params in, and the
+// console takes words in: its own, then those under More options
+// (Advanced), each by order and label.
+func formOrder(params []protocol.FieldSpec) []protocol.FieldSpec {
+	out := slices.Clone(params)
+	slices.SortStableFunc(out, func(a, b protocol.FieldSpec) int {
+		if a.Advanced != b.Advanced {
+			if a.Advanced {
+				return 1
+			}
+			return -1
+		}
+		return cmp.Or(cmp.Compare(a.Order, b.Order),
+			strings.Compare(strings.ToLower(orKey(a.Label, a.Key)), strings.ToLower(orKey(b.Label, b.Key))))
+	})
+	return out
 }
 
 // commandUsage is how a command is typed: shell <command> [timeout=30s].
 func commandUsage(c protocol.BuildCommand) string {
 	parts := []string{c.ID}
-	for _, p := range c.Params {
+	for _, p := range formOrder(c.Params) {
 		switch {
 		case p.Required:
 			parts = append(parts, "<"+p.Key+">")

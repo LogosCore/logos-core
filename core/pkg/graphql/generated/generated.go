@@ -1204,6 +1204,7 @@ type ComplexityRoot struct {
 
 	ModuleField struct {
 		Accept      func(childComplexity int) int
+		Advanced    func(childComplexity int) int
 		Default     func(childComplexity int) int
 		Description func(childComplexity int) int
 		Format      func(childComplexity int) int
@@ -1223,6 +1224,12 @@ type ComplexityRoot struct {
 		Required    func(childComplexity int) int
 		Type        func(childComplexity int) int
 		Unit        func(childComplexity int) int
+		When        func(childComplexity int) int
+	}
+
+	ModuleFieldCondition struct {
+		Key    func(childComplexity int) int
+		Values func(childComplexity int) int
 	}
 
 	ModuleLogEvent struct {
@@ -7401,6 +7408,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleField.Accept(childComplexity), true
+	case "ModuleField.advanced":
+		if e.ComplexityRoot.ModuleField.Advanced == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Advanced(childComplexity), true
 	case "ModuleField.default":
 		if e.ComplexityRoot.ModuleField.Default == nil {
 			break
@@ -7515,6 +7528,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleField.Unit(childComplexity), true
+	case "ModuleField.when":
+		if e.ComplexityRoot.ModuleField.When == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.When(childComplexity), true
+
+	case "ModuleFieldCondition.key":
+		if e.ComplexityRoot.ModuleFieldCondition.Key == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleFieldCondition.Key(childComplexity), true
+	case "ModuleFieldCondition.values":
+		if e.ComplexityRoot.ModuleFieldCondition.Values == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleFieldCondition.Values(childComplexity), true
 
 	case "ModuleLogEvent.backlog":
 		if e.ComplexityRoot.ModuleLogEvent.Backlog == nil {
@@ -15710,6 +15742,20 @@ type ModuleField {
   accept: [String!]
   # file: the largest file in bytes; null when there is no limit.
   maxSize: JSON
+  # An action's or a command's param: when it applies (the form shows it,
+  # and takes it) — while the param key of the same form, an enum, holds
+  # one of values. Null: always.
+  when: ModuleFieldCondition
+  # An action's or a command's param seldom changed: the form shows it
+  # under More options, folded.
+  advanced: Boolean!
+}
+
+# When a param applies (ModuleField.when): while the param key of its form
+# holds one of values (given, or its default).
+type ModuleFieldCondition {
+  key: String!
+  values: [String!]!
 }
 
 type ModuleProperty {
@@ -23583,6 +23629,10 @@ func (ec *executionContext) fieldContext_BindConnection_fields(_ context.Context
 				return ec.fieldContext_ModuleField_accept(ctx, field)
 			case "maxSize":
 				return ec.fieldContext_ModuleField_maxSize(ctx, field)
+			case "when":
+				return ec.fieldContext_ModuleField_when(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ModuleField_advanced(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -24884,6 +24934,10 @@ func (ec *executionContext) fieldContext_BuildChannelKind_fields(_ context.Conte
 				return ec.fieldContext_ModuleField_accept(ctx, field)
 			case "maxSize":
 				return ec.fieldContext_ModuleField_maxSize(ctx, field)
+			case "when":
+				return ec.fieldContext_ModuleField_when(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ModuleField_advanced(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -25303,6 +25357,10 @@ func (ec *executionContext) fieldContext_BuildCommand_params(_ context.Context, 
 				return ec.fieldContext_ModuleField_accept(ctx, field)
 			case "maxSize":
 				return ec.fieldContext_ModuleField_maxSize(ctx, field)
+			case "when":
+				return ec.fieldContext_ModuleField_when(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ModuleField_advanced(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -26048,6 +26106,10 @@ func (ec *executionContext) fieldContext_BuildSchema_fields(_ context.Context, f
 				return ec.fieldContext_ModuleField_accept(ctx, field)
 			case "maxSize":
 				return ec.fieldContext_ModuleField_maxSize(ctx, field)
+			case "when":
+				return ec.fieldContext_ModuleField_when(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ModuleField_advanced(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -26650,6 +26712,10 @@ func (ec *executionContext) fieldContext_BuildTarget_fields(_ context.Context, f
 				return ec.fieldContext_ModuleField_accept(ctx, field)
 			case "maxSize":
 				return ec.fieldContext_ModuleField_maxSize(ctx, field)
+			case "when":
+				return ec.fieldContext_ModuleField_when(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ModuleField_advanced(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -46796,6 +46862,10 @@ func (ec *executionContext) fieldContext_ModuleAction_params(_ context.Context, 
 				return ec.fieldContext_ModuleField_accept(ctx, field)
 			case "maxSize":
 				return ec.fieldContext_ModuleField_maxSize(ctx, field)
+			case "when":
+				return ec.fieldContext_ModuleField_when(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ModuleField_advanced(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -47748,6 +47818,10 @@ func (ec *executionContext) fieldContext_ModuleConnectionKind_fields(_ context.C
 				return ec.fieldContext_ModuleField_accept(ctx, field)
 			case "maxSize":
 				return ec.fieldContext_ModuleField_maxSize(ctx, field)
+			case "when":
+				return ec.fieldContext_ModuleField_when(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ModuleField_advanced(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -47819,6 +47893,10 @@ func (ec *executionContext) fieldContext_ModuleConnectionKind_target(_ context.C
 				return ec.fieldContext_ModuleField_accept(ctx, field)
 			case "maxSize":
 				return ec.fieldContext_ModuleField_maxSize(ctx, field)
+			case "when":
+				return ec.fieldContext_ModuleField_when(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ModuleField_advanced(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -48856,6 +48934,128 @@ func (ec *executionContext) fieldContext_ModuleField_maxSize(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _ModuleField_when(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_when,
+		func(ctx context.Context) (any, error) {
+			return obj.When, nil
+		},
+		nil,
+		ec.marshalOModuleFieldCondition2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleFieldCondition,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_when(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_ModuleFieldCondition_key(ctx, field)
+			case "values":
+				return ec.fieldContext_ModuleFieldCondition_values(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleFieldCondition", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_advanced(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_advanced,
+		func(ctx context.Context) (any, error) {
+			return obj.Advanced, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_advanced(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleFieldCondition_key(ctx context.Context, field graphql.CollectedField, obj *model.ModuleFieldCondition) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleFieldCondition_key,
+		func(ctx context.Context) (any, error) {
+			return obj.Key, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleFieldCondition_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleFieldCondition",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleFieldCondition_values(ctx context.Context, field graphql.CollectedField, obj *model.ModuleFieldCondition) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleFieldCondition_values,
+		func(ctx context.Context) (any, error) {
+			return obj.Values, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleFieldCondition_values(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleFieldCondition",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleLogEvent_records(ctx context.Context, field graphql.CollectedField, obj *model.ModuleLogEvent) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -49535,6 +49735,10 @@ func (ec *executionContext) fieldContext_ModuleProperty_field(_ context.Context,
 				return ec.fieldContext_ModuleField_accept(ctx, field)
 			case "maxSize":
 				return ec.fieldContext_ModuleField_maxSize(ctx, field)
+			case "when":
+				return ec.fieldContext_ModuleField_when(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ModuleField_advanced(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -93609,6 +93813,57 @@ func (ec *executionContext) _ModuleField(ctx context.Context, sel ast.SelectionS
 			out.Values[i] = ec._ModuleField_accept(ctx, field, obj)
 		case "maxSize":
 			out.Values[i] = ec._ModuleField_maxSize(ctx, field, obj)
+		case "when":
+			out.Values[i] = ec._ModuleField_when(ctx, field, obj)
+		case "advanced":
+			out.Values[i] = ec._ModuleField_advanced(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleFieldConditionImplementors = []string{"ModuleFieldCondition"}
+
+func (ec *executionContext) _ModuleFieldCondition(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleFieldCondition) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleFieldConditionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleFieldCondition")
+		case "key":
+			out.Values[i] = ec._ModuleFieldCondition_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "values":
+			out.Values[i] = ec._ModuleFieldCondition_values(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -107788,6 +108043,13 @@ func (ec *executionContext) marshalOModuleEnumOption2ᚕᚖgithubᚗcomᚋlogosc
 	}
 
 	return ret
+}
+
+func (ec *executionContext) marshalOModuleFieldCondition2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleFieldCondition(ctx context.Context, sel ast.SelectionSet, v *model.ModuleFieldCondition) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ModuleFieldCondition(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOModuleLogLevel2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogLevel(ctx context.Context, v any) (*model.ModuleLogLevel, error) {

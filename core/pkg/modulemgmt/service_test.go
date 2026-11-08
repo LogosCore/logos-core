@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -626,5 +627,26 @@ func TestInvokeActionRefreshesStatus(t *testing.T) {
 	}
 	if got := h.reg.row("http-1").LastMetrics["draining"]; got != true {
 		t.Fatalf("status after a failed read: draining = %v", got)
+	}
+}
+
+// An action's param by a condition (When): required only where it applies,
+// refused where it does not, and sent only where it does.
+func TestValidateParamsConditions(t *testing.T) {
+	action := protocol.ActionSpec{Name: "open", Params: []protocol.FieldSpec{
+		{Key: "mode", Type: protocol.FieldEnum, Default: "plain", Options: []protocol.EnumOption{{Value: "plain"}, {Value: "tls"}}},
+		{Key: "cert", Type: protocol.FieldString, Required: true, When: &protocol.FieldCondition{Key: "mode", Values: []string{"tls"}}},
+	}}
+	if send, _, err := validateParams(action, map[string]any{}); err != nil || len(send) != 0 {
+		t.Errorf("plain: %v %v", send, err)
+	}
+	if _, _, err := validateParams(action, map[string]any{"mode": "tls"}); err == nil {
+		t.Error("tls without its cert passed")
+	}
+	if send, _, err := validateParams(action, map[string]any{"mode": "tls", "cert": "pem"}); err != nil || send["cert"] != "pem" {
+		t.Errorf("tls: %v %v", send, err)
+	}
+	if _, _, err := validateParams(action, map[string]any{"cert": "pem"}); err == nil || !strings.Contains(err.Error(), "only when mode is tls") {
+		t.Errorf("a plain one's cert: %v", err)
 	}
 }

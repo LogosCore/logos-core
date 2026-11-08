@@ -1,18 +1,25 @@
 // What an operator types in a session's console, read as a command and its
 // args (the command's params, as the build schema declares them):
 //
-//   ls /var/log                 positional words fill the params in order
-//   sleep 30s 20
+//   ls /var/log                 words fill the params in the form's order
+//   sleep 30s 20                  (its own, then More options), the order
+//                                 usage and help show
 //   sleep 30s --jitter=20       --key=value (or --key value) sets any param
-//   shell ls -la /tmp | wc -l   a command whose first param is text takes
-//   shell sleep 9 --timeout=1m    the rest of the line as it, verbatim; only
-//                                 options at the end are read as options
+//   feedback disk is full       an optional param takes a word that is one
+//   feedback error disk full      of its values, when words are left for the
+//   tunnel 1080                   required params after it; else it is passed
+//                                 over (feedback's level, a tunnel's front)
+//   shell ls -la /tmp | wc -l   the last required param, when it is text,
+//   shell sleep 9 --timeout=1m    takes the rest of the line, verbatim;
+//                                 options go before it or at the end
 //
+// A param that does not apply as the line stands (its when) takes no word.
 // Words may be quoted ("a b" or 'a b'). Values are converted to the param's
 // type here (a number, a list split at commas); core checks them again. A
 // param of the connection format takes a session's connection by name or
 // place (connection-choices.ts).
 
+import { parseGoDuration } from "@/components/modules/management/field-values"
 import {
   CONNECTION_FORMAT,
   connectionFromText,
@@ -29,6 +36,31 @@ export interface CommandParam {
   default?: unknown
   /** What the value is beyond its type: "connection" takes a session's connection. */
   format?: string | null
+  /** When it applies: while the param key holds one of values (a tunnel's
+   *  host, with front forward alone); always when absent. */
+  when?: { key: string; values: readonly string[] } | null
+  /** An enum's values. */
+  options?: readonly string[] | null
+}
+
+/**
+ * Whether a param applies, given the values (or the texts) typed so far:
+ * always without a condition; with one, while the param it names holds one
+ * of its values, as typed or else by its default. Core refuses one that
+ * does not.
+ */
+export function paramApplies(param: CommandParam, params: readonly CommandParam[], values: ReadonlyMap<string, unknown> | Record<string, unknown>): boolean {
+  const when = param.when
+  if (!when) return true
+  const typed = values instanceof Map ? values.get(when.key) : (values as Record<string, unknown>)[when.key]
+  const value = typed ?? params.find((p) => p.key === when.key)?.default
+  return typeof value === "string" && when.values.includes(value)
+}
+
+/** A condition as core says it: "front is forward", "front is socks, http or forward". */
+export function conditionText(when: { key: string; values: readonly string[] }): string {
+  const v = when.values
+  return `${when.key} is ${v.length < 2 ? v.join("") : `${v.slice(0, -1).join(", ")} or ${v[v.length - 1]}`}`
 }
 
 export interface CommandDef {
@@ -42,11 +74,51 @@ export type ParsedLine =
   | { ok: true; command: CommandDef; args: Record<string, unknown> }
   | { ok: false; error: string; command?: CommandDef }
 
-const TEXT_TYPES = new Set(["string", "url", "secret", "enum"])
+/** The types of free text: a path, a command line, a message. */
+const FREE_TEXT = new Set(["string", "url", "secret"])
 
-/** Whether a command takes the rest of the line as its first param. */
-export function takesRest(command: CommandDef): boolean {
-  return command.params.length > 0 && TEXT_TYPES.has(command.params[0].type)
+const BOOL_WORDS = ["true", "yes", "on", "1", "false", "no", "off", "0"]
+
+function isRequired(p: CommandParam): boolean {
+  return p.required && (p.default === null || p.default === undefined)
+}
+
+/**
+ * The param that takes the rest of the line, as typed: the last required
+ * one, when it is free text (a path, a shell's command line, a message);
+ * with none required, the first, when it is (ls's path). One that applies
+ * only by a condition (when) never is. Params after it go as options.
+ */
+export function restParam(command: CommandDef): CommandParam | undefined {
+  const required = command.params.filter((p) => isRequired(p) && !p.when)
+  const p = required.length > 0 ? required[required.length - 1] : command.params[0]
+  return p && !p.when && FREE_TEXT.has(p.type) ? p : undefined
+}
+
+/**
+ * Whether a word reads as a value of an optional param: one that does not
+ * passes it over (feedback's level, for a message; a tunnel's front, for
+ * a port). One of an enum's options, a number, a duration, true or false,
+ * a session's connection; free text takes any word.
+ */
+function fits(param: CommandParam, text: string, connections: readonly ConnectionChoice[]): boolean {
+  if (param.format === CONNECTION_FORMAT) return connections.length === 0 || connectionFromText(param.key, text, connections).ok
+  switch (param.type) {
+    case "enum":
+      return !param.options?.length || param.options.includes(text)
+    case "bool":
+      return BOOL_WORDS.includes(text.toLowerCase())
+    case "int":
+    case "bytes":
+      return /^[-+]?\d+$/.test(text)
+    case "number":
+      return text.trim() !== "" && Number.isFinite(Number(text))
+    case "duration":
+      return parseGoDuration(text) !== null
+    case "datetime":
+      return !Number.isNaN(Date.parse(text))
+  }
+  return true
 }
 
 interface Word {
@@ -99,6 +171,9 @@ function convert(
 ): { ok: true; value: unknown } | { ok: false; error: string } {
   if (param.format === CONNECTION_FORMAT) return connectionFromText(param.key, text, connections)
   switch (param.type) {
+    case "enum":
+      if (param.options?.length && !param.options.includes(text)) return { ok: false, error: `${param.key}: one of ${param.options.join(", ")}` }
+      return { ok: true, value: text }
     case "int":
     case "bytes": {
       if (!/^[-+]?\d+$/.test(text)) return { ok: false, error: `${param.key}: a whole number` }
@@ -144,17 +219,39 @@ export interface LineTexts {
 }
 
 /** Reads a line's command and its params' texts, leniently (LineTexts). */
-export function lineTexts(line: string, commands: readonly CommandDef[]): LineTexts {
-  const all = words(line)
+export function lineTexts(line: string, commands: readonly CommandDef[], connections: readonly ConnectionChoice[] = []): LineTexts {
   const command = commandOf(line, commands)
   if (!command) return { texts: new Map(), extra: [] }
-  const byKey = new Map(command.params.map((p) => [p.key, p]))
+  const { texts, extra } = readWords(command, line, words(line).slice(1), connections)
+  return { command, texts, extra }
+}
+
+interface WordsRead {
+  texts: Map<string, string>
+  extra: string[]
+  /** The param each word went to, by its place (none: an option's, or extra). */
+  at: (string | undefined)[]
+}
+
+/**
+ * A command's words (past its own) as its params' texts. Options set what
+ * they name; each other word goes to the next param, in order, that takes
+ * it, the params before passed: one that does not apply as the line stands
+ * takes none, an optional one takes one that is one of its values (fits)
+ * when words are left for the required params after it, a required one
+ * takes any, and the rest param (restParam) the rest of the line. A word
+ * no param takes goes to one it did not fit, for its error to say why, or
+ * else is extra.
+ */
+function readWords(command: CommandDef, line: string, ws: readonly Word[], connections: readonly ConnectionChoice[]): WordsRead {
+  const params = command.params
+  const byKey = new Map(params.map((p) => [p.key, p]))
   const texts = new Map<string, string>()
   const extra: string[] = []
-  const rest = all.slice(1)
+  const rest = restParam(command)
 
   // An option: --key=value, or --key value. Only a param's key makes one.
-  const option = (ws: Word[], i: number): { key: string; value: string; used: number } | null => {
+  const option = (i: number): { key: string; value: string; used: number } | null => {
     const m = /^--([A-Za-z0-9_.-]+)(?:=(.*))?$/.exec(ws[i].text)
     if (!m || !byKey.has(m[1])) return null
     if (m[2] !== undefined) return { key: m[1], value: m[2], used: 1 }
@@ -162,15 +259,16 @@ export function lineTexts(line: string, commands: readonly CommandDef[]): LineTe
     return null
   }
 
-  if (takesRest(command)) {
-    // Options at the end only: the text before is the first param, verbatim.
-    let cut = rest.length
+  let cut = ws.length
+  if (rest) {
+    // The options at the end come first: what is before them may be the
+    // rest param's text, options in it included.
     for (;;) {
       let found = false
       for (const back of [1, 2]) {
         const i = cut - back
         if (i < 0) continue
-        const o = option(rest, i)
+        const o = option(i)
         if (o && i + o.used === cut) {
           texts.set(o.key, o.value)
           cut = i
@@ -180,28 +278,64 @@ export function lineTexts(line: string, commands: readonly CommandDef[]): LineTe
       }
       if (!found) break
     }
-    if (cut > 0) {
-      let text = line.slice(rest[0].start, rest[cut - 1].end).trim()
-      // A text wholly in quotes is unquoted.
-      if (cut === 1) text = rest[0].text
-      texts.set(command.params[0].key, text)
-    }
   } else {
-    const positional: string[] = []
-    for (let i = 0; i < rest.length; ) {
-      const o = option(rest, i)
-      if (o) {
-        texts.set(o.key, o.value)
-        i += o.used
-        continue
-      }
-      positional.push(rest[i].text)
-      i++
+    // An option anywhere counts for the words before it too.
+    for (let i = 0; i < cut; ) {
+      const o = option(i)
+      if (o) texts.set(o.key, o.value)
+      i += o ? o.used : 1
     }
-    const free = command.params.filter((p) => !texts.has(p.key))
-    positional.forEach((text, i) => (i < free.length ? texts.set(free[i].key, text) : extra.push(text)))
   }
-  return { command, texts, extra }
+
+  const open = (p: CommandParam) => !texts.has(p.key) && paramApplies(p, params, texts)
+  // Words from i to the cut, options aside; required params from k on.
+  const wordsLeft = (i: number) => {
+    let n = 0
+    for (let j = i; j < cut; ) {
+      const o = option(j)
+      if (!o) n++
+      j += o ? o.used : 1
+    }
+    return n
+  }
+  const requiredLeft = (k: number) => params.slice(k).filter((p) => isRequired(p) && open(p)).length
+
+  const at: (string | undefined)[] = []
+  let next = 0
+  let restTaken = false
+  for (let i = 0; i < cut && !restTaken; i++) {
+    const o = option(i)
+    if (o) {
+      texts.set(o.key, o.value)
+      i += o.used - 1
+      continue
+    }
+    const word = ws[i].text
+    let misfit: CommandParam | undefined
+    let took = false
+    for (; next < params.length && !took; next++) {
+      const p = params[next]
+      if (!open(p)) continue
+      if (p === rest) {
+        // As typed; a text wholly in quotes unquoted.
+        texts.set(p.key, i === cut - 1 ? word : line.slice(ws[i].start, ws[cut - 1].end).trim())
+        for (let j = i; j < cut; j++) at[j] = p.key
+        took = restTaken = true
+      } else if (isRequired(p) || (fits(p, word, connections) && wordsLeft(i) > requiredLeft(next + 1))) {
+        texts.set(p.key, word)
+        at[i] = p.key
+        took = true
+      } else if (!misfit && !fits(p, word, connections)) {
+        misfit = p
+      }
+    }
+    if (took) continue
+    if (misfit) {
+      texts.set(misfit.key, word)
+      at[i] = misfit.key
+    } else extra.push(word)
+  }
+  return { texts, extra, at }
 }
 
 /** Reads a line as one of commands with its args; connections are the session's, for a connection param. */
@@ -212,12 +346,13 @@ export function parseCommandLine(
 ): ParsedLine {
   const all = words(line)
   if (all.length === 0) return { ok: false, error: "Type a command" }
-  const { command, texts, extra } = lineTexts(line, commands)
+  const { command, texts, extra } = lineTexts(line, commands, connections)
   if (!command) {
     return { ok: false, error: `No command "${all[0].text}": ${commands.map((c) => c.id).join(", ") || "none"}` }
   }
   if (extra.length > 0) {
-    return { ok: false, command, error: `${command.id} takes ${command.params.length === 0 ? "nothing" : `at most ${command.params.length}`}: ${usage(command)}` }
+    const why = command.params.length === 0 ? `${command.id} takes nothing` : `No param of ${command.id} takes "${extra[0]}"`
+    return { ok: false, command, error: `${why}: ${usage(command)}` }
   }
   const byKey = new Map(command.params.map((p) => [p.key, p]))
   const args: Record<string, unknown> = {}
@@ -226,7 +361,9 @@ export function parseCommandLine(
     if (!r.ok) return { ok: false, command, error: r.error }
     args[key] = r.value
   }
-  const missing = command.params.filter((p) => p.required && (p.default === null || p.default === undefined) && !(p.key in args))
+  const stray = command.params.find((p) => p.key in args && p.when && !paramApplies(p, command.params, args))
+  if (stray?.when) return { ok: false, command, error: `${stray.key}: only when ${conditionText(stray.when)}` }
+  const missing = command.params.filter((p) => isRequired(p) && !(p.key in args) && paramApplies(p, command.params, args))
   if (missing.length > 0) {
     return { ok: false, command, error: `Missing ${missing.map((p) => p.key).join(", ")}: ${usage(command)}` }
   }
@@ -260,10 +397,14 @@ export function lineOf(
   })
   const quote = (s: string) => (/[\s"']/.test(s) || s === "" ? JSON.stringify(s) : s)
   const show = (v: unknown) => (Array.isArray(v) ? v.join(",") : typeof v === "object" && v !== null ? Object.entries(v).map(([k, x]) => `${k}=${String(x)}`).join(",") : String(v))
-  if (def && takesRest(def)) {
-    const first = def.params[0].key
-    if (first in (args ?? {})) parts.push(String(args![first]))
-    for (const [k, v] of entries) if (k !== first) parts.push(`--${k}=${quote(show(v))}`)
+  // The rest param's text first, as typed, where it is the first param (a
+  // shell's command line, a path); else every value as an option, so a
+  // word of it is never read as an optional param's value.
+  const rest = def ? restParam(def) : undefined
+  const restText = rest && def!.params[0] === rest && args ? args[rest.key] : undefined
+  if (rest && typeof restText === "string" && restText.trim() !== "" && !restText.trimStart().startsWith("--")) {
+    parts.push(restText)
+    for (const [k, v] of entries) if (k !== rest.key) parts.push(`--${k}=${quote(show(v))}`)
     return parts.join(" ")
   }
   for (const [k, v] of entries) parts.push(`--${k}=${quote(show(v))}`)
@@ -301,7 +442,7 @@ export function valueCompletion(
 ): ValueCompletion | null {
   if (connections.length === 0) return null
   const command = commandOf(line, commands)
-  if (!command || takesRest(command)) return null
+  if (!command) return null
   const all = words(line)
   const trailing = /\s$/.test(line)
   // Still typing the command.
@@ -319,18 +460,7 @@ export function valueCompletion(
   const prev = before.length > 0 ? /^--([A-Za-z0-9_.-]+)$/.exec(before[before.length - 1].text) : null
   if (prev && byKey.has(prev[1])) return offer(byKey.get(prev[1]), current.start, current.text)
 
-  const set = new Set<string>()
-  let positional = 0
-  for (let i = 0; i < before.length; ) {
-    const o = /^--([A-Za-z0-9_.-]+)(?:=(.*))?$/.exec(before[i].text)
-    if (o && byKey.has(o[1])) {
-      set.add(o[1])
-      i += o[2] !== undefined ? 1 : 2
-      continue
-    }
-    positional++
-    i++
-  }
-  const free = command.params.filter((p) => !set.has(p.key))
-  return offer(free[positional], current.start, current.text)
+  // The word goes where the line read so far puts it.
+  const read = readWords(command, line, [...before, current], connections)
+  return offer(byKey.get(read.at[before.length] ?? ""), current.start, current.text)
 }
