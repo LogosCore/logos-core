@@ -393,7 +393,8 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 			}
 		}
 		// And when core stops it: a command line that leaves stop_idle out
-		// runs by its default, as the form (which sends every field) does.
+		// runs by core's default for the action, as the form (which sends
+		// every field) does.
 		withDefault(values, commands[i].Params, protocol.ParamStopIdle)
 	}
 	// On the wire the args go by their params' numbers.

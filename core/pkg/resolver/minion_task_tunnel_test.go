@@ -194,14 +194,12 @@ func TestOpenTunnel(t *testing.T) {
 	}
 }
 
-// A command line that leaves stop_idle out runs by its default, and the
-// task's args then say so, as a form's (which sends every field) do; one
-// given stays, and a command with none, or none by default, has none.
+// A command line that leaves stop_idle out runs by core's default for the
+// action (a tunnel 1h, a reverse tunnel never: core adds the param), and
+// the task's args then say so, as a form's (which sends every field) do;
+// one given stays. withDefault leaves out a param with no default, or none.
 func TestTunnelStopIdleDefault(t *testing.T) {
-	params := []protocol.FieldSpec{
-		{Key: "timeout", Type: protocol.FieldDuration, Num: 2, Default: "10s"},
-		{Key: protocol.ParamStopIdle, Type: protocol.FieldDuration, Default: "1h"},
-	}
+	params := []protocol.FieldSpec{{Key: "timeout", Type: protocol.FieldDuration, Num: 2, Default: "10s"}}
 	params = append(params, protocol.TunnelCoreParams(protocol.ActionTunnel)...)
 	values := map[string]any{"port": 41000}
 	wire, problems := protocol.TaskArgs(params, values)
@@ -220,6 +218,11 @@ func TestTunnelStopIdleDefault(t *testing.T) {
 	withDefault(values, params, protocol.ParamStopIdle)
 	if values[protocol.ParamStopIdle] != "1h" || values["port"] != 41000 {
 		t.Errorf("args %v", values)
+	}
+	reverse := map[string]any{}
+	withDefault(reverse, protocol.TunnelCoreParams(protocol.ActionReverseTunnel), protocol.ParamStopIdle)
+	if reverse[protocol.ParamStopIdle] != "0s" {
+		t.Errorf("a reverse tunnel's args %v", reverse)
 	}
 	for name, c := range map[string]struct {
 		values map[string]any
@@ -405,8 +408,8 @@ func (f fakeTaskSchemas) LatestBuildSchema(context.Context, string) (*models.Mod
 }
 
 // A session's tunnel commands come with core's own params beside the
-// command's (the front, the port, a forward's destination, the cap): no
-// num, so they never go to the minion; others come as they are.
+// command's (the front, the port, a forward's destination, stop_idle, the
+// cap): no num, so they never go to the minion; others come as they are.
 func TestCommandsHaveCoreParams(t *testing.T) {
 	timeout := protocol.FieldSpec{Key: "timeout", Num: 2, Type: protocol.FieldDuration, Default: "10s"}
 	cmd := tunnelCmd
@@ -423,7 +426,7 @@ func TestCommandsHaveCoreParams(t *testing.T) {
 	for _, p := range commands[0].Params {
 		keys = append(keys, p.Key)
 	}
-	if strings.Join(keys, ",") != "timeout,front,port,host,to,cap" || len(commands[1].Params) != 1 || len(sc.Commands[0].Params) != 1 {
+	if strings.Join(keys, ",") != "timeout,front,port,host,to,stop_idle,cap" || len(commands[1].Params) != 1 || len(sc.Commands[0].Params) != 1 {
 		t.Errorf("tunnel %v; ls %d; the schema's own %d", keys, len(commands[1].Params), len(sc.Commands[0].Params))
 	}
 	wire, problems := protocol.TaskArgs(commands[0].Params, map[string]any{"front": "http"})
@@ -449,13 +452,13 @@ func TestCommandsByTarget(t *testing.T) {
 		return strings.Join(out, ",")
 	}
 	linux := tunnelCommand(sc, full, "linux-elf")
-	if strings.Join(linux.Opens, ",") != "tcp,udp,unix,source,tls" || keys(linux) != "front,port,host,to,path,source,tls,cap" {
+	if strings.Join(linux.Opens, ",") != "tcp,udp,unix,source,tls" || keys(linux) != "front,port,host,to,path,source,tls,stop_idle,cap" {
 		t.Errorf("linux: opens %v, params %s", linux.Opens, keys(linux))
 	}
 	if win := tunnelCommand(sc, full, "windows-exe"); !win.CanOpen(protocol.OpenPipe) {
 		t.Errorf("windows: opens %v", win.Opens)
 	}
-	if plain := tunnelCommand(sc, tunnelCmd, "linux-elf"); keys(plain) != "front,port,host,to,cap" {
+	if plain := tunnelCommand(sc, tunnelCmd, "linux-elf"); keys(plain) != "front,port,host,to,stop_idle,cap" {
 		t.Errorf("a command that opens tcp and udp: %s", keys(plain))
 	}
 }
