@@ -100,6 +100,9 @@ services:
       OPERATIONAL_PORTS: ${OPERATIONAL_PORTS:-41000-41009}
       OPERATIONAL_BIND: 0.0.0.0
       OPERATIONAL_ADDRESS: ${OPERATIONAL_ADDRESS:-}
+      # logos-vpn's binaries, which dev.Dockerfile fetches outside /app
+      # (the source mount): vpn-client.version names the release.
+      VPN_CLIENT_DIR: /opt/vpn-clients
     ports:
       # The host's loopback only by default: core's SOCKS takes no
       # credentials, so whoever reaches a port uses its minion. Set
