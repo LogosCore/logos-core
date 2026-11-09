@@ -109,6 +109,11 @@ type Build struct {
 	// (protocol.BuildRequest.MaxTasks), for a factory whose minions take
 	// one (protocol.BuildSchema.MaxTasks); nil for any other.
 	MaxTasks *int `bson:"max_tasks,omitempty" json:"max_tasks,omitempty"`
+	// Compression is the algorithm the minion packs and inflates
+	// (protocol.CompressionDeflate), for a factory that declares
+	// protocol.BuildSchema.Compression: on unless the operator turned it
+	// off; "" for off, or a factory that declares none.
+	Compression string `bson:"compression,omitempty" json:"compression,omitempty"`
 	// SearchText is what the builds list search reads of the build beyond
 	// its fields (BuildSearchText), set when the build is stored.
 	SearchText string `bson:"search_text" json:"-"`

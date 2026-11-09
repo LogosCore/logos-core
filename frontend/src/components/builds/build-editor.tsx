@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { LeaveJsonDialog } from "@/components/ui/leave-json-dialog"
 import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
@@ -388,6 +389,7 @@ function Editor({
           connections: request.connections,
           failover: request.failover,
           maxTasks: kind.maxTasks ? request.maxTasks : null,
+          compression: kind.compression ? request.compression : null,
           ...(persistedOptions ? persistedInput(read?.ok && read.doc.persisted ? read.doc.persisted : persisted) : {}),
         },
       })
@@ -637,6 +639,20 @@ function Editor({
                   options={persistedOptions}
                   value={persisted}
                   onChange={setPersisted}
+                  disabled={disabled}
+                />
+              </SettingRow>
+            )}
+            {kind.compression && (
+              <SettingRow
+                id="build-compression"
+                label="Compress messages"
+                help="Each item that shrinks goes deflated, both ways: text output and listings to a fifth or less. Off shows no compression in the traffic's sizes."
+              >
+                <Switch
+                  id="build-compression"
+                  checked={form.compression}
+                  onCheckedChange={(compression) => setForm((f) => ({ ...f, compression }))}
                   disabled={disabled}
                 />
               </SettingRow>

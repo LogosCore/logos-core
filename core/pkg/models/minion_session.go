@@ -133,8 +133,13 @@ type MinionSession struct {
 	// ConnMaxMessage is the largest message the connection in use carries
 	// (protocol.BuildConnection.MaxMessage): what core sends the minion
 	// keeps within it. 0: the protocol's limit.
-	ConnMaxMessage int                       `bson:"conn_max_message,omitempty" json:"-"`
-	ConnChanges    []MinionSessionConnChange `bson:"conn_changes,omitempty" json:"conn_changes,omitempty"`
+	ConnMaxMessage int `bson:"conn_max_message,omitempty" json:"-"`
+	// Compression is the algorithm its build packs with
+	// (models.Build.Compression), copied when the session opens or a build
+	// claims it: core packs the items it sends the minion only with one
+	// (protocol.Pack). "": core packs nothing for it.
+	Compression string                    `bson:"compression,omitempty" json:"-"`
+	ConnChanges []MinionSessionConnChange `bson:"conn_changes,omitempty" json:"conn_changes,omitempty"`
 	// LastSeenAt is the latest message under the session id; nil before the
 	// first check-in.
 	LastSeenAt *time.Time `bson:"last_seen_at,omitempty" json:"last_seen_at,omitempty"`

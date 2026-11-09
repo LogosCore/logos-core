@@ -102,6 +102,19 @@ export function BuildOverview({
               <span className="text-muted-foreground">{b.maxTasks === 0 ? " · none until a session sets more" : " · as it starts; its sessions change it"}</span>
             </LabelRow>
           )}
+          {/* Packed messages: the build's algorithm, or off where its factory's minions inflate. */}
+          {(b.compression || kind?.compression) && (
+            <LabelRow label="Compression">
+              {b.compression ? (
+                <>
+                  <span className="font-mono">{b.compression}</span>
+                  <span className="text-muted-foreground"> · each item that shrinks goes packed, both ways</span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">off</span>
+              )}
+            </LabelRow>
+          )}
           {b.persistedSession && (
             <LabelRow label="Persisted session">
               <PersistedSession id={b.persistedSession} />

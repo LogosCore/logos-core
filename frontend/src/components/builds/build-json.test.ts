@@ -27,6 +27,7 @@ const schema: BuildSchemaFieldsFragment = {
   crypto: null,
   failover: false,
   maxTasks: false,
+  compression: [],
   persistedSessions: false,
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
@@ -301,6 +302,37 @@ describe("max_tasks", () => {
   })
 })
 
+describe("compression", () => {
+  const packing = factoryKindsByName([{ moduleName: "bob", instances: 1, schema: { ...schema, compression: ["deflate"] } }]).get("bob")!
+  const readC = (doc: unknown) => readBuildJson(JSON.stringify(doc), packing, channels)
+
+  it("is on unless turned off, in and out of the form, and to createBuild", () => {
+    expect(formFromDocument(packing, channels, good).compression).toBe(true)
+    const off = formFromDocument(packing, channels, { ...good, compression: false })
+    expect(off.compression).toBe(false)
+    expect(formDocument(packing, channels, off).compression).toBe(false)
+    expect(JSON.parse(buildJson(packing, channels, { ...good, compression: false })).compression).toBe(false)
+    expect(documentInput({ ...good, compression: false }).compression).toBe(false)
+    expect(documentInput(good).compression).toBeNull()
+  })
+
+  it("reads back true or false, and refuses anything else", () => {
+    const at = (value: unknown) => {
+      const r = readC({ ...json(), compression: value })
+      if (!r.ok) throw new Error(r.message)
+      return { compression: r.doc.compression, problems: r.problems.map((p) => p.path) }
+    }
+    expect(at(false)).toEqual({ compression: false, problems: [] })
+    expect(at(true)).toEqual({ compression: true, problems: [] })
+    expect(at("deflate").problems).toEqual(["/compression"])
+  })
+
+  it("is not for a factory whose minions inflate nothing", () => {
+    expect(problems({ ...json(), compression: true })["/compression"]).toMatch(/inflate nothing/)
+    expect(formDocument(kind, channels, formFromDocument(kind, channels, good)).compression).toBeUndefined()
+  })
+})
+
 describe("a finished build's JSON", () => {
   it("reads back as a new build's, the defaults it holds left to the server", () => {
     const record = {
@@ -380,6 +412,7 @@ describe("documentInput", () => {
       ],
       failover: DEFAULT_FAILOVER,
       maxTasks: null,
+      compression: null,
     })
   })
 })

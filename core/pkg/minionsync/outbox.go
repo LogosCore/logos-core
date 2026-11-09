@@ -155,6 +155,9 @@ func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d d
 	}
 	room := d.room
 	add := func(item cbor.RawMessage) bool {
+		// Packed as it goes in, where the build packs (packing.go): a
+		// connection that carries little takes more.
+		item = pack(session, item)
 		n := len(item) + itemOverhead
 		if n > room {
 			return false
@@ -282,6 +285,9 @@ func (s *Service) taskItems(ctx context.Context, session *models.MinionSession, 
 		if err != nil {
 			return false, err
 		}
+		// Packed unless it carries a credential (packing.go); add leaves
+		// a task as it is.
+		item = packTask(session, t, item)
 		if len(item)+itemOverhead > most {
 			if err := s.tooLarge(ctx, session, t, len(item)); err != nil {
 				return false, err

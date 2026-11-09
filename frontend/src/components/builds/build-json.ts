@@ -63,6 +63,9 @@ import { DEFAULT_MAX_TASKS, MAX_TASKS_LIMIT, parseMaxTasks } from "@/components/
 // "max_tasks", for a factory whose minions take a limit: how many tasks the
 // minion runs at once, 0 to 64 (left out: 5); its sessions change it live.
 //
+// "compression", for a factory whose minions inflate packed items: whether
+// the build packs its messages (left out: true).
+//
 // "persisted_session", for a factory whose minions claim persisted sessions:
 // false (none), true (a new one, reserved with the build), or an existing
 // session's id, which the minion takes over.
@@ -97,6 +100,8 @@ export interface BuildDocument {
   failover: FailoverPolicy
   /** How many tasks at once, typed text that does not read kept as typed; absent where the factory has none. */
   maxTasks?: number | string
+  /** Whether the build packs its messages; absent where the factory has none, or the JSON leaves it out (on). */
+  compression?: boolean
   /** The persisted session; absent where the factory has none, or the JSON leaves it out. */
   persisted?: PersistedChoice
 }
@@ -104,7 +109,19 @@ export interface BuildDocument {
 /** The parts the JSON tab locks. */
 export const BUILD_JSON_LOCKED: readonly string[] = ["/factory"]
 
-const KEYS = ["factory", "description", "target", "platform", "commands", "values", "connections", "failover", "max_tasks", "persisted_session"]
+const KEYS = [
+  "factory",
+  "description",
+  "target",
+  "platform",
+  "commands",
+  "values",
+  "connections",
+  "failover",
+  "max_tasks",
+  "compression",
+  "persisted_session",
+]
 const CONNECTION_KEYS = ["channel", "kind", "name", "description", "settings", "values", "failover"]
 
 /**
@@ -147,6 +164,7 @@ export function buildJson(kind: FactoryKind, channels: ReadonlyMap<string, Chann
     }),
     failover: doc.failover,
     ...(doc.maxTasks !== undefined ? { max_tasks: doc.maxTasks } : {}),
+    ...(doc.compression !== undefined ? { compression: doc.compression } : {}),
     ...(doc.persisted ? { persisted_session: persistedJson(doc.persisted) } : {}),
   })
 }
@@ -190,6 +208,7 @@ export function formDocument(kind: FactoryKind, channels: ReadonlyMap<string, Ch
     }),
     failover: form.failover,
     ...(kind.maxTasks ? { maxTasks: maxTasksOf(form.maxTasks) } : {}),
+    ...(kind.compression ? { compression: form.compression } : {}),
   }
 }
 
@@ -226,6 +245,7 @@ export function formFromDocument(kind: FactoryKind, channels: ReadonlyMap<string
     ),
     failover: doc.failover,
     maxTasks: kind.maxTasks ? String(doc.maxTasks ?? DEFAULT_MAX_TASKS) : "",
+    compression: doc.compression ?? true,
   }
 }
 
@@ -248,6 +268,7 @@ export function documentInput(doc: BuildDocument): FormInput {
     })),
     failover: doc.failover,
     maxTasks: typeof doc.maxTasks === "number" ? doc.maxTasks : null,
+    compression: doc.compression ?? null,
   }
 }
 
@@ -352,6 +373,11 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
         doc.maxTasks = typeof raw === "string" || typeof raw === "number" ? raw : JSON.stringify(raw)
       }
     }
+  }
+  if (root.compression !== undefined && root.compression !== null) {
+    if (!kind.compression) at("/compression", `${kind.name}'s minions inflate nothing`)
+    else if (typeof root.compression === "boolean") doc.compression = root.compression
+    else at("/compression", "true or false")
   }
   if (root.persisted_session !== undefined) {
     if (!kind.persistedSessions) at("/persisted_session", `${kind.name}'s minions do not claim persisted sessions`)
@@ -478,6 +504,15 @@ export function buildJsonHints(
               key: "max_tasks",
               detail: `number, 0 to ${MAX_TASKS_LIMIT}`,
               info: `How many tasks the minion runs at once as it starts; 0: none until a session sets more. Left out: ${DEFAULT_MAX_TASKS}. Its sessions change it live.`,
+            },
+          ]
+        : []),
+      ...(kind.compression
+        ? [
+            {
+              key: "compression",
+              detail: "boolean",
+              info: "Whether the build packs its messages: each item that shrinks deflated, both ways. Left out: true. Off shows no compression in the traffic's sizes.",
             },
           ]
         : []),

@@ -516,7 +516,8 @@ func (s *Service) push(ctx context.Context, c *Conn, from *sender, items []cbor.
 func (s *Service) pushUnder(ctx context.Context, c *Conn, from *sender, id uuid.UUID, items []cbor.RawMessage) error {
 	c.touch(s.now())
 	msgID := protocol.NewMessageID()
-	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: items, At: unixNow(s.now())})
+	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: packMessage(from.session, items),
+		At: unixNow(s.now())})
 	if err != nil {
 		return err
 	}

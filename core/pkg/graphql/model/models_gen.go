@@ -79,6 +79,7 @@ type Build struct {
 	ConnectionDescriptions []string          `json:"connectionDescriptions"`
 	Failover               any               `json:"failover"`
 	MaxTasks               *int              `json:"maxTasks,omitempty"`
+	Compression            *string           `json:"compression,omitempty"`
 	Crypto                 any               `json:"crypto,omitempty"`
 	PersistedSession       *string           `json:"persistedSession,omitempty"`
 	State                  string            `json:"state"`
@@ -186,6 +187,7 @@ type BuildInput struct {
 	NewPersistedSession *bool                   `json:"newPersistedSession,omitempty"`
 	Failover            any                     `json:"failover,omitempty"`
 	MaxTasks            *int                    `json:"maxTasks,omitempty"`
+	Compression         *bool                   `json:"compression,omitempty"`
 }
 
 type BuildMatchInput struct {
@@ -209,6 +211,7 @@ type BuildSchema struct {
 	PersistedSessions bool            `json:"persistedSessions"`
 	Failover          bool            `json:"failover"`
 	MaxTasks          bool            `json:"maxTasks"`
+	Compression       []string        `json:"compression"`
 }
 
 type BuildServe struct {

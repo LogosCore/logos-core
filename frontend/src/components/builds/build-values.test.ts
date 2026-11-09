@@ -39,6 +39,7 @@ const schema: BuildSchemaFieldsFragment = {
   crypto: null,
   failover: false,
   maxTasks: false,
+  compression: [],
   persistedSessions: false,
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
@@ -281,7 +282,17 @@ describe("the build form", () => {
       ],
       failover: DEFAULT_FAILOVER,
       maxTasks: null,
+      compression: null,
     })
+  })
+
+  it("packs by default where the factory's minions inflate, and says off", () => {
+    const packing = factoryKindsByName([{ moduleName: "bob", instances: 1, schema: { ...schema, compression: ["deflate"] } }]).get("bob")!
+    const form = initialForm(packing, null, channels)
+    expect(form.compression).toBe(true)
+    expect(evaluateForm(packing, form, channels).input.compression).toBe(true)
+    expect(evaluateForm(packing, { ...form, compression: false }, channels).input.compression).toBe(false)
+    expect(evaluateForm(kind, { ...form, compression: false }, channels).input.compression).toBeNull()
   })
 
   it("keys errors like the server's problems", () => {

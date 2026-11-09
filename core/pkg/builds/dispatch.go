@@ -227,6 +227,7 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 		n := uint64(max(*b.MaxTasks, 0))
 		req.MaxTasks = &n
 	}
+	req.Compression = b.Compression
 	if b.PersistedSessionID != nil {
 		req.SessionID = b.PersistedSessionID.String()
 	}

@@ -747,7 +747,8 @@ func (a *callAnswer) ctx(ctx context.Context, t *models.MinionTarget) context.Co
 func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *protocol.BuildConnection,
 	from *sender, id uuid.UUID, items []cbor.RawMessage) (*callAnswer, bool, error) {
 	msgID := protocol.NewMessageID()
-	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: items, At: unixNow(s.now())})
+	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: packMessage(from.session, items),
+		At: unixNow(s.now())})
 	if err != nil {
 		return nil, false, err
 	}
@@ -824,6 +825,8 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 		!bytes.Equal(msg.Re, msgID) {
 		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer that is not one to this call"))
 	}
+	// Packed items in their places (packing.go).
+	protocol.UnpackItems(msg.Items)
 	// A minion whose clock is far from core's refuses the call as stale, as
 	// it would a replay: nothing goes until the clocks agree.
 	for _, raw := range msg.Items {

@@ -452,6 +452,8 @@ type MinionSessionClaim struct {
 	// when it takes one.
 	MaxTasks         *int
 	MaxTasksSettable bool
+	// Compression is the claiming build's ("": none).
+	Compression string
 }
 
 func (r *minionSessionRepository) SetArchived(ctx context.Context, sessionID uuid.UUID, archived bool) error {
@@ -700,6 +702,7 @@ func (r *minionSessionRepository) Claim(ctx context.Context, sessionID uuid.UUID
 		"sleep":              sleepOrRemove(c.Sleep),
 		"max_tasks":          intOrRemove(c.MaxTasks),
 		"max_tasks_settable": c.MaxTasksSettable,
+		"compression":        strOrRemove(c.Compression),
 		"max_tasks_sends":    "$$REMOVE",
 		"late_at":            "$$REMOVE", // set again by the claim's check-in
 		"lost_at":            "$$REMOVE",
@@ -718,6 +721,14 @@ func intOrRemove(n *int) any {
 
 func sleepOrRemove(s *models.MinionSessionSleep) any {
 	if s == nil {
+		return "$$REMOVE"
+	}
+	return bson.M{"$literal": s}
+}
+
+// strOrRemove is text for a pipeline $set, or the field's removal for "".
+func strOrRemove(s string) any {
+	if s == "" {
 		return "$$REMOVE"
 	}
 	return bson.M{"$literal": s}

@@ -47,7 +47,10 @@ type BuildInput struct {
 	// protocol.MaxTasksLimit, for a factory whose minions take one; nil:
 	// protocol.DefaultMaxTasks there, none elsewhere.
 	MaxTasks *int
-	Actor    models.ModuleActor
+	// Compression turns the build's compression on or off, for a factory
+	// that declares protocol.BuildSchema.Compression; nil: on there.
+	Compression *bool
+	Actor       models.ModuleActor
 }
 
 // artifactKey is where a build's artifact is uploaded.
@@ -121,6 +124,12 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 			probs.add("maxTasks", "0 to %d", protocol.MaxTasksLimit)
 		}
 	}
+	if in.Compression != nil && *in.Compression && len(schema.Compression) == 0 {
+		if probs == nil {
+			probs = problems{}
+		}
+		probs.add("compression", "this factory's minions inflate nothing")
+	}
 	if err := probs.err("the build does not fit the factory's build schema"); err != nil {
 		return nil, err
 	}
@@ -152,6 +161,10 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 			n = *in.MaxTasks
 		}
 		b.MaxTasks = &n
+	}
+	// On by default where the factory's minions inflate.
+	if len(schema.Compression) > 0 && (in.Compression == nil || *in.Compression) {
+		b.Compression = schema.Compression[0]
 	}
 	if schema.Crypto != "" {
 		if b.Crypto, err = payloadcrypto.NewKeys(schema.Crypto); err != nil {

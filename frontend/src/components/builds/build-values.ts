@@ -135,6 +135,8 @@ export interface FactoryKind {
   failover?: boolean
   /** The minions run up to a number of tasks at once: a build says how many, a session changes it. */
   maxTasks?: boolean
+  /** The minions inflate packed items: a build packs its messages, on unless turned off. */
+  compression?: boolean
   /** Fields every target shares, sorted. */
   fields: FieldDef[]
   /** The factory's connection parameters by channel kind, then connection kind, sorted. */
@@ -168,6 +170,7 @@ export function factoryKindsByName(
       persistedSessions: k.schema.persistedSessions,
       failover: k.schema.failover,
       maxTasks: k.schema.maxTasks,
+      compression: k.schema.compression.length > 0,
       fields: sorted(k.schema.fields),
       channelFields: new Map(
         k.schema.channels.map((c) => [c.moduleName, new Map(c.kinds.map((ck) => [ck.kind, sorted(ck.fields)]))]),
@@ -325,6 +328,8 @@ export interface BuildForm {
   failover: FailoverPolicy
   /** How many tasks the minion runs at once, as typed; "" for a factory whose minions take no limit. */
   maxTasks: string
+  /** Whether the build packs its messages; kept, unused, for a factory whose minions inflate nothing. */
+  compression: boolean
 }
 
 /** A connection as an earlier build's turns into ("Build again"). */
@@ -353,6 +358,8 @@ export interface FormSource {
   failover?: FailoverPolicy
   /** How many tasks at once it had; none for a factory without the limit. */
   maxTasks?: number | null
+  /** Whether it packed its messages; none: on. */
+  compression?: boolean | null
 }
 
 /**
@@ -525,6 +532,7 @@ export function initialForm(
     connections: (source?.connections ?? []).map((c) => connectionDraft(kind, channels.get(c.moduleName), c, target)),
     failover: source?.failover ?? { ...DEFAULT_FAILOVER },
     maxTasks: kind.maxTasks ? String(source?.maxTasks ?? DEFAULT_MAX_TASKS) : "",
+    compression: source?.compression ?? true,
   }
 }
 
@@ -544,6 +552,8 @@ export interface BuildRecordLike {
   failover?: unknown
   /** How many tasks at once the factory got; none for a factory without the limit. */
   maxTasks?: number | null
+  /** The algorithm it packed its messages with; none when it packed none. */
+  compression?: string | null
 }
 
 /** One of a build record's connections, as far as it reads. */
@@ -635,6 +645,7 @@ export function sourceFromBuild(
     connections,
     failover: recordFailover(build.failover),
     maxTasks: build.maxTasks ?? null,
+    compression: build.compression != null,
   }
 }
 
@@ -672,6 +683,8 @@ export interface FormInput {
   failover: FailoverPolicy
   /** How many tasks the minion runs at once; null for a factory without the limit. */
   maxTasks: number | null
+  /** Whether the build packs its messages; null for a factory whose minions inflate nothing. */
+  compression: boolean | null
 }
 
 function evaluateFields(
@@ -799,6 +812,7 @@ export function evaluateForm(
     connections,
     failover: form.failover,
     maxTasks,
+    compression: kind.compression ? form.compression : null,
   }
   return { input, errors }
 }

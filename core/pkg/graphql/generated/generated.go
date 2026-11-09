@@ -157,6 +157,7 @@ type ComplexityRoot struct {
 		BindConnections        func(childComplexity int) int
 		CancelledBy            func(childComplexity int) int
 		Commands               func(childComplexity int) int
+		Compression            func(childComplexity int) int
 		ConnectionDescriptions func(childComplexity int) int
 		Connections            func(childComplexity int) int
 		CreatedAt              func(childComplexity int) int
@@ -259,6 +260,7 @@ type ComplexityRoot struct {
 	BuildSchema struct {
 		Channels          func(childComplexity int) int
 		Commands          func(childComplexity int) int
+		Compression       func(childComplexity int) int
 		Crypto            func(childComplexity int) int
 		Failover          func(childComplexity int) int
 		Fields            func(childComplexity int) int
@@ -2989,6 +2991,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.Commands(childComplexity), true
+	case "Build.compression":
+		if e.ComplexityRoot.Build.Compression == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Build.Compression(childComplexity), true
 	case "Build.connectionDescriptions":
 		if e.ComplexityRoot.Build.ConnectionDescriptions == nil {
 			break
@@ -3414,6 +3422,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildSchema.Commands(childComplexity), true
+	case "BuildSchema.compression":
+		if e.ComplexityRoot.BuildSchema.Compression == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildSchema.Compression(childComplexity), true
 	case "BuildSchema.crypto":
 		if e.ComplexityRoot.BuildSchema.Crypto == nil {
 			break
@@ -13213,6 +13227,10 @@ type BuildSchema {
   # (BuildInput.maxTasks), and a session changes it live
   # (setMinionSessionMaxTasks).
   maxTasks: Boolean!
+  # The compression algorithms the minions inflate ("deflate"): a build
+  # packs its messages with the first unless turned off
+  # (BuildInput.compression). Empty: none.
+  compression: [String!]!
 }
 
 # A command a factory's minions can be built with.
@@ -13390,6 +13408,9 @@ input BuildInput {
   # How many tasks the minion runs at once as it starts, 0 (none until a
   # session sets more) to 64, for a factory with maxTasks; null: 5 there.
   maxTasks: Int
+  # Whether the build packs its messages (docs: wire format, Compression),
+  # for a factory with compression; null: on there.
+  compression: Boolean
 }
 
 # One stage of a build's pipeline: core's queue, then the factory's steps
@@ -13470,6 +13491,9 @@ type Build {
   # How many tasks the minion runs at once as it starts, as the factory got
   # it; null for a factory whose minions take no max tasks.
   maxTasks: Int
+  # The algorithm the build packs its messages with ("deflate"); null when
+  # it packs none (turned off, or a factory without compression).
+  compression: String
   # The minion's payload crypto as the factory got it: {suite, material}.
   # null when its factory declares no suite.
   crypto: JSON
@@ -25069,6 +25093,35 @@ func (ec *executionContext) fieldContext_Build_maxTasks(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Build_compression(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Build_compression,
+		func(ctx context.Context) (any, error) {
+			return obj.Compression, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Build_compression(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Build",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Build_crypto(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26587,6 +26640,8 @@ func (ec *executionContext) fieldContext_BuildEdge_node(_ context.Context, field
 				return ec.fieldContext_Build_failover(ctx, field)
 			case "maxTasks":
 				return ec.fieldContext_Build_maxTasks(ctx, field)
+			case "compression":
+				return ec.fieldContext_Build_compression(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
 			case "persistedSession":
@@ -27363,6 +27418,35 @@ func (ec *executionContext) fieldContext_BuildSchema_maxTasks(_ context.Context,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildSchema_compression(ctx context.Context, field graphql.CollectedField, obj *model.BuildSchema) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildSchema_compression,
+		func(ctx context.Context) (any, error) {
+			return obj.Compression, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildSchema_compression(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildSchema",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -31717,6 +31801,8 @@ func (ec *executionContext) fieldContext_FactoryKind_schema(_ context.Context, f
 				return ec.fieldContext_BuildSchema_failover(ctx, field)
 			case "maxTasks":
 				return ec.fieldContext_BuildSchema_maxTasks(ctx, field)
+			case "compression":
+				return ec.fieldContext_BuildSchema_compression(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type BuildSchema", field.Name)
 		},
@@ -49419,6 +49505,8 @@ func (ec *executionContext) fieldContext_Module_build(_ context.Context, field g
 				return ec.fieldContext_BuildSchema_failover(ctx, field)
 			case "maxTasks":
 				return ec.fieldContext_BuildSchema_maxTasks(ctx, field)
+			case "compression":
+				return ec.fieldContext_BuildSchema_compression(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type BuildSchema", field.Name)
 		},
@@ -54909,6 +54997,8 @@ func (ec *executionContext) fieldContext_Mutation_createBuild(ctx context.Contex
 				return ec.fieldContext_Build_failover(ctx, field)
 			case "maxTasks":
 				return ec.fieldContext_Build_maxTasks(ctx, field)
+			case "compression":
+				return ec.fieldContext_Build_compression(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
 			case "persistedSession":
@@ -55030,6 +55120,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 				return ec.fieldContext_Build_failover(ctx, field)
 			case "maxTasks":
 				return ec.fieldContext_Build_maxTasks(ctx, field)
+			case "compression":
+				return ec.fieldContext_Build_compression(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
 			case "persistedSession":
@@ -55151,6 +55243,8 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 				return ec.fieldContext_Build_failover(ctx, field)
 			case "maxTasks":
 				return ec.fieldContext_Build_maxTasks(ctx, field)
+			case "compression":
+				return ec.fieldContext_Build_compression(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
 			case "persistedSession":
@@ -66920,6 +67014,8 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 				return ec.fieldContext_Build_failover(ctx, field)
 			case "maxTasks":
 				return ec.fieldContext_Build_maxTasks(ctx, field)
+			case "compression":
+				return ec.fieldContext_Build_compression(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
 			case "persistedSession":
@@ -85705,7 +85801,7 @@ func (ec *executionContext) unmarshalInputBuildInput(ctx context.Context, obj an
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"description", "moduleName", "target", "platform", "values", "commands", "connections", "persistedSession", "newPersistedSession", "failover", "maxTasks"}
+	fieldsInOrder := [...]string{"description", "moduleName", "target", "platform", "values", "commands", "connections", "persistedSession", "newPersistedSession", "failover", "maxTasks", "compression"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -85789,6 +85885,13 @@ func (ec *executionContext) unmarshalInputBuildInput(ctx context.Context, obj an
 				return it, err
 			}
 			it.MaxTasks = data
+		case "compression":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("compression"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Compression = data
 		}
 	}
 	return it, nil
@@ -89677,6 +89780,8 @@ func (ec *executionContext) _Build(ctx context.Context, sel ast.SelectionSet, ob
 			}
 		case "maxTasks":
 			out.Values[i] = ec._Build_maxTasks(ctx, field, obj)
+		case "compression":
+			out.Values[i] = ec._Build_compression(ctx, field, obj)
 		case "crypto":
 			out.Values[i] = ec._Build_crypto(ctx, field, obj)
 		case "persistedSession":
@@ -90363,6 +90468,11 @@ func (ec *executionContext) _BuildSchema(ctx context.Context, sel ast.SelectionS
 			}
 		case "maxTasks":
 			out.Values[i] = ec._BuildSchema_maxTasks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "compression":
+			out.Values[i] = ec._BuildSchema_compression(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

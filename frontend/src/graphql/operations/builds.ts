@@ -7,6 +7,7 @@ export const BuildSchemaFields = graphql(`
     persistedSessions
     failover
     maxTasks
+    compression
     fields {
       ...ModuleFieldDefFields
     }
@@ -176,6 +177,7 @@ export const BuildQuery = graphql(`
       connectionDescriptions
       failover
       maxTasks
+      compression
       crypto
       warnings
       log

@@ -409,6 +409,17 @@ func TestIntegrationMinionSessionClaim(t *testing.T) {
 	if len(s.ReplacedKeys) != 2 || string(s.ReplacedKeys[1].Crypto.Material) != `{"k":1}` {
 		t.Fatalf("replaced keys %+v", s.ReplacedKeys)
 	}
+	// The claiming build's compression, and none when it packs none.
+	for _, c := range []string{protocol.CompressionDeflate, ""} {
+		withC := claim
+		withC.Compression = c
+		if err := repo.Claim(ctx, sid, withC); err != nil {
+			t.Fatal(err)
+		}
+		if s, _ = repo.FindBySessionID(ctx, sid); s.Compression != c {
+			t.Fatalf("compression %q after a claim with %q", s.Compression, c)
+		}
+	}
 	for range models.MaxSessionReplacedKeys + 2 {
 		_ = repo.Claim(ctx, sid, claim)
 	}

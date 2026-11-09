@@ -55,6 +55,10 @@ type BuildSchema {
   # (BuildInput.maxTasks), and a session changes it live
   # (setMinionSessionMaxTasks).
   maxTasks: Boolean!
+  # The compression algorithms the minions inflate ("deflate"): a build
+  # packs its messages with the first unless turned off
+  # (BuildInput.compression). Empty: none.
+  compression: [String!]!
 }
 
 # A command a factory's minions can be built with.
@@ -232,6 +236,9 @@ input BuildInput {
   # How many tasks the minion runs at once as it starts, 0 (none until a
   # session sets more) to 64, for a factory with maxTasks; null: 5 there.
   maxTasks: Int
+  # Whether the build packs its messages (docs: wire format, Compression),
+  # for a factory with compression; null: on there.
+  compression: Boolean
 }
 
 # One stage of a build's pipeline: core's queue, then the factory's steps
@@ -312,6 +319,9 @@ type Build {
   # How many tasks the minion runs at once as it starts, as the factory got
   # it; null for a factory whose minions take no max tasks.
   maxTasks: Int
+  # The algorithm the build packs its messages with ("deflate"); null when
+  # it packs none (turned off, or a factory without compression).
+  compression: String
   # The minion's payload crypto as the factory got it: {suite, material}.
   # null when its factory declares no suite.
   crypto: JSON

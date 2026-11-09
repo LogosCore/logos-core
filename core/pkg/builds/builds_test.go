@@ -495,6 +495,43 @@ func TestBuildMaxTasks(t *testing.T) {
 	}
 }
 
+// A factory whose minions inflate gets compression on by default, off when
+// the operator says so; one whose minions inflate nothing gets none, and
+// compression asked of it is refused. The factory learns it in the request.
+func TestBuildCompression(t *testing.T) {
+	r := newRig(t)
+	if b := r.queue(t, nil); b.Compression != "" {
+		t.Fatalf("compression for a factory without it: %q", b.Compression)
+	}
+	on, off := true, false
+	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) { in.Compression = &on }))
+	var v *ValidationError
+	if !errors.As(err, &v) || v.Problems["compression"] == "" {
+		t.Fatalf("compression the factory's minions do not inflate: %v", err)
+	}
+	if b := r.queue(t, func(in *BuildInput) { in.Compression = &off }); b.Compression != "" {
+		t.Fatalf("off for a factory without it: %q", b.Compression)
+	}
+	r.reg.schemas["bob"].Compression = []string{protocol.CompressionDeflate}
+	if b := r.queue(t, func(in *BuildInput) { in.Compression = &off }); b.Compression != "" {
+		t.Fatalf("turned off: %q", b.Compression)
+	}
+	b := r.queue(t, nil)
+	if b.Compression != protocol.CompressionDeflate {
+		t.Fatalf("the default: %q", b.Compression)
+	}
+	r.svc.Tick(context.Background())
+	var req *protocol.BuildRequest
+	for _, c := range r.rpc.recorded() {
+		if q, ok := c.payload.(protocol.BuildRequest); ok && q.BuildID == b.BuildID.String() {
+			req = &q
+		}
+	}
+	if req == nil || req.Compression != protocol.CompressionDeflate {
+		t.Fatalf("the factory got %+v", req)
+	}
+}
+
 func TestOfferWithCrypto(t *testing.T) {
 	r := newRig(t)
 	r.reg.schemas["bob"].Crypto = protocol.CryptoAES256CBCHMACSHA256

@@ -269,6 +269,9 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 		}
 	}
 
+	// Packed items in their places (packing.go): one that does not unpack
+	// stays, and is answered.
+	protocol.UnpackItems(msg.Items)
 	if via != nil && via.target != uuid.Nil {
 		// Over a bind-persistent target's connection only its minion
 		// speaks: one of another build reached at its address is not it,
@@ -339,7 +342,7 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 		s.keepReply(ctx, msg.ID, nil)
 		return nil, nil
 	}
-	reply, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, Re: msg.ID, Items: items})
+	reply, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, Re: msg.ID, Items: packMessage(from.session, items)})
 	if err != nil {
 		return nil, err
 	}
@@ -565,6 +568,7 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 	conn := connOf(b, place)
 	session.Conn, session.ConnKind, session.ConnName, session.ConnCount = conn.Place, conn.Kind, conn.Name, len(b.Connections.Items)
 	session.ConnMaxMessage = conn.MaxMessage
+	session.Compression = b.Compression
 	if peer != "" {
 		session.PeerAddress = peer
 		session.Peers = []models.MinionSessionPeer{{Address: peer, FirstSeen: now, LastSeen: now, Count: 1}}
@@ -632,7 +636,7 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 		At: now, BuildID: b.BuildID, BuildDescription: b.Description, ModuleName: b.ModuleName, Target: b.Target,
 		Platform: b.Platform, Staged: from.staging != nil, Crypto: from.crypto, Hello: models.MinionHelloFrom(hello),
 		Address: address, AddressPicked: picked, Sleep: sleepOf(hello), MaxTasks: models.MaxTasksOf(hello),
-		MaxTasksSettable: b.MaxTasks != nil,
+		MaxTasksSettable: b.MaxTasks != nil, Compression: b.Compression,
 	})
 	if repository.IsNotFound(err) {
 		return refuse("the session closed meanwhile")
@@ -878,6 +882,9 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			// What a delegate carries for the minions it serves
 			// (delegates.go).
 			out, err = s.takeDelegate(ctx, session, raw, i)
+		case protocol.ItemPacked:
+			// One that did not unpack (Exchange took the rest in place).
+			out, err = packedErr(msg.Items, i)
 		default:
 			out, err = errItem(protocol.ErrItemUnknownItem, "not taken under a session yet", i)
 		}
