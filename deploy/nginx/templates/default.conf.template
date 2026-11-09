@@ -1,0 +1,59 @@
+# logos-nginx: core's front (docs: deployment, "Core's front"). The
+# image's entrypoint fills ${...} from the environment (the official nginx
+# image's templates); nginx's own $variables stay as they are.
+
+# keepalive: connections to core are kept open and reused (the locations
+# send HTTP/1.1 without "Connection: close"). Without it every request
+# opened its own and left it in TIME_WAIT: a burst of a few thousand
+# requests a second (a file browser following a large walk) ran nginx out
+# of local ports, and core answered 502 for seconds ("connect() failed (99:
+# Address not available)").
+upstream backend {
+    server ${LOGOS_BACKEND};
+    keepalive 64;
+}
+
+upstream hocuspocus {
+    server ${LOGOS_HOCUSPOCUS};
+}
+
+upstream frontend {
+    server ${LOGOS_FRONTEND};
+}
+
+# Plain HTTP: the full app (LOGOS_HTTP=serve, the default), so clients that
+# do not trust the certificate (scripts, MCP clients) can use it; or a
+# redirect to HTTPS (LOGOS_HTTP=redirect). /healthz answers either way.
+server {
+    listen 80 default_server;
+    server_name ${LOGOS_SERVER_NAME};
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    include /etc/nginx/logos-http.conf;
+    include /etc/nginx/logos-extra/*.conf;
+}
+
+# HTTPS + HTTP/2: the entrypoint for browsers and modules. HTTP/2
+# multiplexes every request (SSE streams and graphql-ws upgrades included)
+# over one connection per origin. The certificate is the one mounted, or
+# one the image made (25-logos-front.sh).
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${LOGOS_SERVER_NAME};
+
+    ssl_certificate     /etc/nginx/logos-certs/tls.crt;
+    ssl_certificate_key /etc/nginx/logos-certs/tls.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    include /etc/nginx/logos-locations.conf;
+    include /etc/nginx/logos-extra/*.conf;
+}

@@ -350,8 +350,12 @@ services:
         aliases:
           - keycloak.localhost
 
+  # Core's front: the logos-nginx image (deploy/nginx), as production runs
+  # it, so its routes are tried here first.
   nginx:
-    image: nginx:alpine
+    build:
+      context: ./deploy/nginx
+    image: logos-nginx:dev
     container_name: logos-nginx
     restart: unless-stopped
     profiles:
@@ -362,8 +366,14 @@ services:
       # browser entry point.
       - "8080:80"
       - "8443:443"
+    environment:
+      LOGOS_BACKEND: core-dev:8002
+      LOGOS_FRONTEND: frontend-dev:5173
+      LOGOS_HOCUSPOCUS: hocuspocus:1234
+      LOGOS_TLS_CERT: /etc/nginx/certs/localhost.crt
+      LOGOS_TLS_KEY: /etc/nginx/certs/localhost.key
     volumes:
-      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      # Editing the routes takes effect on a restart, without a rebuild.
       - ./deploy/nginx/locations.conf:/etc/nginx/logos-locations.conf:ro
       - ./deploy/nginx/dev-certs:/etc/nginx/certs:ro
     depends_on:
