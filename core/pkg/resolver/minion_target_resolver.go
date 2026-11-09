@@ -254,6 +254,7 @@ func (r *minionTargetResolver) BindConnections(ctx context.Context, b *model.Bui
 	out := make([]*model.BindConnection, len(conns))
 	for i, c := range conns {
 		out[i] = &model.BindConnection{Place: c.Place, Name: c.Name, ModuleName: c.ModuleName, Kind: c.Kind,
+			Version: c.Version, DelegatedOnly: c.DelegatedOnly, Agentless: c.Agentless,
 			Fields: fieldModels(c.Fields), Problem: strPtr(c.Problem)}
 	}
 	return out, nil
@@ -306,6 +307,9 @@ func (r *minionTargetResolver) toModel(ctx context.Context, t *models.MinionTarg
 	if t.SessionID != nil {
 		out.SessionID = strPtr(t.SessionID.String())
 	}
+	if t.DelegateID != nil {
+		out.DelegateID = strPtr(t.DelegateID.String())
+	}
 	out.Problems = []*model.ChannelEndpointProblem{}
 	if problems, err := r.targets.Problems(ctx, t); err == nil {
 		out.Problems = problemModels(problems)
@@ -350,6 +354,13 @@ func targetInput(ctx context.Context, input model.MinionTargetInput) (miniontarg
 	}
 	if input.Policy != nil {
 		in.Policy = *input.Policy
+	}
+	if input.DelegateID != nil && *input.DelegateID != "" {
+		id, err := uuid.Parse(*input.DelegateID)
+		if err != nil {
+			return miniontargets.Input{}, moduleGQLError(ctx, errCodeBadUserInput, "delegateId is a session id")
+		}
+		in.Delegate = &id
 	}
 	return in, nil
 }

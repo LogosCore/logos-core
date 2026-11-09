@@ -440,12 +440,16 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 	if err != nil {
 		return fmt.Errorf("load the build: %w", err)
 	}
-	if s.link == nil {
-		return s.saveCall(ctx, s.openFailed(t, models.TargetNoChannel, "core keeps no control links"))
-	}
 	kind, err := s.kindOf(ctx, t)
 	if err != nil {
 		return err
+	}
+	if why := delegateMismatch(t, kind); why != "" {
+		return s.saveCall(ctx, s.stateOnly(t, models.TargetRefused, why))
+	}
+	link := s.linkerFor(t, buildConn(b, t))
+	if link == nil {
+		return s.saveCall(ctx, s.openFailed(t, models.TargetNoChannel, "core keeps no control links"))
 	}
 	if err := s.saveCall(ctx, s.stateOnly(t, models.TargetConnecting, "")); err != nil {
 		return err
@@ -504,9 +508,12 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 	if kind.agentless {
 		acting = s.actingOf(ctx, session)
 	}
-	a, err := s.link.Open(ctx, t.ModuleName, values, creds, under, keys, acting, kind.open, sent)
+	a, err := link.Open(ctx, t.ModuleName, values, creds, under, keys, acting, kind.open, sent)
 	if err == nil {
 		s.noteLogins(ctx, t, creds, a.Logins)
+	}
+	if done, err := s.delegateFailed(ctx, t, err); done {
+		return err
 	}
 	switch {
 	case errors.Is(err, channellink.ErrNoLink):

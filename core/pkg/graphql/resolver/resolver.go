@@ -20,6 +20,7 @@ package resolver
 import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
+	"github.com/logoscore/logos-core/core/pkg/minionsync"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/resolver"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
@@ -74,7 +75,8 @@ type Resolver struct {
 }
 
 // MinionConnections reports whether a persistent connection serving a
-// session is open.
+// session is open, and what a delegate task carries.
 type MinionConnections interface {
 	Connected(session uuid.UUID) bool
+	Delegate(task uuid.UUID) (minionsync.DelegateSummary, bool)
 }

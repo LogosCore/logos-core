@@ -59,6 +59,12 @@ func (s *Service) takeAck(ctx context.Context, session *models.MinionSession, ra
 		if err := s.tasks.Ack(ctx, session.SessionID, ids, s.now(), session.Acting); err != nil {
 			return nil, nil, fmt.Errorf("ack tasks: %w", err)
 		}
+		// The minion has them: each is news (its console shows it running;
+		// a delegate task core queued calls the targets that wait for it).
+		for _, id := range ids {
+			s.bus.Publish(eventbus.NewMinionTaskChangedEvent(eventbus.MinionTaskEventPayload{TaskID: id.String(),
+				SessionID: session.SessionID.String(), OperationID: session.OperationID.String()}))
+		}
 	}
 	if ack.Xfer != nil {
 		return nil, &pull{xfer: ack.Xfer, next: *ack.Next, ctx: ack.Ctx, i: i}, nil

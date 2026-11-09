@@ -3,6 +3,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
 // Minion sessions over GraphQL (minion_sessions.graphql): read-only, opened
@@ -26,7 +28,7 @@ type IMinionSessionResolver interface {
 	// Connections is MinionSession.connections: its build's, read when
 	// asked (the session was authorized with it).
 	Connections(ctx context.Context, s *model.MinionSession) ([]*model.MinionConnection, error)
-	MinionSessions(ctx context.Context, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
+	MinionSessions(ctx context.Context, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, delegatesFor *model.MinionDelegatesForInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
 	MinionSessionValues(ctx context.Context, operationID string, column string) ([]string, error)
 	MinionSession(ctx context.Context, id string) (*model.MinionSession, error)
 	// MinionSessionsLayout and SetMinionSessionsLayout are the caller's own
@@ -88,6 +90,15 @@ type minionSessionResolver struct {
 	limits        MaxTasksSetter
 	feedback      repository.IMinionFeedbackRepository
 	identities    repository.IMinionIdentityRepository
+	// schemas are the factories' build schemas: which builds' minions can
+	// be delegates; nil, none can.
+	schemas SessionSchemas
+}
+
+// SessionSchemas are the factories' latest build schemas, by factory kind
+// (the module registry).
+type SessionSchemas interface {
+	LatestBuildSchemas(ctx context.Context) (map[string]*models.ModuleBuildSchema, error)
 }
 
 // SessionTasks counts a session's tasks under way (the minion task
@@ -108,10 +119,10 @@ func NewMinionSessionResolver(sessions repository.IMinionSessionRepository, oper
 	reservations repository.IMinionSessionReservationRepository, marks repository.IMinionSessionMarkRepository,
 	builds repository.IBuildRepository, bus eventbus.IEventBus, tasks SessionTasks, limits MaxTasksSetter,
 	feedback repository.IMinionFeedbackRepository, identities repository.IMinionIdentityRepository,
-	folders repository.IMinionSessionFolderRepository) IMinionSessionResolver {
+	folders repository.IMinionSessionFolderRepository, schemas SessionSchemas) IMinionSessionResolver {
 	return &minionSessionResolver{sessions: sessions, operationRepo: operationRepo, userRepo: userRepo, preferences: preferences,
 		reservations: reservations, marks: marks, folders: folders, builds: builds, bus: bus, tasks: tasks, limits: limits, feedback: feedback,
-		identities: identities}
+		identities: identities, schemas: schemas}
 }
 
 func (r *minionSessionResolver) Connections(ctx context.Context, s *model.MinionSession) ([]*model.MinionConnection, error) {
@@ -154,12 +165,17 @@ func (r *minionSessionResolver) viewer(ctx context.Context, operationID string) 
 	return op, authorization.AuthorizeOperationRole(ctx, &operation, models.OperationRoleViewer)
 }
 
-func (r *minionSessionResolver) MinionSessions(ctx context.Context, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
+func (r *minionSessionResolver) MinionSessions(ctx context.Context, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, delegatesFor *model.MinionDelegatesForInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
 	op, err := r.viewer(ctx, operationID)
 	if err != nil {
 		return nil, err
 	}
 	q := repository.MinionSessionQuery{Archived: archived != nil && *archived, Search: strings.TrimSpace(deref(search)), Sort: models.DefaultMinionSessionSort}
+	if delegatesFor != nil {
+		if q.Builds, err = r.delegateBuilds(ctx, op, *delegatesFor); err != nil {
+			return nil, err
+		}
+	}
 	if q.Folder, err = folderOf(ctx, folderID); err != nil {
 		return nil, err
 	}
@@ -207,6 +223,37 @@ func (r *minionSessionResolver) MinionSessions(ctx context.Context, operationID 
 			return &model.MinionSessionEdge{Node: node, Cursor: cursor}
 		})
 	return &model.MinionSessionConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
+}
+
+// delegateBuilds are the ids of op's builds whose minions can be the
+// delegate of a target of in's channel kind: each has a delegate command
+// its factory's latest schema says serves it. Empty, not nil, for none.
+func (r *minionSessionResolver) delegateBuilds(ctx context.Context, op uuid.UUID, in model.MinionDelegatesForInput) ([]uuid.UUID, error) {
+	out := []uuid.UUID{}
+	if r.schemas == nil || r.builds == nil {
+		return out, nil
+	}
+	schemas, err := r.schemas.LatestBuildSchemas(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load the build schemas: %w", err)
+	}
+	for _, module := range slices.Sorted(maps.Keys(schemas)) {
+		var commands []string
+		for _, c := range schemas[module].Commands {
+			if c.Action == protocol.ActionDelegate && c.Serving(in.ModuleName, in.Kind, in.Version) > 0 {
+				commands = append(commands, c.ID)
+			}
+		}
+		if len(commands) == 0 {
+			continue
+		}
+		ids, err := r.builds.IDsWithCommands(ctx, op, module, commands)
+		if err != nil {
+			return nil, fmt.Errorf("the builds that serve %s %s: %w", in.ModuleName, in.Kind, err)
+		}
+		out = append(out, ids...)
+	}
+	return out, nil
 }
 
 // operatorSession loads a session for a change: an operator (or admin) of
@@ -729,7 +776,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		PeerAddress: strPtr(s.PeerAddress), Peers: toSessionPeerModels(s.Peers),
 		Persisted: s.Persisted, RestartCount: int(s.RestartCount), Restarts: toSessionRestartModels(s.Restarts),
 		LateAt: timePtr(s.LateAt), LostAt: timePtr(s.LostAt), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
-		Acting: toIdentityModel(s.Acting),
+		Acting: toIdentityModel(s.Acting), Via: toSessionViaModels(s.Via), ViaSince: timePtr(s.ViaSince),
 	}
 	if len(h.X) > 0 {
 		out.X = h.X
@@ -764,6 +811,14 @@ func toSessionPeerModels(peers []models.MinionSessionPeer) []*model.MinionSessio
 	for i, p := range peers {
 		out[i] = &model.MinionSessionPeer{Address: p.Address, FirstSeen: p.FirstSeen.UTC().Format(time.RFC3339),
 			LastSeen: p.LastSeen.UTC().Format(time.RFC3339), Count: int(p.Count)}
+	}
+	return out
+}
+
+func toSessionViaModels(via []models.MinionSessionVia) []*model.MinionSessionVia {
+	out := make([]*model.MinionSessionVia, len(via))
+	for i, v := range via {
+		out[i] = &model.MinionSessionVia{SessionID: v.SessionID.String(), Number: int(v.Number), TaskID: v.TaskID.String()}
 	}
 	return out
 }

@@ -272,7 +272,7 @@ func NewApp() (*App, error) {
 	minionSync := minionsync.NewService(repos.Build, repos.MinionStaging, repos.MinionSession, repos.MinionReservation, infra.cache, bus, l).
 		WithTasks(repos.MinionTask).WithFiles(minionFiles).WithStreams(minionStreams).WithFileBrowser(fileBrowser).
 		WithFeedback(repos.MinionFeedback).WithIdentities(repos.MinionIdentity).WithCredentials(credentialRefs).
-		WithTunnels(minionTunnels)
+		WithTunnels(minionTunnels).WithDelegates(repos.ModuleRegistry)
 	// A downloader or an uploader coming wakes a stream the minion holds,
 	// over its persistent connection; a tunnel's bytes, the session's.
 	minionStreams.WithWaker(minionSync)
@@ -282,7 +282,7 @@ func NewApp() (*App, error) {
 	links := channellink.New(l)
 	minionSync.WithTargets(repos.MinionTarget, links)
 	minionTargets := miniontargets.NewService(repos.MinionTarget, repos.MinionSession, repos.Build, endpoints, minionSync, bus).
-		WithCredentials(credentialRefs)
+		WithCredentials(credentialRefs).WithDelegates(minionSync)
 	credentialRefs.WithUsage(credentialrefs.UsageRepos{Targets: repos.MinionTarget, Endpoints: repos.ChannelEndpoint,
 		Builds: repos.Build, Tasks: repos.MinionTask, Schemas: endpoints})
 	minionSync.WithTargetChecker(minionTargets, miniontargets.ProblemsText)
@@ -449,10 +449,12 @@ func (a *App) startLifecycle() {
 	a.minionFiles.Start()
 	a.minionStreams.Start()
 	a.minionTunnels.Start(context.Background())
-	a.stopTaskWatch = a.minionSync.WatchTasks()
+	stopTasks, stopDelegates := a.minionSync.WatchTasks(), a.minionSync.WatchDelegates()
+	a.stopTaskWatch = func() { stopTasks(); stopDelegates() }
 	targetsCtx, stopTargets := context.WithCancel(context.Background())
 	a.stopTargets = stopTargets
 	go a.minionSync.RunTargets(targetsCtx)
+	go a.minionSync.RunDelegates(targetsCtx)
 }
 
 // stopLifecycle tears down the reaper, RPC server, and broker connection. All

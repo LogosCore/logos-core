@@ -54,12 +54,15 @@ type AgentKeyWithSecret struct {
 }
 
 type BindConnection struct {
-	Place      int            `json:"place"`
-	Name       string         `json:"name"`
-	ModuleName string         `json:"moduleName"`
-	Kind       string         `json:"kind"`
-	Fields     []*ModuleField `json:"fields"`
-	Problem    *string        `json:"problem,omitempty"`
+	Place         int            `json:"place"`
+	Name          string         `json:"name"`
+	ModuleName    string         `json:"moduleName"`
+	Kind          string         `json:"kind"`
+	Fields        []*ModuleField `json:"fields"`
+	Version       int            `json:"version"`
+	DelegatedOnly bool           `json:"delegatedOnly"`
+	Agentless     bool           `json:"agentless"`
+	Problem       *string        `json:"problem,omitempty"`
 }
 
 type Build struct {
@@ -130,6 +133,7 @@ type BuildCommand struct {
 	Result      *string        `json:"result,omitempty"`
 	Action      *string        `json:"action,omitempty"`
 	Kinds       []string       `json:"kinds"`
+	Serves      []*BuildServe  `json:"serves"`
 	Params      []*ModuleField `json:"params"`
 }
 
@@ -205,6 +209,12 @@ type BuildSchema struct {
 	PersistedSessions bool            `json:"persistedSessions"`
 	Failover          bool            `json:"failover"`
 	MaxTasks          bool            `json:"maxTasks"`
+}
+
+type BuildServe struct {
+	ModuleName string   `json:"moduleName"`
+	Versions   []int    `json:"versions"`
+	Kinds      []string `json:"kinds"`
 }
 
 type BuildStage struct {
@@ -646,6 +656,31 @@ type MinionConnection struct {
 	Params     any    `json:"params"`
 }
 
+type MinionDelegate struct {
+	Serves      []*BuildServe               `json:"serves"`
+	Held        bool                        `json:"held"`
+	StopIdle    *string                     `json:"stopIdle,omitempty"`
+	UsedAt      *string                     `json:"usedAt,omitempty"`
+	Carried     int                         `json:"carried"`
+	Waiting     int                         `json:"waiting"`
+	Connections []*MinionDelegateConnection `json:"connections"`
+}
+
+type MinionDelegateConnection struct {
+	N          int            `json:"n"`
+	ModuleName string         `json:"moduleName"`
+	Kind       string         `json:"kind"`
+	Peer       *string        `json:"peer,omitempty"`
+	OpenedAt   string         `json:"openedAt"`
+	Session    *MinionSession `json:"session,omitempty"`
+}
+
+type MinionDelegatesForInput struct {
+	ModuleName string `json:"moduleName"`
+	Kind       string `json:"kind"`
+	Version    int    `json:"version"`
+}
+
 type MinionFeedback struct {
 	ID         string  `json:"id"`
 	Level      string  `json:"level"`
@@ -813,6 +848,8 @@ type MinionSession struct {
 	FeedbackWarnings int                     `json:"feedbackWarnings"`
 	FeedbackAt       *string                 `json:"feedbackAt,omitempty"`
 	FeedbackReadAt   *string                 `json:"feedbackReadAt,omitempty"`
+	Via              []*MinionSessionVia     `json:"via"`
+	ViaSince         *string                 `json:"viaSince,omitempty"`
 	BindTarget       *MinionTarget           `json:"bindTarget,omitempty"`
 }
 
@@ -939,6 +976,13 @@ type MinionSessionSortInput struct {
 	Direction SortDirection `json:"direction"`
 }
 
+type MinionSessionVia struct {
+	SessionID string         `json:"sessionId"`
+	Number    int            `json:"number"`
+	TaskID    string         `json:"taskId"`
+	Session   *MinionSession `json:"session,omitempty"`
+}
+
 type MinionSessionsLayout struct {
 	Columns      []string                     `json:"columns"`
 	Sort         *MinionSessionSort           `json:"sort,omitempty"`
@@ -991,6 +1035,8 @@ type MinionTarget struct {
 	StateAt          string                    `json:"stateAt"`
 	SessionID        *string                   `json:"sessionId,omitempty"`
 	Session          *MinionSession            `json:"session,omitempty"`
+	DelegateID       *string                   `json:"delegateId,omitempty"`
+	Delegate         *MinionSession            `json:"delegate,omitempty"`
 	Failures         int                       `json:"failures"`
 	UnreachableSince *string                   `json:"unreachableSince,omitempty"`
 	NextCallAt       *string                   `json:"nextCallAt,omitempty"`
@@ -1021,9 +1067,10 @@ type MinionTargetEvent struct {
 }
 
 type MinionTargetInput struct {
-	Values  any     `json:"values"`
-	Retries *bool   `json:"retries,omitempty"`
-	Policy  *string `json:"policy,omitempty"`
+	Values     any     `json:"values"`
+	Retries    *bool   `json:"retries,omitempty"`
+	Policy     *string `json:"policy,omitempty"`
+	DelegateID *string `json:"delegateId,omitempty"`
 }
 
 type MinionTask struct {
@@ -1069,6 +1116,7 @@ type MinionTask struct {
 	Upload            *MinionTaskUpload `json:"upload,omitempty"`
 	Stream            *MinionTaskStream `json:"stream,omitempty"`
 	Document          string            `json:"document"`
+	Delegate          *MinionDelegate   `json:"delegate,omitempty"`
 }
 
 type MinionTaskPage struct {

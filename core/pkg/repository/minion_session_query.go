@@ -30,6 +30,9 @@ type MinionSessionQuery struct {
 	Search  string
 	Filters []models.MinionSessionFilter
 	Sort    models.MinionSessionSort
+	// Builds, when not nil, keeps the sessions of these builds (none for
+	// an empty list): the delegates a target can name, say.
+	Builds []uuid.UUID
 }
 
 // Validate checks the filters and the sort.
@@ -55,6 +58,9 @@ func minionSessionFilter(operationID uuid.UUID, q MinionSessionQuery, now time.T
 	and := bson.A{minionSessionListFilter(operationID, q.Search), openSessions(now), archived}
 	if q.Folder != nil {
 		and = append(and, bson.M{"folder_id": *q.Folder})
+	}
+	if q.Builds != nil {
+		and = append(and, bson.M{"build_id": bson.M{"$in": q.Builds}})
 	}
 	for _, f := range q.Filters {
 		and = append(and, columnFilter(f, now))

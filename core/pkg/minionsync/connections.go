@@ -79,11 +79,15 @@ type Conn struct {
 	// active is when a message last went over it, either way: a
 	// bind-persistent connection closes after its policy's idle time.
 	active time.Time
-	// owner is the session whose own connection it is: the first that
-	// spoke over it, or the next once that one's session closed or another
-	// process took it. The socket says its minion is there; sessions it
-	// relays (a pivot's) are only reached over it.
-	owner uuid.UUID
+	// owner is the session whose connection it is: the first that spoke
+	// over it, or the next once that one's session closed or another
+	// process took it. A connection carries one minion's messages
+	// (Exchange takes no other's): a minion that relays others delegates
+	// (delegates.go). ownerBuild is its build: a hello of it over the
+	// connection (its minion staging again) moves the connection to the
+	// session it opens.
+	owner      uuid.UUID
+	ownerBuild uuid.UUID
 	// unusedSince is since when no open session uses it (from its open);
 	// zero while one does.
 	unusedSince time.Time
@@ -139,15 +143,30 @@ func NewConn(id, kind, instance, peer string, send func(ctx context.Context, f p
 		heard: make(chan struct{}), gone: make(chan struct{}), carried: map[uuid.UUID]bool{}}
 }
 
-// claim makes session c's own when c has none: the minion whose
+// claim makes session, of build, c's own when c has none: the minion whose
 // connection it is speaks first. It reports whether session is.
-func (c *Conn) claim(session uuid.UUID) bool {
+func (c *Conn) claim(session, build uuid.UUID) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.owner == uuid.Nil {
-		c.owner = session
+		c.owner, c.ownerBuild = session, build
 	}
 	return c.owner == session
+}
+
+// carries reports whether c carries from's messages: those of its own
+// session, or under its build's ids (its minion staging again); any when
+// it has none.
+func (c *Conn) carries(from *sender) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch {
+	case c.owner == uuid.Nil:
+		return true
+	case from.session != nil:
+		return from.session.SessionID == c.owner
+	}
+	return from.build != nil && from.build.BuildID == c.ownerBuild
 }
 
 // disown says c is no longer session's own (its session closed, another
@@ -370,8 +389,7 @@ func (cs *connections) lock(session uuid.UUID) func() {
 }
 
 // Connected reports whether a persistent connection of the session's own
-// is open: its minion is there. A session a connection only relays (a
-// pivot's) is not: its own messages say when it was there.
+// is open: its minion is there.
 func (s *Service) Connected(session uuid.UUID) bool {
 	for _, c := range s.conns.of(session) {
 		if c.ownerOf() == session {
@@ -382,7 +400,7 @@ func (s *Service) Connected(session uuid.UUID) bool {
 }
 
 // reachable reports whether a persistent connection open reaches the
-// session: its own, or one that relays it.
+// session.
 func (s *Service) reachable(session uuid.UUID) bool {
 	return len(s.conns.of(session)) > 0
 }
@@ -529,7 +547,7 @@ func (s *Service) seenOn(ctx context.Context, via *Conn, session *models.MinionS
 		s.linkTarget(ctx, via, session)
 	}
 	was := s.Connected(sid)
-	via.claim(sid)
+	via.claim(sid, session.BuildID)
 	_, evicted := s.conns.seen(sid, via, s.now())
 	if evicted != nil {
 		evicted.disown(sid)
@@ -583,8 +601,7 @@ func (s *Service) resetConnected(ctx context.Context) {
 // KeepAlive is the open socket of c saying its minion is there, every
 // connKeepAlive (its handler calls it while the socket is open): a check-in
 // for the session whose own connection it is, so its last seen stays now
-// and it is not late. Sessions c only relays check in by their own
-// messages. A session closed meanwhile is told so (session_closed, as the
+// and it is not late. A session closed meanwhile is told so (session_closed, as the
 // reply to its next message would say) and no longer served; a
 // reverse-persistent socket no open session uses for unusedFor closes.
 func (s *Service) KeepAlive(ctx context.Context, c *Conn) {
@@ -652,10 +669,9 @@ func (s *Service) closeUnused(c *Conn, used bool, now time.Time) {
 	}
 }
 
-// Closed forgets c once its socket closed. The session whose own
-// connection it was is seen a last time now (late and lost run from here,
-// by its schedule), and told of when it has none left; sessions c relayed
-// keep their own last word.
+// Closed forgets c once its socket closed. The session whose connection it
+// was is seen a last time now (late and lost run from here, by its
+// schedule), and told of when it has none left.
 func (s *Service) Closed(ctx context.Context, c *Conn) {
 	// First: an open waiting for its minion's first word over c stops
 	// waiting.

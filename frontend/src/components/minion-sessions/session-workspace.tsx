@@ -14,6 +14,7 @@ import { DEFAULT_PANE_TEXT, PANE_TEXT_SIZES, PaneTextContext, paneTextStyle } fr
 import { markColorVars, markRowClass } from "./session-mark-colors"
 import { SessionFire } from "./session-fire"
 import { fileBrowserTabId, workspaceTab, WorkspaceActionsContext, type WorkspaceActions } from "./workspace-tabs"
+import { viaNote, viaShort } from "./via-values"
 
 // The lower half of the Sessions page: the sessions an operator works with,
 // a tab each ("Interact" in a session's menu opens one), each a console of
@@ -175,7 +176,12 @@ function SessionTabLabel({ id }: { id: string }) {
   return (
     <span
       className="flex min-w-0 items-center gap-1.5"
-      title={[files ? `Files of session ${s.number}'s machine` : `Session ${s.number}`, s.host, s.user].filter(Boolean).join(" · ")}
+      title={[
+        [files ? `Files of session ${s.number}'s machine` : `Session ${s.number}`, s.host, s.user].filter(Boolean).join(" · "),
+        !files && viaNote(s.via, s.viaSince),
+      ]
+        .filter(Boolean)
+        .join("\n")}
     >
       {files ? (
         <FolderTreeIcon className="size-4 shrink-0" />
@@ -184,6 +190,8 @@ function SessionTabLabel({ id }: { id: string }) {
       )}
       <span className="font-mono font-medium">{s.number}</span>
       {s.host && <span className="truncate">{s.host}</span>}
+      {/* The console's session through a delegate: the nearest. */}
+      {!files && s.via.length > 0 && <span className="shrink-0 text-muted-foreground">{viaShort(s.via)}</span>}
       {(s.mark?.icon || s.mark?.emoji) && <MarkIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} />}
       {!files && <FeedbackCounts errors={s.feedbackErrors} warnings={s.feedbackWarnings} className="text-xs" />}
     </span>

@@ -39,13 +39,7 @@ func (s *Service) WithTunnels(t Tunnels) *Service {
 // WakeTunnels: the session's tunnels have items to go (the tunnels'
 // Waker). A persistent connection gets them at once, a bind-call page with
 // a call; a minion that polls with its next message.
-func (s *Service) WakeTunnels(session uuid.UUID) {
-	if s.reachable(session) {
-		s.pushAfter(session, false, tunnelDelay)
-		return
-	}
-	s.Nudge(session, false)
-}
+func (s *Service) WakeTunnels(session uuid.UUID) { s.wake(session) }
 
 // takeTunnel takes one of the minion's tunnel items.
 func (s *Service) takeTunnel(ctx context.Context, session *models.MinionSession, raw cbor.RawMessage, i int) ([]cbor.RawMessage, error) {

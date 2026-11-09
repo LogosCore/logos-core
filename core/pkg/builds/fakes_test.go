@@ -145,6 +145,10 @@ func (f *fakeBuilds) sorted(keep func(*models.Build) bool) []models.Build {
 }
 
 // List is newest first, at most limit (0: all), as the repository's.
+func (f *fakeBuilds) IDsWithCommands(context.Context, uuid.UUID, string, []string) ([]uuid.UUID, error) {
+	return nil, nil
+}
+
 func (f *fakeBuilds) List(_ context.Context, op uuid.UUID, limit int64) ([]models.Build, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -29,7 +29,8 @@ type MinionTask {
   issuedBy: ID!
   # The operator's username; null when the user is gone.
   issuedByName: String
-  # QUEUED (waiting for the minion to ask), SENT, RUNNING (output coming),
+  # QUEUED (waiting for the minion to ask), SENT (not acked yet), RUNNING
+  # (the minion has it: acked, or its output coming),
   # DONE (the minion did it), FAILED or CANCELLED.
   state: String!
   queuedAt: String!

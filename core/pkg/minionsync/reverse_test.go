@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
-	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
@@ -103,67 +102,47 @@ func TestHelloTakesItsCarrier(t *testing.T) {
 	}
 }
 
-// A connection is its first speaker's own: that minion is connected while
-// it is open, checked in by it, and seen a last time when it closes. A
-// session it relays (a pivot's) is reached over it, but is not connected:
-// its own messages say when it was there, and go late and lost by its
-// schedule.
-func TestRelayedSessionsAreReachedNotKeptAlive(t *testing.T) {
+// A connection carries one minion's messages: its first speaker's, which
+// is connected while it is open, checked in by it, and seen a last time
+// when it closes. Another session's message over it is not taken (a
+// minion that relays others delegates: delegates.go); its own minion
+// staging again moves it to the new session.
+func TestAConnectionCarriesOneMinion(t *testing.T) {
 	r := newRig(t)
-	tasks := &fakeTasks{results: map[uuid.UUID][]repository.MinionTaskResult{}}
-	r.svc.WithTasks(tasks)
 	ctx := context.Background()
-	sk, c := newSock("pivot")
-	h := hello("pivot")
+	_, c := newSock("ws")
+	h := hello("own")
 	h.Sleep = &protocol.Sleep{Interval: 60_000}
-	pivot := r.helloOver(t, ctx, c, h)
-	h = hello("relayed")
-	h.Sleep = &protocol.Sleep{Interval: 60_000}
-	relayed := r.helloOver(t, ctx, c, h)
-	if !r.svc.Connected(pivot) || r.svc.Connected(relayed) || !r.svc.reachable(relayed) {
-		t.Fatalf("connected: pivot %v, relayed %v (reachable %v)", r.svc.Connected(pivot), r.svc.Connected(relayed), r.svc.reachable(relayed))
+	own := r.helloOver(t, ctx, c, h)
+	if !r.svc.Connected(own) || !r.sessionRow(t, own).Connected {
+		t.Fatal("its own minion is connected")
 	}
-	if !r.sessionRow(t, pivot).Connected || r.sessionRow(t, relayed).Connected {
-		t.Fatal("the recorded flags")
+	// A message under another session, opened elsewhere, is not taken.
+	_, elsewhere := newSock("elsewhere")
+	second := r.helloOver(t, ctx, elsewhere, hello("second"))
+	msg := sealedMinionMessage(t, r.keys, second, nil, protocol.GetTasksItem{T: protocol.ItemGetTasks})
+	if _, err := r.svc.Exchange(ctx, c, second.String(), "10.0.0.9", msg); !errors.Is(err, ErrUnopened) {
+		t.Fatalf("another session's message over the connection: %v", err)
 	}
-	// The relayed minion's last word was an hour ago: KeepAlive leaves it
-	// so, and checks the pivot in.
+	if len(r.svc.conns.of(second)) != 1 {
+		t.Fatal("the second session reached over the first's connection")
+	}
+	// KeepAlive checks its own in; its close sees it a last time.
 	hourAgo := time.Now().Add(-time.Hour)
-	r.sessionRow(t, relayed).LastSeenAt = &hourAgo
-	r.sessionRow(t, pivot).LastSeenAt = &hourAgo
+	r.sessionRow(t, own).LastSeenAt = &hourAgo
 	r.svc.KeepAlive(ctx, c)
-	if got := r.sessionRow(t, relayed).LastSeenAt; !got.Equal(hourAgo) {
-		t.Fatalf("the relayed session checked in by its relay's socket: %s", got)
+	if got := r.sessionRow(t, own).LastSeenAt; time.Since(*got) > time.Minute {
+		t.Fatal("not checked in by its own socket")
 	}
-	if got := r.sessionRow(t, pivot).LastSeenAt; time.Since(*got) > time.Minute {
-		t.Fatal("the pivot not checked in by its own socket")
+	// Its minion staging again over it (a hello under its build's id):
+	// the connection is the new session's.
+	again := r.helloOver(t, ctx, c, hello("own"))
+	if again == own || !r.svc.Connected(again) || r.svc.Connected(own) || r.sessionRow(t, own).Connected {
+		t.Fatal("the connection did not move to the session its minion opened again")
 	}
-	// Its tasks still go over the pivot's socket.
-	max := uint64(2)
-	r.say(t, ctx, c, relayed, protocol.GetTasksItem{T: protocol.ItemGetTasks, Max: &max})
-	sk.taken()
-	tasks.rows = append(tasks.rows, models.MinionTask{TaskID: uuid.New(), SessionID: relayed, OperationID: r.build.OperationID,
-		Command: "shell", Op: 11, State: models.MinionTaskQueued})
-	r.svc.Notify(ctx, relayed)
-	if frames, _ := sk.taken(); len(frames) != 1 || uuid.UUID(frames[0].ID) != relayed {
-		t.Fatalf("a push to the relayed session: %d frames", len(frames))
-	}
-	// News for it pushes too: it is reached, though not connected.
-	tasks.rows[0].State = models.MinionTaskDone
-	tasks.rows = append(tasks.rows, models.MinionTask{TaskID: uuid.New(), SessionID: relayed, OperationID: r.build.OperationID,
-		Command: "shell", Op: 11, State: models.MinionTaskQueued})
-	r.svc.Nudge(relayed, false)
-	waitFor(t, "a pushed task", func() bool { sk.mu.Lock(); defer sk.mu.Unlock(); return len(sk.frames) == 1 })
-	sk.taken()
-	// The socket closes: the pivot is seen then, the relayed session keeps
-	// its own last word.
-	before := *r.sessionRow(t, relayed).LastSeenAt
 	r.svc.Closed(ctx, c)
-	if got := r.sessionRow(t, relayed).LastSeenAt; !got.Equal(before) {
-		t.Fatal("the relayed session seen at its relay's close")
-	}
-	if r.svc.Connected(pivot) || r.sessionRow(t, pivot).Connected {
-		t.Fatal("the pivot still connected")
+	if r.svc.Connected(again) || r.sessionRow(t, again).Connected {
+		t.Fatal("still connected")
 	}
 }
 
@@ -294,29 +273,27 @@ func TestAnswerOverAnotherSocket(t *testing.T) {
 	}
 }
 
-// A ninth connection of a session no longer reaches it over the oldest:
-// that one closes only when no one else uses it (a pivot's own socket
-// relaying others stays).
-func TestNinthConnectionKeepsASharedSocket(t *testing.T) {
+// A session keeps maxSessionConns connections: a ninth no longer reaches it
+// over the oldest, which closes, no session using it.
+func TestNinthConnectionClosesTheOldest(t *testing.T) {
 	r := newRig(t)
 	ctx := context.Background()
-	shared, c0 := newSock("c0")
-	sid := r.helloOver(t, ctx, c0, hello("pivot"))
-	other := r.helloOver(t, ctx, c0, hello("relayed"))
+	oldest, c0 := newSock("c0")
+	sid := r.helloOver(t, ctx, c0, hello("ws01"))
 	for i := range maxSessionConns {
 		_, c := newSock("c" + string(rune('1'+i)))
 		r.say(t, ctx, c, sid, protocol.GetTasksItem{T: protocol.ItemGetTasks})
 	}
-	if _, closed := shared.taken(); closed {
-		t.Fatal("a socket another session uses closed")
+	if _, closed := oldest.taken(); !closed {
+		t.Fatal("the oldest, no session's now, still open")
 	}
 	for _, c := range r.svc.conns.of(sid) {
 		if c == c0 {
 			t.Fatal("the oldest still reaches the session")
 		}
 	}
-	if !r.svc.reachable(other) || c0.ownerOf() == sid {
-		t.Fatal("the relayed session lost its socket, or the old owner kept it")
+	if c0.ownerOf() == sid {
+		t.Fatal("the oldest still the session's own")
 	}
 }
 

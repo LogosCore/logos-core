@@ -187,6 +187,7 @@ describe("live updates", () => {
     addressPicked: false,
     peerAddress: null,
     peers: [],
+    via: [],
     sleepInterval: null,
     sleepJitter: null,
     lateAt: null,

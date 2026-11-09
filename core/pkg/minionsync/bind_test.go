@@ -66,8 +66,20 @@ func (f *fakeTargets) CountByOperationID(context.Context, uuid.UUID, repository.
 	return 0, nil
 }
 
-func (f *fakeTargets) SetValues(context.Context, uuid.UUID, models.JSONMap, []uuid.UUID, string, bool, string, time.Time) error {
+func (f *fakeTargets) SetValues(context.Context, uuid.UUID, models.JSONMap, []uuid.UUID, string, bool, string, *uuid.UUID, time.Time) error {
 	return nil
+}
+
+func (f *fakeTargets) FindByDelegateID(_ context.Context, sid uuid.UUID) ([]models.MinionTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []models.MinionTarget
+	for _, t := range f.rows {
+		if t.DelegateID != nil && *t.DelegateID == sid {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeTargets) NoteLogins(_ context.Context, id uuid.UUID, logins map[string]models.TargetLogin) error {

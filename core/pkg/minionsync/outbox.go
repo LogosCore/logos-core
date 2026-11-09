@@ -87,6 +87,10 @@ type outcome struct {
 	// come back for its tunnels.
 	tunnelPoll  time.Duration
 	tunnelPolls bool
+	// delegatePolls: something waits for a delegate task of the session's
+	// (a step, the rest of a frame, a frame): a minion that polls comes
+	// back soon.
+	delegatePolls bool
 	// used is how many bytes the items took.
 	used int
 }
@@ -95,6 +99,10 @@ type outcome struct {
 // all: the sooner of its streams' and its tunnels'.
 func (o outcome) pollWithin() (time.Duration, bool) {
 	switch {
+	case o.delegatePolls && o.tunnelPolls:
+		return min(pollSoon, o.tunnelPoll), true
+	case o.delegatePolls:
+		return pollSoon, true
 	case o.soon && o.tunnelPolls:
 		return min(pollSoon, o.tunnelPoll), true
 	case o.soon:
@@ -136,7 +144,8 @@ func roomFor(limit int, answers []cbor.RawMessage) int {
 // still has), the operator's limit of tasks (a max_tasks,
 // in every message until the minion says it has it: whatever it runs, as a
 // cancel goes), resumes, the streams' acks, then tasks (those sent and not
-// acknowledged first), then the tunnels' items. What does not fit waits
+// acknowledged first), then the tunnels' items. A delegate's items go
+// before its tasks. What does not fit waits
 // for the next message; a task too large for any message of the
 // connection ends failed, saying so.
 func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d delivery) (outcome, error) {
@@ -225,6 +234,14 @@ func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d d
 				o.going = o.going || !a.Hold
 			}
 		}
+	}
+	// What the session's delegate tasks carry for the minions they serve,
+	// before its own tasks (delegates.go).
+	if s.delegateSchemas != nil {
+		most := protocol.MaxMinionMessageItems - d.count - len(o.items)
+		added, polls := s.delegateItems(session.SessionID, max(most, 0), add)
+		o.fresh = o.fresh || added > 0
+		o.delegatePolls = polls
 	}
 	if d.tasks > 0 {
 		fresh, err := s.taskItems(ctx, session, d.tasks, add)

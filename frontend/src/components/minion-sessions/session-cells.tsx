@@ -19,6 +19,7 @@ import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { platformLabel } from "@/components/builds/build-values"
 import { formatAbsolute } from "@/lib/relative-time"
 import { ListCell } from "./list-cell"
+import { viaNote, viaShort } from "./via-values"
 import { MarkIcon } from "./mark-icon"
 import { OsIcon } from "./os-icon"
 import { MARK_TONE_CLASSES, isMarkColor } from "./session-mark-colors"
@@ -147,6 +148,10 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
         <ListCell
           items={s.peers.map((p) => p.address)}
           shown={s.peerAddress ?? null}
+          // Through a delegate: the address it saw.
+          shownTitle={
+            s.via.length > 0 && s.peerAddress ? `${s.peerAddress}\nAs session #${s.via[0].number}'s delegate task saw it` : undefined
+          }
           noun="external addresses"
           detail={(address) => {
             const p = s.peers.find((x) => x.address === address)
@@ -227,6 +232,7 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
             s.lastSeenAt &&
               `Last seen ${formatAbsolute(s.lastSeenAt)} (${formatAgoExact(ctx.now - Date.parse(s.lastSeenAt))})`,
             ...connNote(s, ctx.now),
+            viaNote(s.via, s.viaSince),
             `Opened ${formatAbsolute(s.createdAt)}`,
           ]
             .filter(Boolean)
@@ -236,6 +242,8 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
           <span className="truncate">
             {s.connected ? "connected" : s.lastSeenAt ? <Ago at={s.lastSeenAt} now={ctx.now} /> : "not yet"}
           </span>
+          {/* Through a delegate: the nearest, in the row's own tone. */}
+          {s.via.length > 0 && <span className="shrink-0 text-xs opacity-75">{viaShort(s.via)}</span>}
         </div>
       )
     }

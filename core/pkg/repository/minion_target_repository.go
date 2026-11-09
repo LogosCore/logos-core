@@ -50,7 +50,10 @@ type IMinionTargetRepository interface {
 	CountByOperationID(ctx context.Context, operationID uuid.UUID, filter MinionTargetFilter) (int64, error)
 	// SetValues replaces what the operator gave: the values (and the
 	// credentials they name), the name and retries.
-	SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, credentialIDs []uuid.UUID, name string, retries bool, policy string, at time.Time) error
+	SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, credentialIDs []uuid.UUID, name string, retries bool, policy string, delegate *uuid.UUID, at time.Time) error
+	// FindByDelegateID are the targets whose calls and opens the session's
+	// minion carries, a delegate (MinionTarget.DelegateID).
+	FindByDelegateID(ctx context.Context, sessionID uuid.UUID) ([]models.MinionTarget, error)
 	// NoteLogins records how the credentials a channel tried fared at the
 	// target (Logins), each under its id.
 	NoteLogins(ctx context.Context, targetID uuid.UUID, logins map[string]models.TargetLogin) error
@@ -87,6 +90,8 @@ func NewMinionTargetRepository(db database.Database) IMinionTargetRepository {
 		{Key: []string{"next_call_at"}, IndexOptions: new(options.IndexOptions).
 			SetPartialFilterExpression(bson.M{"next_call_at": bson.M{"$exists": true}})},
 		{Key: []string{"credential_ids"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
+		{Key: []string{"delegate_id"}, IndexOptions: new(options.IndexOptions).
+			SetPartialFilterExpression(bson.M{"delegate_id": bson.M{"$exists": true}})},
 	})
 	return &minionTargetRepository{coll: db.Collection(minionTargetCollection)}
 }
@@ -155,18 +160,29 @@ func (r *minionTargetRepository) CountByOperationID(ctx context.Context, operati
 	return r.coll.Count(ctx, minionTargetListFilter(operationID, filter))
 }
 
-func (r *minionTargetRepository) SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, credentialIDs []uuid.UUID, name string, retries bool, policy string, at time.Time) error {
+func (r *minionTargetRepository) SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, credentialIDs []uuid.UUID, name string, retries bool, policy string, delegate *uuid.UUID, at time.Time) error {
 	set := bson.M{"values": values, "name": name, "retries": retries, "updated_at": at, "updateAt": at}
 	if policy != "" {
 		set["policy"] = policy
 	}
-	u := bson.M{"$set": set}
+	unset := bson.M{}
 	if len(credentialIDs) > 0 {
 		set["credential_ids"] = credentialIDs
 	} else {
-		u["$unset"] = bson.M{"credential_ids": ""}
+		unset["credential_ids"] = ""
 	}
-	return r.coll.UpdateOne(ctx, bson.M{"target_id": targetID}, u)
+	if delegate != nil {
+		set["delegate_id"] = *delegate
+	} else {
+		unset["delegate_id"] = ""
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"target_id": targetID}, bson.M{"$set": set, "$unset": unset})
+}
+
+func (r *minionTargetRepository) FindByDelegateID(ctx context.Context, sessionID uuid.UUID) ([]models.MinionTarget, error) {
+	var out []models.MinionTarget
+	err := r.coll.Find(ctx, bson.M{"delegate_id": sessionID}).Sort("created_at").Limit(1000).All(&out)
+	return out, err
 }
 
 func (r *minionTargetRepository) NoteLogins(ctx context.Context, targetID uuid.UUID, logins map[string]models.TargetLogin) error {

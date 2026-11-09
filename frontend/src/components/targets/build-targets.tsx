@@ -143,6 +143,7 @@ export function BuildTargets({
           setAdding(false)
           setEditing(null)
         }}
+        operationId={operationId}
         buildId={buildId}
         connections={connections}
         target={editing}

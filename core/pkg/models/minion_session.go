@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 
@@ -75,6 +76,12 @@ type MinionSession struct {
 	// channels had none.
 	PeerAddress string              `bson:"peer_address,omitempty" json:"peer_address,omitempty"`
 	Peers       []MinionSessionPeer `bson:"peers,omitempty" json:"peers,omitempty"`
+	// Via are the delegates the latest message came through, nearest first
+	// (docs: contracts/minion-messages/delegation/): empty when a channel's
+	// instance brought it. ViaSince is when its messages began to come that
+	// way. PeerAddress is then the address the nearest delegate saw.
+	Via      []MinionSessionVia `bson:"via,omitempty" json:"via,omitempty"`
+	ViaSince *time.Time         `bson:"via_since,omitempty" json:"via_since,omitempty"`
 	// Sleep is the check-in schedule the minion last said (its hello's, or
 	// a sleep_update); nil when it never did. LateAt is when the session
 	// turns late: its next check-in overdue by that schedule (LateAtFrom);
@@ -291,6 +298,19 @@ type MinionSessionPeer struct {
 	LastSeen  time.Time `bson:"last_seen" json:"last_seen"`
 	// Count is the messages from it.
 	Count int64 `bson:"count" json:"count"`
+}
+
+// MinionSessionVia is a delegate on a session's way to core: the session
+// whose task carried the message, with its number as operators know it.
+type MinionSessionVia struct {
+	SessionID uuid.UUID `bson:"session_id" json:"session_id"`
+	Number    int64     `bson:"number" json:"number"`
+	TaskID    uuid.UUID `bson:"task_id" json:"task_id"`
+}
+
+// SameVia reports whether two paths go through the same delegate tasks.
+func SameVia(a, b []MinionSessionVia) bool {
+	return slices.EqualFunc(a, b, func(x, y MinionSessionVia) bool { return x.SessionID == y.SessionID && x.TaskID == y.TaskID })
 }
 
 // MinionHello is a hello's host and process (protocol.HelloItem).

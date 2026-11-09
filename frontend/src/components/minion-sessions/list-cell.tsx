@@ -26,6 +26,7 @@ export function ListCell({
   noun,
   onPick,
   detail,
+  shownTitle,
   mono = true,
 }: {
   items: readonly string[]
@@ -37,13 +38,15 @@ export function ListCell({
   onPick?: (item: string) => void
   /** More about an item, muted after it in the menu. */
   detail?: (item: string) => ReactNode
+  /** The shown item's hover, when more than the item. */
+  shownTitle?: string
   mono?: boolean
 }) {
   if (items.length === 0) return <span className="text-muted-foreground">—</span>
   const others = items.length - 1
   return (
     <div className="flex min-w-0 items-center gap-1">
-      <span className={cn("truncate", mono && "font-mono text-xs")} title={shown ?? undefined}>
+      <span className={cn("truncate", mono && "font-mono text-xs")} title={shownTitle ?? shown ?? undefined}>
         {shown}
       </span>
       {others > 0 && (

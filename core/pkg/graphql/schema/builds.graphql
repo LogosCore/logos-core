@@ -80,8 +80,20 @@ type BuildCommand {
   # The connection kinds it works over (reverse-call, ...): core refuses a
   # task of it on a session whose minion uses another; empty: every kind.
   kinds: [String!]!
+  # A delegate command's (action delegate or reverse_delegate): the channel
+  # kinds its minions serve for other minions (docs:
+  # contracts/minion-messages/delegation); empty for any other.
+  serves: [BuildServe!]!
   # What a task of the command takes.
   params: [ModuleField!]!
+}
+
+# A channel kind a delegate command's minions serve: its connection schema
+# versions and connection kinds.
+type BuildServe {
+  moduleName: String!
+  versions: [Int!]!
+  kinds: [String!]!
 }
 
 type BuildChannel {

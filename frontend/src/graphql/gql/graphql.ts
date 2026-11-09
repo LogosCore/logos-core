@@ -101,12 +101,15 @@ export type AgentKeyWithSecret = {
 };
 
 export type BindConnection = {
+  agentless: Scalars['Boolean']['output'];
+  delegatedOnly: Scalars['Boolean']['output'];
   fields: Array<ModuleField>;
   kind: Scalars['String']['output'];
   moduleName: Scalars['String']['output'];
   name: Scalars['String']['output'];
   place: Scalars['Int']['output'];
   problem?: Maybe<Scalars['String']['output']>;
+  version: Scalars['Int']['output'];
 };
 
 export type Build = {
@@ -177,6 +180,7 @@ export type BuildCommand = {
   params: Array<ModuleField>;
   required: Scalars['Boolean']['output'];
   result?: Maybe<Scalars['String']['output']>;
+  serves: Array<BuildServe>;
   targets: Array<Scalars['String']['output']>;
 };
 
@@ -252,6 +256,12 @@ export type BuildSchema = {
   persistedSessions: Scalars['Boolean']['output'];
   targets: Array<BuildTarget>;
   version: Scalars['Int']['output'];
+};
+
+export type BuildServe = {
+  kinds: Array<Scalars['String']['output']>;
+  moduleName: Scalars['String']['output'];
+  versions: Array<Scalars['Int']['output']>;
 };
 
 export type BuildStage = {
@@ -863,6 +873,31 @@ export type MinionConnection = {
   place: Scalars['Int']['output'];
 };
 
+export type MinionDelegate = {
+  carried: Scalars['Int']['output'];
+  connections: Array<MinionDelegateConnection>;
+  held: Scalars['Boolean']['output'];
+  serves: Array<BuildServe>;
+  stopIdle?: Maybe<Scalars['String']['output']>;
+  usedAt?: Maybe<Scalars['String']['output']>;
+  waiting: Scalars['Int']['output'];
+};
+
+export type MinionDelegateConnection = {
+  kind: Scalars['String']['output'];
+  moduleName: Scalars['String']['output'];
+  n: Scalars['Int']['output'];
+  openedAt: Scalars['String']['output'];
+  peer?: Maybe<Scalars['String']['output']>;
+  session?: Maybe<MinionSession>;
+};
+
+export type MinionDelegatesForInput = {
+  kind: Scalars['String']['input'];
+  moduleName: Scalars['String']['input'];
+  version: Scalars['Int']['input'];
+};
+
 export type MinionFeedback = {
   at?: Maybe<Scalars['String']['output']>;
   code?: Maybe<Scalars['String']['output']>;
@@ -1030,6 +1065,8 @@ export type MinionSession = {
   target: Scalars['String']['output'];
   user?: Maybe<Scalars['String']['output']>;
   version?: Maybe<Scalars['String']['output']>;
+  via: Array<MinionSessionVia>;
+  viaSince?: Maybe<Scalars['String']['output']>;
   x?: Maybe<Scalars['JSON']['output']>;
 };
 
@@ -1172,6 +1209,13 @@ export type MinionSessionSortInput = {
   direction: SortDirection;
 };
 
+export type MinionSessionVia = {
+  number: Scalars['Int']['output'];
+  session?: Maybe<MinionSession>;
+  sessionId: Scalars['ID']['output'];
+  taskId: Scalars['ID']['output'];
+};
+
 export type MinionSessionsLayout = {
   columns: Array<Scalars['String']['output']>;
   consoleSplit?: Maybe<Scalars['Float']['output']>;
@@ -1213,6 +1257,8 @@ export type MinionTarget = {
   connName?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['String']['output'];
   createdBy: ModuleActor;
+  delegate?: Maybe<MinionSession>;
+  delegateId?: Maybe<Scalars['ID']['output']>;
   failures: Scalars['Int']['output'];
   id: Scalars['ID']['output'];
   kind: Scalars['String']['output'];
@@ -1254,6 +1300,7 @@ export type MinionTargetEvent = {
 };
 
 export type MinionTargetInput = {
+  delegateId?: InputMaybe<Scalars['ID']['input']>;
   policy?: InputMaybe<Scalars['String']['input']>;
   retries?: InputMaybe<Scalars['Boolean']['input']>;
   values: Scalars['JSON']['input'];
@@ -1272,6 +1319,7 @@ export type MinionTask = {
   dataProblem?: Maybe<Scalars['String']['output']>;
   dataSize: Scalars['Int']['output'];
   dataTruncated: Scalars['Boolean']['output'];
+  delegate?: Maybe<MinionDelegate>;
   document: Scalars['String']['output'];
   doneAt?: Maybe<Scalars['String']['output']>;
   err?: Maybe<Scalars['String']['output']>;
@@ -2849,6 +2897,7 @@ export type QueryMinionSessionsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   archived?: InputMaybe<Scalars['Boolean']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
+  delegatesFor?: InputMaybe<MinionDelegatesForInput>;
   filters?: InputMaybe<Array<MinionSessionFilterInput>>;
   first?: InputMaybe<Scalars['Int']['input']>;
   folderId?: InputMaybe<Scalars['ID']['input']>;
@@ -4413,7 +4462,7 @@ export type MinionTaskQueryVariables = Exact<{
 }>;
 
 
-export type MinionTaskQuery = { minionTask?: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } | null };
+export type MinionTaskQuery = { minionTask?: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } | null };
 
 export type PublishOperatorFocusMutationVariables = Exact<{
   input: OperatorFocusInput;
@@ -4619,7 +4668,7 @@ export type MinionListenerChangedSubscriptionVariables = Exact<{
 
 export type MinionListenerChangedSubscription = { minionListenerChanged: { action: EventAction, id: string, operationId: string, listener?: { id: string, bind: string, listen: number, bound?: string | null, udp: boolean, front: string, to?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } | null } };
 
-export type MinionSessionFieldsFragment = { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> };
+export type MinionSessionFieldsFragment = { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, viaSince?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, via: Array<{ sessionId: string, number: number, taskId: string }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> };
 
 export type MinionFeedbackFieldsFragment = { id: string, level: string, msg: string, code?: string | null, taskId?: string | null, at?: string | null, count: number, receivedAt: string, unread: boolean };
 
@@ -4648,7 +4697,7 @@ export type MarkMinionFeedbackReadMutationVariables = Exact<{
 }>;
 
 
-export type MarkMinionFeedbackReadMutation = { markMinionFeedbackRead: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+export type MarkMinionFeedbackReadMutation = { markMinionFeedbackRead: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, viaSince?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, via: Array<{ sessionId: string, number: number, taskId: string }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
 
 export type MinionSessionsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4662,14 +4711,14 @@ export type MinionSessionsQueryVariables = Exact<{
 }>;
 
 
-export type MinionSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MinionSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, viaSince?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, via: Array<{ sessionId: string, number: number, taskId: string }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type MinionSessionChangedSubscriptionVariables = Exact<{
   operationId: Scalars['ID']['input'];
 }>;
 
 
-export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } | null } };
+export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, viaSince?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, via: Array<{ sessionId: string, number: number, taskId: string }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } | null } };
 
 export type MinionSessionValuesQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4699,7 +4748,7 @@ export type SetMinionSessionAddressMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionAddressMutation = { setMinionSessionAddress: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+export type SetMinionSessionAddressMutation = { setMinionSessionAddress: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, viaSince?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, via: Array<{ sessionId: string, number: number, taskId: string }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
 
 export type SetMinionSessionMaxTasksMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4707,7 +4756,7 @@ export type SetMinionSessionMaxTasksMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionMaxTasksMutation = { setMinionSessionMaxTasks: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+export type SetMinionSessionMaxTasksMutation = { setMinionSessionMaxTasks: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, viaSince?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, via: Array<{ sessionId: string, number: number, taskId: string }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
 
 export type MinionSessionRunningTasksQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4721,7 +4770,7 @@ export type MinionSessionQueryVariables = Exact<{
 }>;
 
 
-export type MinionSessionQuery = { minionSession?: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } | null };
+export type MinionSessionQuery = { minionSession?: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, viaSince?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, via: Array<{ sessionId: string, number: number, taskId: string }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } | null };
 
 export type MinionSessionConnectionsQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4736,7 +4785,7 @@ export type SetMinionSessionArchivedMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionArchivedMutation = { setMinionSessionArchived: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+export type SetMinionSessionArchivedMutation = { setMinionSessionArchived: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, viaSince?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, via: Array<{ sessionId: string, number: number, taskId: string }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
 
 export type SetMinionSessionsArchivedMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4754,7 +4803,7 @@ export type SetMinionSessionDescriptionMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionDescriptionMutation = { setMinionSessionDescription: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+export type SetMinionSessionDescriptionMutation = { setMinionSessionDescription: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, viaSince?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, via: Array<{ sessionId: string, number: number, taskId: string }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
 
 export type SetMinionSessionMarkMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4762,7 +4811,7 @@ export type SetMinionSessionMarkMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionMarkMutation = { setMinionSessionMark: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+export type SetMinionSessionMarkMutation = { setMinionSessionMark: { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, viaSince?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackWarnings: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, via: Array<{ sessionId: string, number: number, taskId: string }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
 
 export type SetMinionSessionsMarkMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4831,7 +4880,7 @@ export type MinionSessionCountQueryVariables = Exact<{
 
 export type MinionSessionCountQuery = { minionSessionCount: number };
 
-export type MinionTargetFieldsFragment = { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } };
+export type MinionTargetFieldsFragment = { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, delegateId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, delegate?: { id: string, number: number, host?: string | null, user?: string | null } | null, createdBy: { type: string, id: string, name?: string | null } };
 
 export type MinionTargetsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4843,14 +4892,14 @@ export type MinionTargetsQueryVariables = Exact<{
 }>;
 
 
-export type MinionTargetsQuery = { minionTargets: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MinionTargetsQuery = { minionTargets: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, delegateId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, delegate?: { id: string, number: number, host?: string | null, user?: string | null } | null, createdBy: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type BuildBindConnectionsQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type BuildBindConnectionsQuery = { build?: { id: string, bindConnections: Array<{ place: number, name: string, moduleName: string, kind: string, problem?: string | null, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> } | null };
+export type BuildBindConnectionsQuery = { build?: { id: string, bindConnections: Array<{ place: number, name: string, moduleName: string, kind: string, version: number, delegatedOnly: boolean, agentless: boolean, problem?: string | null, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> } | null };
 
 export type AddMinionTargetMutationVariables = Exact<{
   buildId: Scalars['ID']['input'];
@@ -4860,7 +4909,7 @@ export type AddMinionTargetMutationVariables = Exact<{
 }>;
 
 
-export type AddMinionTargetMutation = { addMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
+export type AddMinionTargetMutation = { addMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, delegateId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, delegate?: { id: string, number: number, host?: string | null, user?: string | null } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type UpdateMinionTargetMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4868,28 +4917,28 @@ export type UpdateMinionTargetMutationVariables = Exact<{
 }>;
 
 
-export type UpdateMinionTargetMutation = { updateMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
+export type UpdateMinionTargetMutation = { updateMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, delegateId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, delegate?: { id: string, number: number, host?: string | null, user?: string | null } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type CheckMinionTargetMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type CheckMinionTargetMutation = { checkMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
+export type CheckMinionTargetMutation = { checkMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, delegateId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, delegate?: { id: string, number: number, host?: string | null, user?: string | null } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type ConnectMinionTargetMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type ConnectMinionTargetMutation = { connectMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
+export type ConnectMinionTargetMutation = { connectMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, delegateId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, delegate?: { id: string, number: number, host?: string | null, user?: string | null } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type DisconnectMinionTargetMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type DisconnectMinionTargetMutation = { disconnectMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
+export type DisconnectMinionTargetMutation = { disconnectMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, delegateId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, delegate?: { id: string, number: number, host?: string | null, user?: string | null } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type RemoveMinionTargetMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4905,14 +4954,25 @@ export type MinionTargetChangedSubscriptionVariables = Exact<{
 
 export type MinionTargetChangedSubscription = { minionTargetChanged: { action: EventAction, targetId: string, operationId: string } };
 
+export type DelegateSessionsQueryVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+  delegatesFor: MinionDelegatesForInput;
+  search?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type DelegateSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, number: number, host?: string | null, user?: string | null, moduleName: string } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+
 export type MinionSessionTargetQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type MinionSessionTargetQuery = { minionSession?: { id: string, operationId: string, connKind?: string | null, bindTarget?: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } | null } | null };
+export type MinionSessionTargetQuery = { minionSession?: { id: string, operationId: string, connKind?: string | null, bindTarget?: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, delegateId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, delegate?: { id: string, number: number, host?: string | null, user?: string | null } | null, createdBy: { type: string, id: string, name?: string | null } } | null } | null };
 
-export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null };
+export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null };
 
 export type MinionTunnelStreamsQueryVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -4958,7 +5018,7 @@ export type MinionTasksQueryVariables = Exact<{
 }>;
 
 
-export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null }> } };
+export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null }> } };
 
 export type MinionTaskDocumentQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4981,14 +5041,14 @@ export type QueueMinionTaskMutationVariables = Exact<{
 }>;
 
 
-export type QueueMinionTaskMutation = { queueMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
+export type QueueMinionTaskMutation = { queueMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
 
 export type CancelMinionTaskMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
+export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
 
 export type SetMinionTunnelCapMutationVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -5033,7 +5093,7 @@ export type MinionTaskChangedSubscriptionVariables = Exact<{
 }>;
 
 
-export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
+export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -6550,6 +6610,12 @@ export const MinionSessionFieldsFragmentDoc = new TypedDocumentString(`
     lastSeen
     count
   }
+  via {
+    sessionId
+    number
+    taskId
+  }
+  viaSince
   version
   x
   createdAt
@@ -6660,6 +6726,13 @@ export const MinionTargetFieldsFragmentDoc = new TypedDocumentString(`
     id
     number
   }
+  delegateId
+  delegate {
+    id
+    number
+    host
+    user
+  }
   failures
   unreachableSince
   nextCallAt
@@ -6757,6 +6830,29 @@ export const MinionTaskFieldsFragmentDoc = new TypedDocumentString(`
     from
     attachedAt
     readerAt
+  }
+  delegate {
+    held
+    serves {
+      moduleName
+      versions
+      kinds
+    }
+    stopIdle
+    usedAt
+    carried
+    waiting
+    connections {
+      n
+      moduleName
+      kind
+      peer
+      openedAt
+      session {
+        id
+        number
+      }
+    }
   }
   tunnel {
     port
@@ -9374,6 +9470,29 @@ export const MinionTaskDocument = new TypedDocumentString(`
     attachedAt
     readerAt
   }
+  delegate {
+    held
+    serves {
+      moduleName
+      versions
+      kinds
+    }
+    stopIdle
+    usedAt
+    carried
+    waiting
+    connections {
+      n
+      moduleName
+      kind
+      peer
+      openedAt
+      session {
+        id
+        number
+      }
+    }
+  }
   tunnel {
     port
     address
@@ -10184,6 +10303,12 @@ export const MarkMinionFeedbackReadDocument = new TypedDocumentString(`
     lastSeen
     count
   }
+  via {
+    sessionId
+    number
+    taskId
+  }
+  viaSince
   version
   x
   createdAt
@@ -10293,6 +10418,12 @@ export const MinionSessionsDocument = new TypedDocumentString(`
     lastSeen
     count
   }
+  via {
+    sessionId
+    number
+    taskId
+  }
+  viaSince
   version
   x
   createdAt
@@ -10388,6 +10519,12 @@ export const MinionSessionChangedDocument = new TypedDocumentString(`
     lastSeen
     count
   }
+  via {
+    sessionId
+    number
+    taskId
+  }
+  viaSince
   version
   x
   createdAt
@@ -10559,6 +10696,12 @@ export const SetMinionSessionAddressDocument = new TypedDocumentString(`
     lastSeen
     count
   }
+  via {
+    sessionId
+    number
+    taskId
+  }
+  viaSince
   version
   x
   createdAt
@@ -10649,6 +10792,12 @@ export const SetMinionSessionMaxTasksDocument = new TypedDocumentString(`
     lastSeen
     count
   }
+  via {
+    sessionId
+    number
+    taskId
+  }
+  viaSince
   version
   x
   createdAt
@@ -10748,6 +10897,12 @@ export const MinionSessionDocument = new TypedDocumentString(`
     lastSeen
     count
   }
+  via {
+    sessionId
+    number
+    taskId
+  }
+  viaSince
   version
   x
   createdAt
@@ -10852,6 +11007,12 @@ export const SetMinionSessionArchivedDocument = new TypedDocumentString(`
     lastSeen
     count
   }
+  via {
+    sessionId
+    number
+    taskId
+  }
+  viaSince
   version
   x
   createdAt
@@ -10952,6 +11113,12 @@ export const SetMinionSessionDescriptionDocument = new TypedDocumentString(`
     lastSeen
     count
   }
+  via {
+    sessionId
+    number
+    taskId
+  }
+  viaSince
   version
   x
   createdAt
@@ -11042,6 +11209,12 @@ export const SetMinionSessionMarkDocument = new TypedDocumentString(`
     lastSeen
     count
   }
+  via {
+    sessionId
+    number
+    taskId
+  }
+  viaSince
   version
   x
   createdAt
@@ -11208,6 +11381,13 @@ export const MinionTargetsDocument = new TypedDocumentString(`
     id
     number
   }
+  delegateId
+  delegate {
+    id
+    number
+    host
+    user
+  }
   failures
   unreachableSince
   nextCallAt
@@ -11231,6 +11411,9 @@ export const BuildBindConnectionsDocument = new TypedDocumentString(`
       name
       moduleName
       kind
+      version
+      delegatedOnly
+      agentless
       problem
       fields {
         ...ModuleFieldDefFields
@@ -11305,6 +11488,13 @@ export const AddMinionTargetDocument = new TypedDocumentString(`
     id
     number
   }
+  delegateId
+  delegate {
+    id
+    number
+    host
+    user
+  }
   failures
   unreachableSince
   nextCallAt
@@ -11349,6 +11539,13 @@ export const UpdateMinionTargetDocument = new TypedDocumentString(`
   session {
     id
     number
+  }
+  delegateId
+  delegate {
+    id
+    number
+    host
+    user
   }
   failures
   unreachableSince
@@ -11395,6 +11592,13 @@ export const CheckMinionTargetDocument = new TypedDocumentString(`
     id
     number
   }
+  delegateId
+  delegate {
+    id
+    number
+    host
+    user
+  }
   failures
   unreachableSince
   nextCallAt
@@ -11439,6 +11643,13 @@ export const ConnectMinionTargetDocument = new TypedDocumentString(`
   session {
     id
     number
+  }
+  delegateId
+  delegate {
+    id
+    number
+    host
+    user
   }
   failures
   unreachableSince
@@ -11485,6 +11696,13 @@ export const DisconnectMinionTargetDocument = new TypedDocumentString(`
     id
     number
   }
+  delegateId
+  delegate {
+    id
+    number
+    host
+    user
+  }
   failures
   unreachableSince
   nextCallAt
@@ -11513,6 +11731,33 @@ export const MinionTargetChangedDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<MinionTargetChangedSubscription, MinionTargetChangedSubscriptionVariables>;
+export const DelegateSessionsDocument = new TypedDocumentString(`
+    query DelegateSessions($operationId: ID!, $delegatesFor: MinionDelegatesForInput!, $search: String, $first: Int, $after: String) {
+  minionSessions(
+    operationId: $operationId
+    delegatesFor: $delegatesFor
+    search: $search
+    first: $first
+    after: $after
+  ) {
+    edges {
+      node {
+        id
+        number
+        host
+        user
+        moduleName
+      }
+      cursor
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    totalCount
+  }
+}
+    `) as unknown as TypedDocumentString<DelegateSessionsQuery, DelegateSessionsQueryVariables>;
 export const MinionSessionTargetDocument = new TypedDocumentString(`
     query MinionSessionTarget($id: ID!) {
   minionSession(id: $id) {
@@ -11548,6 +11793,13 @@ export const MinionSessionTargetDocument = new TypedDocumentString(`
   session {
     id
     number
+  }
+  delegateId
+  delegate {
+    id
+    number
+    host
+    user
   }
   failures
   unreachableSince
@@ -11740,6 +11992,29 @@ export const MinionTasksDocument = new TypedDocumentString(`
     attachedAt
     readerAt
   }
+  delegate {
+    held
+    serves {
+      moduleName
+      versions
+      kinds
+    }
+    stopIdle
+    usedAt
+    carried
+    waiting
+    connections {
+      n
+      moduleName
+      kind
+      peer
+      openedAt
+      session {
+        id
+        number
+      }
+    }
+  }
   tunnel {
     port
     address
@@ -11928,6 +12203,29 @@ export const QueueMinionTaskDocument = new TypedDocumentString(`
     attachedAt
     readerAt
   }
+  delegate {
+    held
+    serves {
+      moduleName
+      versions
+      kinds
+    }
+    stopIdle
+    usedAt
+    carried
+    waiting
+    connections {
+      n
+      moduleName
+      kind
+      peer
+      openedAt
+      session {
+        id
+        number
+      }
+    }
+  }
   tunnel {
     port
     address
@@ -12062,6 +12360,29 @@ export const CancelMinionTaskDocument = new TypedDocumentString(`
     from
     attachedAt
     readerAt
+  }
+  delegate {
+    held
+    serves {
+      moduleName
+      versions
+      kinds
+    }
+    stopIdle
+    usedAt
+    carried
+    waiting
+    connections {
+      n
+      moduleName
+      kind
+      peer
+      openedAt
+      session {
+        id
+        number
+      }
+    }
   }
   tunnel {
     port
@@ -12234,6 +12555,29 @@ export const MinionTaskChangedDocument = new TypedDocumentString(`
     from
     attachedAt
     readerAt
+  }
+  delegate {
+    held
+    serves {
+      moduleName
+      versions
+      kinds
+    }
+    stopIdle
+    usedAt
+    carried
+    waiting
+    connections {
+      n
+      moduleName
+      kind
+      peer
+      openedAt
+      session {
+        id
+        number
+      }
+    }
   }
   tunnel {
     port

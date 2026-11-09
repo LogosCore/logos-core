@@ -92,8 +92,8 @@ type IMinionTaskRepository interface {
 	// within its limit; nor are core's own commands, which core runs.
 	CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error)
 	// CountSlots counts those of them that hold a place in the minion's
-	// max_tasks: all but tunnels' (protocol.TunnelActions), which hold
-	// none as long as they run. CountTunnels counts those.
+	// max_tasks: all but tunnels' and delegates' (protocol.HoldsNoSlot),
+	// which hold none as long as they run. CountTunnels counts tunnels'.
 	CountSlots(ctx context.Context, sessionID uuid.UUID) (int, error)
 	CountTunnels(ctx context.Context, sessionID uuid.UUID) (int, error)
 	// RunningIDs are the ids of the tasks CountRunning counts, oldest
@@ -334,18 +334,15 @@ func uuidsIn(ids []uuid.UUID) bson.A {
 }
 
 // runningFilter is the session's tasks its minion has and has not ended:
-// acknowledged, or with a result, and not finished. Core's own commands (a
-// connect waiting for its dial, a max_tasks for the minion's word) run in
-// core: they take none of the minion's room.
+// acknowledged, or with a result (RUNNING), and not finished. Core's own
+// commands (a connect waiting for its dial, a max_tasks for the minion's
+// word) run in core: they take none of the minion's room.
 func runningFilter(sessionID uuid.UUID) bson.M {
 	core := bson.A{}
 	for _, c := range protocol.CoreCommands() {
 		core = append(core, c)
 	}
-	return bson.M{"session_id": sessionID, "command": bson.M{"$nin": core}, "$or": bson.A{
-		bson.M{"state": models.MinionTaskRunning},
-		bson.M{"state": models.MinionTaskSent, "acked_at": bson.M{"$exists": true}},
-	}}
+	return bson.M{"session_id": sessionID, "command": bson.M{"$nin": core}, "state": models.MinionTaskRunning}
 }
 
 func (r *minionTaskRepository) CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error) {
@@ -355,7 +352,7 @@ func (r *minionTaskRepository) CountRunning(ctx context.Context, sessionID uuid.
 
 func (r *minionTaskRepository) CountSlots(ctx context.Context, sessionID uuid.UUID) (int, error) {
 	q := runningFilter(sessionID)
-	q["action"] = bson.M{"$nin": protocol.TunnelActions()}
+	q["action"] = bson.M{"$nin": append(protocol.TunnelActions(), protocol.DelegateActions()...)}
 	n, err := r.tasks.Find(ctx, q).Count()
 	return int(n), err
 }
@@ -400,6 +397,13 @@ func (r *minionTaskRepository) Ack(ctx context.Context, sessionID uuid.UUID, tas
 		return nil
 	}
 	filter := bson.M{"session_id": sessionID, "task_id": bson.M{"$in": uuidsIn(taskIDs)}, "acked_at": bson.M{"$exists": false}}
+	// The minion has them: running, sent or not output yet (a tunnel, a
+	// delegate, prints nothing while it runs). Before acked_at is set, which
+	// the filter reads.
+	running := bson.M{"$and": bson.A{filter, bson.M{"state": models.MinionTaskSent}}}
+	if _, err := r.tasks.UpdateAll(ctx, running, bson.M{"$set": bson.M{"state": models.MinionTaskRunning}}); err != nil {
+		return err
+	}
 	if as != nil {
 		// The tasks acked now without an identity of their own run as the
 		// session does.

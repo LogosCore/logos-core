@@ -177,7 +177,7 @@ function TaskRow({
             onClick={onSelect}
             // The menu shows the row it is for.
             onContextMenu={onSelect}
-            title={`${line}\n${t.issuedByName ?? "someone gone"} · queued ${formatAbsolute(t.queuedAt)}`}
+            title={`${line}\n${t.issuedBy === "00000000-0000-0000-0000-000000000000" ? "core" : (t.issuedByName ?? "someone gone")} · queued ${formatAbsolute(t.queuedAt)}`}
             className={cn(
               "relative flex cursor-pointer items-baseline gap-2 px-3 py-1 text-xs select-none",
               selected ? "bg-muted before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-foreground" : "hover:bg-muted/50",

@@ -3,6 +3,7 @@ package miniontargets
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -39,11 +40,11 @@ func (f *fakeTargets) FindByTargetID(_ context.Context, id uuid.UUID) (*models.M
 	return &t, nil
 }
 
-func (f *fakeTargets) SetValues(_ context.Context, id uuid.UUID, v models.JSONMap, creds []uuid.UUID, name string, retries bool, policy string, _ time.Time) error {
+func (f *fakeTargets) SetValues(_ context.Context, id uuid.UUID, v models.JSONMap, creds []uuid.UUID, name string, retries bool, policy string, delegate *uuid.UUID, _ time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t := f.rows[id]
-	t.Values, t.CredentialIDs, t.Name, t.Retries = v, creds, name, retries
+	t.Values, t.CredentialIDs, t.Name, t.Retries, t.DelegateID = v, creds, name, retries, delegate
 	if policy != "" {
 		t.Policy = policy
 	}
@@ -347,5 +348,60 @@ func TestTargetCredentials(t *testing.T) {
 	row.Values = models.JSONMap{"url": "https://h/a.php", "logins": []any{other}}
 	if p, err := s.Problems(ctx, &row); err != nil || p["logins"] == "" {
 		t.Fatalf("a credential gone since: %v %v", p, err)
+	}
+}
+
+type delegates map[uuid.UUID]string
+
+func (d delegates) CheckDelegate(_ context.Context, id, _ uuid.UUID, _, _ string, _ int) (string, error) {
+	why, ok := d[id]
+	if !ok {
+		return "no such session", nil
+	}
+	return why, nil
+}
+
+// A target names a delegate the delegates say can carry it; none where
+// only delegates carry the kind; never one of an agentless kind, nor its
+// own session.
+func TestTargetDelegate(t *testing.T) {
+	s, targets, _, b, _ := setup()
+	ctx := context.Background()
+	good, bad := uuid.New(), uuid.New()
+	var invalid *ValidationError
+	if _, err := s.Add(ctx, b, 2, nil, Input{Values: map[string]any{"url": "https://h/a.php"}, Delegate: &good}); !errors.As(err, &invalid) ||
+		invalid.Problems["delegate"] == "" {
+		t.Fatalf("a delegate without the service's delegates: %v", err)
+	}
+	s.WithDelegates(delegates{good: "", bad: "session #3's minion serves no dumbo bind-call connections (version 0)"})
+	tg, err := s.Add(ctx, b, 2, nil, Input{Values: map[string]any{"url": "https://h/a.php"}, Delegate: &good})
+	if err != nil || tg.DelegateID == nil || *tg.DelegateID != good {
+		t.Fatalf("a target through a delegate: %+v %v", tg, err)
+	}
+	if _, err := s.Update(ctx, tg.TargetID, Input{Values: map[string]any{"url": "https://h/a.php"}, Delegate: &bad}); !errors.As(err, &invalid) ||
+		!strings.Contains(invalid.Problems["delegate"], "serves no dumbo") {
+		t.Fatalf("a delegate that cannot carry it: %v", err)
+	}
+	if _, err := s.Update(ctx, tg.TargetID, Input{Values: map[string]any{"url": "https://h/a.php"}}); err != nil || targets.rows[tg.TargetID].DelegateID != nil {
+		t.Fatalf("its delegate removed: %v", err)
+	}
+	own := uuid.New()
+	if err := s.checkDelegate(ctx, b.OperationID, "dumbo", protocol.KindBindCall, 1, &own, &own); !errors.As(err, &invalid) ||
+		!strings.Contains(invalid.Message, "its own delegate") {
+		t.Fatalf("its own session: %v", err)
+	}
+	dumbo := s.schemas.(schemas)["dumbo"]
+	k := dumbo.Kinds[protocol.KindBindCall]
+	k.Agentless = true
+	dumbo.Kinds[protocol.KindBindCall] = k
+	if err := s.checkDelegate(ctx, b.OperationID, "dumbo", protocol.KindBindCall, 1, nil, &good); !errors.As(err, &invalid) ||
+		!strings.Contains(invalid.Message, "agentless") {
+		t.Fatalf("an agentless kind: %v", err)
+	}
+	k.Agentless, k.DelegatedOnly = false, true
+	dumbo.Kinds[protocol.KindBindCall] = k
+	if err := s.checkDelegate(ctx, b.OperationID, "dumbo", protocol.KindBindCall, 1, nil, nil); !errors.As(err, &invalid) ||
+		!strings.Contains(invalid.Message, "only delegates carry") {
+		t.Fatalf("a delegated-only kind with none: %v", err)
 	}
 }

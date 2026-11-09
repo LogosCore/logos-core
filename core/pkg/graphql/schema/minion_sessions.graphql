@@ -512,6 +512,9 @@ extend type Query {
     search: String
     filters: [MinionSessionFilterInput!]
     sort: MinionSessionSortInput
+    # The sessions whose minions can be the delegate of a target of this
+    # channel kind: their builds have a delegate command serving it.
+    delegatesFor: MinionDelegatesForInput
     first: Int = 20
     after: String
     last: Int

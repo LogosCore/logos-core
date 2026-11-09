@@ -31,6 +31,14 @@ func (r *minionTargetResolver) Session(ctx context.Context, obj *model.MinionTar
 	return r.MinionSessionResolver.MinionSession(ctx, *obj.SessionID)
 }
 
+// Delegate is the resolver for the delegate field.
+func (r *minionTargetResolver) Delegate(ctx context.Context, obj *model.MinionTarget) (*model.MinionSession, error) {
+	if obj.DelegateID == nil {
+		return nil, nil
+	}
+	return r.MinionSessionResolver.MinionSession(ctx, *obj.DelegateID)
+}
+
 // AddMinionTarget is the resolver for the addMinionTarget field.
 func (r *mutationResolver) AddMinionTarget(ctx context.Context, buildID string, conn int, input model.MinionTargetInput, sessionID *string) (*model.MinionTarget, error) {
 	return r.MinionTargetResolver.AddMinionTarget(ctx, buildID, conn, input, sessionID)

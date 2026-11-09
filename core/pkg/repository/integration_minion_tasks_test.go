@@ -98,6 +98,11 @@ func TestIntegrationMinionTasks(t *testing.T) {
 	if r := rev(ids[0]); r <= sentRev {
 		t.Fatalf("rev after the ack: %d, was %d", r, sentRev)
 	}
+	// Acked, it runs, though nothing came of it yet (a tunnel prints
+	// nothing while it runs).
+	if acked, _ := repo.FindByTaskID(ctx, ids[0]); acked.State != models.MinionTaskRunning || acked.AckedAt == nil || acked.StartedAt != nil {
+		t.Fatalf("acked: %s %v %v", acked.State, acked.AckedAt, acked.StartedAt)
+	}
 	if g, _ := repo.ForDelivery(ctx, session, 10); len(g) != 3 || g[0].TaskID != ids[1] {
 		t.Fatalf("after the ack: %v", taskIDs(g))
 	}

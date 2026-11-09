@@ -804,3 +804,43 @@ func TestIntegrationMinionSessionProcessNames(t *testing.T) {
 		t.Fatalf("a second run changed %d", n)
 	}
 }
+
+// A message's check-in records its path (the delegates it came through)
+// with a peer and without one; a check-in that says none (a keepalive)
+// leaves it, one straight from a channel clears it.
+func TestIntegrationMinionSessionVia(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	sid := uuid.New()
+	t0 := time.Now().UTC().Truncate(time.Millisecond)
+	if err := repo.Insert(ctx, &models.MinionSession{SessionID: sid, OperationID: uuid.New(), Number: 1, CreatedAt: t0}); err != nil {
+		t.Fatal(err)
+	}
+	via := []models.MinionSessionVia{{SessionID: uuid.New(), Number: 3, TaskID: uuid.New()}, {SessionID: uuid.New(), Number: 2, TaskID: uuid.New()}}
+	for i, c := range []struct {
+		in      MinionSessionCheckIn
+		via     []models.MinionSessionVia
+		since   *time.Time
+		explain string
+	}{
+		{MinionSessionCheckIn{At: t0, Peer: "10.0.0.7", Path: true, Via: via, ViaSince: t0}, via, &t0, "through two delegates, with a peer"},
+		{MinionSessionCheckIn{At: t0.Add(time.Second)}, via, &t0, "a keepalive leaves it"},
+		{MinionSessionCheckIn{At: t0.Add(2 * time.Second), Path: true, Via: via[:1], ViaSince: t0.Add(2 * time.Second)}, via[:1], ptrTime(t0.Add(2 * time.Second)), "one delegate, no peer"},
+		{MinionSessionCheckIn{At: t0.Add(3 * time.Second), Peer: "203.0.113.9", Path: true}, nil, nil, "straight from a channel"},
+	} {
+		if err := repo.CheckIn(ctx, sid, c.in); err != nil {
+			t.Fatal(err)
+		}
+		s, err := repo.FindBySessionID(ctx, sid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sameSince := (s.ViaSince == nil) == (c.since == nil) && (c.since == nil || s.ViaSince.Equal(*c.since))
+		if !slices.Equal(s.Via, c.via) || !sameSince {
+			t.Fatalf("%d (%s): via %+v since %v", i, c.explain, s.Via, s.ViaSince)
+		}
+	}
+}
+
+func ptrTime(t time.Time) *time.Time { return &t }

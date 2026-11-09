@@ -230,7 +230,7 @@ func (a *App) buildResolvers() *resolvers {
 		// Builds too: operation data, authorized by operation role.
 		builds: resolver.NewBuildResolver(a.builds, a.repos.Operation),
 		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences, a.repos.MinionReservation, a.repos.MinionMark, a.repos.Build, a.eventBus,
-			a.repos.MinionTask, a.minionSync, a.repos.MinionFeedback, a.repos.MinionIdentity, a.repos.MinionFolder),
+			a.repos.MinionTask, a.minionSync, a.repos.MinionFeedback, a.repos.MinionIdentity, a.repos.MinionFolder, a.repos.ModuleRegistry),
 		minionTasks: resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
 			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync, a.minionSync, a.repos.MinionFeedback,
 			a.credentialRefs, a.minionTunnels),

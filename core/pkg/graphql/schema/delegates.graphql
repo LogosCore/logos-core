@@ -1,0 +1,74 @@
+# =============================================================================
+# Delegates — minions that carry other minions' messages
+# =============================================================================
+#
+# A delegate is a session whose minion serves a channel kind's transport on
+# its host while a task of its runs (a command whose action is delegate or
+# reverse_delegate), carrying what a channel module would say to core in
+# delegate items (docs: contracts/minion-messages/delegation). What goes
+# through one is held in memory, as a tunnel's streams are.
+
+# What a delegate task carries.
+type MinionDelegate {
+  # The channel kinds its command serves.
+  serves: [BuildServe!]!
+  # Whether core holds what goes through it: false when nothing has since
+  # core started (or the task ended).
+  held: Boolean!
+  # Core stops it once nothing has gone through it this long; null: never.
+  stopIdle: String
+  # When an item last went through it, either way.
+  usedAt: String
+  # The requests and frames it carried.
+  carried: Int!
+  # Steps and frames waiting for its minion.
+  waiting: Int!
+  # The connections open through it.
+  connections: [MinionDelegateConnection!]!
+}
+
+# A connection through a delegate.
+type MinionDelegateConnection {
+  # Its number in the task.
+  n: Int!
+  moduleName: String!
+  kind: String!
+  # The minion's address as the delegate saw it.
+  peer: String
+  openedAt: String!
+  # The session over it, once its minion spoke.
+  session: MinionSession
+}
+
+# A delegate on a session's way to core: the session whose task carried
+# its latest message.
+type MinionSessionVia {
+  sessionId: ID!
+  # The delegate's session number.
+  number: Int!
+  taskId: ID!
+  # The delegate's session; null once removed.
+  session: MinionSession
+}
+
+input MinionDelegatesForInput {
+  moduleName: String!
+  kind: String!
+  # The connection schema version the target's build connection was built
+  # against.
+  version: Int!
+}
+
+extend type MinionTask {
+  # A delegate task's: what it serves and carries; null for any other.
+  delegate: MinionDelegate
+}
+
+extend type MinionSession {
+  # The delegates its latest message came through, nearest first (the
+  # delegate whose task carried it, then the ones that delegate's own
+  # messages came through); empty: a channel's instance brought it.
+  via: [MinionSessionVia!]!
+  # When its messages began to come that way; null while via is empty.
+  viaSince: String
+}

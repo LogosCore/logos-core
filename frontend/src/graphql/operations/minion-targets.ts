@@ -26,6 +26,13 @@ export const MinionTargetFields = graphql(`
       id
       number
     }
+    delegateId
+    delegate {
+      id
+      number
+      host
+      user
+    }
     failures
     unreachableSince
     nextCallAt
@@ -83,6 +90,9 @@ export const BuildBindConnectionsQuery = graphql(`
         name
         moduleName
         kind
+        version
+        delegatedOnly
+        agentless
         problem
         fields {
           ...ModuleFieldDefFields
@@ -144,6 +154,31 @@ export const MinionTargetChangedSubscription = graphql(`
       action
       targetId
       operationId
+    }
+  }
+`)
+
+// The sessions whose minions can be a target's delegate: their builds have
+// a delegate command serving the target's channel kind. The server
+// searches.
+export const DelegateSessionsQuery = graphql(`
+  query DelegateSessions($operationId: ID!, $delegatesFor: MinionDelegatesForInput!, $search: String, $first: Int, $after: String) {
+    minionSessions(operationId: $operationId, delegatesFor: $delegatesFor, search: $search, first: $first, after: $after) {
+      edges {
+        node {
+          id
+          number
+          host
+          user
+          moduleName
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      totalCount
     }
   }
 `)

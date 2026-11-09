@@ -57,6 +57,13 @@ type Caller interface {
 	DisconnectTarget(ctx context.Context, targetID uuid.UUID) (*models.MinionTarget, error)
 }
 
+// Delegates says whether a session can be a target's delegate (docs:
+// contracts/minion-messages/delegation/): why not, "" when it can.
+// Satisfied by *minionsync.Service.
+type Delegates interface {
+	CheckDelegate(ctx context.Context, sessionID, operation uuid.UUID, module, kind string, version int) (string, error)
+}
+
 // Service manages targets.
 // Credentials checks the credentials a target's values name (credential
 // fields): each one of the operation's, of a type its field takes.
@@ -66,20 +73,28 @@ type Credentials interface {
 }
 
 type Service struct {
-	targets  repository.IMinionTargetRepository
-	sessions repository.IMinionSessionRepository
-	builds   Builds
-	schemas  Schemas
-	caller   Caller
-	creds    Credentials
-	bus      eventbus.IEventBus
-	now      func() time.Time
+	targets   repository.IMinionTargetRepository
+	sessions  repository.IMinionSessionRepository
+	builds    Builds
+	schemas   Schemas
+	caller    Caller
+	creds     Credentials
+	delegates Delegates
+	bus       eventbus.IEventBus
+	now       func() time.Time
 }
 
 // WithCredentials has the service check the credentials targets name. A
 // service without it takes credential fields unchecked: its tests.
 func (s *Service) WithCredentials(c Credentials) *Service {
 	s.creds = c
+	return s
+}
+
+// WithDelegates has the service take targets that name a delegate. A
+// service without it refuses one.
+func (s *Service) WithDelegates(d Delegates) *Service {
+	s.delegates = d
 	return s
 }
 
@@ -98,7 +113,10 @@ type Input struct {
 	// (models.PolicyOnDemand, ...); "" keeps a target's, on-demand for a new
 	// one. A bind-call target has none.
 	Policy string
-	Actor  models.ModuleActor
+	// Delegate is the session whose minion carries the target's calls and
+	// opens, a delegate; nil: an instance of the channel does.
+	Delegate *uuid.UUID
+	Actor    models.ModuleActor
 }
 
 // policyFor is the policy a target of kind takes from in (keeping had).
@@ -128,6 +146,12 @@ type BindConnection struct {
 	ModuleName string
 	Kind       string
 	Fields     []protocol.FieldSpec
+	// Version is the channel's connection schema version it was built
+	// against: what a delegate serving it must serve.
+	Version int
+	// DelegatedOnly: only delegates carry the kind, so a target names one;
+	// Agentless: its channel is the minion, so a target names none.
+	DelegatedOnly, Agentless bool
 	// Problem says why no target can be added to it now ("" when one can).
 	Problem string
 }
@@ -140,7 +164,8 @@ func (s *Service) BindConnections(ctx context.Context, b *models.Build) ([]BindC
 		if !protocol.IsBindKind(kind) {
 			continue
 		}
-		bc := BindConnection{Place: i + 1, Name: c.Endpoint.Name, ModuleName: c.Endpoint.Channel.ModuleName, Kind: kind}
+		bc := BindConnection{Place: i + 1, Name: c.Endpoint.Name, ModuleName: c.Endpoint.Channel.ModuleName, Kind: kind,
+			Version: c.Endpoint.Channel.SchemaVersion}
 		schema, err := s.schemas.Schema(ctx, bc.ModuleName)
 		if err != nil {
 			return nil, err
@@ -152,6 +177,7 @@ func (s *Service) BindConnections(ctx context.Context, b *models.Build) ([]BindC
 			bc.Problem = fmt.Sprintf("no %s channel declares %s connections now", bc.ModuleName, kind)
 		default:
 			bc.Fields = schema.TargetFields(kind)
+			bc.DelegatedOnly, bc.Agentless = schema.IsDelegatedOnly(kind), schema.IsAgentless(kind)
 		}
 		out = append(out, bc)
 	}
@@ -186,13 +212,16 @@ func (s *Service) Add(ctx context.Context, b *models.Build, conn int, session *u
 	if err != nil {
 		return nil, err
 	}
+	if err := s.checkDelegate(ctx, b.OperationID, module, kind, c.Endpoint.Channel.SchemaVersion, session, in.Delegate); err != nil {
+		return nil, err
+	}
 	policy, err := policyFor(kind, in, "")
 	if err != nil {
 		return nil, err
 	}
 	now := s.now()
 	t := &models.MinionTarget{
-		OperationID: b.OperationID, BuildID: b.BuildID, Conn: conn, ModuleName: module, Kind: kind, Policy: policy,
+		OperationID: b.OperationID, BuildID: b.BuildID, Conn: conn, ModuleName: module, Kind: kind, Policy: policy, DelegateID: in.Delegate,
 		Values: values, CredentialIDs: credentialIDs, Name: targetName(values), Retries: in.Retries, SessionID: session,
 		State: models.TargetNew, StateAt: now, CreatedBy: in.Actor, CreatedAt: now, UpdatedAt: now,
 	}
@@ -246,11 +275,18 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (*models.M
 	if err != nil {
 		return nil, err
 	}
+	version := 0
+	if b, err := s.builds.FindByBuildID(ctx, t.BuildID); err == nil && t.Conn >= 1 && t.Conn <= len(b.Connections.Items) {
+		version = b.Connections.Items[t.Conn-1].Endpoint.Channel.SchemaVersion
+	}
+	if err := s.checkDelegate(ctx, t.OperationID, t.ModuleName, t.Kind, version, t.SessionID, in.Delegate); err != nil {
+		return nil, err
+	}
 	policy, err := policyFor(t.Kind, in, t.Policy)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.targets.SetValues(ctx, id, values, credentialIDs, targetName(values), in.Retries, policy, s.now()); err != nil {
+	if err := s.targets.SetValues(ctx, id, values, credentialIDs, targetName(values), in.Retries, policy, in.Delegate, s.now()); err != nil {
 		return nil, fmt.Errorf("store the target: %w", err)
 	}
 	s.publish(t, false)
@@ -426,6 +462,41 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, module, kind string, 
 		return nil, nil, &ValidationError{Message: "the target's values do not fit the channel's target fields", Problems: problems}
 	}
 	return models.JSONMap(protocol.ResolveTargetValues(*schema, kind, clean)), credentialrefs.IDs(schema.TargetFields(kind), clean), nil
+}
+
+// checkDelegate checks a target's delegate (nil: none) for a target of
+// operation op's of module's kind at version, whose own session is own:
+// none where only delegates carry the kind; one where the kind is not
+// agentless, another session than the target's own, that can carry it.
+func (s *Service) checkDelegate(ctx context.Context, op uuid.UUID, module, kind string, version int, own, delegate *uuid.UUID) error {
+	schema, err := s.schemas.Schema(ctx, module)
+	if err != nil {
+		return err
+	}
+	if delegate == nil {
+		if schema != nil && schema.IsDelegatedOnly(kind) {
+			return &ValidationError{Message: fmt.Sprintf("only delegates carry %s %s connections: name the target's delegate", module, kind),
+				Problems: map[string]string{"delegate": "required: only delegates carry the kind"}}
+		}
+		return nil
+	}
+	var problem string
+	switch {
+	case schema != nil && schema.IsAgentless(kind):
+		problem = "an agentless kind is not delegated"
+	case own != nil && *own == *delegate:
+		problem = "a minion is not its own delegate"
+	case s.delegates == nil:
+		problem = "core carries no delegates here"
+	default:
+		if problem, err = s.delegates.CheckDelegate(ctx, *delegate, op, module, kind, version); err != nil {
+			return err
+		}
+	}
+	if problem != "" {
+		return &ValidationError{Message: "the delegate: " + problem, Problems: map[string]string{"delegate": problem}}
+	}
+	return nil
 }
 
 // empty reports a value an operator left blank: its default applies.

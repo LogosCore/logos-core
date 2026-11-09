@@ -162,13 +162,19 @@ type Service struct {
 	// creds resolves the credentials calls carry, and learns from their
 	// logins (bind.go); nil, a call naming one is refused.
 	creds Credentials
+	// dlg are the delegates' tasks and what goes through them, and
+	// delegateSchemas what their commands serve (delegates.go); nil
+	// schemas carry none.
+	dlg             *delegates
+	delegateSchemas DelegateSchemas
 }
 
 func NewService(builds Builds, stagings repository.IMinionStagingRepository, sessions repository.IMinionSessionRepository,
 	reservations repository.IMinionSessionReservationRepository, c cache.Cache, bus eventbus.IEventBus, logger *zap.Logger) *Service {
 	return &Service{builds: builds, stagings: stagings, sessions: sessions, reservations: reservations, cache: c, bus: bus,
 		logger: logger.Named("minionsync"), now: func() time.Time { return time.Now().UTC() },
-		conns: newConnections(), binds: newBinds(), persist: newPersistent(), reacks: newReacks(), answers: newAnswers()}
+		conns: newConnections(), binds: newBinds(), persist: newPersistent(), reacks: newReacks(), answers: newAnswers(),
+		dlg: newDelegates()}
 }
 
 // Handle opens a minion's sealed frame sent under id from peer (the IP
@@ -196,7 +202,21 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 	if err != nil {
 		return nil, err
 	}
+	if why := delegatedRefusal(ctx, from); why != "" {
+		// A delegate carries its own operation's minions, and none on its
+		// own way.
+		s.logger.Info("delegates: a delegated message not taken", zap.String("id", id), zap.String("why", why))
+		return nil, ErrUnopened
+	}
 	if via != nil {
+		// A connection carries one minion's messages: its session's, once
+		// one spoke over it, until that session closes or another process
+		// takes it.
+		if !via.carries(from) {
+			s.logger.Info("minion connection: a message of another minion than its own, not taken", zap.String("conn", via.ID),
+				zap.String("id", id), zap.String("owner", via.ownerOf().String()))
+			return nil, ErrUnopened
+		}
 		from.place = via.placeOf()
 	}
 	if from.place == 0 && from.build != nil {
@@ -373,9 +393,19 @@ func (s *Service) seenOnHello(ctx context.Context, via *Conn, items []cbor.RawMe
 		if err != nil {
 			return
 		}
-		if session, err := s.sessions.FindBySessionID(ctx, sid); err == nil {
-			s.seenOn(ctx, via, session)
+		session, err := s.sessions.FindBySessionID(ctx, sid)
+		if err != nil {
+			return
 		}
+		if old := via.ownerOf(); old != uuid.Nil && old != sid {
+			// Its minion staged again over it: the connection is the new
+			// session's, and no longer the one before's.
+			s.conns.drop(old, via)
+			via.disown(old)
+			s.setConnected(ctx, old)
+			s.publishSession(ctx, old)
+		}
+		s.seenOn(ctx, via, session)
 		return
 	}
 }
@@ -539,6 +569,9 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 		session.PeerAddress = peer
 		session.Peers = []models.MinionSessionPeer{{Address: peer, FirstSeen: now, LastSeen: now, Count: 1}}
 	}
+	if via, _ := s.pathOf(ctx, nil); len(via) > 0 {
+		session.Via, session.ViaSince = via, &now
+	}
 	if hello.Sleep != nil {
 		session.Sleep = models.SleepFrom(*hello.Sleep)
 		if models.LateBySchedule(session.ConnKind) {
@@ -621,7 +654,7 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 		sess.ConnKind = conn.Kind
 	}
 	// The claim's own message is the session's check-in, from where it came.
-	if err := s.sessions.CheckIn(ctx, sid, checkIn(now, peer, sleepOf(hello), sleepOf(hello), sess.ConnKind)); err != nil {
+	if err := s.sessions.CheckIn(ctx, sid, s.withPath(ctx, checkIn(now, peer, sleepOf(hello), sleepOf(hello), sess.ConnKind), sess)); err != nil {
 		return nil, false, fmt.Errorf("check in: %w", err)
 	}
 	s.logger.Info("minion claimed its persisted session", zap.Int64("number", sess.Number), zap.String("session_id", sid.String()),
@@ -690,7 +723,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 	if schedule == nil {
 		schedule = session.Sleep
 	}
-	if err := s.sessions.CheckIn(ctx, session.SessionID, checkIn(s.now(), peer, said, schedule, session.ConnKind)); err != nil {
+	if err := s.sessions.CheckIn(ctx, session.SessionID, s.withPath(ctx, checkIn(s.now(), peer, said, schedule, session.ConnKind), session)); err != nil {
 		return nil, fmt.Errorf("check in: %w", err)
 	}
 	var items []cbor.RawMessage
@@ -841,6 +874,10 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			// A tunnel from the minion opens a reverse port forward's
 			// stream; miniontunnels closes one for any other task.
 			out, err = s.takeTunnel(ctx, session, raw, i)
+		case protocol.ItemDelegate:
+			// What a delegate carries for the minions it serves
+			// (delegates.go).
+			out, err = s.takeDelegate(ctx, session, raw, i)
 		default:
 			out, err = errItem(protocol.ErrItemUnknownItem, "not taken under a session yet", i)
 		}

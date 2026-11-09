@@ -34,6 +34,7 @@ import { FileView } from "./file-view"
 import { UploadView } from "./upload-view"
 import { StreamView } from "./stream-view"
 import { TunnelView } from "./tunnel-view"
+import { DelegateView } from "./delegate-view"
 import { FRONT_FORWARD, FRONT_TERMINAL, FRONT_VPN } from "./tunnel-values"
 import type { DeleteTarget } from "./delete-dialog"
 import type { UploadTarget } from "./upload-target"
@@ -80,6 +81,9 @@ function saveFlag(key: string, on: boolean) {
 }
 
 const noChange = () => {}
+
+/** Who core's own tasks are issued by: no user (a delegate task core queued). */
+const NO_ISSUER = "00000000-0000-0000-0000-000000000000"
 
 export function TaskDetail({
   task: t,
@@ -175,11 +179,14 @@ export function TaskDetail({
   const isStream = t.result === "file_stream" && t.stream != null
   // A tunnel task's proxy shows from its queueing: core took its port then.
   const isTunnel = t.tunnel != null
+  // A delegate task's: what it serves and carries.
+  const isDelegate = t.delegate != null
   const hasData =
     (isFile && t.file != null) ||
     isUpload ||
     isStream ||
     isTunnel ||
+    isDelegate ||
     (detail ? data !== null : t.dataSize > 0 || (t.outputSize === 0 && t.parts > 0))
   // The result's view, for data that fits it; the rest shows raw.
   const listing = t.result === "dir_listing" && !t.dataProblem ? readDirListing(data) : null
@@ -208,7 +215,7 @@ export function TaskDetail({
         ? "feedback"
         : tab === "data" && hasData
         ? "data"
-        : tab === "output" || !hasData || (t.outputSize > 0 && !isUpload && !isStream && !isTunnel)
+        : tab === "output" || !hasData || (t.outputSize > 0 && !isUpload && !isStream && !isTunnel && !isDelegate)
           ? "output"
           : "data"
   const [wrap, setWrap] = useState(() => readFlag(WRAP_KEY, true))
@@ -233,7 +240,7 @@ export function TaskDetail({
           </TabButton>
           {hasData && (
             <TabButton active={shown === "data"} onClick={() => setTab("data")}>
-              {isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? (t.tunnel?.front === FRONT_FORWARD ? "Forward" : t.tunnel?.front === FRONT_TERMINAL ? "Terminal" : t.tunnel?.front === FRONT_VPN ? "VPN" : "Proxy") : "Data"}
+              {isDelegate ? "Delegate" : isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? (t.tunnel?.front === FRONT_FORWARD ? "Forward" : t.tunnel?.front === FRONT_TERMINAL ? "Terminal" : t.tunnel?.front === FRONT_VPN ? "VPN" : "Proxy") : "Data"}
             </TabButton>
           )}
           {hasFeedback && (
@@ -251,7 +258,7 @@ export function TaskDetail({
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 border-l pl-2">
           <StateLabel t={t} held={held} />
           <span className="text-xs text-muted-foreground" title={`Queued ${formatAbsolute(t.queuedAt)}`}>
-            by {t.issuedByName ?? "someone gone"}
+            by {t.issuedBy === NO_ISSUER ? "core" : (t.issuedByName ?? "someone gone")}
           </span>
           <TaskAs as={t.as} />
           <TaskTimes t={t} />
@@ -276,7 +283,7 @@ export function TaskDetail({
               <BracesIcon />
             </Button>
           )}
-          {shown === "data" && isTunnel ? null : shown === "data" ? (
+          {shown === "data" && (isTunnel || isDelegate) ? null : shown === "data" ? (
             <>
               <Button variant="ghost" size="icon-xs" title="Copy the data as JSON" aria-label="Copy the data" disabled={!data}
                 onClick={() => void copyToClipboard(JSON.stringify(data, null, 2), "data")}>
@@ -344,7 +351,9 @@ export function TaskDetail({
           {dataNotes.length > 0 && (
             <p className="border-b px-3 py-1 text-xs text-amber-700 dark:text-amber-400">{dataNotes.join(" ")}</p>
           )}
-          {isTunnel && t.tunnel ? (
+          {isDelegate && t.delegate ? (
+            <DelegateView delegate={t.delegate} />
+          ) : isTunnel && t.tunnel ? (
             <TunnelView key={t.id} task={t} tunnel={t.tunnel} />
           ) : isFile && t.file && !rawData ? (
             <FileView key={t.file.id} file={t.file} />

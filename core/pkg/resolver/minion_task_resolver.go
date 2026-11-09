@@ -35,6 +35,9 @@ type IMinionTaskResolver interface {
 	// Feedback is MinionTask.feedback: what its minion said of it.
 	Feedback(ctx context.Context, t *model.MinionTask) ([]*model.MinionFeedback, error)
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
+	// DelegateServes are what a delegate task's command serves, as its
+	// factory's latest schema says.
+	DelegateServes(ctx context.Context, t *model.MinionTask) ([]protocol.ChannelVersions, error)
 	QueueMinionTask(ctx context.Context, sessionID, command string, args any) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
 	SetMinionTunnelCap(ctx context.Context, taskID string, limit int) (*model.MinionTask, error)
@@ -298,8 +301,12 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 		// help, connect and disconnect are core's own: a schema from before
 		// they were reserved does not shadow them.
 		if slices.Contains(b.Commands, c.ID) && !protocol.IsCoreCommand(c.ID) {
-			if protocol.IsTunnelAction(c.Action) {
+			switch {
+			case protocol.IsTunnelAction(c.Action):
 				c = tunnelCommand(sc.BuildSchema, c, b.Target)
+			case protocol.IsDelegateAction(c.Action):
+				// Core's own params (stop_idle) beside the command's.
+				c.Params = append(slices.Clone(c.Params), protocol.TunnelCoreParams(c.Action)...)
 			}
 			out = append(out, c)
 		}
@@ -311,6 +318,23 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 		out = append(out, maxTasksCommand())
 	}
 	return &sc.BuildSchema, append(out, helpCommand(out)), nil
+}
+
+func (r *minionTaskResolver) DelegateServes(ctx context.Context, t *model.MinionTask) ([]protocol.ChannelVersions, error) {
+	s, err := r.session(ctx, t.SessionID, models.OperationRoleViewer)
+	if err != nil {
+		return nil, err
+	}
+	_, commands, err := r.commandsOf(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range commands {
+		if c.ID == t.Command {
+			return c.Serves, nil
+		}
+	}
+	return nil, nil
 }
 
 func (r *minionTaskResolver) MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error) {
@@ -423,6 +447,10 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 		// And when core stops it: a command line that leaves stop_idle out
 		// runs by core's default for the action, as the form (which sends
 		// every field) does.
+		withDefault(values, commands[i].Params, protocol.ParamStopIdle)
+	}
+	if protocol.IsDelegateAction(commands[i].Action) {
+		// When core stops it, as for a tunnel.
 		withDefault(values, commands[i].Params, protocol.ParamStopIdle)
 	}
 	// On the wire the args go by their params' numbers.

@@ -152,6 +152,11 @@ type MinionTarget struct {
 	StateAt     time.Time `bson:"state_at" json:"state_at"`
 	// SessionID is the session the target's hello opened.
 	SessionID *uuid.UUID `bson:"session_id,omitempty" json:"session_id,omitempty"`
+	// DelegateID is the session whose minion carries the target's calls
+	// and opens, a delegate serving its channel kind (docs:
+	// contracts/minion-messages/delegation/); nil: an instance of the
+	// channel module does.
+	DelegateID *uuid.UUID `bson:"delegate_id,omitempty" json:"delegate_id,omitempty"`
 	// Allowance is how many tasks a call core starts may bring: the page's
 	// last get_tasks max; nil for one a call, as when it never said.
 	Allowance *uint64 `bson:"allowance,omitempty" json:"allowance,omitempty"`

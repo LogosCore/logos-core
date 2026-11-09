@@ -6,6 +6,7 @@ import {
   BuildBindConnectionsDocument,
   CheckMinionTargetDocument,
   ConnectMinionTargetDocument,
+  DelegateSessionsDocument,
   DisconnectMinionTargetDocument,
   MinionTargetChangedDocument,
   MinionSessionTargetDocument,
@@ -45,6 +46,34 @@ export function useInfiniteMinionTargets(params: TargetListParams) {
     getNextPageParam: (last) =>
       last.minionTargets.pageInfo.hasNextPage ? (last.minionTargets.pageInfo.endCursor ?? undefined) : undefined,
     enabled: params.operationId !== "",
+  })
+}
+
+/** What a delegate picker lists: sessions that can carry a target of a channel kind, searched by the server. */
+export interface DelegateSessionParams {
+  operationId: string
+  moduleName: string
+  kind: string
+  version: number
+  search: string | null
+}
+
+/** The sessions whose minions can be a target's delegate, a page at a time. */
+export function useInfiniteDelegateSessions(params: DelegateSessionParams, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...minionTargetKeys.all, "delegates", params] as const,
+    queryFn: ({ pageParam }) =>
+      graphqlClient(DelegateSessionsDocument, {
+        operationId: params.operationId,
+        delegatesFor: { moduleName: params.moduleName, kind: params.kind, version: params.version },
+        search: params.search,
+        first: 30,
+        after: pageParam,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) =>
+      last.minionSessions.pageInfo.hasNextPage ? (last.minionSessions.pageInfo.endCursor ?? undefined) : undefined,
+    enabled: enabled && params.operationId !== "",
   })
 }
 

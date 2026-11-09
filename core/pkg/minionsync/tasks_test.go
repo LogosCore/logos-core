@@ -9,6 +9,7 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -75,7 +76,7 @@ func (f *fakeTasks) CountRunning(_ context.Context, sid uuid.UUID) (int, error) 
 	n := 0
 	for _, t := range f.rows {
 		if t.SessionID == sid && !protocol.IsCoreCommand(t.Command) &&
-			(t.State == models.MinionTaskRunning || t.State == models.MinionTaskSent && t.AckedAt != nil) {
+			t.State == models.MinionTaskRunning {
 			n++
 		}
 	}
@@ -94,7 +95,7 @@ func (f *fakeTasks) CountTunnels(_ context.Context, sid uuid.UUID) (int, error) 
 	n := 0
 	for _, t := range f.rows {
 		if t.SessionID == sid && protocol.IsTunnelAction(t.Action) &&
-			(t.State == models.MinionTaskRunning || t.State == models.MinionTaskSent && t.AckedAt != nil) {
+			t.State == models.MinionTaskRunning {
 			n++
 		}
 	}
@@ -107,7 +108,7 @@ func (f *fakeTasks) RunningIDs(_ context.Context, sid uuid.UUID, limit int) ([]u
 	var ids []uuid.UUID
 	for _, t := range f.rows {
 		if t.SessionID == sid && !protocol.IsCoreCommand(t.Command) && len(ids) < limit &&
-			(t.State == models.MinionTaskRunning || t.State == models.MinionTaskSent && t.AckedAt != nil) {
+			t.State == models.MinionTaskRunning {
 			ids = append(ids, t.TaskID)
 		}
 	}
@@ -142,6 +143,10 @@ func (f *fakeTasks) Ack(_ context.Context, _ uuid.UUID, ids []uuid.UUID, at time
 	for _, id := range ids {
 		if t := f.find(id); t != nil && t.AckedAt == nil {
 			t.AckedAt = &at
+			// As the repository: the minion has it, so it runs.
+			if t.State == models.MinionTaskSent {
+				t.State = models.MinionTaskRunning
+			}
 			if t.As == nil && as != nil {
 				a := *as
 				t.As = &a
@@ -426,5 +431,39 @@ func TestResultPartNamed(t *testing.T) {
 	if err != nil || len(l.Entries) != 1 || l.Entries[0].Mode != "-rw-r--r--" || l.Entries[0].Owner != "root" ||
 		l.Entries[0].Type != protocol.DirEntryFile {
 		t.Fatalf("listing: %+v %v", l, err)
+	}
+}
+
+// An ack is news for each task it names: the console shows it running at
+// once, whether or not its minion prints anything (a tunnel does not).
+func TestAckPublishesTheTasks(t *testing.T) {
+	r := newRig(t)
+	tasks := &fakeTasks{results: map[uuid.UUID][]repository.MinionTaskResult{}}
+	r.svc.WithTasks(tasks)
+	ctx := context.Background()
+	reply, err := r.svc.Handle(ctx, r.build.BuildID.String(), "", sealedMinionMessage(t, r.keys, r.build.BuildID, nil, hello("a")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid := sessionID(t, r.open(t, reply))
+	id := uuid.New()
+	tasks.rows = append(tasks.rows, models.MinionTask{TaskID: id, SessionID: sid, OperationID: r.build.OperationID, Command: "tunnel",
+		Op: 15, State: models.MinionTaskSent})
+	before := len(r.bus.published())
+	if _, err := r.svc.Handle(ctx, sid.String(), "", sealedMinionMessage(t, r.keys, sid, nil,
+		protocol.AckItem{T: protocol.ItemAck, Tasks: [][]byte{id[:]}})); err != nil {
+		t.Fatal(err)
+	}
+	if got := tasks.find(id); got.State != models.MinionTaskRunning || got.AckedAt == nil {
+		t.Fatalf("acked: %s %v", got.State, got.AckedAt)
+	}
+	found := false
+	for _, e := range r.bus.published()[before:] {
+		if p, ok := e.Payload.(eventbus.MinionTaskEventPayload); ok && p.TaskID == id.String() && p.SessionID == sid.String() {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("the ack published no change of the task")
 	}
 }

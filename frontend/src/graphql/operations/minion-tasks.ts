@@ -87,6 +87,29 @@ export const MinionTaskFields = graphql(`
       attachedAt
       readerAt
     }
+    delegate {
+      held
+      serves {
+        moduleName
+        versions
+        kinds
+      }
+      stopIdle
+      usedAt
+      carried
+      waiting
+      connections {
+        n
+        moduleName
+        kind
+        peer
+        openedAt
+        session {
+          id
+          number
+        }
+      }
+    }
     tunnel {
       port
       address

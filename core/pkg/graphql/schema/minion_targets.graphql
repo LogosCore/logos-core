@@ -51,6 +51,11 @@ type MinionTarget {
   # The session the minion's hello opened; null until then.
   sessionId: ID
   session: MinionSession
+  # The session whose minion carries its calls and opens, a delegate
+  # serving its channel kind (docs: contracts/minion-messages/delegation);
+  # null: an instance of the channel does.
+  delegateId: ID
+  delegate: MinionSession
   # Calls that failed in a row, and when the first of them was.
   failures: Int!
   unreachableSince: String
@@ -85,6 +90,13 @@ type BindConnection {
   kind: String!
   # The channel's target fields for its kind: what a target fills in.
   fields: [ModuleField!]!
+  # The channel's connection schema version it was built against: what a
+  # delegate serving it must serve (minionSessions' delegatesFor).
+  version: Int!
+  # Only delegates carry the kind: a target names one. An agentless kind's
+  # channel is the minion: a target names none.
+  delegatedOnly: Boolean!
+  agentless: Boolean!
   # Why no target can be added to it now; null when one can.
   problem: String
 }
@@ -97,6 +109,10 @@ input MinionTargetInput {
   # A bind-persistent target's policy (on-demand, manual, always); null
   # keeps a target's, on-demand for a new one.
   policy: String
+  # Its delegate: a session of the operation whose minion serves the
+  # target's channel kind (minionSessions' delegatesFor lists them); null:
+  # none, an instance of the channel carries it. An update sets it too.
+  delegateId: ID
 }
 
 type MinionTargetEvent {

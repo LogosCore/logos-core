@@ -216,6 +216,13 @@ type MinionSessionCheckIn struct {
 	// Untimed: the minion's connection says whether it is there, not a
 	// schedule (models.LateBySchedule): late_at and lost_at go.
 	Untimed bool
+	// Path: the check-in is a message's, which says how it came: through
+	// the delegates Via (nearest first) since ViaSince, or none (straight
+	// from a channel). Without it (a connection's keepalive) the session's
+	// path stays.
+	Path     bool
+	Via      []models.MinionSessionVia
+	ViaSince time.Time
 }
 
 func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UUID, c MinionSessionCheckIn) error {
@@ -235,6 +242,12 @@ func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UU
 		delete(set, "late_at")
 		delete(set, "lost_at")
 		unset = append(unset, "late_at", "lost_at")
+	}
+	switch {
+	case c.Path && len(c.Via) > 0:
+		set["via"], set["via_since"] = c.Via, c.ViaSince
+	case c.Path:
+		unset = append(unset, "via", "via_since")
 	}
 	if c.Peer == "" {
 		u := bson.M{}

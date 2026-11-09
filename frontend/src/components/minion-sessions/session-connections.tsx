@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { IdRows, InfoCard, NoteRow } from "@/components/ui/info-card"
+import { IdRows, InfoCard, LabelRow, NoteRow } from "@/components/ui/info-card"
+import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { kindLabels, kindsByName } from "@/components/endpoints/endpoint-values"
 import { settingsSummary } from "@/components/builds/build-values"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { useChannelKinds } from "@/graphql/hooks/channel-endpoints"
-import { useMinionSessionConnections } from "@/graphql/hooks/minion-sessions"
+import { useMinionSessionConnections, useMinionSessions } from "@/graphql/hooks/minion-sessions"
 import {
   useBindConnections,
   useCheckMinionTarget,
@@ -33,7 +34,9 @@ import { useSwitchConnection } from "./use-connection-choices"
 // says core cannot reach it, and a target added there takes the session
 // over. A connection the minion listens on (bind-persistent) offers a target
 // even while the minion uses another: core dials it once the minion
-// switches to it.
+// switches to it. A session whose latest message came through delegates
+// has a via row: each delegate's session, nearest first, the task that
+// carried it and since when (the session's own fields: live).
 
 type Session = MinionSessionFieldsFragment
 
@@ -100,10 +103,53 @@ export function ConnectionsCard({ s }: { s: Session }) {
           })}
         />
       )}
+      <ViaRow s={s} />
       {connections.length > 1 && !command && (
         <NoteRow>The minion was built without a command to switch connections.</NoteRow>
       )}
     </InfoCard>
+  )
+}
+
+/** The delegates the session's latest message came through, nearest first: each one's session (opens it), then the task that carried it and since when. */
+function ViaRow({ s }: { s: Session }) {
+  const modals = useRecordModals()
+  // Their hosts; null: removed.
+  const hops = useMinionSessions(s.via.map((v) => v.sessionId))
+  if (s.via.length === 0) return null
+  const task = s.via[0].taskId
+  return (
+    <LabelRow label="via">
+      <div className="flex flex-wrap items-baseline gap-x-1.5">
+        {s.via.map((v, i) => (
+          <span key={v.sessionId} className="flex items-baseline gap-1.5">
+            {i > 0 && <span className="text-muted-foreground">→</span>}
+            <button
+              type="button"
+              className="font-mono underline-offset-2 hover:underline"
+              title={`Open session #${v.number}`}
+              onClick={() => modals.open({ kind: "session", id: v.sessionId })}
+            >
+              #{v.number}
+            </button>
+            {hops[i]?.host && <span className="text-muted-foreground">{hops[i].host}</span>}
+            {hops[i] === null && <span className="text-muted-foreground italic">removed</span>}
+          </span>
+        ))}
+      </div>
+      <div className="text-xs text-muted-foreground">
+        delegate task{" "}
+        <code className="font-mono" title={task}>
+          {task.slice(0, 8)}
+        </code>
+        {s.viaSince && (
+          <>
+            {" "}
+            · since <FormattedDateTimeText date={s.viaSince} />
+          </>
+        )}
+      </div>
+    </LabelRow>
   )
 }
 
@@ -141,6 +187,7 @@ function TargetLine({ target: t }: { target: Target }) {
         {t.name}
       </span>
       <TargetStateBadge state={shownState(t)} pending={busy} />
+      {t.delegate && <span className="text-muted-foreground">through session #{t.delegate.number}</span>}
       {(t.problems.length > 0 || t.stateDetail) && (
         <span className="min-w-0 truncate text-muted-foreground" title={problemsText(t) || t.stateDetail || undefined}>
           {problemsText(t) || t.stateDetail}
@@ -183,6 +230,7 @@ function NoTargetLine({ s, place, open, inUse }: { s: Session; place: number; op
       <TargetDialog
         open={adding && conns.length > 0}
         onClose={() => setAdding(false)}
+        operationId={s.operationId}
         buildId={s.buildId}
         connections={conns.filter((c) => c.place === place)}
         target={null}

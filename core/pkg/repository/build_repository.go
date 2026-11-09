@@ -124,6 +124,9 @@ type IBuildRepository interface {
 	// List returns an operation's builds, newest first, at most limit (0:
 	// all).
 	List(ctx context.Context, operationID uuid.UUID, limit int64) ([]models.Build, error)
+	// IDsWithCommands are the ids of an operation's builds of factory
+	// module that have one of commands.
+	IDsWithCommands(ctx context.Context, operationID uuid.UUID, module string, commands []string) ([]uuid.UUID, error)
 	// FindByOperationIDWithCursor returns a page of an operation's builds,
 	// newest first: those filter lets through, past cursor, at most limit.
 	FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, filter BuildFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]models.Build, error)
@@ -221,6 +224,19 @@ func (r *buildRepository) List(ctx context.Context, operationID uuid.UUID, limit
 		q = q.Limit(limit)
 	}
 	return out, q.All(&out)
+}
+
+func (r *buildRepository) IDsWithCommands(ctx context.Context, operationID uuid.UUID, module string, commands []string) ([]uuid.UUID, error) {
+	var rows []struct {
+		BuildID uuid.UUID `bson:"build_id"`
+	}
+	err := r.coll.Find(ctx, bson.M{"operation_id": operationID, "module_name": module, "commands": bson.M{"$in": commands}}).
+		Select(bson.M{"build_id": 1}).All(&rows)
+	out := make([]uuid.UUID, len(rows))
+	for i, row := range rows {
+		out[i] = row.BuildID
+	}
+	return out, err
 }
 
 func (r *buildRepository) ListUnfinished(ctx context.Context) ([]models.Build, error) {

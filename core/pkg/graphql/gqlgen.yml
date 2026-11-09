@@ -104,6 +104,11 @@ models:
       runningTunnels:
         resolver: true
 
+  MinionSessionVia:
+    fields:
+      session:
+        resolver: true
+
   Build:
     fields:
       bindConnections:
@@ -112,6 +117,8 @@ models:
   MinionTarget:
     fields:
       session:
+        resolver: true
+      delegate:
         resolver: true
 
   # Map the GraphQL "OperationRole" enum to our existing OperationRole type.
@@ -576,4 +583,7 @@ models:
         resolver: true
       # Read when asked, for a tunnel task.
       tunnel:
+        resolver: true
+      # Read when asked, for a delegate task.
+      delegate:
         resolver: true

@@ -98,6 +98,9 @@ type callKind struct {
 	// agentless: the channel acts as the minion, so calls and opens carry
 	// their id's keys.
 	agentless bool
+	// delegatedOnly: no instance of the channel carries the kind, only
+	// delegates do.
+	delegatedOnly bool
 	// deadline is how long a call may take (callDeadline), open how long
 	// an open may (openWithin).
 	deadline, open time.Duration
@@ -118,6 +121,7 @@ func (s *Service) kindOf(ctx context.Context, t *models.MinionTarget) (callKind,
 	}
 	if cs != nil {
 		k.agentless, k.deadline, k.open = cs.IsAgentless(t.Kind), callDeadline(cs.CallLimit(t.Kind)), openWithin(cs.OpenLimit(t.Kind))
+		k.delegatedOnly = cs.IsDelegatedOnly(t.Kind)
 		k.fields = append(slices.Clone(cs.Kinds[t.Kind].Fields), cs.TargetFields(t.Kind)...)
 	}
 	return k, nil
@@ -520,10 +524,11 @@ func (s *Service) firstCall(ctx context.Context, t *models.MinionTarget) error {
 	if err != nil {
 		return err
 	}
-	msg, peer, done, err := s.exchange(ctx, t, buildConn(b, t), from, b.BuildID, []cbor.RawMessage{rehello})
+	answer, done, err := s.exchange(ctx, t, buildConn(b, t), from, b.BuildID, []cbor.RawMessage{rehello})
 	if err != nil || done {
 		return err
 	}
+	msg, peer, actx := answer.msg, answer.peer, answer.ctx(ctx, t)
 	// A hello opens the session; without one, an err says why the minion
 	// refused.
 	var hello cbor.RawMessage
@@ -547,7 +552,7 @@ func (s *Service) firstCall(ctx context.Context, t *models.MinionTarget) error {
 	case hello == nil:
 		return s.saveCall(ctx, s.answered(t, models.TargetRefused, "the minion answered without a hello"))
 	}
-	items, err := s.openSession(ctx, from, peer, hello)
+	items, err := s.openSession(actx, from, peer, hello)
 	if err != nil {
 		return err
 	}
@@ -579,7 +584,7 @@ func (s *Service) firstCall(ctx context.Context, t *models.MinionTarget) error {
 	rest.Items = slices.DeleteFunc(slices.Clone(msg.Items), func(raw cbor.RawMessage) bool {
 		return protocol.ItemType(raw) == protocol.ItemHello
 	})
-	back, err := s.underSession(ctx, session, peer, rest, nil, pathCall)
+	back, err := s.underSession(actx, session, peer, rest, nil, pathCall)
 	if err != nil {
 		return fmt.Errorf("take the first answer under its session: %w", err)
 	}
@@ -643,13 +648,14 @@ func (s *Service) callWhileWorkRemains(ctx context.Context, t *models.MinionTarg
 	conn *protocol.BuildConnection, from *sender, items []cbor.RawMessage) error {
 	var last []cbor.RawMessage
 	for {
-		msg, peer, done, err := s.exchange(ctx, t, conn, from, session.SessionID, items)
+		answer, done, err := s.exchange(ctx, t, conn, from, session.SessionID, items)
 		if err != nil || done {
 			return err
 		}
+		msg := answer.msg
 		last = items
 		nameUnknownTasks(msg, items)
-		if items, err = s.underSession(ctx, session, peer, *msg, nil, pathCall); err != nil {
+		if items, err = s.underSession(answer.ctx(ctx, t), session, answer.peer, *msg, nil, pathCall); err != nil {
 			return err
 		}
 		s.allowanceOf(t, msg)
@@ -717,35 +723,56 @@ func (s *Service) allowanceOf(t *models.MinionTarget, msg *protocol.MinionMessag
 	}
 }
 
+// callAnswer is a call's answer: the minion's message, opened, the address
+// the channel reached the minion at (its external one), and the delegates
+// it came through (the target's, when it names one).
+type callAnswer struct {
+	msg  *protocol.MinionMessage
+	peer string
+	via  []models.MinionSessionVia
+}
+
+// ctx is ctx for what a's message says, which came a's way.
+func (a *callAnswer) ctx(ctx context.Context, t *models.MinionTarget) context.Context {
+	if len(a.via) == 0 {
+		return ctx
+	}
+	return withVia(ctx, a.via, t.OperationID)
+}
+
 // exchange makes one call: items under id, sealed as from's suite has
-// them, to the target through its channel. It returns the minion's answer,
-// opened; or done, when the call reached nothing or not the minion, which
-// it recorded.
+// them, to the target through its channel. It returns the minion's answer;
+// or done, when the call reached nothing or not the minion, which it
+// recorded.
 func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *protocol.BuildConnection,
-	from *sender, id uuid.UUID, items []cbor.RawMessage) (*protocol.MinionMessage, string, bool, error) {
+	from *sender, id uuid.UUID, items []cbor.RawMessage) (*callAnswer, bool, error) {
 	msgID := protocol.NewMessageID()
 	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: items, At: unixNow(s.now())})
 	if err != nil {
-		return nil, "", false, err
+		return nil, false, err
 	}
 	sealed, err := from.seal(id, plain)
 	if err != nil {
-		return nil, "", false, err
-	}
-	if s.link == nil {
-		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetNoChannel, "core keeps no control links"))
+		return nil, false, err
 	}
 	kind, err := s.kindOf(ctx, t)
 	if err != nil {
-		return nil, "", false, err
+		return nil, false, err
+	}
+	if why := delegateMismatch(t, kind); why != "" {
+		return nil, true, s.saveCall(ctx, s.stateOnly(t, models.TargetRefused, why))
+	}
+	link := s.linkerFor(t, conn)
+	if link == nil {
+		return nil, true, s.saveCall(ctx, s.failed(t, models.TargetNoChannel, "core keeps no control links"))
 	}
 	values := callValues(conn, t)
 	creds, err := s.credentialsOf(ctx, t, kind, values)
 	if why := refusedCredentials(err); why != "" {
-		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetRefused, why))
+		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetRefused, why))
 	}
 	if err != nil {
-		return nil, "", false, err
+		return nil, false, err
 	}
 	t.Calls++
 	call := channellink.Call{Values: values, Credentials: creds, ID: id, Data: sealed, Deadline: kind.deadline}
@@ -758,54 +785,96 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 	// A call sent is waited for, whatever asked for it: an answer not taken
 	// would leave the tasks it ran unacknowledged, and the next call would
 	// run them again.
-	a, err := s.link.Call(context.WithoutCancel(ctx), t.ModuleName, call)
+	a, err := link.Call(context.WithoutCancel(ctx), t.ModuleName, call)
 	if err == nil {
 		s.noteLogins(ctx, t, creds, a.Logins)
 	}
+	if done, err := s.delegateFailed(ctx, t, err); done {
+		return nil, true, err
+	}
 	switch {
 	case errors.Is(err, channellink.ErrNoLink):
-		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetNoChannel, fmt.Sprintf("no %s channel has its control link open", t.ModuleName)))
+		return nil, true, s.saveCall(ctx, s.failed(t, models.TargetNoChannel, fmt.Sprintf("no %s channel has its control link open", t.ModuleName)))
 	case errors.Is(err, channellink.ErrLinkDropped):
-		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetUnreachable, "the channel's control link dropped during the call"))
+		return nil, true, s.saveCall(ctx, s.failed(t, models.TargetUnreachable, "the channel's control link dropped during the call"))
 	case err != nil:
-		return nil, "", false, err
+		return nil, false, err
 	case a.Failure != nil && refusal(a.Failure.Kind):
 		// The target refused the channel (a login, a host key): calling it
 		// again changes nothing until it is edited.
-		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetRefused,
+		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetRefused,
 			fmt.Sprintf("%s: %s", protocol.LinkFailName(a.Failure.Kind), a.Failure.Msg)))
 	case a.Failure != nil:
-		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetUnreachable,
+		return nil, true, s.saveCall(ctx, s.failed(t, models.TargetUnreachable,
 			fmt.Sprintf("%s: %s", protocol.LinkFailName(a.Failure.Kind), a.Failure.Msg)))
 	case a.ID == nil:
-		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, notTheMinion(a.Status, a.Excerpt)))
+		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, notTheMinion(a.Status, a.Excerpt)))
 	}
 	// The minion answers under the id it was called under, sealed with the
 	// same keys, and answers this message: anything else is not it.
 	if !bytes.Equal(a.ID, id[:]) {
-		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer under another id"))
+		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer under another id"))
 	}
 	opened, err := from.open(id, a.Data)
 	if err != nil {
-		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, notTheMinion(a.Status, nil)+": an answer that does not open"))
+		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, notTheMinion(a.Status, nil)+": an answer that does not open"))
 	}
 	var msg protocol.MinionMessage
 	if err := protocol.UnmarshalCBOR(opened, &msg); err != nil || protocol.ValidateMessageHead(msg.V, msg.ID, msg.Re, len(msg.Items)) != nil ||
 		!bytes.Equal(msg.Re, msgID) {
-		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer that is not one to this call"))
+		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer that is not one to this call"))
 	}
 	// A minion whose clock is far from core's refuses the call as stale, as
 	// it would a replay: nothing goes until the clocks agree.
 	for _, raw := range msg.Items {
 		var e protocol.ErrItem
 		if protocol.ItemType(raw) == protocol.ItemErr && protocol.UnmarshalCBOR(raw, &e) == nil && e.Code == protocol.ErrItemStale {
-			return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetRefused,
+			return nil, true, s.saveCall(ctx, s.answered(t, models.TargetRefused,
 				"the minion refused the call as stale: its clock is far from core's ("+e.Msg+")"))
 		}
 	}
-	// The address the channel reached the minion at: its external one.
-	return &msg, peerAddress(a.Peer), false, nil
+	answer := &callAnswer{msg: &msg, peer: peerAddress(a.Peer)}
+	if dl, ok := link.(*delegateLink); ok {
+		answer.via = dl.via
+	}
+	return answer, false, nil
 }
+
+// delegateMismatch says why t cannot be called as it is: through a
+// delegate while its kind is agentless (its channel is the minion, and
+// keys never go to a minion), or through none while only delegates carry
+// its kind; "" when it can.
+func delegateMismatch(t *models.MinionTarget, kind callKind) string {
+	switch {
+	case t.DelegateID != nil && kind.agentless:
+		return "an agentless kind is not delegated: remove the target's delegate"
+	case t.DelegateID == nil && kind.delegatedOnly:
+		return fmt.Sprintf("only delegates carry %s %s connections: name the target's delegate", t.ModuleName, t.Kind)
+	}
+	return ""
+}
+
+// delegateFailed stores what a call or an open through t's delegate came
+// to when the delegate could not take it: done when it did (or core could
+// not store it, err).
+func (s *Service) delegateFailed(ctx context.Context, t *models.MinionTarget, err error) (done bool, _ error) {
+	switch {
+	case errors.Is(err, ErrNoDelegateTask):
+		// Called again once its minion has the task core queued, and in a
+		// while whatever happens.
+		now := s.now()
+		next := now.Add(delegateWaitRetry)
+		t.State, t.StateDetail, t.StateAt, t.NextCallAt = models.TargetConnecting, clip(err.Error(), 400), now, &next
+		return true, s.saveCall(ctx, t)
+	case errors.Is(err, ErrNotADelegate):
+		return true, s.saveCall(ctx, s.stateOnly(t, models.TargetRefused, clip(err.Error(), 400)))
+	}
+	return false, nil
+}
+
+// delegateWaitRetry is how soon a target waiting for its delegate's task is
+// called again by itself.
+const delegateWaitRetry = 15 * time.Second
 
 // refusal reports whether a link failure is the target refusing the
 // channel (the login, the host key), which no retry changes until the

@@ -19,6 +19,7 @@ import { problemsFromError } from "@/components/endpoints/endpoint-values"
 import type { BuildBindConnectionsQuery } from "@/graphql/gql/graphql"
 import { useAddMinionTarget, useUpdateMinionTarget } from "@/graphql/hooks/minion-targets"
 import { TARGET_POLICIES, TARGET_POLICY_HELP, TARGET_POLICY_LABEL, targetValues, type Target } from "./target-values"
+import { DelegatePicker, type DelegateSession } from "./delegate-picker"
 
 export type BindConnection = NonNullable<BuildBindConnectionsQuery["build"]>["bindConnections"][number]
 
@@ -38,6 +39,7 @@ export interface TakenOverSession {
 export function TargetDialog({
   open,
   onClose,
+  operationId,
   buildId,
   connections,
   target,
@@ -45,6 +47,7 @@ export function TargetDialog({
 }: {
   open: boolean
   onClose: () => void
+  operationId: string
   buildId: string
   /** The build's bind connections: what a new target can be of. */
   connections: readonly BindConnection[]
@@ -60,6 +63,7 @@ export function TargetDialog({
         {open && (
           <TargetForm
             key={target?.id ?? "new"}
+            operationId={operationId}
             buildId={buildId}
             connections={connections}
             target={target}
@@ -79,12 +83,14 @@ function draftsFor(fields: readonly FieldDef[], values: Record<string, unknown>)
 }
 
 function TargetForm({
+  operationId,
   buildId,
   connections,
   target,
   session,
   onClose,
 }: {
+  operationId: string
   buildId: string
   connections: readonly BindConnection[]
   target: Target | null
@@ -100,6 +106,9 @@ function TargetForm({
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() => draftsFor(fields, target ? targetValues(target) : {}))
   const [retries, setRetries] = useState(target?.retries ?? true)
   const [policy, setPolicy] = useState<string>(target?.policy ?? "on-demand")
+  // The session whose minion carries its calls and opens; none: an
+  // instance of the channel.
+  const [delegate, setDelegate] = useState<DelegateSession | null>(target?.delegate ?? null)
   const [submitted, setSubmitted] = useState(false)
   // A target that needs editing opens with what no longer fits, on its fields.
   const [serverProblems, setServerProblems] = useState<Record<string, string>>(() =>
@@ -119,6 +128,10 @@ function TargetForm({
   // A minion core keeps a connection to (bind-persistent): who opens it.
   const persistent = conn?.kind === "bind-persistent"
   const errorOf = (key: string) => (submitted ? errors[key] : undefined) ?? serverProblems[key]
+  // Only delegates carry a delegated-only kind; an agentless kind's channel
+  // is the minion, so it has none.
+  const delegateMissing = !!conn?.delegatedOnly && !delegate
+  const delegateError = (submitted && delegateMissing ? "Only delegates carry this kind: pick one." : undefined) ?? serverProblems.delegate
 
   function pick(next: number) {
     setPlace(next)
@@ -131,16 +144,17 @@ function TargetForm({
   async function save() {
     setSubmitted(true)
     setError(null)
-    if (!conn || conn.problem || Object.keys(errors).length > 0 || pending) return
+    if (!conn || conn.problem || Object.keys(errors).length > 0 || delegateMissing || pending) return
+    const delegateId = conn.agentless ? null : (delegate?.id ?? null)
     try {
       if (target) {
-        await update.mutateAsync({ id: target.id, input: { values, retries, policy: persistent ? policy : null } })
+        await update.mutateAsync({ id: target.id, input: { values, retries, policy: persistent ? policy : null, delegateId } })
         toast.success("Target saved", { description: target.state === "connected" ? undefined : "Core calls it again now." })
       } else {
         await add.mutateAsync({
           buildId,
           conn: conn.place,
-          input: { values, retries, policy: persistent ? policy : null },
+          input: { values, retries, policy: persistent ? policy : null, delegateId },
           sessionId: session?.id ?? null,
         })
         toast.success("Target added", {
@@ -153,7 +167,9 @@ function TargetForm({
     } catch (err) {
       const problems = problemsFromError(err)
       setServerProblems(problems)
-      const unplaced = Object.entries(problems).filter(([key]) => key === "" || !fields.some((f) => f.key === key))
+      const unplaced = Object.entries(problems).filter(
+        ([key]) => key === "" || (key !== "delegate" && !fields.some((f) => f.key === key)),
+      )
       setError(
         unplaced.length > 0
           ? unplaced.map(([key, message]) => (key ? `${key}: ${message}` : message)).join("; ")
@@ -244,6 +260,39 @@ function TargetForm({
         ))}
 
         <SettingsSection title={persistent ? "Connection" : "Calls"}>
+          {conn && !conn.agentless && (
+            <SettingRow
+              id="target-delegate"
+              label="Through a delegate"
+              required={conn.delegatedOnly}
+              error={delegateError}
+              help={
+                conn.delegatedOnly
+                  ? `Only delegates carry ${conn.moduleName} ${conn.kind} connections: a session whose minion serves them on its host, while a delegate task of its runs (core starts one when none does).`
+                  : `A session whose minion serves ${conn.moduleName} ${conn.kind} connections on its host carries this target's ${persistent ? "opens" : "calls"}, while a delegate task of its runs (core starts one when none does). None: an instance of the channel does.`
+              }
+            >
+              <DelegatePicker
+                id="target-delegate"
+                operationId={operationId}
+                moduleName={conn.moduleName}
+                kind={conn.kind}
+                version={conn.version}
+                value={delegate}
+                onChange={(s) => {
+                  setDelegate(s)
+                  setServerProblems((prev) => {
+                    const next = { ...prev }
+                    delete next.delegate
+                    return next
+                  })
+                }}
+                required={conn.delegatedOnly}
+                disabled={pending}
+                invalid={!!delegateError}
+              />
+            </SettingRow>
+          )}
           {persistent && (
             <SettingRow id="target-policy" label="Opened by" help={TARGET_POLICY_HELP[policy]}>
               <Select value={policy} onValueChange={(v) => v && setPolicy(v)} disabled={pending}>

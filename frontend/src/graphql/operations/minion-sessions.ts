@@ -63,6 +63,12 @@ export const MinionSessionFields = graphql(`
       lastSeen
       count
     }
+    via {
+      sessionId
+      number
+      taskId
+    }
+    viaSince
     version
     x
     createdAt

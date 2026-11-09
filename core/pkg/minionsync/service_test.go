@@ -130,6 +130,12 @@ func (f *fakeSessions) CheckIn(_ context.Context, id uuid.UUID, c repository.Min
 		if c.Untimed {
 			r.LateAt, r.LostAt = nil, nil
 		}
+		switch since := c.ViaSince; {
+		case c.Path && len(c.Via) > 0:
+			r.Via, r.ViaSince = c.Via, &since
+		case c.Path:
+			r.Via, r.ViaSince = nil, nil
+		}
 	}
 	return nil
 }
@@ -276,12 +282,21 @@ type fakeBus struct {
 	eventbus.NopEventBus
 	mu     sync.Mutex
 	topics []eventbus.Topic
+	events []eventbus.Event
 }
 
 func (f *fakeBus) Publish(e eventbus.Event) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.topics = append(f.topics, e.Topic)
+	f.events = append(f.events, e)
+}
+
+// published are the events published so far.
+func (f *fakeBus) published() []eventbus.Event {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]eventbus.Event(nil), f.events...)
 }
 
 // fakeCache keeps SetNX's keys; the rest of cache.Cache is unused here.

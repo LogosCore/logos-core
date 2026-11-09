@@ -128,8 +128,8 @@ func (r *queryResolver) MinionIdentities(ctx context.Context, sessionID string, 
 }
 
 // MinionSessions is the resolver for the minionSessions field.
-func (r *queryResolver) MinionSessions(ctx context.Context, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
-	return r.MinionSessionResolver.MinionSessions(ctx, operationID, archived, folderID, search, filters, sort, first, after, last, before)
+func (r *queryResolver) MinionSessions(ctx context.Context, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, delegatesFor *model.MinionDelegatesForInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
+	return r.MinionSessionResolver.MinionSessions(ctx, operationID, archived, folderID, search, filters, sort, delegatesFor, first, after, last, before)
 }
 
 // MinionSession is the resolver for the minionSession field.

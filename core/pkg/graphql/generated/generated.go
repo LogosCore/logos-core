@@ -39,6 +39,7 @@ type ResolverRoot interface {
 	Hash() HashResolver
 	Host() HostResolver
 	MinionSession() MinionSessionResolver
+	MinionSessionVia() MinionSessionViaResolver
 	MinionTarget() MinionTargetResolver
 	MinionTask() MinionTaskResolver
 	Module() ModuleResolver
@@ -140,12 +141,15 @@ type ComplexityRoot struct {
 	}
 
 	BindConnection struct {
-		Fields     func(childComplexity int) int
-		Kind       func(childComplexity int) int
-		ModuleName func(childComplexity int) int
-		Name       func(childComplexity int) int
-		Place      func(childComplexity int) int
-		Problem    func(childComplexity int) int
+		Agentless     func(childComplexity int) int
+		DelegatedOnly func(childComplexity int) int
+		Fields        func(childComplexity int) int
+		Kind          func(childComplexity int) int
+		ModuleName    func(childComplexity int) int
+		Name          func(childComplexity int) int
+		Place         func(childComplexity int) int
+		Problem       func(childComplexity int) int
+		Version       func(childComplexity int) int
 	}
 
 	Build struct {
@@ -216,6 +220,7 @@ type ComplexityRoot struct {
 		Params      func(childComplexity int) int
 		Required    func(childComplexity int) int
 		Result      func(childComplexity int) int
+		Serves      func(childComplexity int) int
 		Targets     func(childComplexity int) int
 	}
 
@@ -261,6 +266,12 @@ type ComplexityRoot struct {
 		PersistedSessions func(childComplexity int) int
 		Targets           func(childComplexity int) int
 		Version           func(childComplexity int) int
+	}
+
+	BuildServe struct {
+		Kinds      func(childComplexity int) int
+		ModuleName func(childComplexity int) int
+		Versions   func(childComplexity int) int
 	}
 
 	BuildStage struct {
@@ -647,6 +658,25 @@ type ComplexityRoot struct {
 		Place      func(childComplexity int) int
 	}
 
+	MinionDelegate struct {
+		Carried     func(childComplexity int) int
+		Connections func(childComplexity int) int
+		Held        func(childComplexity int) int
+		Serves      func(childComplexity int) int
+		StopIdle    func(childComplexity int) int
+		UsedAt      func(childComplexity int) int
+		Waiting     func(childComplexity int) int
+	}
+
+	MinionDelegateConnection struct {
+		Kind       func(childComplexity int) int
+		ModuleName func(childComplexity int) int
+		N          func(childComplexity int) int
+		OpenedAt   func(childComplexity int) int
+		Peer       func(childComplexity int) int
+		Session    func(childComplexity int) int
+	}
+
 	MinionFeedback struct {
 		At         func(childComplexity int) int
 		Code       func(childComplexity int) int
@@ -814,6 +844,8 @@ type ComplexityRoot struct {
 		Target           func(childComplexity int) int
 		User             func(childComplexity int) int
 		Version          func(childComplexity int) int
+		Via              func(childComplexity int) int
+		ViaSince         func(childComplexity int) int
 		X                func(childComplexity int) int
 	}
 
@@ -893,6 +925,13 @@ type ComplexityRoot struct {
 		Direction func(childComplexity int) int
 	}
 
+	MinionSessionVia struct {
+		Number    func(childComplexity int) int
+		Session   func(childComplexity int) int
+		SessionID func(childComplexity int) int
+		TaskID    func(childComplexity int) int
+	}
+
 	MinionSessionsLayout struct {
 		Columns      func(childComplexity int) int
 		ConsoleSplit func(childComplexity int) int
@@ -920,6 +959,8 @@ type ComplexityRoot struct {
 		ConnName         func(childComplexity int) int
 		CreatedAt        func(childComplexity int) int
 		CreatedBy        func(childComplexity int) int
+		Delegate         func(childComplexity int) int
+		DelegateID       func(childComplexity int) int
 		Failures         func(childComplexity int) int
 		ID               func(childComplexity int) int
 		Kind             func(childComplexity int) int
@@ -973,6 +1014,7 @@ type ComplexityRoot struct {
 		DataProblem       func(childComplexity int) int
 		DataSize          func(childComplexity int) int
 		DataTruncated     func(childComplexity int) int
+		Delegate          func(childComplexity int) int
 		Document          func(childComplexity int) int
 		DoneAt            func(childComplexity int) int
 		Err               func(childComplexity int) int
@@ -1563,7 +1605,7 @@ type ComplexityRoot struct {
 		MinionSessionCount                 func(childComplexity int, operationID string) int
 		MinionSessionFolders               func(childComplexity int, operationID string) int
 		MinionSessionValues                func(childComplexity int, operationID string, column string) int
-		MinionSessions                     func(childComplexity int, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) int
+		MinionSessions                     func(childComplexity int, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, delegatesFor *model.MinionDelegatesForInput, first *int, after *string, last *int, before *string) int
 		MinionSessionsLayout               func(childComplexity int) int
 		MinionTarget                       func(childComplexity int, id string) int
 		MinionTargets                      func(childComplexity int, operationID string, search *string, buildID *string, states []string, first *int, after *string, last *int, before *string) int
@@ -2152,8 +2194,13 @@ type MinionSessionResolver interface {
 
 	BindTarget(ctx context.Context, obj *model.MinionSession) (*model.MinionTarget, error)
 }
+type MinionSessionViaResolver interface {
+	Session(ctx context.Context, obj *model.MinionSessionVia) (*model.MinionSession, error)
+}
 type MinionTargetResolver interface {
 	Session(ctx context.Context, obj *model.MinionTarget) (*model.MinionSession, error)
+
+	Delegate(ctx context.Context, obj *model.MinionTarget) (*model.MinionSession, error)
 }
 type MinionTaskResolver interface {
 	Feedback(ctx context.Context, obj *model.MinionTask) ([]*model.MinionFeedback, error)
@@ -2168,6 +2215,7 @@ type MinionTaskResolver interface {
 	File(ctx context.Context, obj *model.MinionTask) (*model.MinionFile, error)
 
 	Document(ctx context.Context, obj *model.MinionTask) (string, error)
+	Delegate(ctx context.Context, obj *model.MinionTask) (*model.MinionDelegate, error)
 }
 type ModuleResolver interface {
 	RegisteredAt(ctx context.Context, obj *models.Module) (string, error)
@@ -2354,7 +2402,7 @@ type QueryResolver interface {
 	MinionSessionCount(ctx context.Context, operationID string) (int, error)
 	MinionFeedback(ctx context.Context, sessionID string, level *string, search *string, after *string, first *int) (*model.MinionFeedbackPage, error)
 	MinionIdentities(ctx context.Context, sessionID string, after *string, first *int) (*model.MinionIdentityPage, error)
-	MinionSessions(ctx context.Context, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
+	MinionSessions(ctx context.Context, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, delegatesFor *model.MinionDelegatesForInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
 	MinionSession(ctx context.Context, id string) (*model.MinionSession, error)
 	MinionSessionValues(ctx context.Context, operationID string, column string) ([]string, error)
 	MinionSessionsLayout(ctx context.Context) (*model.MinionSessionsLayout, error)
@@ -2862,6 +2910,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.AgentKeyWithSecret.Token(childComplexity), true
 
+	case "BindConnection.agentless":
+		if e.ComplexityRoot.BindConnection.Agentless == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BindConnection.Agentless(childComplexity), true
+	case "BindConnection.delegatedOnly":
+		if e.ComplexityRoot.BindConnection.DelegatedOnly == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BindConnection.DelegatedOnly(childComplexity), true
 	case "BindConnection.fields":
 		if e.ComplexityRoot.BindConnection.Fields == nil {
 			break
@@ -2898,6 +2958,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BindConnection.Problem(childComplexity), true
+	case "BindConnection.version":
+		if e.ComplexityRoot.BindConnection.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BindConnection.Version(childComplexity), true
 
 	case "Build.artifact":
 		if e.ComplexityRoot.Build.Artifact == nil {
@@ -3216,6 +3282,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildCommand.Result(childComplexity), true
+	case "BuildCommand.serves":
+		if e.ComplexityRoot.BuildCommand.Serves == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildCommand.Serves(childComplexity), true
 	case "BuildCommand.targets":
 		if e.ComplexityRoot.BuildCommand.Targets == nil {
 			break
@@ -3384,6 +3456,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildSchema.Version(childComplexity), true
+
+	case "BuildServe.kinds":
+		if e.ComplexityRoot.BuildServe.Kinds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildServe.Kinds(childComplexity), true
+	case "BuildServe.moduleName":
+		if e.ComplexityRoot.BuildServe.ModuleName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildServe.ModuleName(childComplexity), true
+	case "BuildServe.versions":
+		if e.ComplexityRoot.BuildServe.Versions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildServe.Versions(childComplexity), true
 
 	case "BuildStage.core":
 		if e.ComplexityRoot.BuildStage.Core == nil {
@@ -4975,6 +5066,86 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MinionConnection.Place(childComplexity), true
 
+	case "MinionDelegate.carried":
+		if e.ComplexityRoot.MinionDelegate.Carried == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegate.Carried(childComplexity), true
+	case "MinionDelegate.connections":
+		if e.ComplexityRoot.MinionDelegate.Connections == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegate.Connections(childComplexity), true
+	case "MinionDelegate.held":
+		if e.ComplexityRoot.MinionDelegate.Held == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegate.Held(childComplexity), true
+	case "MinionDelegate.serves":
+		if e.ComplexityRoot.MinionDelegate.Serves == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegate.Serves(childComplexity), true
+	case "MinionDelegate.stopIdle":
+		if e.ComplexityRoot.MinionDelegate.StopIdle == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegate.StopIdle(childComplexity), true
+	case "MinionDelegate.usedAt":
+		if e.ComplexityRoot.MinionDelegate.UsedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegate.UsedAt(childComplexity), true
+	case "MinionDelegate.waiting":
+		if e.ComplexityRoot.MinionDelegate.Waiting == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegate.Waiting(childComplexity), true
+
+	case "MinionDelegateConnection.kind":
+		if e.ComplexityRoot.MinionDelegateConnection.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegateConnection.Kind(childComplexity), true
+	case "MinionDelegateConnection.moduleName":
+		if e.ComplexityRoot.MinionDelegateConnection.ModuleName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegateConnection.ModuleName(childComplexity), true
+	case "MinionDelegateConnection.n":
+		if e.ComplexityRoot.MinionDelegateConnection.N == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegateConnection.N(childComplexity), true
+	case "MinionDelegateConnection.openedAt":
+		if e.ComplexityRoot.MinionDelegateConnection.OpenedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegateConnection.OpenedAt(childComplexity), true
+	case "MinionDelegateConnection.peer":
+		if e.ComplexityRoot.MinionDelegateConnection.Peer == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegateConnection.Peer(childComplexity), true
+	case "MinionDelegateConnection.session":
+		if e.ComplexityRoot.MinionDelegateConnection.Session == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionDelegateConnection.Session(childComplexity), true
+
 	case "MinionFeedback.at":
 		if e.ComplexityRoot.MinionFeedback.At == nil {
 			break
@@ -5767,6 +5938,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.Version(childComplexity), true
+	case "MinionSession.via":
+		if e.ComplexityRoot.MinionSession.Via == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.Via(childComplexity), true
+	case "MinionSession.viaSince":
+		if e.ComplexityRoot.MinionSession.ViaSince == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.ViaSince(childComplexity), true
 	case "MinionSession.x":
 		if e.ComplexityRoot.MinionSession.X == nil {
 			break
@@ -6043,6 +6226,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MinionSessionSort.Direction(childComplexity), true
 
+	case "MinionSessionVia.number":
+		if e.ComplexityRoot.MinionSessionVia.Number == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionVia.Number(childComplexity), true
+	case "MinionSessionVia.session":
+		if e.ComplexityRoot.MinionSessionVia.Session == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionVia.Session(childComplexity), true
+	case "MinionSessionVia.sessionId":
+		if e.ComplexityRoot.MinionSessionVia.SessionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionVia.SessionID(childComplexity), true
+	case "MinionSessionVia.taskId":
+		if e.ComplexityRoot.MinionSessionVia.TaskID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionVia.TaskID(childComplexity), true
+
 	case "MinionSessionsLayout.columns":
 		if e.ComplexityRoot.MinionSessionsLayout.Columns == nil {
 			break
@@ -6165,6 +6373,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTarget.CreatedBy(childComplexity), true
+	case "MinionTarget.delegate":
+		if e.ComplexityRoot.MinionTarget.Delegate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTarget.Delegate(childComplexity), true
+	case "MinionTarget.delegateId":
+		if e.ComplexityRoot.MinionTarget.DelegateID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTarget.DelegateID(childComplexity), true
 	case "MinionTarget.failures":
 		if e.ComplexityRoot.MinionTarget.Failures == nil {
 			break
@@ -6415,6 +6635,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.DataTruncated(childComplexity), true
+	case "MinionTask.delegate":
+		if e.ComplexityRoot.MinionTask.Delegate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.Delegate(childComplexity), true
 	case "MinionTask.document":
 		if e.ComplexityRoot.MinionTask.Document == nil {
 			break
@@ -9942,7 +10168,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MinionSessions(childComplexity, args["operationId"].(string), args["archived"].(*bool), args["folderId"].(*string), args["search"].(*string), args["filters"].([]*model.MinionSessionFilterInput), args["sort"].(*model.MinionSessionSortInput), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
+		return e.ComplexityRoot.Query.MinionSessions(childComplexity, args["operationId"].(string), args["archived"].(*bool), args["folderId"].(*string), args["search"].(*string), args["filters"].([]*model.MinionSessionFilterInput), args["sort"].(*model.MinionSessionSortInput), args["delegatesFor"].(*model.MinionDelegatesForInput), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.minionSessionsLayout":
 		if e.ComplexityRoot.Query.MinionSessionsLayout == nil {
 			break
@@ -12487,6 +12713,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputImportLocalPreferencesInput,
 		ec.unmarshalInputLoginInput,
 		ec.unmarshalInputMarkHashCrackedInput,
+		ec.unmarshalInputMinionDelegatesForInput,
 		ec.unmarshalInputMinionSessionColumnWidthInput,
 		ec.unmarshalInputMinionSessionFilterInput,
 		ec.unmarshalInputMinionSessionFolderChoiceInput,
@@ -13011,8 +13238,20 @@ type BuildCommand {
   # The connection kinds it works over (reverse-call, ...): core refuses a
   # task of it on a session whose minion uses another; empty: every kind.
   kinds: [String!]!
+  # A delegate command's (action delegate or reverse_delegate): the channel
+  # kinds its minions serve for other minions (docs:
+  # contracts/minion-messages/delegation); empty for any other.
+  serves: [BuildServe!]!
   # What a task of the command takes.
   params: [ModuleField!]!
+}
+
+# A channel kind a delegate command's minions serve: its connection schema
+# versions and connection kinds.
+type BuildServe {
+  moduleName: String!
+  versions: [Int!]!
+  kinds: [String!]!
 }
 
 type BuildChannel {
@@ -14040,6 +14279,81 @@ extend type Subscription {
   # reconnect to pick up the new membership set — same constraint as
   # operationChanged.
   myCredentialChanged(operationIds: [ID!]): CredentialEvent!
+}
+`, BuiltIn: false},
+	{Name: "../schema/delegates.graphql", Input: `# =============================================================================
+# Delegates — minions that carry other minions' messages
+# =============================================================================
+#
+# A delegate is a session whose minion serves a channel kind's transport on
+# its host while a task of its runs (a command whose action is delegate or
+# reverse_delegate), carrying what a channel module would say to core in
+# delegate items (docs: contracts/minion-messages/delegation). What goes
+# through one is held in memory, as a tunnel's streams are.
+
+# What a delegate task carries.
+type MinionDelegate {
+  # The channel kinds its command serves.
+  serves: [BuildServe!]!
+  # Whether core holds what goes through it: false when nothing has since
+  # core started (or the task ended).
+  held: Boolean!
+  # Core stops it once nothing has gone through it this long; null: never.
+  stopIdle: String
+  # When an item last went through it, either way.
+  usedAt: String
+  # The requests and frames it carried.
+  carried: Int!
+  # Steps and frames waiting for its minion.
+  waiting: Int!
+  # The connections open through it.
+  connections: [MinionDelegateConnection!]!
+}
+
+# A connection through a delegate.
+type MinionDelegateConnection {
+  # Its number in the task.
+  n: Int!
+  moduleName: String!
+  kind: String!
+  # The minion's address as the delegate saw it.
+  peer: String
+  openedAt: String!
+  # The session over it, once its minion spoke.
+  session: MinionSession
+}
+
+# A delegate on a session's way to core: the session whose task carried
+# its latest message.
+type MinionSessionVia {
+  sessionId: ID!
+  # The delegate's session number.
+  number: Int!
+  taskId: ID!
+  # The delegate's session; null once removed.
+  session: MinionSession
+}
+
+input MinionDelegatesForInput {
+  moduleName: String!
+  kind: String!
+  # The connection schema version the target's build connection was built
+  # against.
+  version: Int!
+}
+
+extend type MinionTask {
+  # A delegate task's: what it serves and carries; null for any other.
+  delegate: MinionDelegate
+}
+
+extend type MinionSession {
+  # The delegates its latest message came through, nearest first (the
+  # delegate whose task carried it, then the ones that delegate's own
+  # messages came through); empty: a channel's instance brought it.
+  via: [MinionSessionVia!]!
+  # When its messages began to come that way; null while via is empty.
+  viaSince: String
 }
 `, BuiltIn: false},
 	{Name: "../schema/file_browser.graphql", Input: `# The file browser (docs: contracts/file-browser.md): what core's minions
@@ -15269,6 +15583,9 @@ extend type Query {
     search: String
     filters: [MinionSessionFilterInput!]
     sort: MinionSessionSortInput
+    # The sessions whose minions can be the delegate of a target of this
+    # channel kind: their builds have a delegate command serving it.
+    delegatesFor: MinionDelegatesForInput
     first: Int = 20
     after: String
     last: Int
@@ -15436,6 +15753,11 @@ type MinionTarget {
   # The session the minion's hello opened; null until then.
   sessionId: ID
   session: MinionSession
+  # The session whose minion carries its calls and opens, a delegate
+  # serving its channel kind (docs: contracts/minion-messages/delegation);
+  # null: an instance of the channel does.
+  delegateId: ID
+  delegate: MinionSession
   # Calls that failed in a row, and when the first of them was.
   failures: Int!
   unreachableSince: String
@@ -15470,6 +15792,13 @@ type BindConnection {
   kind: String!
   # The channel's target fields for its kind: what a target fills in.
   fields: [ModuleField!]!
+  # The channel's connection schema version it was built against: what a
+  # delegate serving it must serve (minionSessions' delegatesFor).
+  version: Int!
+  # Only delegates carry the kind: a target names one. An agentless kind's
+  # channel is the minion: a target names none.
+  delegatedOnly: Boolean!
+  agentless: Boolean!
   # Why no target can be added to it now; null when one can.
   problem: String
 }
@@ -15482,6 +15811,10 @@ input MinionTargetInput {
   # A bind-persistent target's policy (on-demand, manual, always); null
   # keeps a target's, on-demand for a new one.
   policy: String
+  # Its delegate: a session of the operation whose minion serves the
+  # target's channel kind (minionSessions' delegatesFor lists them); null:
+  # none, an instance of the channel carries it. An update sets it too.
+  delegateId: ID
 }
 
 type MinionTargetEvent {
@@ -15597,7 +15930,8 @@ type MinionTask {
   issuedBy: ID!
   # The operator's username; null when the user is gone.
   issuedByName: String
-  # QUEUED (waiting for the minion to ask), SENT, RUNNING (output coming),
+  # QUEUED (waiting for the minion to ask), SENT (not acked yet), RUNNING
+  # (the minion has it: acked, or its output coming),
   # DONE (the minion did it), FAILED or CANCELLED.
   state: String!
   queuedAt: String!
@@ -20852,26 +21186,31 @@ func (ec *executionContext) field_Query_minionSessions_args(ctx context.Context,
 		return nil, err
 	}
 	args["sort"] = arg5
-	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "delegatesFor", ec.unmarshalOMinionDelegatesForInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionDelegatesForInput)
 	if err != nil {
 		return nil, err
 	}
-	args["first"] = arg6
-	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	args["delegatesFor"] = arg6
+	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg7
-	arg8, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	args["first"] = arg7
+	arg8, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
-	args["last"] = arg8
-	arg9, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	args["after"] = arg8
+	arg9, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["before"] = arg9
+	args["last"] = arg9
+	arg10, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg10
 	return args, nil
 }
 
@@ -24237,6 +24576,93 @@ func (ec *executionContext) fieldContext_BindConnection_fields(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _BindConnection_version(ctx context.Context, field graphql.CollectedField, obj *model.BindConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BindConnection_version,
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BindConnection_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BindConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BindConnection_delegatedOnly(ctx context.Context, field graphql.CollectedField, obj *model.BindConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BindConnection_delegatedOnly,
+		func(ctx context.Context) (any, error) {
+			return obj.DelegatedOnly, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BindConnection_delegatedOnly(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BindConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BindConnection_agentless(ctx context.Context, field graphql.CollectedField, obj *model.BindConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BindConnection_agentless,
+		func(ctx context.Context) (any, error) {
+			return obj.Agentless, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BindConnection_agentless(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BindConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BindConnection_problem(ctx context.Context, field graphql.CollectedField, obj *model.BindConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25191,6 +25617,12 @@ func (ec *executionContext) fieldContext_Build_bindConnections(_ context.Context
 				return ec.fieldContext_BindConnection_kind(ctx, field)
 			case "fields":
 				return ec.fieldContext_BindConnection_fields(ctx, field)
+			case "version":
+				return ec.fieldContext_BindConnection_version(ctx, field)
+			case "delegatedOnly":
+				return ec.fieldContext_BindConnection_delegatedOnly(ctx, field)
+			case "agentless":
+				return ec.fieldContext_BindConnection_agentless(ctx, field)
 			case "problem":
 				return ec.fieldContext_BindConnection_problem(ctx, field)
 			}
@@ -25885,6 +26317,43 @@ func (ec *executionContext) fieldContext_BuildCommand_kinds(_ context.Context, f
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildCommand_serves(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildCommand_serves,
+		func(ctx context.Context) (any, error) {
+			return obj.Serves, nil
+		},
+		nil,
+		ec.marshalNBuildServe2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildServeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildCommand_serves(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildCommand",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "moduleName":
+				return ec.fieldContext_BuildServe_moduleName(ctx, field)
+			case "versions":
+				return ec.fieldContext_BuildServe_versions(ctx, field)
+			case "kinds":
+				return ec.fieldContext_BuildServe_kinds(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type BuildServe", field.Name)
 		},
 	}
 	return fc, nil
@@ -26801,6 +27270,8 @@ func (ec *executionContext) fieldContext_BuildSchema_commands(_ context.Context,
 				return ec.fieldContext_BuildCommand_action(ctx, field)
 			case "kinds":
 				return ec.fieldContext_BuildCommand_kinds(ctx, field)
+			case "serves":
+				return ec.fieldContext_BuildCommand_serves(ctx, field)
 			case "params":
 				return ec.fieldContext_BuildCommand_params(ctx, field)
 			}
@@ -26892,6 +27363,93 @@ func (ec *executionContext) fieldContext_BuildSchema_maxTasks(_ context.Context,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildServe_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.BuildServe) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildServe_moduleName,
+		func(ctx context.Context) (any, error) {
+			return obj.ModuleName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildServe_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildServe",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildServe_versions(ctx context.Context, field graphql.CollectedField, obj *model.BuildServe) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildServe_versions,
+		func(ctx context.Context) (any, error) {
+			return obj.Versions, nil
+		},
+		nil,
+		ec.marshalNInt2ᚕintᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildServe_versions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildServe",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildServe_kinds(ctx context.Context, field graphql.CollectedField, obj *model.BuildServe) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildServe_kinds,
+		func(ctx context.Context) (any, error) {
+			return obj.Kinds, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildServe_kinds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildServe",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -35677,6 +36235,529 @@ func (ec *executionContext) fieldContext_MinionConnection_params(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionDelegate_serves(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegate_serves,
+		func(ctx context.Context) (any, error) {
+			return obj.Serves, nil
+		},
+		nil,
+		ec.marshalNBuildServe2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildServeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegate_serves(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegate",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "moduleName":
+				return ec.fieldContext_BuildServe_moduleName(ctx, field)
+			case "versions":
+				return ec.fieldContext_BuildServe_versions(ctx, field)
+			case "kinds":
+				return ec.fieldContext_BuildServe_kinds(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type BuildServe", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegate_held(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegate_held,
+		func(ctx context.Context) (any, error) {
+			return obj.Held, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegate_held(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegate",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegate_stopIdle(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegate_stopIdle,
+		func(ctx context.Context) (any, error) {
+			return obj.StopIdle, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegate_stopIdle(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegate",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegate_usedAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegate_usedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.UsedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegate_usedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegate",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegate_carried(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegate_carried,
+		func(ctx context.Context) (any, error) {
+			return obj.Carried, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegate_carried(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegate",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegate_waiting(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegate_waiting,
+		func(ctx context.Context) (any, error) {
+			return obj.Waiting, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegate_waiting(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegate",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegate_connections(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegate_connections,
+		func(ctx context.Context) (any, error) {
+			return obj.Connections, nil
+		},
+		nil,
+		ec.marshalNMinionDelegateConnection2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionDelegateConnectionᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegate_connections(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegate",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "n":
+				return ec.fieldContext_MinionDelegateConnection_n(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_MinionDelegateConnection_moduleName(ctx, field)
+			case "kind":
+				return ec.fieldContext_MinionDelegateConnection_kind(ctx, field)
+			case "peer":
+				return ec.fieldContext_MinionDelegateConnection_peer(ctx, field)
+			case "openedAt":
+				return ec.fieldContext_MinionDelegateConnection_openedAt(ctx, field)
+			case "session":
+				return ec.fieldContext_MinionDelegateConnection_session(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionDelegateConnection", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegateConnection_n(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegateConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegateConnection_n,
+		func(ctx context.Context) (any, error) {
+			return obj.N, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegateConnection_n(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegateConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegateConnection_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegateConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegateConnection_moduleName,
+		func(ctx context.Context) (any, error) {
+			return obj.ModuleName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegateConnection_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegateConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegateConnection_kind(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegateConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegateConnection_kind,
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegateConnection_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegateConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegateConnection_peer(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegateConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegateConnection_peer,
+		func(ctx context.Context) (any, error) {
+			return obj.Peer, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegateConnection_peer(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegateConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegateConnection_openedAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegateConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegateConnection_openedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.OpenedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegateConnection_openedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegateConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionDelegateConnection_session(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegateConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionDelegateConnection_session,
+		func(ctx context.Context) (any, error) {
+			return obj.Session, nil
+		},
+		nil,
+		ec.marshalOMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionDelegateConnection_session(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionDelegateConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionSession_rev(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionSession_state(ctx, field)
+			case "number":
+				return ec.fieldContext_MinionSession_number(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionSession_operationId(ctx, field)
+			case "buildId":
+				return ec.fieldContext_MinionSession_buildId(ctx, field)
+			case "buildDescription":
+				return ec.fieldContext_MinionSession_buildDescription(ctx, field)
+			case "description":
+				return ec.fieldContext_MinionSession_description(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_MinionSession_moduleName(ctx, field)
+			case "target":
+				return ec.fieldContext_MinionSession_target(ctx, field)
+			case "platform":
+				return ec.fieldContext_MinionSession_platform(ctx, field)
+			case "staged":
+				return ec.fieldContext_MinionSession_staged(ctx, field)
+			case "pid":
+				return ec.fieldContext_MinionSession_pid(ctx, field)
+			case "os":
+				return ec.fieldContext_MinionSession_os(ctx, field)
+			case "arch":
+				return ec.fieldContext_MinionSession_arch(ctx, field)
+			case "host":
+				return ec.fieldContext_MinionSession_host(ctx, field)
+			case "user":
+				return ec.fieldContext_MinionSession_user(ctx, field)
+			case "domain":
+				return ec.fieldContext_MinionSession_domain(ctx, field)
+			case "proc":
+				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "machineId":
+				return ec.fieldContext_MinionSession_machineId(ctx, field)
+			case "integrity":
+				return ec.fieldContext_MinionSession_integrity(ctx, field)
+			case "acting":
+				return ec.fieldContext_MinionSession_acting(ctx, field)
+			case "addrs":
+				return ec.fieldContext_MinionSession_addrs(ctx, field)
+			case "address":
+				return ec.fieldContext_MinionSession_address(ctx, field)
+			case "addressPicked":
+				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "peerAddress":
+				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
+			case "peers":
+				return ec.fieldContext_MinionSession_peers(ctx, field)
+			case "version":
+				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "x":
+				return ec.fieldContext_MinionSession_x(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_MinionSession_createdAt(ctx, field)
+			case "archived":
+				return ec.fieldContext_MinionSession_archived(ctx, field)
+			case "folderId":
+				return ec.fieldContext_MinionSession_folderId(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionSession_mark(ctx, field)
+			case "persisted":
+				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "restarts":
+				return ec.fieldContext_MinionSession_restarts(ctx, field)
+			case "restartCount":
+				return ec.fieldContext_MinionSession_restartCount(ctx, field)
+			case "sleepInterval":
+				return ec.fieldContext_MinionSession_sleepInterval(ctx, field)
+			case "sleepJitter":
+				return ec.fieldContext_MinionSession_sleepJitter(ctx, field)
+			case "lateAt":
+				return ec.fieldContext_MinionSession_lateAt(ctx, field)
+			case "lostAt":
+				return ec.fieldContext_MinionSession_lostAt(ctx, field)
+			case "lastSeenAt":
+				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionSession_conn(ctx, field)
+			case "connKind":
+				return ec.fieldContext_MinionSession_connKind(ctx, field)
+			case "connName":
+				return ec.fieldContext_MinionSession_connName(ctx, field)
+			case "connCount":
+				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connChanges":
+				return ec.fieldContext_MinionSession_connChanges(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionSession_connections(ctx, field)
+			case "maxTasks":
+				return ec.fieldContext_MinionSession_maxTasks(ctx, field)
+			case "maxTasksSettable":
+				return ec.fieldContext_MinionSession_maxTasksSettable(ctx, field)
+			case "maxTasksPending":
+				return ec.fieldContext_MinionSession_maxTasksPending(ctx, field)
+			case "maxTasksNotTaken":
+				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
+			case "runningTasks":
+				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
+			case "feedbackErrors":
+				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
+			case "feedbackWarnings":
+				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
+			case "feedbackAt":
+				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
+			case "feedbackReadAt":
+				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
+			case "bindTarget":
+				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionFeedback_id(ctx context.Context, field graphql.CollectedField, obj *model.MinionFeedback) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -39651,6 +40732,74 @@ func (ec *executionContext) fieldContext_MinionSession_feedbackReadAt(_ context.
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_via(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_via,
+		func(ctx context.Context) (any, error) {
+			return obj.Via, nil
+		},
+		nil,
+		ec.marshalNMinionSessionVia2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionViaᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_via(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "sessionId":
+				return ec.fieldContext_MinionSessionVia_sessionId(ctx, field)
+			case "number":
+				return ec.fieldContext_MinionSessionVia_number(ctx, field)
+			case "taskId":
+				return ec.fieldContext_MinionSessionVia_taskId(ctx, field)
+			case "session":
+				return ec.fieldContext_MinionSessionVia_session(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSessionVia", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSession_viaSince(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_viaSince,
+		func(ctx context.Context) (any, error) {
+			return obj.ViaSince, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_viaSince(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_bindTarget(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -39711,6 +40860,10 @@ func (ec *executionContext) fieldContext_MinionSession_bindTarget(_ context.Cont
 				return ec.fieldContext_MinionTarget_sessionId(ctx, field)
 			case "session":
 				return ec.fieldContext_MinionTarget_session(ctx, field)
+			case "delegateId":
+				return ec.fieldContext_MinionTarget_delegateId(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTarget_delegate(ctx, field)
 			case "failures":
 				return ec.fieldContext_MinionTarget_failures(ctx, field)
 			case "unreachableSince":
@@ -40037,6 +41190,10 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
 				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
 			case "bindTarget":
 				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
 			}
@@ -40302,6 +41459,10 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
 				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
 			case "bindTarget":
 				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
 			}
@@ -41234,6 +42395,246 @@ func (ec *executionContext) fieldContext_MinionSessionSort_direction(_ context.C
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type SortDirection does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionVia_sessionId(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionVia) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionVia_sessionId,
+		func(ctx context.Context) (any, error) {
+			return obj.SessionID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionVia_sessionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionVia",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionVia_number(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionVia) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionVia_number,
+		func(ctx context.Context) (any, error) {
+			return obj.Number, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionVia_number(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionVia",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionVia_taskId(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionVia) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionVia_taskId,
+		func(ctx context.Context) (any, error) {
+			return obj.TaskID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionVia_taskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionVia",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionVia_session(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionVia) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionVia_session,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.MinionSessionVia().Session(ctx, obj)
+		},
+		nil,
+		ec.marshalOMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionVia_session(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionVia",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionSession_rev(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionSession_state(ctx, field)
+			case "number":
+				return ec.fieldContext_MinionSession_number(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionSession_operationId(ctx, field)
+			case "buildId":
+				return ec.fieldContext_MinionSession_buildId(ctx, field)
+			case "buildDescription":
+				return ec.fieldContext_MinionSession_buildDescription(ctx, field)
+			case "description":
+				return ec.fieldContext_MinionSession_description(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_MinionSession_moduleName(ctx, field)
+			case "target":
+				return ec.fieldContext_MinionSession_target(ctx, field)
+			case "platform":
+				return ec.fieldContext_MinionSession_platform(ctx, field)
+			case "staged":
+				return ec.fieldContext_MinionSession_staged(ctx, field)
+			case "pid":
+				return ec.fieldContext_MinionSession_pid(ctx, field)
+			case "os":
+				return ec.fieldContext_MinionSession_os(ctx, field)
+			case "arch":
+				return ec.fieldContext_MinionSession_arch(ctx, field)
+			case "host":
+				return ec.fieldContext_MinionSession_host(ctx, field)
+			case "user":
+				return ec.fieldContext_MinionSession_user(ctx, field)
+			case "domain":
+				return ec.fieldContext_MinionSession_domain(ctx, field)
+			case "proc":
+				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "machineId":
+				return ec.fieldContext_MinionSession_machineId(ctx, field)
+			case "integrity":
+				return ec.fieldContext_MinionSession_integrity(ctx, field)
+			case "acting":
+				return ec.fieldContext_MinionSession_acting(ctx, field)
+			case "addrs":
+				return ec.fieldContext_MinionSession_addrs(ctx, field)
+			case "address":
+				return ec.fieldContext_MinionSession_address(ctx, field)
+			case "addressPicked":
+				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "peerAddress":
+				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
+			case "peers":
+				return ec.fieldContext_MinionSession_peers(ctx, field)
+			case "version":
+				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "x":
+				return ec.fieldContext_MinionSession_x(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_MinionSession_createdAt(ctx, field)
+			case "archived":
+				return ec.fieldContext_MinionSession_archived(ctx, field)
+			case "folderId":
+				return ec.fieldContext_MinionSession_folderId(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionSession_mark(ctx, field)
+			case "persisted":
+				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "restarts":
+				return ec.fieldContext_MinionSession_restarts(ctx, field)
+			case "restartCount":
+				return ec.fieldContext_MinionSession_restartCount(ctx, field)
+			case "sleepInterval":
+				return ec.fieldContext_MinionSession_sleepInterval(ctx, field)
+			case "sleepJitter":
+				return ec.fieldContext_MinionSession_sleepJitter(ctx, field)
+			case "lateAt":
+				return ec.fieldContext_MinionSession_lateAt(ctx, field)
+			case "lostAt":
+				return ec.fieldContext_MinionSession_lostAt(ctx, field)
+			case "lastSeenAt":
+				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionSession_conn(ctx, field)
+			case "connKind":
+				return ec.fieldContext_MinionSession_connKind(ctx, field)
+			case "connName":
+				return ec.fieldContext_MinionSession_connName(ctx, field)
+			case "connCount":
+				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connChanges":
+				return ec.fieldContext_MinionSession_connChanges(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionSession_connections(ctx, field)
+			case "maxTasks":
+				return ec.fieldContext_MinionSession_maxTasks(ctx, field)
+			case "maxTasksSettable":
+				return ec.fieldContext_MinionSession_maxTasksSettable(ctx, field)
+			case "maxTasksPending":
+				return ec.fieldContext_MinionSession_maxTasksPending(ctx, field)
+			case "maxTasksNotTaken":
+				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
+			case "runningTasks":
+				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
+			case "feedbackErrors":
+				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
+			case "feedbackWarnings":
+				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
+			case "feedbackAt":
+				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
+			case "feedbackReadAt":
+				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
+			case "bindTarget":
+				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
 	}
 	return fc, nil
@@ -42293,6 +43694,192 @@ func (ec *executionContext) fieldContext_MinionTarget_session(_ context.Context,
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
 				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
+			case "bindTarget":
+				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTarget_delegateId(ctx context.Context, field graphql.CollectedField, obj *model.MinionTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTarget_delegateId,
+		func(ctx context.Context) (any, error) {
+			return obj.DelegateID, nil
+		},
+		nil,
+		ec.marshalOID2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTarget_delegateId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTarget",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTarget_delegate(ctx context.Context, field graphql.CollectedField, obj *model.MinionTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTarget_delegate,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.MinionTarget().Delegate(ctx, obj)
+		},
+		nil,
+		ec.marshalOMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTarget_delegate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTarget",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionSession_rev(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionSession_state(ctx, field)
+			case "number":
+				return ec.fieldContext_MinionSession_number(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionSession_operationId(ctx, field)
+			case "buildId":
+				return ec.fieldContext_MinionSession_buildId(ctx, field)
+			case "buildDescription":
+				return ec.fieldContext_MinionSession_buildDescription(ctx, field)
+			case "description":
+				return ec.fieldContext_MinionSession_description(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_MinionSession_moduleName(ctx, field)
+			case "target":
+				return ec.fieldContext_MinionSession_target(ctx, field)
+			case "platform":
+				return ec.fieldContext_MinionSession_platform(ctx, field)
+			case "staged":
+				return ec.fieldContext_MinionSession_staged(ctx, field)
+			case "pid":
+				return ec.fieldContext_MinionSession_pid(ctx, field)
+			case "os":
+				return ec.fieldContext_MinionSession_os(ctx, field)
+			case "arch":
+				return ec.fieldContext_MinionSession_arch(ctx, field)
+			case "host":
+				return ec.fieldContext_MinionSession_host(ctx, field)
+			case "user":
+				return ec.fieldContext_MinionSession_user(ctx, field)
+			case "domain":
+				return ec.fieldContext_MinionSession_domain(ctx, field)
+			case "proc":
+				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "machineId":
+				return ec.fieldContext_MinionSession_machineId(ctx, field)
+			case "integrity":
+				return ec.fieldContext_MinionSession_integrity(ctx, field)
+			case "acting":
+				return ec.fieldContext_MinionSession_acting(ctx, field)
+			case "addrs":
+				return ec.fieldContext_MinionSession_addrs(ctx, field)
+			case "address":
+				return ec.fieldContext_MinionSession_address(ctx, field)
+			case "addressPicked":
+				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "peerAddress":
+				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
+			case "peers":
+				return ec.fieldContext_MinionSession_peers(ctx, field)
+			case "version":
+				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "x":
+				return ec.fieldContext_MinionSession_x(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_MinionSession_createdAt(ctx, field)
+			case "archived":
+				return ec.fieldContext_MinionSession_archived(ctx, field)
+			case "folderId":
+				return ec.fieldContext_MinionSession_folderId(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionSession_mark(ctx, field)
+			case "persisted":
+				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "restarts":
+				return ec.fieldContext_MinionSession_restarts(ctx, field)
+			case "restartCount":
+				return ec.fieldContext_MinionSession_restartCount(ctx, field)
+			case "sleepInterval":
+				return ec.fieldContext_MinionSession_sleepInterval(ctx, field)
+			case "sleepJitter":
+				return ec.fieldContext_MinionSession_sleepJitter(ctx, field)
+			case "lateAt":
+				return ec.fieldContext_MinionSession_lateAt(ctx, field)
+			case "lostAt":
+				return ec.fieldContext_MinionSession_lostAt(ctx, field)
+			case "lastSeenAt":
+				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionSession_conn(ctx, field)
+			case "connKind":
+				return ec.fieldContext_MinionSession_connKind(ctx, field)
+			case "connName":
+				return ec.fieldContext_MinionSession_connName(ctx, field)
+			case "connCount":
+				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connChanges":
+				return ec.fieldContext_MinionSession_connChanges(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionSession_connections(ctx, field)
+			case "maxTasks":
+				return ec.fieldContext_MinionSession_maxTasks(ctx, field)
+			case "maxTasksSettable":
+				return ec.fieldContext_MinionSession_maxTasksSettable(ctx, field)
+			case "maxTasksPending":
+				return ec.fieldContext_MinionSession_maxTasksPending(ctx, field)
+			case "maxTasksNotTaken":
+				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
+			case "runningTasks":
+				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
+			case "feedbackErrors":
+				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
+			case "feedbackWarnings":
+				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
+			case "feedbackAt":
+				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
+			case "feedbackReadAt":
+				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
 			case "bindTarget":
 				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
 			}
@@ -42734,6 +44321,10 @@ func (ec *executionContext) fieldContext_MinionTargetEdge_node(_ context.Context
 				return ec.fieldContext_MinionTarget_sessionId(ctx, field)
 			case "session":
 				return ec.fieldContext_MinionTarget_session(ctx, field)
+			case "delegateId":
+				return ec.fieldContext_MinionTarget_delegateId(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTarget_delegate(ctx, field)
 			case "failures":
 				return ec.fieldContext_MinionTarget_failures(ctx, field)
 			case "unreachableSince":
@@ -42935,6 +44526,10 @@ func (ec *executionContext) fieldContext_MinionTargetEvent_target(_ context.Cont
 				return ec.fieldContext_MinionTarget_sessionId(ctx, field)
 			case "session":
 				return ec.fieldContext_MinionTarget_session(ctx, field)
+			case "delegateId":
+				return ec.fieldContext_MinionTarget_delegateId(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTarget_delegate(ctx, field)
 			case "failures":
 				return ec.fieldContext_MinionTarget_failures(ctx, field)
 			case "unreachableSince":
@@ -44350,6 +45945,51 @@ func (ec *executionContext) fieldContext_MinionTask_document(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_delegate(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_delegate,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.MinionTask().Delegate(ctx, obj)
+		},
+		nil,
+		ec.marshalOMinionDelegate2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionDelegate,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_delegate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "serves":
+				return ec.fieldContext_MinionDelegate_serves(ctx, field)
+			case "held":
+				return ec.fieldContext_MinionDelegate_held(ctx, field)
+			case "stopIdle":
+				return ec.fieldContext_MinionDelegate_stopIdle(ctx, field)
+			case "usedAt":
+				return ec.fieldContext_MinionDelegate_usedAt(ctx, field)
+			case "carried":
+				return ec.fieldContext_MinionDelegate_carried(ctx, field)
+			case "waiting":
+				return ec.fieldContext_MinionDelegate_waiting(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionDelegate_connections(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionDelegate", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTaskPage_tasks(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskPage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -44458,6 +46098,8 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
 		},
@@ -55839,6 +57481,10 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
 				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
 			case "bindTarget":
 				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
 			}
@@ -56077,6 +57723,10 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
 				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
 			case "bindTarget":
 				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
 			}
@@ -56256,6 +57906,10 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
 				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
 			case "bindTarget":
 				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
 			}
@@ -56494,6 +58148,10 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
 				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
 			case "bindTarget":
 				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
 			}
@@ -56673,6 +58331,10 @@ func (ec *executionContext) fieldContext_Mutation_markMinionFeedbackRead(ctx con
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
 				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
 			case "bindTarget":
 				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
 			}
@@ -56852,6 +58514,10 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMaxTasks(ctx c
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
 				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
 			case "bindTarget":
 				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
 			}
@@ -57034,6 +58700,10 @@ func (ec *executionContext) fieldContext_Mutation_addMinionTarget(ctx context.Co
 				return ec.fieldContext_MinionTarget_sessionId(ctx, field)
 			case "session":
 				return ec.fieldContext_MinionTarget_session(ctx, field)
+			case "delegateId":
+				return ec.fieldContext_MinionTarget_delegateId(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTarget_delegate(ctx, field)
 			case "failures":
 				return ec.fieldContext_MinionTarget_failures(ctx, field)
 			case "unreachableSince":
@@ -57149,6 +58819,10 @@ func (ec *executionContext) fieldContext_Mutation_updateMinionTarget(ctx context
 				return ec.fieldContext_MinionTarget_sessionId(ctx, field)
 			case "session":
 				return ec.fieldContext_MinionTarget_session(ctx, field)
+			case "delegateId":
+				return ec.fieldContext_MinionTarget_delegateId(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTarget_delegate(ctx, field)
 			case "failures":
 				return ec.fieldContext_MinionTarget_failures(ctx, field)
 			case "unreachableSince":
@@ -57264,6 +58938,10 @@ func (ec *executionContext) fieldContext_Mutation_checkMinionTarget(ctx context.
 				return ec.fieldContext_MinionTarget_sessionId(ctx, field)
 			case "session":
 				return ec.fieldContext_MinionTarget_session(ctx, field)
+			case "delegateId":
+				return ec.fieldContext_MinionTarget_delegateId(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTarget_delegate(ctx, field)
 			case "failures":
 				return ec.fieldContext_MinionTarget_failures(ctx, field)
 			case "unreachableSince":
@@ -57379,6 +59057,10 @@ func (ec *executionContext) fieldContext_Mutation_connectMinionTarget(ctx contex
 				return ec.fieldContext_MinionTarget_sessionId(ctx, field)
 			case "session":
 				return ec.fieldContext_MinionTarget_session(ctx, field)
+			case "delegateId":
+				return ec.fieldContext_MinionTarget_delegateId(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTarget_delegate(ctx, field)
 			case "failures":
 				return ec.fieldContext_MinionTarget_failures(ctx, field)
 			case "unreachableSince":
@@ -57494,6 +59176,10 @@ func (ec *executionContext) fieldContext_Mutation_disconnectMinionTarget(ctx con
 				return ec.fieldContext_MinionTarget_sessionId(ctx, field)
 			case "session":
 				return ec.fieldContext_MinionTarget_session(ctx, field)
+			case "delegateId":
+				return ec.fieldContext_MinionTarget_delegateId(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTarget_delegate(ctx, field)
 			case "failures":
 				return ec.fieldContext_MinionTarget_failures(ctx, field)
 			case "unreachableSince":
@@ -57722,6 +59408,8 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
 		},
@@ -57867,6 +59555,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
 		},
@@ -58012,6 +59702,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelCap(ctx context
 				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
 		},
@@ -58157,6 +59849,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelRoutes(ctx cont
 				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
 		},
@@ -58367,6 +60061,8 @@ func (ec *executionContext) fieldContext_Mutation_disconnectMinionVPNClient(ctx 
 				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
 		},
@@ -67267,7 +68963,7 @@ func (ec *executionContext) _Query_minionSessions(ctx context.Context, field gra
 		ec.fieldContext_Query_minionSessions,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MinionSessions(ctx, fc.Args["operationId"].(string), fc.Args["archived"].(*bool), fc.Args["folderId"].(*string), fc.Args["search"].(*string), fc.Args["filters"].([]*model.MinionSessionFilterInput), fc.Args["sort"].(*model.MinionSessionSortInput), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+			return ec.Resolvers.Query().MinionSessions(ctx, fc.Args["operationId"].(string), fc.Args["archived"].(*bool), fc.Args["folderId"].(*string), fc.Args["search"].(*string), fc.Args["filters"].([]*model.MinionSessionFilterInput), fc.Args["sort"].(*model.MinionSessionSortInput), fc.Args["delegatesFor"].(*model.MinionDelegatesForInput), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -67485,6 +69181,10 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
 				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
 			case "bindTarget":
 				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
 			}
@@ -67781,6 +69481,10 @@ func (ec *executionContext) fieldContext_Query_minionTarget(ctx context.Context,
 				return ec.fieldContext_MinionTarget_sessionId(ctx, field)
 			case "session":
 				return ec.fieldContext_MinionTarget_session(ctx, field)
+			case "delegateId":
+				return ec.fieldContext_MinionTarget_delegateId(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTarget_delegate(ctx, field)
 			case "failures":
 				return ec.fieldContext_MinionTarget_failures(ctx, field)
 			case "unreachableSince":
@@ -67944,6 +69648,8 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
 		},
@@ -68153,6 +69859,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionCommands(ctx context
 				return ec.fieldContext_BuildCommand_action(ctx, field)
 			case "kinds":
 				return ec.fieldContext_BuildCommand_kinds(ctx, field)
+			case "serves":
+				return ec.fieldContext_BuildCommand_serves(ctx, field)
 			case "params":
 				return ec.fieldContext_BuildCommand_params(ctx, field)
 			}
@@ -74484,6 +76192,8 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
 		},
@@ -85257,6 +86967,50 @@ func (ec *executionContext) unmarshalInputMarkHashCrackedInput(ctx context.Conte
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputMinionDelegatesForInput(ctx context.Context, obj any) (model.MinionDelegatesForInput, error) {
+	var it model.MinionDelegatesForInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"moduleName", "kind", "version"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "moduleName":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("moduleName"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ModuleName = data
+		case "kind":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("kind"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Kind = data
+		case "version":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("version"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Version = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputMinionSessionColumnWidthInput(ctx context.Context, obj any) (model.MinionSessionColumnWidthInput, error) {
 	var it model.MinionSessionColumnWidthInput
 	if obj == nil {
@@ -85715,7 +87469,7 @@ func (ec *executionContext) unmarshalInputMinionTargetInput(ctx context.Context,
 		asMap["retries"] = true
 	}
 
-	fieldsInOrder := [...]string{"values", "retries", "policy"}
+	fieldsInOrder := [...]string{"values", "retries", "policy", "delegateId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -85743,6 +87497,13 @@ func (ec *executionContext) unmarshalInputMinionTargetInput(ctx context.Context,
 				return it, err
 			}
 			it.Policy = data
+		case "delegateId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("delegateId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DelegateID = data
 		}
 	}
 	return it, nil
@@ -87803,6 +89564,21 @@ func (ec *executionContext) _BindConnection(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "version":
+			out.Values[i] = ec._BindConnection_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "delegatedOnly":
+			out.Values[i] = ec._BindConnection_delegatedOnly(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "agentless":
+			out.Values[i] = ec._BindConnection_agentless(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "problem":
 			out.Values[i] = ec._BindConnection_problem(ctx, field, obj)
 		default:
@@ -88255,6 +90031,11 @@ func (ec *executionContext) _BuildCommand(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "serves":
+			out.Values[i] = ec._BuildCommand_serves(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "params":
 			out.Values[i] = ec._BuildCommand_params(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -88582,6 +90363,55 @@ func (ec *executionContext) _BuildSchema(ctx context.Context, sel ast.SelectionS
 			}
 		case "maxTasks":
 			out.Values[i] = ec._BuildSchema_maxTasks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var buildServeImplementors = []string{"BuildServe"}
+
+func (ec *executionContext) _BuildServe(ctx context.Context, sel ast.SelectionSet, obj *model.BuildServe) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, buildServeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BuildServe")
+		case "moduleName":
+			out.Values[i] = ec._BuildServe_moduleName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "versions":
+			out.Values[i] = ec._BuildServe_versions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kinds":
+			out.Values[i] = ec._BuildServe_kinds(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -92255,6 +94085,127 @@ func (ec *executionContext) _MinionConnection(ctx context.Context, sel ast.Selec
 	return out
 }
 
+var minionDelegateImplementors = []string{"MinionDelegate"}
+
+func (ec *executionContext) _MinionDelegate(ctx context.Context, sel ast.SelectionSet, obj *model.MinionDelegate) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionDelegateImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionDelegate")
+		case "serves":
+			out.Values[i] = ec._MinionDelegate_serves(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "held":
+			out.Values[i] = ec._MinionDelegate_held(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "stopIdle":
+			out.Values[i] = ec._MinionDelegate_stopIdle(ctx, field, obj)
+		case "usedAt":
+			out.Values[i] = ec._MinionDelegate_usedAt(ctx, field, obj)
+		case "carried":
+			out.Values[i] = ec._MinionDelegate_carried(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "waiting":
+			out.Values[i] = ec._MinionDelegate_waiting(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "connections":
+			out.Values[i] = ec._MinionDelegate_connections(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionDelegateConnectionImplementors = []string{"MinionDelegateConnection"}
+
+func (ec *executionContext) _MinionDelegateConnection(ctx context.Context, sel ast.SelectionSet, obj *model.MinionDelegateConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionDelegateConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionDelegateConnection")
+		case "n":
+			out.Values[i] = ec._MinionDelegateConnection_n(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "moduleName":
+			out.Values[i] = ec._MinionDelegateConnection_moduleName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._MinionDelegateConnection_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "peer":
+			out.Values[i] = ec._MinionDelegateConnection_peer(ctx, field, obj)
+		case "openedAt":
+			out.Values[i] = ec._MinionDelegateConnection_openedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "session":
+			out.Values[i] = ec._MinionDelegateConnection_session(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var minionFeedbackImplementors = []string{"MinionFeedback"}
 
 func (ec *executionContext) _MinionFeedback(ctx context.Context, sel ast.SelectionSet, obj *model.MinionFeedback) graphql.Marshaler {
@@ -93292,6 +95243,13 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			out.Values[i] = ec._MinionSession_feedbackAt(ctx, field, obj)
 		case "feedbackReadAt":
 			out.Values[i] = ec._MinionSession_feedbackReadAt(ctx, field, obj)
+		case "via":
+			out.Values[i] = ec._MinionSession_via(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "viaSince":
+			out.Values[i] = ec._MinionSession_viaSince(ctx, field, obj)
 		case "bindTarget":
 			field := field
 
@@ -93892,6 +95850,88 @@ func (ec *executionContext) _MinionSessionSort(ctx context.Context, sel ast.Sele
 	return out
 }
 
+var minionSessionViaImplementors = []string{"MinionSessionVia"}
+
+func (ec *executionContext) _MinionSessionVia(ctx context.Context, sel ast.SelectionSet, obj *model.MinionSessionVia) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionSessionViaImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionSessionVia")
+		case "sessionId":
+			out.Values[i] = ec._MinionSessionVia_sessionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "number":
+			out.Values[i] = ec._MinionSessionVia_number(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "taskId":
+			out.Values[i] = ec._MinionSessionVia_taskId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "session":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._MinionSessionVia_session(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var minionSessionsLayoutImplementors = []string{"MinionSessionsLayout"}
 
 func (ec *executionContext) _MinionSessionsLayout(ctx context.Context, sel ast.SelectionSet, obj *model.MinionSessionsLayout) graphql.Marshaler {
@@ -94098,6 +96138,41 @@ func (ec *executionContext) _MinionTarget(ctx context.Context, sel ast.Selection
 					}
 				}()
 				res = ec._MinionTarget_session(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "delegateId":
+			out.Values[i] = ec._MinionTarget_delegateId(ctx, field, obj)
+		case "delegate":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._MinionTarget_delegate(ctx, field, obj)
 				return res
 			}
 
@@ -94676,6 +96751,39 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "delegate":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._MinionTask_delegate(ctx, field, obj)
 				return res
 			}
 
@@ -106393,6 +108501,32 @@ func (ec *executionContext) marshalNBuildSchema2ᚖgithubᚗcomᚋlogoscoreᚋlo
 	return ec._BuildSchema(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNBuildServe2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildServeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildServe) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNBuildServe2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildServe(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNBuildServe2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildServe(ctx context.Context, sel ast.SelectionSet, v *model.BuildServe) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BuildServe(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNBuildStage2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildStageᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildStage) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -107596,6 +109730,32 @@ func (ec *executionContext) marshalNMinionConnection2ᚖgithubᚗcomᚋlogoscore
 	return ec._MinionConnection(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNMinionDelegateConnection2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionDelegateConnectionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionDelegateConnection) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionDelegateConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionDelegateConnection(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionDelegateConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionDelegateConnection(ctx context.Context, sel ast.SelectionSet, v *model.MinionDelegateConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionDelegateConnection(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNMinionFeedback2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionFeedbackᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionFeedback) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -108051,6 +110211,32 @@ func (ec *executionContext) marshalNMinionSessionRestart2ᚖgithubᚗcomᚋlogos
 		return graphql.Null
 	}
 	return ec._MinionSessionRestart(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionSessionVia2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionViaᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionSessionVia) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionSessionVia2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionVia(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionSessionVia2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionVia(ctx context.Context, sel ast.SelectionSet, v *model.MinionSessionVia) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionSessionVia(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNMinionStreamLink2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionStreamLink(ctx context.Context, sel ast.SelectionSet, v model.MinionStreamLink) graphql.Marshaler {
@@ -110800,6 +112986,21 @@ func (ec *executionContext) unmarshalOLoginInput2ᚕᚖgithubᚗcomᚋlogoscore�
 		}
 	}
 	return res, nil
+}
+
+func (ec *executionContext) marshalOMinionDelegate2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionDelegate(ctx context.Context, sel ast.SelectionSet, v *model.MinionDelegate) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MinionDelegate(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOMinionDelegatesForInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionDelegatesForInput(ctx context.Context, v any) (*model.MinionDelegatesForInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputMinionDelegatesForInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalOMinionFile2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionFile(ctx context.Context, sel ast.SelectionSet, v *model.MinionFile) graphql.Marshaler {
