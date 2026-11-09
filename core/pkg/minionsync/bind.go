@@ -697,7 +697,7 @@ func (s *Service) bindItems(ctx context.Context, t *models.MinionTarget, session
 	if t.Allowance != nil {
 		limit = int(min(*t.Allowance, uint64(models.MaxMinionTasksPerReply)))
 	}
-	o, err := s.outbox(ctx, session, delivery{tasks: limit, resumes: true, streams: true, room: roomFor(session.MessageLimit(), nil)})
+	o, err := s.outbox(ctx, session, delivery{tasks: limit, resumes: true, streams: true, room: roomFor(planLimit(session), nil)})
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -747,12 +747,8 @@ func (a *callAnswer) ctx(ctx context.Context, t *models.MinionTarget) context.Co
 func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *protocol.BuildConnection,
 	from *sender, id uuid.UUID, items []cbor.RawMessage) (*callAnswer, bool, error) {
 	msgID := protocol.NewMessageID()
-	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: packMessage(from.session, items),
+	sealed, _, err := s.writeMessage(ctx, from, id, protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: items,
 		At: unixNow(s.now())})
-	if err != nil {
-		return nil, false, err
-	}
-	sealed, err := from.seal(id, plain)
 	if err != nil {
 		return nil, false, err
 	}
@@ -816,7 +812,7 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 	if !bytes.Equal(a.ID, id[:]) {
 		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer under another id"))
 	}
-	opened, err := from.open(id, a.Data)
+	opened, err := s.readMessage(ctx, from, id, a.Data)
 	if err != nil {
 		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, notTheMinion(a.Status, nil)+": an answer that does not open"))
 	}
@@ -826,7 +822,7 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer that is not one to this call"))
 	}
 	// Packed items in their places (packing.go).
-	protocol.UnpackItems(msg.Items)
+	unpackItems(from, msg.Items)
 	// A minion whose clock is far from core's refuses the call as stale, as
 	// it would a replay: nothing goes until the clocks agree.
 	for _, raw := range msg.Items {

@@ -100,6 +100,17 @@ func (f *fakeBuilds) SetCredentialRevs(_ context.Context, id uuid.UUID, revs map
 	return nil
 }
 
+func (f *fakeBuilds) SetCrypto(_ context.Context, id uuid.UUID, crypto protocol.BuildCrypto) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	b, ok := f.rows[id]
+	if !ok || b.Crypto != nil {
+		return false, nil
+	}
+	b.Crypto = &crypto
+	return true, nil
+}
+
 func (f *fakeBuilds) CountByCredentialID(_ context.Context, id uuid.UUID) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

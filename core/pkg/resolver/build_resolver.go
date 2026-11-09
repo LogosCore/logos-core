@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -393,6 +394,8 @@ func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 			ID: t.ID, Label: orKey(t.Label, t.ID), Description: strPtr(t.Description), Format: t.Format,
 			Platforms: t.Platforms, Fields: toBuildFieldModels(t.Fields),
 		}
+		codec := s.TargetCodec(t)
+		mt.Crypto, mt.Envelope = strPtr(codec.Suite), codec.Envelope
 		for _, c := range s.TargetChannels(t) {
 			mt.Channels = append(mt.Channels, &model.BuildChannelVersions{ModuleName: c.ModuleName, Versions: c.Versions,
 				Kinds: s.TargetKinds(t, c.ModuleName)})
@@ -472,6 +475,10 @@ func toBuildModel(b *models.Build) *model.Build {
 	out.Failover = b.FailoverPolicy()
 	out.MaxTasks = b.MaxTasks
 	out.Compression = strPtr(b.Compression)
+	out.Envelope = cmp.Or(b.Envelope, protocol.EnvelopeCBOR)
+	if b.Codec != nil {
+		out.Codec = b.Codec
+	}
 	out.ConnectionDescriptions = make([]string, len(b.Connections.Items))
 	copy(out.ConnectionDescriptions, b.ConnectionDescriptions)
 	for _, st := range builds.Pipeline(b) {

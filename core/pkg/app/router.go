@@ -44,6 +44,9 @@ func (a *App) NewRouter() *gin.Engine {
 	channel.POST("/sync", c.channel.Sync)
 	channel.GET("/connection", c.channel.Connection)
 	channel.GET("/link", c.link.Link)
+	// A factory that translates its minions' codec keeps its link here,
+	// behind the same registration gate (docs: Codecs, The factory link).
+	r.Group("/api/factory").GET("/link", c.factory.Link)
 
 	v1 := r.Group("/api/v1")
 

@@ -151,15 +151,30 @@ type Service struct {
 	store    Store
 	signer   Signer
 	creds    Credentials
-	cfg      Config
-	logger   *zap.Logger
-	now      func() time.Time
+	// factoryKeys makes the keys of a factory's own suite.
+	factoryKeys FactoryKeys
+	cfg         Config
+	logger      *zap.Logger
+	now         func() time.Time
 
 	kick      chan struct{}
 	stop      chan struct{}
 	wg        sync.WaitGroup
 	next      atomic.Uint64 // rotates the instances builds are offered to
 	verifying sync.Map      // build ids whose artifact this process checks
+}
+
+// FactoryKeys asks a factory that translates its suite for a build's keys
+// (docs: Codecs, Keys). Satisfied by *factorylink.Hub.
+type FactoryKeys interface {
+	BuildKeys(ctx context.Context, module string, build uuid.UUID, timeout time.Duration) ([]byte, error)
+}
+
+// WithFactoryKeys has the service ask factories for the keys of their own
+// suites. Without it a build of such a suite stays queued: its tests.
+func (s *Service) WithFactoryKeys(k FactoryKeys) *Service {
+	s.factoryKeys = k
+	return s
 }
 
 // WithCredentials has the service check and resolve the credentials builds

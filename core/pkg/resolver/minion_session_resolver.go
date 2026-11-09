@@ -777,6 +777,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		Persisted: s.Persisted, RestartCount: int(s.RestartCount), Restarts: toSessionRestartModels(s.Restarts),
 		LateAt: timePtr(s.LateAt), LostAt: timePtr(s.LostAt), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
 		Acting: toIdentityModel(s.Acting), Via: toSessionViaModels(s.Via), ViaSince: timePtr(s.ViaSince),
+		CodecDownSince: timePtr(s.CodecDownSince),
 	}
 	if len(h.X) > 0 {
 		out.X = h.X

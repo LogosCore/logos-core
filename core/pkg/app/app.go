@@ -21,6 +21,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/environment"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
+	"github.com/logoscore/logos-core/core/pkg/factorylink"
 	"github.com/logoscore/logos-core/core/pkg/filebrowser"
 	"github.com/logoscore/logos-core/core/pkg/lifecycle"
 	"github.com/logoscore/logos-core/core/pkg/logger"
@@ -178,7 +179,10 @@ type App struct {
 	// links are the channels' control links; minionTargets the targets of
 	// bind minions, which minionSync calls through them. stopTargets stops
 	// the calls' scheduler.
-	links         *channellink.Hub
+	links *channellink.Hub
+	// factoryLinks are the links of factories that translate their
+	// minions' codec (docs: Codecs).
+	factoryLinks  *factorylink.Hub
 	minionTargets *miniontargets.Service
 	// credentialRefs checks and resolves the credentials modules' values
 	// name.
@@ -257,6 +261,10 @@ func NewApp() (*App, error) {
 		return nil, err
 	}
 	buildSvc.WithCredentials(credentialRefs)
+	// Factories that translate their minions' codec: core calls them for
+	// each message, and for their suite's keys.
+	factoryLinks := factorylink.New(l)
+	buildSvc.WithFactoryKeys(factoryLinks)
 	minionFiles, err := newMinionFileService(ctx, e, l, repos, bus)
 	if err != nil {
 		return nil, err
@@ -287,6 +295,7 @@ func NewApp() (*App, error) {
 		Builds: repos.Build, Tasks: repos.MinionTask, Schemas: endpoints})
 	minionSync.WithTargetChecker(minionTargets, miniontargets.ProblemsText)
 	minionSync.WithChannelSchemas(endpoints)
+	minionSync.WithFactoryLinks(factoryLinks)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
 
@@ -347,6 +356,7 @@ func NewApp() (*App, error) {
 		fileBrowser:     fileBrowser,
 		minionSync:      minionSync,
 		links:           links,
+		factoryLinks:    factoryLinks,
 		minionTargets:   minionTargets,
 		credentialRefs:  credentialRefs,
 	}, nil

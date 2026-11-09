@@ -127,6 +127,11 @@ func (s *Service) offer(ctx context.Context, b *models.Build) {
 		return
 	}
 
+	if !s.factoryCrypto(ctx, b) {
+		// Kept claimed: asked again once the lease runs out, not at once
+		// in this tick.
+		return
+	}
 	deadline := s.now().Add(s.cfg.Timeout)
 	req, revs, err := s.request(ctx, b, deadline)
 	var unusable *credentialrefs.Unusable
@@ -212,6 +217,57 @@ func (s *Service) setPlan(ctx context.Context, buildID uuid.UUID, instance strin
 	}
 }
 
+// factoryCrypto makes sure a build of its factory's own suite has its keys:
+// the factory makes them over its link (docs: Codecs, Keys), before the
+// build is offered. False while it cannot (no link, no answer): the build
+// waits in the queue, and fails at its deadline.
+func (s *Service) factoryCrypto(ctx context.Context, b *models.Build) bool {
+	if b.Crypto != nil || b.Codec == nil {
+		return true
+	}
+	schema, err := s.schema(ctx, b.ModuleName)
+	if err != nil || schema == nil {
+		return false
+	}
+	t, ok := schema.Target(b.Target)
+	if !ok {
+		return false
+	}
+	suite := schema.TargetCodec(t).Suite
+	if !protocol.IsFactoryCodec(suite) {
+		return true
+	}
+	if s.factoryKeys == nil {
+		return false
+	}
+	material, err := s.factoryKeys.BuildKeys(ctx, b.ModuleName, b.BuildID, b.Codec.CallTimeout())
+	if err != nil {
+		s.logger.Info("a build waits for its factory's keys", zap.String("build_id", b.BuildID.String()),
+			zap.String("module", b.ModuleName), zap.Error(err))
+		return false
+	}
+	raw, err := json.Marshal(material)
+	if err != nil {
+		return false
+	}
+	crypto := protocol.BuildCrypto{Suite: suite, Material: raw}
+	set, err := s.repos.Builds.SetCrypto(ctx, b.BuildID, crypto)
+	if err != nil {
+		s.logger.Warn("record a build's keys", zap.String("build_id", b.BuildID.String()), zap.Error(err))
+		return false
+	}
+	if !set {
+		// Made meanwhile: the build's own.
+		fresh, err := s.repos.Builds.FindByBuildID(ctx, b.BuildID)
+		if err != nil || fresh.Crypto == nil {
+			return false
+		}
+		crypto = *fresh.Crypto
+	}
+	b.Crypto = &crypto
+	return true
+}
+
 // request is the factory.build request of b, with URLs valid until
 // deadline, and the revision of each credential it carries.
 func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Time) (protocol.BuildRequest, map[string]int64, error) {
@@ -228,6 +284,7 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 		req.MaxTasks = &n
 	}
 	req.Compression = b.Compression
+	req.Envelope = b.Envelope
 	if b.PersistedSessionID != nil {
 		req.SessionID = b.PersistedSessionID.String()
 	}

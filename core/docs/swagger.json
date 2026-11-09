@@ -409,6 +409,47 @@
                 }
             }
         },
+        "/factory/link": {
+            "get": {
+                "description": "A factory instance that translates its minions' suite or envelope opens one: a WebSocket over which core asks it to read and write its minions' messages and make its suite's keys, and it answers each request by its id.",
+                "tags": [
+                    "Factories"
+                ],
+                "summary": "Factory link (data plane)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The factory's registered instance id",
+                        "name": "Logos-Factory-Instance",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "101": {
+                        "description": "Switching Protocols"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "instance is not a registered factory",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "module registry unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/graphql": {
             "get": {
                 "description": "Serves the Altair GraphQL Client UI for interactive query testing. Development only.",
@@ -806,6 +847,41 @@
                 "responses": {}
             }
         },
+        "/minion-tasks/{id}/terminal": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Minion tasks"
+                ],
+                "summary": "Open a web terminal on a terminal task",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Rows (24)",
+                        "name": "rows",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Columns (80)",
+                        "name": "cols",
+                        "in": "query"
+                    }
+                ],
+                "responses": {}
+            }
+        },
         "/skills": {
             "post": {
                 "description": "Uploads a zip as a new version of a named skill, claiming the name if it is free. Only the operator who claimed a name may publish new versions of it; an administrator may publish to any name.",
@@ -940,6 +1016,38 @@
                         }
                     }
                 }
+            }
+        },
+        "/vpn": {
+            "get": {
+                "tags": [
+                    "VPN"
+                ],
+                "summary": "A logos-vpn client's link (WebSocket)",
+                "responses": {}
+            }
+        },
+        "/vpn/client/{platform}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "VPN"
+                ],
+                "summary": "Download logos-vpn for a system",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "linux-amd64, darwin-arm64, windows-amd64, ...",
+                        "name": "platform",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
             }
         },
         "/wiki/collab-ticket": {

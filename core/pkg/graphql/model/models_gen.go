@@ -81,6 +81,8 @@ type Build struct {
 	MaxTasks               *int              `json:"maxTasks,omitempty"`
 	Compression            *string           `json:"compression,omitempty"`
 	Crypto                 any               `json:"crypto,omitempty"`
+	Envelope               string            `json:"envelope"`
+	Codec                  any               `json:"codec,omitempty"`
 	PersistedSession       *string           `json:"persistedSession,omitempty"`
 	State                  string            `json:"state"`
 	Instance               *string           `json:"instance,omitempty"`
@@ -238,6 +240,8 @@ type BuildTarget struct {
 	Platforms   []string                `json:"platforms"`
 	Fields      []*ModuleField          `json:"fields"`
 	Channels    []*BuildChannelVersions `json:"channels"`
+	Crypto      *string                 `json:"crypto,omitempty"`
+	Envelope    string                  `json:"envelope"`
 }
 
 type BulkImportHashesInput struct {
@@ -835,6 +839,7 @@ type MinionSession struct {
 	LostAt           *string                 `json:"lostAt,omitempty"`
 	LastSeenAt       *string                 `json:"lastSeenAt,omitempty"`
 	Connected        bool                    `json:"connected"`
+	CodecDownSince   *string                 `json:"codecDownSince,omitempty"`
 	Conn             *int                    `json:"conn,omitempty"`
 	ConnKind         *string                 `json:"connKind,omitempty"`
 	ConnName         *string                 `json:"connName,omitempty"`

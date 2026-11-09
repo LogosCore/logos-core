@@ -34,7 +34,7 @@ func pack(session *models.MinionSession, item cbor.RawMessage) cbor.RawMessage {
 	if session == nil || session.Compression == "" || !packable(item) {
 		return item
 	}
-	return packed(item)
+	return packed(session, item)
 }
 
 // packTask is task t's item as core sends it to session's minion: packed
@@ -43,12 +43,19 @@ func packTask(session *models.MinionSession, t *models.MinionTask, item cbor.Raw
 	if session == nil || session.Compression == "" || len(t.CredentialIDs) > 0 {
 		return item
 	}
-	return packed(item)
+	return packed(session, item)
 }
 
-// packed is item packed when that pays, else item.
-func packed(item cbor.RawMessage) cbor.RawMessage {
-	if out, _, err := protocol.Pack(item); err == nil {
+// packed is item packed when that pays, as session's envelope writes it
+// (protocol.PackIn), else item. Under a factory's envelope core packs
+// nothing: the factory packs in its own format (docs: Codecs, Packing goes
+// with the envelope).
+func packed(session *models.MinionSession, item cbor.RawMessage) cbor.RawMessage {
+	env, ok := sessionEnvelope(session)
+	if !ok {
+		return item
+	}
+	if out, _, err := protocol.PackIn(env, item); err == nil {
 		return out
 	}
 	return item
@@ -69,10 +76,10 @@ func packMessage(session *models.MinionSession, items []cbor.RawMessage) []cbor.
 }
 
 // packedErr answers item i of items, a packed item the minion sent that
-// did not unpack (protocol.UnpackItems left it): too_large past the room
-// its message had left, bad_message otherwise.
-func packedErr(items []cbor.RawMessage, i int) ([]cbor.RawMessage, error) {
-	_, err := protocol.Unpack(items[i], protocol.UnpackRoom(items, i))
+// did not unpack in env (protocol.UnpackItemsIn left it): too_large past
+// the room its message had left, bad_message otherwise.
+func packedErr(env protocol.MessageEnvelope, items []cbor.RawMessage, i int) ([]cbor.RawMessage, error) {
+	_, err := protocol.UnpackIn(env, items[i], protocol.UnpackRoomIn(env, items, i))
 	if errors.Is(err, protocol.ErrPackedTooLarge) {
 		return errItem(protocol.ErrItemTooLarge, err.Error(), i)
 	}

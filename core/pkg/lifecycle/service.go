@@ -236,9 +236,20 @@ func (s *Service) HandleRegister(ctx context.Context, req messaging.Envelope) (a
 		if err := protocol.ValidateBuildSchema(*p.Build); err != nil {
 			return nil, validationErr("invalid build schema: " + err.Error())
 		}
-		if c := p.Build.Crypto; c != "" && !payloadcrypto.Supported(c) {
-			return nil, validationErr(fmt.Sprintf("unsupported crypto suite %q: core implements %s",
-				c, strings.Join(payloadcrypto.Suites(), ", ")))
+		// Suites without a dot are core's, and core must implement them; a
+		// factory's own names carry its module_name (docs: Codecs).
+		suites := []string{p.Build.Crypto}
+		for _, t := range p.Build.Targets {
+			suites = append(suites, t.Crypto)
+		}
+		for _, c := range suites {
+			if c != "" && !protocol.IsFactoryCodec(c) && !payloadcrypto.Supported(c) {
+				return nil, validationErr(fmt.Sprintf("unsupported crypto suite %q: core implements %s",
+					c, strings.Join(payloadcrypto.Suites(), ", ")))
+			}
+		}
+		if err := protocol.ValidateCodecOwner(*p.Build, p.ModuleName); err != nil {
+			return nil, validationErr("invalid build schema: " + err.Error())
 		}
 		reg.Build = &models.ModuleBuildSchema{BuildSchema: *p.Build}
 	}

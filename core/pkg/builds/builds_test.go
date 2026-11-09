@@ -1,6 +1,7 @@
 package builds
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -369,7 +370,7 @@ func TestCreateBuildRefusals(t *testing.T) {
 			r.reg.schemas["bob"].Version = 2
 			r.reg.setActive(bobInstance("bob-1", 1))
 		}, want: "schema version 2"},
-		"crypto": {setup: func(r *rig) { r.reg.schemas["bob"].Crypto = "x25519-xchacha20poly1305" }, want: "payload crypto"},
+		"crypto": {setup: func(r *rig) { r.reg.schemas["bob"].Crypto = "x25519-xchacha20poly1305" }, want: "does not fit"},
 		// BOB's minions read version 2 of the HTTP channel's settings.
 		"channel version": {setup: func(r *rig) { r.chs.schemas["http"].Version = 3 }, want: "does not fit"},
 	} {
@@ -1313,5 +1314,81 @@ func TestConnectionKinds(t *testing.T) {
 	_, err = r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) { in.Connections[0].Kind = protocol.KindReversePersistent }))
 	if p := problemsOf(err); !strings.Contains(p["connections[0].kind"], "reverse-call") {
 		t.Fatalf("a kind the channel lacks: %v %v", err, p)
+	}
+}
+
+// fakeFactoryKeys makes a factory suite's keys, or none while down.
+type fakeFactoryKeys struct {
+	down  bool
+	calls int
+}
+
+func (f *fakeFactoryKeys) BuildKeys(_ context.Context, module string, build uuid.UUID, timeout time.Duration) ([]byte, error) {
+	f.calls++
+	if f.down || module != "bob" || timeout != 2*time.Second {
+		return nil, errors.New("no link")
+	}
+	return append([]byte("key of "), build[:4]...), nil
+}
+
+// A target's codec (docs: Codecs): the build keeps its envelope and the
+// factory's declaration; a factory's suite gets its keys from the factory
+// as the build is offered (queued until then), and the request carries
+// both; an agentless kind refuses a codec it cannot speak.
+func TestBuildCodec(t *testing.T) {
+	r := newRig(t)
+	sc := r.reg.schemas["bob"]
+	sc.Crypto, sc.Codec = "bob.xor", &protocol.BuildCodec{Growth: 200, Timeout: "2s"}
+	sc.Targets[1].Envelope = protocol.EnvelopeJSON
+	sc.Targets[1].Crypto = protocol.CryptoAES256CBCHMACSHA256
+
+	b := r.queue(t, nil)
+	if b.Crypto != nil || b.Codec == nil || b.Codec.Growth != 200 || b.Envelope != "" {
+		t.Fatalf("a build of the factory's suite: crypto %+v, codec %+v, envelope %q", b.Crypto, b.Codec, b.Envelope)
+	}
+	keys := &fakeFactoryKeys{down: true}
+	r.svc.WithFactoryKeys(keys)
+	r.svc.Tick(context.Background())
+	if got := r.get(t, b.BuildID.String(), models.BuildStateQueued); got.Crypto != nil || keys.calls != 1 || len(r.rpc.recorded()) != 0 {
+		t.Fatalf("offered without the factory's keys: %+v, %d calls", got, keys.calls)
+	}
+	// Asked again once its lease runs out, not before.
+	keys.down = false
+	r.clock = r.clock.Add(time.Minute)
+	r.svc.Tick(context.Background())
+	if keys.calls != 1 {
+		t.Fatalf("asked again within the lease: %d calls", keys.calls)
+	}
+	r.clock = r.clock.Add(2 * time.Minute)
+	r.svc.Tick(context.Background())
+	got := r.get(t, b.BuildID.String(), models.BuildStateBuilding)
+	var material []byte
+	if got.Crypto == nil || got.Crypto.Suite != "bob.xor" || json.Unmarshal(got.Crypto.Material, &material) != nil ||
+		!bytes.HasPrefix(material, []byte("key of ")) {
+		t.Fatalf("the factory's keys: %+v", got.Crypto)
+	}
+	var req *protocol.BuildRequest
+	for _, c := range r.rpc.recorded() {
+		if q, ok := c.payload.(protocol.BuildRequest); ok && q.BuildID == b.BuildID.String() {
+			req = &q
+		}
+	}
+	if req == nil || req.Crypto == nil || req.Crypto.Suite != "bob.xor" || req.Envelope != "" {
+		t.Fatalf("the request: %+v", req)
+	}
+
+	lite := r.queue(t, func(in *BuildInput) { in.Target = "dummy-lite" })
+	if lite.Envelope != protocol.EnvelopeJSON || lite.Codec != nil || lite.Crypto == nil || lite.Crypto.Suite != protocol.CryptoAES256CBCHMACSHA256 {
+		t.Fatalf("a JSON target with core's suite: %+v", lite)
+	}
+
+	// Its channel's kind agentless: the JSON target refused there.
+	k := r.chs.schemas["http"].Kinds[protocol.KindReverseCall]
+	k.Agentless = true
+	r.chs.schemas["http"].Kinds[protocol.KindReverseCall] = k
+	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) { in.Target = "dummy-lite" }))
+	var v *ValidationError
+	if !errors.As(err, &v) || !strings.Contains(v.Problems["connections[0].kind"], "agentless") {
+		t.Fatalf("JSON through an agentless kind: %v", err)
 	}
 }

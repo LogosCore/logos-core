@@ -138,8 +138,18 @@ type MinionSession struct {
 	// (models.Build.Compression), copied when the session opens or a build
 	// claims it: core packs the items it sends the minion only with one
 	// (protocol.Pack). "": core packs nothing for it.
-	Compression string                    `bson:"compression,omitempty" json:"-"`
-	ConnChanges []MinionSessionConnChange `bson:"conn_changes,omitempty" json:"conn_changes,omitempty"`
+	Compression string `bson:"compression,omitempty" json:"-"`
+	// Envelope and Codec are its build's (Build.Envelope, Build.Codec),
+	// copied as Compression is: how the minion writes its messages, and
+	// what its factory (ModuleName) declared of the layers it translates.
+	Envelope string               `bson:"envelope,omitempty" json:"-"`
+	Codec    *protocol.BuildCodec `bson:"codec,omitempty" json:"-"`
+	// CodecDownSince is since when the factory that translates the
+	// session's codec has not answered (no link, or no answer in time):
+	// what the minion sends is refused and what core starts waits. nil
+	// while it answers.
+	CodecDownSince *time.Time                `bson:"codec_down_since,omitempty" json:"codec_down_since,omitempty"`
+	ConnChanges    []MinionSessionConnChange `bson:"conn_changes,omitempty" json:"conn_changes,omitempty"`
 	// LastSeenAt is the latest message under the session id; nil before the
 	// first check-in.
 	LastSeenAt *time.Time `bson:"last_seen_at,omitempty" json:"last_seen_at,omitempty"`

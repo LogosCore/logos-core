@@ -49,6 +49,7 @@ func TestRouteTable(t *testing.T) {
 		"DELETE /api/v1/mcp",
 		"GET /api/channel/connection",
 		"GET /api/channel/link",
+		"GET /api/factory/link",
 		"GET /api/v1/",
 		"GET /api/v1/builds/:id/artifact",
 		"GET /api/v1/graphql/ws",
@@ -172,6 +173,7 @@ func TestRouteAuthTiers(t *testing.T) {
 		"POST /api/channel/sync":             415,
 		"GET /api/channel/connection":        400,
 		"GET /api/channel/link":              400,
+		"GET /api/factory/link":              400,
 	}
 
 	r := testRouter(t).NewRouter()

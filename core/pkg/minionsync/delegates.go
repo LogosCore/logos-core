@@ -263,7 +263,7 @@ func (s *Service) delegateTaskOf(ctx context.Context, session *models.MinionSess
 	stopIdle := delegateStopIdle(t.Action, t.Args[protocol.ParamStopIdle])
 	now := s.now()
 	dt = &delegateTask{id: id, session: session.SessionID, operation: session.OperationID, action: t.Action, command: t.Command,
-		serves: cmd.Serves, stopIdle: stopIdle, limit: session.MessageLimit(), usedAt: now,
+		serves: cmd.Serves, stopIdle: stopIdle, limit: planLimit(session), usedAt: now,
 		steps: map[uint64]*delegateStep{}, closing: map[uint64]*delegateStep{}, conns: map[uint64]*delegateConn{},
 		seq: map[uint64]uint64{}, join: protocol.DelegateJoiner{MaxHeld: delegateHeld}}
 	s.dlg.mu.Lock()
@@ -374,7 +374,7 @@ func (s *Service) takeDelegate(ctx context.Context, session *models.MinionSessio
 		return delegateCloseOf(d, protocol.DelegateTaskEnded, "no such delegate task")
 	}
 	s.dlg.mu.Lock()
-	dt.usedAt, dt.limit = s.now(), session.MessageLimit()
+	dt.usedAt, dt.limit = s.now(), planLimit(session)
 	if d.Step == protocol.DelegateSync || d.Step == protocol.DelegateFrame {
 		dt.carried++
 	}

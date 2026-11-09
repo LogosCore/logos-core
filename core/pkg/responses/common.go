@@ -19,6 +19,7 @@ var (
 
 	// Channel data-plane (registration gate).
 	ErrChannelNotRegistered = ErrorResponse{Error: "channel not registered"}
+	ErrFactoryNotRegistered = ErrorResponse{Error: "factory not registered"}
 	ErrRegistryUnavailable  = ErrorResponse{Error: "registry unavailable"}
 )
 

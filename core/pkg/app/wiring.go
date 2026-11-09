@@ -26,6 +26,7 @@ type controllers struct {
 	status   controller.IStatusController
 	channel  controller.IChannelController
 	link     controller.IChannelLinkController
+	factory  controller.IFactoryLinkController
 	skill    *controller.SkillController
 	build    *controller.BuildController
 	task     *controller.MinionTaskController
@@ -100,6 +101,7 @@ func (a *App) buildControllers() *controllers {
 		}),
 		channel: controller.NewChannelController(a.moduleGate, a.minionSync, a.logger, a.env.ChannelSyncMaxSize),
 		link:    controller.NewChannelLinkController(a.moduleGate, a.channelModule, a.links),
+		factory: controller.NewFactoryLinkController(a.moduleGate, a.factoryModule, a.factoryLinks),
 		skill:   controller.NewSkillController(a.skillService, a.logger),
 		build:   controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
 		task:    controller.NewMinionTaskController(a.repos.MinionTask, a.minionFiles, a.repos.Operation, a.logger),
@@ -240,6 +242,20 @@ func (a *App) buildResolvers() *resolvers {
 
 // channelModule is a registered channel instance's module name, for the
 // control link's handshake: "" for an instance that is not a channel.
+func (a *App) factoryModule(ctx context.Context, instance string) (string, error) {
+	m, err := a.repos.ModuleRegistry.FindByInstance(ctx, instance)
+	if err != nil {
+		if repository.IsNotFound(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	if m.Type != protocol.ServiceFactory {
+		return "", nil
+	}
+	return m.Name, nil
+}
+
 func (a *App) channelModule(ctx context.Context, instance string) (string, error) {
 	m, err := a.repos.ModuleRegistry.FindByInstance(ctx, instance)
 	if err != nil {

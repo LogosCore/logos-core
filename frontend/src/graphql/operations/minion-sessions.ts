@@ -74,6 +74,7 @@ export const MinionSessionFields = graphql(`
     createdAt
     lastSeenAt
     connected
+    codecDownSince
     conn
     connKind
     connName

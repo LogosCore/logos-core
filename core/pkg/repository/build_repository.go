@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"slices"
 	"time"
 
@@ -117,6 +118,10 @@ type IBuildRepository interface {
 	// SetCredentialRevs records the revision of each credential that went
 	// to the factory with the build, by id.
 	SetCredentialRevs(ctx context.Context, buildID uuid.UUID, revs map[string]int64) error
+	// SetCrypto records the keys a factory made for a build of its own
+	// suite (docs: Codecs, Keys), once: false when the build has keys
+	// already.
+	SetCrypto(ctx context.Context, buildID uuid.UUID, crypto protocol.BuildCrypto) (bool, error)
 	// CountByCredentialID counts the builds a credential went into.
 	CountByCredentialID(ctx context.Context, credentialID uuid.UUID) (int64, error)
 	// FindByBuildID returns one build; IsNotFound on a miss.
@@ -203,6 +208,14 @@ func (r *buildRepository) SetCredentialRevs(ctx context.Context, buildID uuid.UU
 		return nil
 	}
 	return r.coll.UpdateOne(ctx, bson.M{"build_id": buildID}, bson.M{"$set": bson.M{"credential_revs": revs}})
+}
+
+func (r *buildRepository) SetCrypto(ctx context.Context, buildID uuid.UUID, crypto protocol.BuildCrypto) (bool, error) {
+	err := r.coll.UpdateOne(ctx, bson.M{"build_id": buildID, "crypto": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"crypto": crypto}})
+	if IsNotFound(err) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func (r *buildRepository) CountByCredentialID(ctx context.Context, credentialID uuid.UUID) (int64, error) {

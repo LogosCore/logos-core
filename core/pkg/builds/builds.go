@@ -71,10 +71,6 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	if schema == nil {
 		return nil, invalid("no %q factory has declared a build schema", moduleName)
 	}
-	if schema.Crypto != "" && !payloadcrypto.Supported(schema.Crypto) {
-		return nil, invalid("the %q factory's minions need payload crypto suite %q, which core does not implement",
-			moduleName, schema.Crypto)
-	}
 	insts, err := s.instances(ctx, moduleName, schema.Version)
 	if err != nil {
 		return nil, err
@@ -130,6 +126,16 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		}
 		probs.add("compression", "this factory's minions inflate nothing")
 	}
+	codec := schema.TargetCodec(c.target)
+	if probs == nil {
+		probs = problems{}
+	}
+	if s := codec.Suite; s != "" && !protocol.IsFactoryCodec(s) && !payloadcrypto.Supported(s) {
+		probs.add("target", "the target's minions need payload crypto suite %q, which core does not implement", s)
+	}
+	if codec.Translated() && schema.Codec == nil {
+		probs.add("target", "the factory names a codec of its own and declares no codec")
+	}
 	if err := probs.err("the build does not fit the factory's build schema"); err != nil {
 		return nil, err
 	}
@@ -166,8 +172,18 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	if len(schema.Compression) > 0 && (in.Compression == nil || *in.Compression) {
 		b.Compression = schema.Compression[0]
 	}
-	if schema.Crypto != "" {
-		if b.Crypto, err = payloadcrypto.NewKeys(schema.Crypto); err != nil {
+	// The target's codec (docs: Codecs). Core makes the keys of its own
+	// suite now; a factory makes those of its own as the build is offered
+	// (dispatch: factoryCrypto).
+	if codec.Envelope != protocol.EnvelopeCBOR {
+		b.Envelope = codec.Envelope
+	}
+	if codec.Translated() {
+		decl := *schema.Codec
+		b.Codec = &decl
+	}
+	if codec.Suite != "" && !protocol.IsFactoryCodec(codec.Suite) {
+		if b.Crypto, err = payloadcrypto.NewKeys(codec.Suite); err != nil {
 			return nil, err
 		}
 	}
@@ -201,6 +217,11 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	req, _, err := s.request(ctx, b, b.Deadline)
 	if err != nil {
 		return nil, err
+	}
+	if req.Crypto == nil && protocol.IsFactoryCodec(codec.Suite) {
+		// The factory makes its suite's keys as the build is offered: the
+		// request then carries them.
+		req.Crypto = &protocol.BuildCrypto{Suite: codec.Suite}
 	}
 	if p := protocol.ValidateBuildRequest(*schema, req); p != nil {
 		return nil, &ValidationError{Message: "the build does not fit the factory's build schema", Problems: p}

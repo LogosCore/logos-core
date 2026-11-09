@@ -547,6 +547,35 @@ paths:
       summary: Enroll first admin
       tags:
       - Enrollment
+  /factory/link:
+    get:
+      description: 'A factory instance that translates its minions'' suite or envelope
+        opens one: a WebSocket over which core asks it to read and write its minions''
+        messages and make its suite''s keys, and it answers each request by its id.'
+      parameters:
+      - description: The factory's registered instance id
+        in: header
+        name: Logos-Factory-Instance
+        required: true
+        type: string
+      responses:
+        "101":
+          description: Switching Protocols
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: instance is not a registered factory
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "503":
+          description: module registry unavailable
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Factory link (data plane)
+      tags:
+      - Factories
   /graphql:
     get:
       description: Serves the Altair GraphQL Client UI for interactive query testing.
@@ -808,6 +837,28 @@ paths:
       summary: Download a minion task's raw output
       tags:
       - Minion tasks
+  /minion-tasks/{id}/terminal:
+    get:
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Rows (24)
+        in: query
+        name: rows
+        type: integer
+      - description: Columns (80)
+        in: query
+        name: cols
+        type: integer
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Open a web terminal on a terminal task
+      tags:
+      - Minion tasks
   /skills:
     post:
       consumes:
@@ -903,6 +954,26 @@ paths:
       summary: System status
       tags:
       - Status
+  /vpn:
+    get:
+      responses: {}
+      summary: A logos-vpn client's link (WebSocket)
+      tags:
+      - VPN
+  /vpn/client/{platform}:
+    get:
+      parameters:
+      - description: linux-amd64, darwin-arm64, windows-amd64, ...
+        in: path
+        name: platform
+        required: true
+        type: string
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Download logos-vpn for a system
+      tags:
+      - VPN
   /wiki/collab-ticket:
     post:
       consumes:

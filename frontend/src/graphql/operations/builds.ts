@@ -179,6 +179,8 @@ export const BuildQuery = graphql(`
       maxTasks
       compression
       crypto
+      envelope
+      codec
       warnings
       log
       cancelledBy {

@@ -80,9 +80,19 @@ type sender struct {
 	session *models.MinionSession
 	crypto  protocol.BuildCrypto
 	keys    protocol.AES256CBCHMACSHA256Material
-	// replaced: the message opened with keys a claim replaced; keys are
-	// those.
+	// replaced: the message opened with keys a claim replaced; keys (or
+	// material) are those.
 	replaced bool
+	// codec is the build's suite and envelope (codecs.go); factory the
+	// module that translates the layers that are its own, decl what it
+	// declared of them, buildID the build the factory's calls name.
+	codec   protocol.Codec
+	factory string
+	decl    *protocol.BuildCodec
+	buildID uuid.UUID
+	// material is the key material of a factory's own suite, which the
+	// factory seals and opens with.
+	material []byte
 	// place is the build connection a hello came through when a target's
 	// call or connection brought it (0: the hello says): a minion a
 	// channel acts as knows no build, and says none.
@@ -167,6 +177,9 @@ type Service struct {
 	// schemas carry none.
 	dlg             *delegates
 	delegateSchemas DelegateSchemas
+	// factories translate the layers of their builds' codecs that are their
+	// own (codecs.go); nil: such a build's messages do not open.
+	factories FactoryLinks
 }
 
 func NewService(builds Builds, stagings repository.IMinionStagingRepository, sessions repository.IMinionSessionRepository,
@@ -224,14 +237,9 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 		// carried it, when only one of the build's fits.
 		from.place = carrierPlace(from.build, carrierKind(via), ChannelOf(ctx))
 	}
-	plain, err := from.open(sentUnder, frame)
-	if err != nil && from.session != nil {
-		// Not the session's keys: maybe an earlier holder's, replaced by a
-		// claim. It is told so.
-		plain, err = s.openReplaced(from, sentUnder, frame)
-	}
+	plain, err := s.readMessage(ctx, from, sentUnder, frame)
 	if err != nil {
-		s.logger.Info("minion message does not open", zap.String("id", id))
+		s.logger.Info("minion message does not open", zap.String("id", id), zap.Error(err))
 		return nil, ErrUnopened
 	}
 	var msg protocol.MinionMessage
@@ -271,7 +279,7 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 
 	// Packed items in their places (packing.go): one that does not unpack
 	// stays, and is answered.
-	protocol.UnpackItems(msg.Items)
+	unpackItems(from, msg.Items)
 	if via != nil && via.target != uuid.Nil {
 		// Over a bind-persistent target's connection only its minion
 		// speaks: one of another build reached at its address is not it,
@@ -342,11 +350,13 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 		s.keepReply(ctx, msg.ID, nil)
 		return nil, nil
 	}
-	reply, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, Re: msg.ID, Items: packMessage(from.session, items)})
-	if err != nil {
-		return nil, err
+	sealed, _, err := s.writeMessage(ctx, from, sentUnder, protocol.CoreMessage{V: protocol.MinionMessageV3, Re: msg.ID, Items: items})
+	if errors.Is(err, ErrCodec) {
+		// Its factory did not write it: the exchange fails as an unopened
+		// message does, and the minion sends again.
+		s.logger.Info("minion reply not written", zap.String("id", id), zap.Error(err))
+		return nil, ErrUnopened
 	}
-	sealed, err := from.seal(sentUnder, reply)
 	if err == nil {
 		s.keepReply(ctx, msg.ID, sealed)
 	}
@@ -431,29 +441,43 @@ func (s *Service) underBuild(ctx context.Context, from *sender, peer string, msg
 	if err := protocol.UnmarshalCBOR(msg.Items[0], &stage); err != nil {
 		return errItem(protocol.ErrItemBadMessage, "the stage does not read", 0)
 	}
-	pub, err := protocol.ParseStageKey(stage.Key)
-	if err != nil {
-		return errItem(protocol.ErrItemBadMessage, err.Error(), 0)
-	}
 	if len(stage.Corr) != 16 {
 		return errItem(protocol.ErrItemBadMessage, "corr is 16 bytes", 0)
 	}
-
-	fresh, err := payloadcrypto.NewKeys(b.Crypto.Suite)
-	if err != nil {
-		return nil, err
-	}
-	var material protocol.AES256CBCHMACSHA256Material
-	if err := json.Unmarshal(fresh.Material, &material); err != nil {
-		return nil, err
-	}
-	asCBOR, err := protocol.MarshalCBOR(material)
-	if err != nil {
-		return nil, err
-	}
-	sealed, err := protocol.EncryptStageKeys(pub, asCBOR)
-	if err != nil {
-		return nil, fmt.Errorf("encrypt the stage keys: %w", err)
+	var fresh *protocol.BuildCrypto
+	var sealed []byte
+	if from.suiteIsFactorys() {
+		// The stage's key is the suite's: its factory makes the keys and
+		// wraps them for it (codecs.go). One that does not answer leaves
+		// the stage unanswered; the minion stages again.
+		crypto, wrapped, refused, err := s.stageKeys(ctx, from, stage.Key)
+		switch {
+		case refused:
+			return errItem(protocol.ErrItemBadMessage, "the build's suite does not stage: say hello under the build id", 0)
+		case err != nil:
+			s.logger.Info("minion stage: no keys from its factory", zap.String("build_id", b.BuildID.String()), zap.Error(err))
+			return nil, ErrUnopened
+		}
+		fresh, sealed = &crypto, wrapped
+	} else {
+		pub, err := protocol.ParseStageKey(stage.Key)
+		if err != nil {
+			return errItem(protocol.ErrItemBadMessage, err.Error(), 0)
+		}
+		if fresh, err = payloadcrypto.NewKeys(b.Crypto.Suite); err != nil {
+			return nil, err
+		}
+		var material protocol.AES256CBCHMACSHA256Material
+		if err := json.Unmarshal(fresh.Material, &material); err != nil {
+			return nil, err
+		}
+		asCBOR, err := protocol.MarshalCBOR(material)
+		if err != nil {
+			return nil, err
+		}
+		if sealed, err = protocol.EncryptStageKeys(pub, asCBOR); err != nil {
+			return nil, fmt.Errorf("encrypt the stage keys: %w", err)
+		}
 	}
 	staging := &models.MinionStaging{
 		TempID: uuid.New(), BuildID: b.BuildID, OperationID: b.OperationID, Crypto: *fresh, CreatedAt: s.now(),
@@ -568,7 +592,7 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 	conn := connOf(b, place)
 	session.Conn, session.ConnKind, session.ConnName, session.ConnCount = conn.Place, conn.Kind, conn.Name, len(b.Connections.Items)
 	session.ConnMaxMessage = conn.MaxMessage
-	session.Compression = b.Compression
+	session.Compression, session.Envelope, session.Codec = b.Compression, b.Envelope, b.Codec
 	if peer != "" {
 		session.PeerAddress = peer
 		session.Peers = []models.MinionSessionPeer{{Address: peer, FirstSeen: now, LastSeen: now, Count: 1}}
@@ -636,7 +660,7 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 		At: now, BuildID: b.BuildID, BuildDescription: b.Description, ModuleName: b.ModuleName, Target: b.Target,
 		Platform: b.Platform, Staged: from.staging != nil, Crypto: from.crypto, Hello: models.MinionHelloFrom(hello),
 		Address: address, AddressPicked: picked, Sleep: sleepOf(hello), MaxTasks: models.MaxTasksOf(hello),
-		MaxTasksSettable: b.MaxTasks != nil, Compression: b.Compression,
+		MaxTasksSettable: b.MaxTasks != nil, Compression: b.Compression, Envelope: b.Envelope, Codec: b.Codec,
 	})
 	if repository.IsNotFound(err) {
 		return refuse("the session closed meanwhile")
@@ -884,7 +908,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			out, err = s.takeDelegate(ctx, session, raw, i)
 		case protocol.ItemPacked:
 			// One that did not unpack (Exchange took the rest in place).
-			out, err = packedErr(msg.Items, i)
+			out, err = packedErr(unpackEnvelope(session), msg.Items, i)
 		default:
 			out, err = errItem(protocol.ErrItemUnknownItem, "not taken under a session yet", i)
 		}
@@ -904,7 +928,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 		// After the answers, what the outbox has (cancels whenever core has
 		// them, tasks only when asked), in the room the answers leave.
 		// The items the message has, and the chunks and poll to come.
-		d := delivery{streams: true, answered: answered, room: roomFor(session.MessageLimit(), items), count: len(items) + len(pulls) + 1}
+		d := delivery{streams: true, answered: answered, room: roomFor(planLimit(session), items), count: len(items) + len(pulls) + 1}
 		if len(pulls) > 0 {
 			// Tunnels leave uploads half the message.
 			d.tunnelRoom = d.room / 2
@@ -1146,6 +1170,7 @@ func (s *Service) sender(ctx context.Context, id uuid.UUID) (*sender, error) {
 	switch {
 	case err == nil:
 		from.session, from.crypto = session, session.Crypto
+		from.setCodec(session.Envelope, session.ModuleName, session.Codec, session.BuildID)
 		return from, from.readKeys()
 	case !repository.IsNotFound(err):
 		return nil, fmt.Errorf("load session: %w", err)
@@ -1175,6 +1200,7 @@ func (s *Service) sender(ctx context.Context, id uuid.UUID) (*sender, error) {
 		}
 		from.crypto = *b.Crypto
 	}
+	from.setCodec(b.Envelope, b.ModuleName, b.Codec, b.BuildID)
 	return from, from.readKeys()
 }
 
@@ -1197,9 +1223,18 @@ func (s *Service) openReplaced(from *sender, id uuid.UUID, frame []byte) ([]byte
 	return nil, protocol.ErrFrame
 }
 
-// readKeys reads the sender's key material; a suite core does not implement
-// does not open.
+// readKeys reads the sender's key material: a factory's own suite's, as
+// bytes the factory takes; else core's, and a suite core does not
+// implement does not open.
 func (f *sender) readKeys() error {
+	if f.suiteIsFactorys() {
+		m, err := factoryMaterial(f.crypto)
+		if err != nil {
+			return ErrUnopened
+		}
+		f.material = m
+		return nil
+	}
 	if f.crypto.Suite != protocol.CryptoAES256CBCHMACSHA256 {
 		return ErrUnopened
 	}

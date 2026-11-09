@@ -466,7 +466,7 @@ func (s *Service) pushNow(ctx context.Context, session uuid.UUID, streams bool) 
 		return
 	}
 	for _, c := range conns {
-		d := delivery{streams: streams, room: roomFor(from.session.MessageLimit(), nil)}
+		d := delivery{streams: streams, room: roomFor(planLimit(from.session), nil)}
 		if max, ok := c.allowanceOf(session); ok {
 			if d.tasks, err = s.room(ctx, from.session, max); err != nil {
 				s.logger.Error("minion push: the allowance's room", zap.String("session_id", session.String()), zap.Error(err))
@@ -516,15 +516,12 @@ func (s *Service) push(ctx context.Context, c *Conn, from *sender, items []cbor.
 func (s *Service) pushUnder(ctx context.Context, c *Conn, from *sender, id uuid.UUID, items []cbor.RawMessage) error {
 	c.touch(s.now())
 	msgID := protocol.NewMessageID()
-	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: packMessage(from.session, items),
+	sealed, sent, err := s.writeMessage(ctx, from, id, protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: items,
 		At: unixNow(s.now())})
 	if err != nil {
 		return err
 	}
-	sealed, err := from.seal(id, plain)
-	if err != nil {
-		return err
-	}
+	items = items[:sent]
 	s.answers.add(id, msgID, s.now())
 	if err := c.send(ctx, protocol.ConnFrame{ID: id[:], Data: sealed}); err != nil {
 		s.answers.take(id, msgID, s.now())

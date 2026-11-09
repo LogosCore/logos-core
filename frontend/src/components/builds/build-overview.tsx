@@ -115,6 +115,14 @@ export function BuildOverview({
               )}
             </LabelRow>
           )}
+          {/* How its messages are written and sealed, where not core's CBOR alone (docs: Codecs). */}
+          {(b.envelope !== "cbor" || b.codec != null) && (
+            <LabelRow label="Codec">
+              <span className="font-mono">{b.envelope}</span>
+              {cryptoSuite(b.crypto) && <span className="font-mono"> · {cryptoSuite(b.crypto)}</span>}
+              {b.codec != null && <span className="text-muted-foreground"> · its factory translates its own</span>}
+            </LabelRow>
+          )}
           {b.persistedSession && (
             <LabelRow label="Persisted session">
               <PersistedSession id={b.persistedSession} />
@@ -337,4 +345,10 @@ function PersistedSession({ id }: { id: string }) {
       <Copyable text={id} what="Session id" />
     </span>
   )
+}
+
+/** The suite of a build's crypto ({suite, material}), if any. */
+function cryptoSuite(crypto: unknown): string | null {
+  const suite = (crypto as { suite?: unknown } | null)?.suite
+  return typeof suite === "string" ? suite : null
 }

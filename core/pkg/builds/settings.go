@@ -1,6 +1,7 @@
 package builds
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -187,6 +188,13 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 			continue
 		}
 		c.kinds[i] = kind
+		if codec := schema.TargetCodec(t); cs.IsAgentless(kind) && !codec.Agentless() {
+			// Its channel acts as the minion with core's keys and speaks
+			// core's codec alone (docs: Codecs, A build's codec).
+			out.add(key+".kind", "%s is agentless: its channel speaks core's CBOR envelope and suite, not target %q's (%s, %s)",
+				kind, t.ID, codec.Envelope, cmp.Or(codec.Suite, "no suite"))
+			continue
+		}
 		if err := s.checkValues(ctx, op, key+".settings.", cs.KindFields(kind), conn.Settings, out, files, creds); err != nil {
 			return c, out, err
 		}

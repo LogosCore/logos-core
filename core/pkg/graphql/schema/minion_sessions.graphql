@@ -109,6 +109,10 @@ type MinionSession {
   # A persistent connection serving the session is open (docs:
   # contracts/channel-core-connections): its minion is reached at once.
   connected: Boolean!
+  # Since when the factory that translates the session's codec has not
+  # answered (docs: Codecs): what the minion sends is refused and what core
+  # starts waits. null while it answers, or for core's codec.
+  codecDownSince: String
   # The connection the minion uses: its place in connections, from 1, as
   # its hello or its last conn_update said. null when it never said.
   conn: Int

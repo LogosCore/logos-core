@@ -136,6 +136,11 @@ type BuildTarget {
   fields: [ModuleField!]!
   # The channel kinds this target can connect through.
   channels: [BuildChannelVersions!]!
+  # The target's codec (docs: Codecs): its payload crypto suite (null for
+  # none) and envelope ("cbor", "json", or the factory's own
+  # "<module_name>.<name>"), the schema's where the target names none.
+  crypto: String
+  envelope: String!
 }
 
 # A factory kind minions can be built with.
@@ -323,8 +328,16 @@ type Build {
   # it packs none (turned off, or a factory without compression).
   compression: String
   # The minion's payload crypto as the factory got it: {suite, material}.
-  # null when its factory declares no suite.
+  # null when its factory declares no suite (or, for a suite of the
+  # factory's own, before the factory made the keys).
   crypto: JSON
+  # How the minion writes its messages: "cbor", "json", or the factory's
+  # own envelope (docs: Codecs).
+  envelope: String!
+  # What the factory declared of the layers it translates, {growth,
+  # overhead, timeout}, when the build's suite or envelope is its own;
+  # null for core's codec.
+  codec: JSON
   # The session the minion claims when it starts; null for a minion that
   # opens new sessions.
   persistedSession: ID

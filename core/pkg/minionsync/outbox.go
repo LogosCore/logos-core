@@ -276,7 +276,7 @@ func (s *Service) taskItems(ctx context.Context, session *models.MinionSession, 
 	if err != nil {
 		return false, fmt.Errorf("tasks to deliver: %w", err)
 	}
-	most := roomFor(session.MessageLimit(), nil)
+	most := roomFor(planLimit(session), nil)
 	var sent []uuid.UUID
 	var went []*models.MinionTask
 	for i := range waiting {
@@ -329,7 +329,7 @@ func taskItem(t *models.MinionTask) (cbor.RawMessage, error) {
 
 // tooLarge ends a task no message of the session's connection can carry.
 func (s *Service) tooLarge(ctx context.Context, session *models.MinionSession, t *models.MinionTask, size int) error {
-	why := fmt.Sprintf("too large for the connection: the task is %d bytes, its messages carry %d", size, session.MessageLimit())
+	why := fmt.Sprintf("too large for the connection: the task is %d bytes, its messages carry %d", size, planLimit(session))
 	after, err := s.tasks.FailUndelivered(ctx, session.SessionID, t.TaskID, why, s.now())
 	if err != nil {
 		if repository.IsNotFound(err) {
@@ -338,7 +338,7 @@ func (s *Service) tooLarge(ctx context.Context, session *models.MinionSession, t
 		return fmt.Errorf("fail a task too large to send: %w", err)
 	}
 	s.logger.Info("minion task too large for its session's connection", zap.String("task_id", t.TaskID.String()),
-		zap.Int("size", size), zap.Int("limit", session.MessageLimit()))
+		zap.Int("size", size), zap.Int("limit", planLimit(session)))
 	s.publishTask(after)
 	return nil
 }

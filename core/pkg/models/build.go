@@ -114,6 +114,14 @@ type Build struct {
 	// protocol.BuildSchema.Compression: on unless the operator turned it
 	// off; "" for off, or a factory that declares none.
 	Compression string `bson:"compression,omitempty" json:"compression,omitempty"`
+	// Envelope is how the minion writes its messages (its target's,
+	// protocol.BuildSchema.TargetCodec): core's protocol.EnvelopeJSON, or a
+	// factory's own; "" for core's CBOR. Its suite is Crypto's.
+	Envelope string `bson:"envelope,omitempty" json:"envelope,omitempty"`
+	// Codec is what the factory declared of the layers it translates
+	// (protocol.BuildSchema.Codec) when the build was made, for a build
+	// whose suite or envelope is the factory's own; nil for core's codec.
+	Codec *protocol.BuildCodec `bson:"codec,omitempty" json:"codec,omitempty"`
 	// SearchText is what the builds list search reads of the build beyond
 	// its fields (BuildSearchText), set when the build is stored.
 	SearchText string `bson:"search_text" json:"-"`

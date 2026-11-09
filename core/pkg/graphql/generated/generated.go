@@ -156,6 +156,7 @@ type ComplexityRoot struct {
 		Artifact               func(childComplexity int) int
 		BindConnections        func(childComplexity int) int
 		CancelledBy            func(childComplexity int) int
+		Codec                  func(childComplexity int) int
 		Commands               func(childComplexity int) int
 		Compression            func(childComplexity int) int
 		ConnectionDescriptions func(childComplexity int) int
@@ -165,6 +166,7 @@ type ComplexityRoot struct {
 		Crypto                 func(childComplexity int) int
 		Deadline               func(childComplexity int) int
 		Description            func(childComplexity int) int
+		Envelope               func(childComplexity int) int
 		Error                  func(childComplexity int) int
 		FactoryVersion         func(childComplexity int) int
 		Failover               func(childComplexity int) int
@@ -288,7 +290,9 @@ type ComplexityRoot struct {
 
 	BuildTarget struct {
 		Channels    func(childComplexity int) int
+		Crypto      func(childComplexity int) int
 		Description func(childComplexity int) int
+		Envelope    func(childComplexity int) int
 		Fields      func(childComplexity int) int
 		Format      func(childComplexity int) int
 		ID          func(childComplexity int) int
@@ -797,6 +801,7 @@ type ComplexityRoot struct {
 		BindTarget       func(childComplexity int) int
 		BuildDescription func(childComplexity int) int
 		BuildID          func(childComplexity int) int
+		CodecDownSince   func(childComplexity int) int
 		Conn             func(childComplexity int) int
 		ConnChanges      func(childComplexity int) int
 		ConnCount        func(childComplexity int) int
@@ -2985,6 +2990,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.CancelledBy(childComplexity), true
+	case "Build.codec":
+		if e.ComplexityRoot.Build.Codec == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Build.Codec(childComplexity), true
 	case "Build.commands":
 		if e.ComplexityRoot.Build.Commands == nil {
 			break
@@ -3039,6 +3050,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.Description(childComplexity), true
+	case "Build.envelope":
+		if e.ComplexityRoot.Build.Envelope == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Build.Envelope(childComplexity), true
 	case "Build.error":
 		if e.ComplexityRoot.Build.Error == nil {
 			break
@@ -3539,12 +3556,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildTarget.Channels(childComplexity), true
+	case "BuildTarget.crypto":
+		if e.ComplexityRoot.BuildTarget.Crypto == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildTarget.Crypto(childComplexity), true
 	case "BuildTarget.description":
 		if e.ComplexityRoot.BuildTarget.Description == nil {
 			break
 		}
 
 		return e.ComplexityRoot.BuildTarget.Description(childComplexity), true
+	case "BuildTarget.envelope":
+		if e.ComplexityRoot.BuildTarget.Envelope == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildTarget.Envelope(childComplexity), true
 	case "BuildTarget.fields":
 		if e.ComplexityRoot.BuildTarget.Fields == nil {
 			break
@@ -5658,6 +5687,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.BuildID(childComplexity), true
+	case "MinionSession.codecDownSince":
+		if e.ComplexityRoot.MinionSession.CodecDownSince == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.CodecDownSince(childComplexity), true
 	case "MinionSession.conn":
 		if e.ComplexityRoot.MinionSession.Conn == nil {
 			break
@@ -13308,6 +13343,11 @@ type BuildTarget {
   fields: [ModuleField!]!
   # The channel kinds this target can connect through.
   channels: [BuildChannelVersions!]!
+  # The target's codec (docs: Codecs): its payload crypto suite (null for
+  # none) and envelope ("cbor", "json", or the factory's own
+  # "<module_name>.<name>"), the schema's where the target names none.
+  crypto: String
+  envelope: String!
 }
 
 # A factory kind minions can be built with.
@@ -13495,8 +13535,16 @@ type Build {
   # it packs none (turned off, or a factory without compression).
   compression: String
   # The minion's payload crypto as the factory got it: {suite, material}.
-  # null when its factory declares no suite.
+  # null when its factory declares no suite (or, for a suite of the
+  # factory's own, before the factory made the keys).
   crypto: JSON
+  # How the minion writes its messages: "cbor", "json", or the factory's
+  # own envelope (docs: Codecs).
+  envelope: String!
+  # What the factory declared of the layers it translates, {growth,
+  # overhead, timeout}, when the build's suite or envelope is its own;
+  # null for core's codec.
+  codec: JSON
   # The session the minion claims when it starts; null for a minion that
   # opens new sessions.
   persistedSession: ID
@@ -15204,6 +15252,10 @@ type MinionSession {
   # A persistent connection serving the session is open (docs:
   # contracts/channel-core-connections): its minion is reached at once.
   connected: Boolean!
+  # Since when the factory that translates the session's codec has not
+  # answered (docs: Codecs): what the minion sends is refused and what core
+  # starts waits. null while it answers, or for core's codec.
+  codecDownSince: String
   # The connection the minion uses: its place in connections, from 1, as
   # its hello or its last conn_update said. null when it never said.
   conn: Int
@@ -25151,6 +25203,64 @@ func (ec *executionContext) fieldContext_Build_crypto(_ context.Context, field g
 	return fc, nil
 }
 
+func (ec *executionContext) _Build_envelope(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Build_envelope,
+		func(ctx context.Context) (any, error) {
+			return obj.Envelope, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Build_envelope(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Build",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Build_codec(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Build_codec,
+		func(ctx context.Context) (any, error) {
+			return obj.Codec, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Build_codec(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Build",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Build_persistedSession(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26644,6 +26754,10 @@ func (ec *executionContext) fieldContext_BuildEdge_node(_ context.Context, field
 				return ec.fieldContext_Build_compression(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
+			case "envelope":
+				return ec.fieldContext_Build_envelope(ctx, field)
+			case "codec":
+				return ec.fieldContext_Build_codec(ctx, field)
 			case "persistedSession":
 				return ec.fieldContext_Build_persistedSession(ctx, field)
 			case "state":
@@ -27276,6 +27390,10 @@ func (ec *executionContext) fieldContext_BuildSchema_targets(_ context.Context, 
 				return ec.fieldContext_BuildTarget_fields(ctx, field)
 			case "channels":
 				return ec.fieldContext_BuildTarget_channels(ctx, field)
+			case "crypto":
+				return ec.fieldContext_BuildTarget_crypto(ctx, field)
+			case "envelope":
+				return ec.fieldContext_BuildTarget_envelope(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type BuildTarget", field.Name)
 		},
@@ -27994,6 +28112,64 @@ func (ec *executionContext) fieldContext_BuildTarget_channels(_ context.Context,
 				return ec.fieldContext_BuildChannelVersions_kinds(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type BuildChannelVersions", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildTarget_crypto(ctx context.Context, field graphql.CollectedField, obj *model.BuildTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildTarget_crypto,
+		func(ctx context.Context) (any, error) {
+			return obj.Crypto, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildTarget_crypto(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildTarget",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildTarget_envelope(ctx context.Context, field graphql.CollectedField, obj *model.BuildTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildTarget_envelope,
+		func(ctx context.Context) (any, error) {
+			return obj.Envelope, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildTarget_envelope(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildTarget",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -36799,6 +36975,8 @@ func (ec *executionContext) fieldContext_MinionDelegateConnection_session(_ cont
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -40332,6 +40510,35 @@ func (ec *executionContext) fieldContext_MinionSession_connected(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_codecDownSince(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_codecDownSince,
+		func(ctx context.Context) (any, error) {
+			return obj.CodecDownSince, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_codecDownSince(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_conn(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -41244,6 +41451,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -41513,6 +41722,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -42681,6 +42892,8 @@ func (ec *executionContext) fieldContext_MinionSessionVia_session(_ context.Cont
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -43748,6 +43961,8 @@ func (ec *executionContext) fieldContext_MinionTarget_session(_ context.Context,
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -43930,6 +44145,8 @@ func (ec *executionContext) fieldContext_MinionTarget_delegate(_ context.Context
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -55001,6 +55218,10 @@ func (ec *executionContext) fieldContext_Mutation_createBuild(ctx context.Contex
 				return ec.fieldContext_Build_compression(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
+			case "envelope":
+				return ec.fieldContext_Build_envelope(ctx, field)
+			case "codec":
+				return ec.fieldContext_Build_codec(ctx, field)
 			case "persistedSession":
 				return ec.fieldContext_Build_persistedSession(ctx, field)
 			case "state":
@@ -55124,6 +55345,10 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 				return ec.fieldContext_Build_compression(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
+			case "envelope":
+				return ec.fieldContext_Build_envelope(ctx, field)
+			case "codec":
+				return ec.fieldContext_Build_codec(ctx, field)
 			case "persistedSession":
 				return ec.fieldContext_Build_persistedSession(ctx, field)
 			case "state":
@@ -55247,6 +55472,10 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 				return ec.fieldContext_Build_compression(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
+			case "envelope":
+				return ec.fieldContext_Build_envelope(ctx, field)
+			case "codec":
+				return ec.fieldContext_Build_codec(ctx, field)
 			case "persistedSession":
 				return ec.fieldContext_Build_persistedSession(ctx, field)
 			case "state":
@@ -57543,6 +57772,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -57785,6 +58016,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -57968,6 +58201,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -58210,6 +58445,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -58393,6 +58630,8 @@ func (ec *executionContext) fieldContext_Mutation_markMinionFeedbackRead(ctx con
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -58576,6 +58815,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMaxTasks(ctx c
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -67018,6 +67259,10 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 				return ec.fieldContext_Build_compression(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
+			case "envelope":
+				return ec.fieldContext_Build_envelope(ctx, field)
+			case "codec":
+				return ec.fieldContext_Build_codec(ctx, field)
 			case "persistedSession":
 				return ec.fieldContext_Build_persistedSession(ctx, field)
 			case "state":
@@ -69245,6 +69490,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
 			case "conn":
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
@@ -89784,6 +90031,13 @@ func (ec *executionContext) _Build(ctx context.Context, sel ast.SelectionSet, ob
 			out.Values[i] = ec._Build_compression(ctx, field, obj)
 		case "crypto":
 			out.Values[i] = ec._Build_crypto(ctx, field, obj)
+		case "envelope":
+			out.Values[i] = ec._Build_envelope(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "codec":
+			out.Values[i] = ec._Build_codec(ctx, field, obj)
 		case "persistedSession":
 			out.Values[i] = ec._Build_persistedSession(ctx, field, obj)
 		case "state":
@@ -90648,6 +90902,13 @@ func (ec *executionContext) _BuildTarget(ctx context.Context, sel ast.SelectionS
 			}
 		case "channels":
 			out.Values[i] = ec._BuildTarget_channels(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "crypto":
+			out.Values[i] = ec._BuildTarget_crypto(ctx, field, obj)
+		case "envelope":
+			out.Values[i] = ec._BuildTarget_envelope(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -95204,6 +95465,8 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "codecDownSince":
+			out.Values[i] = ec._MinionSession_codecDownSince(ctx, field, obj)
 		case "conn":
 			out.Values[i] = ec._MinionSession_conn(ctx, field, obj)
 		case "connKind":

@@ -215,6 +215,13 @@ function SessionCard({ s }: { s: Session }) {
           <When at={s.lostAt} now={now} />
         </LabelRow>
       )}
+      {s.codecDownSince && (
+        <LabelRow label="Codec">
+          <span className="text-red-600 dark:text-red-400" title="Its factory reads and writes this session's messages: until it answers, what the minion sends is refused and what core has for it waits">
+            its factory does not answer since <When at={s.codecDownSince} now={now} />
+          </span>
+        </LabelRow>
+      )}
       <LabelRow label="Tasks">
         <MaxTasksValue s={s} />
       </LabelRow>

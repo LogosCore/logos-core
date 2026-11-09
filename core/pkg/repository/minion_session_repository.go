@@ -113,6 +113,9 @@ type IMinionSessionRepository interface {
 	// SetConnected records whether a persistent connection serving the
 	// session is open (models.MinionSession.Connected).
 	SetConnected(ctx context.Context, sessionID uuid.UUID, connected bool) error
+	// SetCodecDown records since when the factory that translates the
+	// session's codec has not answered; nil clears it.
+	SetCodecDown(ctx context.Context, sessionID uuid.UUID, since *time.Time) error
 	// ClearConnected says no session is connected: core held the
 	// connections, and they went with the process before.
 	ClearConnected(ctx context.Context) (int64, error)
@@ -454,6 +457,9 @@ type MinionSessionClaim struct {
 	MaxTasksSettable bool
 	// Compression is the claiming build's ("": none).
 	Compression string
+	// Envelope and Codec are the claiming build's (models.Build).
+	Envelope string
+	Codec    *protocol.BuildCodec
 }
 
 func (r *minionSessionRepository) SetArchived(ctx context.Context, sessionID uuid.UUID, archived bool) error {
@@ -663,6 +669,14 @@ func (r *minionSessionRepository) SetConnected(ctx context.Context, sessionID uu
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, update)
 }
 
+func (r *minionSessionRepository) SetCodecDown(ctx context.Context, sessionID uuid.UUID, since *time.Time) error {
+	update := withRev(bson.M{"$unset": bson.M{"codec_down_since": ""}})
+	if since != nil {
+		update = withRev(bson.M{"$set": bson.M{"codec_down_since": *since}})
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, update)
+}
+
 func (r *minionSessionRepository) ClearConnected(ctx context.Context) (int64, error) {
 	res, err := r.coll.UpdateAll(ctx, bson.M{"connected": true}, withRev(bson.M{"$unset": bson.M{"connected": ""}}))
 	if err != nil {
@@ -703,6 +717,9 @@ func (r *minionSessionRepository) Claim(ctx context.Context, sessionID uuid.UUID
 		"max_tasks":          intOrRemove(c.MaxTasks),
 		"max_tasks_settable": c.MaxTasksSettable,
 		"compression":        strOrRemove(c.Compression),
+		"envelope":           strOrRemove(c.Envelope),
+		"codec":              codecOrRemove(c.Codec),
+		"codec_down_since":   "$$REMOVE",
 		"max_tasks_sends":    "$$REMOVE",
 		"late_at":            "$$REMOVE", // set again by the claim's check-in
 		"lost_at":            "$$REMOVE",
@@ -727,6 +744,15 @@ func sleepOrRemove(s *models.MinionSessionSleep) any {
 }
 
 // strOrRemove is text for a pipeline $set, or the field's removal for "".
+// codecOrRemove is a codec declaration for a pipeline $set, or the removal
+// of the field for none.
+func codecOrRemove(c *protocol.BuildCodec) any {
+	if c == nil {
+		return "$$REMOVE"
+	}
+	return bson.M{"$literal": *c}
+}
+
 func strOrRemove(s string) any {
 	if s == "" {
 		return "$$REMOVE"
