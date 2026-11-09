@@ -190,7 +190,16 @@ function readFolderChoices(
   return out
 }
 
-/** The layout showing an operation's folder (null: All). */
+/** Unfiled as a folder id: the sessions in no folder (core's nil UUID). */
+export const UNFILED = "00000000-0000-0000-0000-000000000000"
+
+/** Unfiled's count: All's less every folder's (a session is in one folder at most). */
+export function unfiledCount(allCount: number | undefined, folders: readonly { sessions: number }[]): number | undefined {
+  if (allCount === undefined) return undefined
+  return Math.max(0, allCount - folders.reduce((n, f) => n + f.sessions, 0))
+}
+
+/** The layout showing an operation's folder (null: All, UNFILED: those in none). */
 export function showFolder(layout: SessionsLayout, operationId: string, folderId: string | null): SessionsLayout {
   const folders = { ...layout.folders }
   if (folderId === null) delete folders[operationId]

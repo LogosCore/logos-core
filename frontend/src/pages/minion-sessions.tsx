@@ -24,7 +24,7 @@ import { SessionFolderDialog, type FolderDialogTarget } from "@/components/minio
 import type { FolderControls } from "@/components/minion-sessions/sessions-datatable"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { SessionsDatatable } from "@/components/minion-sessions/sessions-datatable"
-import { DEFAULT_SPLIT, MAX_SPLIT, MIN_SPLIT, showFolder } from "@/components/minion-sessions/sessions-layout"
+import { DEFAULT_SPLIT, MAX_SPLIT, MIN_SPLIT, UNFILED, showFolder } from "@/components/minion-sessions/sessions-layout"
 import { SplitPane } from "@/components/ui/split-pane"
 import { useCanBuild } from "@/components/builds/build-access"
 import { SessionWorkspace } from "@/components/minion-sessions/session-workspace"
@@ -70,7 +70,8 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
   // The archived sessions instead of the others: the page's, not the layout's,
   // so it always opens on the live ones.
   const [archived, setArchived] = useState(false)
-  // The operation's folders, and the one shown (the layout's; one gone: All).
+  // The operation's folders, and the one shown (the layout's; one gone, or
+  // Unfiled with no folder left: All).
   const { data: folderList } = useMinionSessionFolders(operationId)
   const { data: allCount } = useMinionSessionCount(operationId)
   const folderMutations = useMinionSessionFolderMutations(operationId)
@@ -79,7 +80,8 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
   // Sessions to put in the folder New folder makes (its row's Move to folder).
   const [moveIntoNew, setMoveIntoNew] = useState<{ ids: string[] } | null>(null)
   const chosen = layout.folders[operationId] ?? null
-  const currentFolder = chosen && folderList?.some((f) => f.id === chosen) ? chosen : null
+  const currentFolder =
+    chosen && (chosen === UNFILED ? (folderList?.length ?? 0) > 0 : folderList?.some((f) => f.id === chosen)) ? chosen : null
   const selectFolder = (id: string | null) => setLayout(showFolder(layout, operationId, id))
   const folderControls: FolderControls = {
     list: folderList ?? [],
@@ -97,7 +99,10 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
           onSuccess: (d) => {
             const n = d.setMinionSessionsFolder
             const name = folderList?.find((f) => f.id === folderId)?.name ?? "the new folder"
-            toast.success(`${folderId ? `Moved ${n} ${n === 1 ? "session" : "sessions"} to ${name}` : `Took ${n} ${n === 1 ? "session" : "sessions"} out of its folder`}`)
+            toast.success(`${folderId ? `Moved ${n} ${n === 1 ? "session" : "sessions"} to ${name}` : `Took ${n} ${n === 1 ? "session" : "sessions"} out of its folder`}`, {
+              // Moved from another view (All, where they stay): the folder they went to, a click away.
+              action: folderId && folderId !== currentFolder ? { label: "Show", onClick: () => selectFolder(folderId) } : undefined,
+            })
             done?.()
           },
           onError: (e) => toast.error(errorMessage(e, "Failed to move the sessions")),
@@ -200,11 +205,12 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
             tabs={tabs}
             onTabsChange={(next) => {
               setTabs(next)
-              // Another tab in front: the table shows its session's folder
-              // (All when it is in none). The pane has read its session.
+              // Another tab in front: the table shows its session's folder;
+              // one in none keeps All or Unfiled, else shows All. The pane has
+              // read its session.
               if (next.active && next.active !== tabs.active) {
                 const s = queryClient.getQueryData<MinionSessionQuery>(minionSessionKeys.detail(workspaceTab(next.active).sessionId))?.minionSession
-                const folder = s?.folderId ?? null
+                const folder = s?.folderId ?? (currentFolder === UNFILED ? UNFILED : null)
                 if (s && folder !== currentFolder) setLayout(showFolder(layout, operationId, folder))
               }
             }}

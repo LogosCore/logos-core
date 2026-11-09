@@ -363,7 +363,8 @@ type MinionSessionFilter {
 # (archived or not), the search and the filters.
 input MinionSessionMatchInput {
   archived: Boolean
-  # The folder's sessions; null: all (All).
+  # The folder's sessions; the nil UUID (00000000-0000-0000-0000-000000000000):
+  # those in no folder (Unfiled); null: all (All).
   folderId: ID
   search: String
   filters: [MinionSessionFilterInput!]
@@ -449,7 +450,7 @@ type MinionSessionFolder {
   operationId: ID!
   name: String!
   # A lucide name, or an emoji (one of the two, or neither); color the
-  # icon's (#rrggbb), as a wiki page's.
+  # icon's, as a wiki page's: the icon picker's oklch(L C H), or #rrggbb.
   icon: String
   emoji: String
   color: String
@@ -511,7 +512,9 @@ extend type Query {
     operationId: ID!
     # The archived sessions instead of the others.
     archived: Boolean = false
-    # The sessions in this folder; null: all of them (the table's All).
+    # The sessions in this folder; the nil UUID
+    # (00000000-0000-0000-0000-000000000000): those in no folder (the
+    # table's Unfiled); null: all of them (the table's All).
     folderId: ID
     search: String
     filters: [MinionSessionFilterInput!]

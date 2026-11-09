@@ -25,7 +25,8 @@ import (
 type MinionSessionQuery struct {
 	// Archived lists the archived sessions instead of the others.
 	Archived bool
-	// Folder keeps the sessions in this folder; nil: all of them.
+	// Folder keeps the sessions in this folder, or in none for
+	// models.UnfiledFolder; nil: all of them.
 	Folder  *uuid.UUID
 	Search  string
 	Filters []models.MinionSessionFilter
@@ -56,7 +57,11 @@ func minionSessionFilter(operationID uuid.UUID, q MinionSessionQuery, now time.T
 		archived = bson.M{"archived": true}
 	}
 	and := bson.A{minionSessionListFilter(operationID, q.Search), openSessions(now), archived}
-	if q.Folder != nil {
+	switch {
+	case q.Folder != nil && *q.Folder == models.UnfiledFolder:
+		// In no folder: the field unset (or null).
+		and = append(and, bson.M{"folder_id": nil})
+	case q.Folder != nil:
 		and = append(and, bson.M{"folder_id": *q.Folder})
 	}
 	if q.Builds != nil {

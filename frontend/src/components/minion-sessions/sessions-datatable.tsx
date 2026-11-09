@@ -125,6 +125,7 @@ import {
   type SessionColumnDef,
   type SessionColumnId,
   type SessionsLayout,
+  UNFILED,
 } from "./sessions-layout"
 import { SwitchConnectionMenu } from "./switch-connection-menu"
 import { FolderGlyph } from "./session-folder-tabs"
@@ -141,7 +142,7 @@ const SKELETON_ROWS = 5
 /** The operation's folders, as the table's menus use them (the page's). */
 export interface FolderControls {
   list: readonly MinionSessionFolderFieldsFragment[]
-  /** The folder shown; null: All. */
+  /** The folder shown; null: All, UNFILED: those in none. */
   current: string | null
   canWrite: boolean
   onSelect: (folderId: string | null) => void
@@ -924,6 +925,11 @@ function TableMenuItems({
           <ContextMenuCheckboxItem checked={folders.current === null} closeOnClick onCheckedChange={() => folders.onSelect(null)}>
             All
           </ContextMenuCheckboxItem>
+          {folders.list.length > 0 && (
+            <ContextMenuCheckboxItem checked={folders.current === UNFILED} closeOnClick onCheckedChange={() => folders.onSelect(UNFILED)}>
+              Unfiled
+            </ContextMenuCheckboxItem>
+          )}
           {folders.list.map((f) => (
             <ContextMenuCheckboxItem key={f.id} checked={folders.current === f.id} closeOnClick onCheckedChange={() => folders.onSelect(f.id)}>
               <FolderGlyph folder={f} />

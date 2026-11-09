@@ -855,3 +855,54 @@ func TestIntegrationMinionSessionVia(t *testing.T) {
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }
+
+// Unfiled: the nil UUID as a list's folder keeps the sessions in no folder,
+// and a folder's emptied sessions come back to it.
+func TestIntegrationMinionSessionUnfiled(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	op, folder := uuid.New(), uuid.New()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	ids := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+	for i, id := range ids {
+		if err := repo.Insert(ctx, &models.MinionSession{SessionID: id, OperationID: op, Number: int64(i + 1), CreatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := repo.SetFolderMany(ctx, op, ids[:1], &folder); err != nil || n != 1 {
+		t.Fatalf("into the folder: %d %v", n, err)
+	}
+	list := func(f uuid.UUID) []uuid.UUID {
+		t.Helper()
+		rows, err := repo.FindByOperationIDWithCursor(ctx, op, MinionSessionQuery{Folder: &f, Sort: models.MinionSessionSort{Column: "number"}}, nil, 10, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []uuid.UUID{}
+		for _, r := range rows {
+			out = append(out, r.SessionID)
+		}
+		slices.SortFunc(out, func(a, b uuid.UUID) int { return bytes.Compare(a[:], b[:]) })
+		return out
+	}
+	want := slices.Clone(ids[1:])
+	slices.SortFunc(want, func(a, b uuid.UUID) int { return bytes.Compare(a[:], b[:]) })
+	if got := list(models.UnfiledFolder); !slices.Equal(got, want) {
+		t.Fatalf("unfiled %v, want %v", got, want)
+	}
+	if got := list(folder); !slices.Equal(got, ids[:1]) {
+		t.Fatalf("the folder's %v", got)
+	}
+	all, by, err := repo.FolderCounts(ctx, op)
+	if err != nil || all != 3 || by[folder] != 1 || len(by) != 1 {
+		t.Fatalf("counts %d %v %v", all, by, err)
+	}
+	// The folder emptied (deleted): all three unfiled again.
+	if _, err := repo.ClearFolder(ctx, op, folder); err != nil {
+		t.Fatal(err)
+	}
+	if got := list(models.UnfiledFolder); len(got) != 3 {
+		t.Fatalf("after the folder went: %v", got)
+	}
+}

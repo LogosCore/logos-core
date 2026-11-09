@@ -12,6 +12,8 @@ import {
   rowMinWidth,
   sessionsLayoutInput,
   showFolder,
+  UNFILED,
+  unfiledCount,
   sizeColumn,
   addressMatcher,
   formatAgo,
@@ -101,6 +103,24 @@ describe("layout", () => {
     expect(isComplete({ column: "host", op: "CONTAINS", text: "" }, col("host"))).toBe(false)
     expect(isComplete({ column: "lastSeen", op: "NEVER" }, col("lastSeen"))).toBe(true)
     expect(isComplete({ column: "pid", op: "RANGE" }, col("pid"))).toBe(false)
+  })
+})
+
+describe("Unfiled", () => {
+  test("its count is All's less every folder's, never below zero", () => {
+    expect(unfiledCount(10, [{ sessions: 3 }, { sessions: 4 }])).toBe(3)
+    expect(unfiledCount(5, [])).toBe(5)
+    // The counts arrive apart: a moment where the folders' run ahead.
+    expect(unfiledCount(2, [{ sessions: 3 }])).toBe(0)
+    expect(unfiledCount(undefined, [{ sessions: 1 }])).toBeUndefined()
+  })
+
+  test("is kept as a folder choice, and All drops it", () => {
+    const op = "8b194cf1-3dc8-40fa-a717-e3ca3d90bf31"
+    const shown = showFolder(DEFAULT_SESSIONS_LAYOUT, op, UNFILED)
+    expect(shown.folders[op]).toBe(UNFILED)
+    expect(readSessionsLayout(sessionsLayoutInput(shown)).folders[op]).toBe(UNFILED)
+    expect(showFolder(shown, op, null).folders[op]).toBeUndefined()
   })
 })
 

@@ -1,4 +1,4 @@
-import { FolderIcon, LayersIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import { FolderIcon, InboxIcon, LayersIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
@@ -7,9 +7,11 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import type { MinionSessionFolderFieldsFragment } from "@/graphql/gql/graphql"
 import { cn } from "@/lib/utils"
+import { UNFILED, unfiledCount } from "./sessions-layout"
 
 // The Sessions table's folders, as tabs above it: All first (every session),
-// then the operation's folders in their order. A click shows one; an
+// Unfiled (those in no folder, once there are folders), then the
+// operation's folders in their order. A click shows one; an
 // operator makes one (+), changes or deletes one (its context menu) and
 // reorders them by dragging.
 
@@ -37,7 +39,7 @@ export function SessionFolderTabs({
   /** All's count: the operation's sessions, not archived. */
   allCount?: number
   folders: readonly Folder[]
-  /** The folder shown; null: All. */
+  /** The folder shown; null: All, UNFILED: those in none. */
   current: string | null
   onSelect: (folderId: string | null) => void
   canWrite: boolean
@@ -50,6 +52,7 @@ export function SessionFolderTabs({
   // A drag only past 6px: a click shows the folder.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const ids = folders.map((f) => f.id)
+  const unfiled = unfiledCount(allCount, folders)
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return
     const next = arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id)))
@@ -70,6 +73,14 @@ export function SessionFolderTabs({
         All
         {allCount !== undefined && <Count n={allCount} />}
       </FolderTab>
+      {/* Only beside folders: without any it would be All again. */}
+      {folders.length > 0 && (
+        <FolderTab active={current === UNFILED} onClick={() => onSelect(UNFILED)} title="The sessions in no folder">
+          <InboxIcon className="size-3.5 shrink-0" aria-hidden />
+          Unfiled
+          {unfiled !== undefined && <Count n={unfiled} />}
+        </FolderTab>
+      )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={ids} strategy={horizontalListSortingStrategy}>
           {folders.map((f) => (
