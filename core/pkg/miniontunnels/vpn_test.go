@@ -796,8 +796,21 @@ func TestVPNRoutesAndEnds(t *testing.T) {
 		n := len(vt.controls)
 		return closed && n > 0 && vt.controls[n-1].End == "disconnected by bob"
 	})
-	// The task's end.
+	// The Ports page hears its machines come and go on the service's tick:
+	// waited for before the task ends, which drops what the tick has not
+	// said yet.
 	vt2 := v.connect(t, v.key(t), 2)
+	eventually(t, "the Ports page heard its machines change", func() bool {
+		v.bus.mu.Lock()
+		defer v.bus.mu.Unlock()
+		for _, e := range v.bus.events {
+			if p, ok := e.Payload.(eventbus.VPNTunnelEventPayload); ok && p.TaskID == v.task.String() && !p.Opened && !p.Closed {
+				return true
+			}
+		}
+		return false
+	})
+	// The task's end.
 	v.svc.Close(context.Background(), v.task)
 	eventually(t, "the task's end said", func() bool {
 		vt2.mu.Lock()
