@@ -1,16 +1,31 @@
-// Realistic browser User-Agent strings for a chosen OS, browser and version
-// age, used by the "Generate" helper on fields with format "user_agent".
+// Realistic browser User-Agent strings for a chosen OS, browser and version,
+// used by the "Generate" helper on fields with format "user_agent", and the
+// check under such a field: what a value is, how far behind its browser it
+// is, and what in it no real browser sends.
 //
 // The strings follow what current browsers actually send, not the historical
 // variety: Chromium reduced its UA (minor versions "0.0.0", a frozen platform
 // token per OS: Windows NT 10.0 even on 11, macOS 10_15_7, Android 10 "K"),
-// Firefox and Safari freeze their macOS token, and Safari on iOS 26 still
-// reports iOS 18_6.
+// Firefox and Safari freeze their macOS token, and Safari on iOS 26 and later
+// still reports iOS 18_6.
 //
-// Versions are estimated from today's date and each browser's release
-// cadence, anchored on a known release, so the generator stays current
-// without a list to maintain. An estimate can be one version off around a
-// release day; real traffic always mixes a few recent versions anyway.
+// Versions come from each vendor's release dates (user-agent-releases.ts). A
+// release that was only scheduled when the tables were read counts two weeks
+// after its date, as schedules slip and a version that is not out yet is the
+// one thing that makes a UA stand out at once; past a table's end Chrome,
+// Edge and Firefox are estimated at two weeks a version, counted the same
+// way. The default is the newest version out for a week: on release day
+// almost nobody runs it yet.
+
+import {
+  CHROME_RELEASES,
+  EDGE_RELEASES,
+  FIREFOX_ESR,
+  FIREFOX_RELEASES,
+  RELEASES_AS_OF,
+  SAFARI_RELEASES,
+  type ReleaseRow,
+} from "./user-agent-releases"
 
 export type UAOS = "windows" | "macos" | "linux" | "android" | "ios"
 export type UABrowser = "chrome" | "edge" | "firefox" | "safari"
@@ -40,66 +55,116 @@ export const UA_BROWSERS_BY_OS: Record<UAOS, UABrowser[]> = {
 }
 
 const DAY = 86_400_000
-
-/** A release with a known date, and the cadence from it (days per version). */
-interface Cadence {
-  version: number
-  date: string
-  days: number
-}
-
-// Chromium (Chrome, Edge) and Firefox ship a major version every four weeks.
-const CHROMIUM: Cadence = { version: 140, date: "2025-09-02", days: 28 }
-const FIREFOX: Cadence = { version: 143, date: "2025-09-16", days: 28 }
-
-function estimate(c: Cadence, now: Date): number {
-  const elapsed = now.getTime() - Date.parse(c.date)
-  return c.version + Math.max(0, Math.floor(elapsed / (c.days * DAY)))
-}
-
+/** How late a release that was only scheduled counts: schedules slip. */
+const PLANNED_LAG = 14 * DAY
+/** How long a release has been out before it is the default. */
+const SETTLED = 7 * DAY
+/** Past a table's end: a version every two weeks, as since September 2026. */
+const CADENCE = 14 * DAY
 /**
- * Safari: a major version every September (26 in 2025), point releases
- * through the year (x.1 in late autumn ... x.6 by summer).
+ * How long a version stays usual once superseded: browsers that update
+ * themselves move on within weeks; Safari moves with the OS, more slowly.
  */
-function safariVersion(now: Date, behind: number): { major: number; minor: number } {
-  const year = now.getUTCFullYear()
-  // The September release of this year, if it has happened.
-  const month = now.getUTCMonth()
-  const released = month > 8 || (month === 8 && now.getUTCDate() >= 15) ? year : year - 1
-  const major = 26 + (released - 2025)
-  const monthsIn = (now.getUTCFullYear() - released) * 12 + now.getUTCMonth() - 8
-  let minor = Math.min(6, Math.floor(Math.max(0, monthsIn) / 1.7))
-  let m = major
-  for (let i = 0; i < behind; i++) {
-    if (minor > 0) minor--
-    else {
-      m--
-      minor = 6
+const STALE_AFTER: Record<UABrowser, number> = { chrome: 56 * DAY, edge: 56 * DAY, firefox: 56 * DAY, safari: 112 * DAY }
+
+/** How many versions the generator offers. */
+export const UA_VERSION_CHOICES = 4
+
+const TABLES: Record<UABrowser, readonly ReleaseRow[]> = {
+  chrome: CHROME_RELEASES,
+  edge: EDGE_RELEASES,
+  firefox: FIREFOX_RELEASES,
+  safari: SAFARI_RELEASES,
+}
+
+/** Whether a browser's versions are whole numbers, one a release (all but Safari's x.y). */
+const numbered = (b: UABrowser) => b !== "safari"
+
+export interface UARelease {
+  version: string
+  /** The day it shipped, was scheduled to, or is estimated to (yyyy-mm-dd). */
+  date: string
+  /** Only scheduled when the tables were read, or estimated past them: it counts two weeks late. */
+  planned: boolean
+  /** Estimated past the end of the vendor's published schedule. */
+  estimated: boolean
+}
+
+function day(date: string): number {
+  return Date.parse(`${date}T00:00:00Z`)
+}
+
+function isoDay(t: number): string {
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+/** When a release counts as out. */
+function countsFrom(r: UARelease): number {
+  return day(r.date) + (r.planned ? PLANNED_LAG : 0)
+}
+
+/** A browser's releases, oldest first: its table, then estimates up to `until`. */
+function schedule(browser: UABrowser, until: number): UARelease[] {
+  const asOf = day(RELEASES_AS_OF)
+  const out: UARelease[] = TABLES[browser].map(([version, date]) => ({ version, date, planned: day(date) > asOf, estimated: false }))
+  const last = out[out.length - 1]
+  if (numbered(browser) && last) {
+    for (let k = 1; k <= 1000; k++) {
+      const t = day(last.date) + k * CADENCE
+      if (t > until) break
+      out.push({ version: String(Number(last.version) + k), date: isoDay(t), planned: true, estimated: true })
     }
   }
-  return { major: m, minor }
+  return out
+}
+
+/** A browser's releases out by now, newest first. */
+export function uaReleases(browser: UABrowser, now = new Date()): UARelease[] {
+  const t = now.getTime()
+  return schedule(browser, t)
+    .filter((r) => countsFrom(r) <= t)
+    .reverse()
+}
+
+/** The versions the generator offers for a browser: its newest, newest first. */
+export function uaChoices(browser: UABrowser, now = new Date()): UARelease[] {
+  return uaReleases(browser, now).slice(0, UA_VERSION_CHOICES)
+}
+
+/** The version most of a browser's users run, the newest out for a week: its place among the choices. */
+export function defaultBehind(browser: UABrowser, now = new Date()): number {
+  const t = now.getTime()
+  const i = uaChoices(browser, now).findIndex((r) => t - day(r.date) >= SETTLED)
+  return Math.max(0, i)
+}
+
+/** How long ago a release came out, for a person: "today", "6 days", "3 weeks", "5 months". */
+export function releaseAge(date: string, now = new Date()): string {
+  const days = Math.floor((now.getTime() - day(date)) / DAY)
+  if (days < 1) return "today"
+  if (days < 14) return days === 1 ? "1 day" : `${days} days`
+  if (days < 60) return `${Math.floor(days / 7)} weeks`
+  return `${Math.floor(days / 30)} months`
+}
+
+/** A release's day as the app writes days (yyyy.mm.dd), and what it is. */
+export function releaseTitle(r: UARelease): string {
+  const when = r.date.replaceAll("-", ".")
+  return r.estimated ? `Estimated: ${when}` : r.planned ? `Scheduled for ${when}` : `Released ${when}`
 }
 
 export interface UAChoice {
   os: UAOS
   browser: UABrowser
-  /** Versions behind the estimated current one (0 = current). */
+  /** Its place among the browser's choices, newest first (0 = the newest out). */
   behind: number
 }
 
-/** The browser version a choice stands for, as shown in the UI. */
+/** The browser version a choice stands for. */
 export function uaVersion(choice: UAChoice, now = new Date()): string {
-  switch (choice.browser) {
-    case "chrome":
-    case "edge":
-      return String(estimate(CHROMIUM, now) - choice.behind)
-    case "firefox":
-      return String(estimate(FIREFOX, now) - choice.behind)
-    case "safari": {
-      const v = safariVersion(now, choice.behind)
-      return `${v.major}.${v.minor}`
-    }
-  }
+  const choices = uaChoices(choice.browser, now)
+  const r = choices[Math.min(Math.max(0, choice.behind), choices.length - 1)]
+  return r ? r.version : TABLES[choice.browser][0][0]
 }
 
 const CHROMIUM_PLATFORM: Record<Exclude<UAOS, "ios">, string> = {
@@ -169,8 +234,8 @@ const WEIGHTS: [UAOS, UABrowser, number][] = [
   ["macos", "edge", 1],
 ]
 
-/** A common choice, weighted by traffic share; mostly current, sometimes 1-2 behind. */
-export function randomChoice(rand: () => number = Math.random): UAChoice {
+/** A common choice, weighted by traffic share: mostly the default version, sometimes one or two older. */
+export function randomChoice(rand: () => number = Math.random, now = new Date()): UAChoice {
   const total = WEIGHTS.reduce((n, [, , w]) => n + w, 0)
   let r = rand() * total
   let pick = WEIGHTS[0]
@@ -181,7 +246,203 @@ export function randomChoice(rand: () => number = Math.random): UAChoice {
     }
     r -= w[2]
   }
+  const [os, browser] = pick
   const age = rand()
-  const behind = age < 0.6 ? 0 : age < 0.9 ? 1 : 2
-  return { os: pick[0], browser: pick[1], behind }
+  const older = age < 0.6 ? 0 : age < 0.9 ? 1 : 2
+  const last = uaChoices(browser, now).length - 1
+  return { os, browser, behind: Math.max(0, Math.min(defaultBehind(browser, now) + older, last)) }
+}
+
+/** A User-Agent the generator could have made: its OS, browser and version (a major; Safari's x.y). */
+export interface ParsedUA {
+  os: UAOS
+  browser: UABrowser
+  version: string
+}
+
+/** Browsers the generator does not make, whose strings carry Chrome's, Safari's or Firefox's tokens too. */
+const OTHER_BROWSERS = /\b(?:OPR|SamsungBrowser|YaBrowser|Vivaldi|UCBrowser|Electron|EdgA|EdgiOS|CriOS|FxiOS|HeadlessChrome)\/|; wv\)/
+
+function osOf(ua: string): UAOS | null {
+  if (/\b(?:iPhone|iPod)\b/.test(ua)) return "ios"
+  if (/\bAndroid\b/.test(ua)) return "android"
+  if (/\bWindows NT\b/.test(ua)) return "windows"
+  if (/\bMacintosh\b|\bMac OS X\b/.test(ua)) return "macos"
+  if (/\bLinux\b|\bX11\b/.test(ua)) return "linux"
+  return null
+}
+
+/** A Safari string's version (x.y), when the string is Safari's. */
+function safariVersion(ua: string): string | null {
+  if (/\b(?:Chrome|CriOS|FxiOS|EdgiOS|Firefox)\//.test(ua)) return null
+  const m = /\bVersion\/(\d+\.\d+)(?:\.\d+)?\b.*\bSafari\//.exec(ua)
+  return m ? m[1] : null
+}
+
+/** The OS, browser and version of a string the generator makes (an OS and a browser it offers); null for any other. */
+export function parseUserAgent(ua: string): ParsedUA | null {
+  const s = ua.trim()
+  if (!s.startsWith("Mozilla/5.0 (") || OTHER_BROWSERS.test(s)) return null
+  const os = osOf(s)
+  const edge = /\bEdg\/(\d+)\./.exec(s)
+  const firefox = /\bFirefox\/(\d+)\./.exec(s)
+  const chrome = /\bChrome\/(\d+)\./.exec(s)
+  const safari = safariVersion(s)
+  const hit: [UABrowser, string] | null = edge
+    ? ["edge", edge[1]]
+    : firefox
+      ? ["firefox", firefox[1]]
+      : chrome
+        ? ["chrome", chrome[1]]
+        : safari
+          ? ["safari", safari]
+          : null
+  if (!os || !hit || !UA_BROWSERS_BY_OS[os].includes(hit[0])) return null
+  return { os, browser: hit[0], version: hit[1] }
+}
+
+/** a < b: -1, equal: 0, a > b: 1, by each dot-separated number. */
+function compareVersions(a: string, b: string): number {
+  const x = a.split(".").map(Number)
+  const y = b.split(".").map(Number)
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0)
+    if (d !== 0) return d < 0 ? -1 : 1
+  }
+  return 0
+}
+
+/**
+ * When a version is due: its table's day, or estimated past the table (two
+ * weeks a version; Safari's next major in a September, a year after the
+ * last). "unknown" for a Safari x.y past the table within a known major.
+ */
+function dueOf(browser: UABrowser, version: string): { at: number; scheduled: boolean } | "unknown" {
+  const table = TABLES[browser]
+  const row = table.find(([v]) => v === version)
+  if (row) return { at: day(row[1]), scheduled: true }
+  const [lastVersion, lastDate] = table[table.length - 1]
+  if (numbered(browser)) {
+    return { at: day(lastDate) + (Number(version) - Number(lastVersion)) * CADENCE, scheduled: false }
+  }
+  const major = Number(version.split(".")[0])
+  const lastMajor = table.findLast(([v]) => v.endsWith(".0"))
+  if (!lastMajor || major <= Number(lastMajor[0].split(".")[0])) return "unknown"
+  return { at: day(lastMajor[1]) + (major - Number(lastMajor[0].split(".")[0])) * 365 * DAY, scheduled: false }
+}
+
+/** What in a User-Agent no real browser sends, each said for a person. */
+function giveaways(ua: string): string[] {
+  const out: string[] = []
+  if (/\bHeadlessChrome\//.test(ua)) out.push("HeadlessChrome is an automated browser's token: sites and proxies flag it.")
+  if (/\bWindows NT 11\.0\b/.test(ua)) out.push("Windows NT 11.0: no browser sends it (on Windows 11 they send 10.0).")
+  const chrome = /\bChrome\/(\d+)\.(\d+)\.(\d+)\.(\d+)/.exec(ua)
+  if (chrome && Number(chrome[1]) >= 101 && !/; wv\)|\bElectron\//.test(ua) && chrome.slice(2).some((n) => n !== "0")) {
+    out.push(`Chrome/${chrome.slice(1).join(".")}: Chrome sends ${chrome[1]}.0.0.0 (since version 101).`)
+  }
+  if (/\bEdg\/\d/.test(ua) && !/\bChrome\/\d/.test(ua)) out.push("Edg/ without Chrome/: Edge sends both.")
+  const os = osOf(ua)
+  if (safariVersion(ua) && (os === "windows" || os === "linux")) {
+    out.push(`Safari on ${UA_OS_LABELS[os]}: Safari runs on Apple's systems only.`)
+  }
+  const nt = /\bWindows NT (6\.[0-3])\b/.exec(ua)
+  if (nt) {
+    // Edge's string carries Chrome's token too: Edge's own first.
+    const edge = /\bEdg\/(\d+)\./.exec(ua)
+    const chrome = /\bChrome\/(\d+)\./.exec(ua)
+    const [name, major] = edge ? ["Edge", edge[1]] : chrome ? ["Chrome", chrome[1]] : ["", "0"]
+    if (Number(major) > 109) {
+      out.push(`Windows NT ${nt[1]} (Windows 7 or 8) with ${name} ${major}: ${name}'s last there is 109.`)
+    }
+    const ff = /\bFirefox\/(\d+)\./.exec(ua)
+    if (ff && Number(ff[1]) > 115) {
+      out.push(`Windows NT ${nt[1]} (Windows 7 or 8) with Firefox ${ff[1]}: Firefox's last there is 115 (ESR).`)
+    }
+  }
+  const rv = /\brv:(\d+)\.\d+\).*\bFirefox\/(\d+)\./.exec(ua)
+  if (rv && Number(rv[2]) >= 120 && rv[1] !== rv[2]) {
+    out.push(`rv:${rv[1]}.0 with Firefox/${rv[2]}.0: Firefox sends one version in both (since 120).`)
+  }
+  return out
+}
+
+export interface UACheck {
+  /** What it is, when it is a string the generator makes. */
+  parsed: ParsedUA | null
+  /** How many versions of its browser are out newer than it; null when not known. */
+  behind: number | null
+  /** One of Firefox's extended support releases: what companies run, not behind. */
+  esr: boolean
+  /** Superseded a while ago: most of that browser's users have moved on. */
+  stale: boolean
+  /** What in it no real browser sends, each said for a person. */
+  findings: string[]
+  /**
+   * What fixes it: the same OS and browser at the default version (the
+   * newest out for a week). Null when there is nothing to fix, or the
+   * generator does not make its kind.
+   */
+  fix: { ua: string; version: string } | null
+}
+
+/** Checks a User-Agent: what it is, how current, and its giveaways. */
+export function checkUserAgent(ua: string, now = new Date()): UACheck {
+  const s = ua.trim()
+  const t = now.getTime()
+  const findings = giveaways(s)
+  const parsed = parseUserAgent(s)
+  let behind: number | null = null
+  let stale = false
+  let esr = false
+  let unreleased = false
+  if (parsed) {
+    const { browser, version } = parsed
+    const out = uaReleases(browser, now)
+    const latest = out[0]
+    if (browser === "firefox" && FIREFOX_ESR.includes(Number(version))) {
+      esr = true
+    } else if (latest && compareVersions(version, latest.version) > 0) {
+      // Newer than any release counted out: out already when its day has
+      // passed (within the lag a schedule gets), or not yet.
+      const due = dueOf(browser, version)
+      if (due !== "unknown" && due.at > t) {
+        unreleased = true
+        const when = due.scheduled ? `: it is due ${isoDay(due.at).replaceAll("-", ".")}` : ""
+        findings.unshift(`${UA_BROWSER_LABELS[browser]} ${version} is not out yet${when}.`)
+      } else if (due !== "unknown") {
+        behind = 0
+      }
+    } else if (latest) {
+      const newer = out.filter((r) => compareVersions(r.version, version) > 0)
+      const oldest = TABLES[browser][0][0]
+      behind = numbered(browser)
+        ? Number(latest.version) - Number(version)
+        : compareVersions(version, oldest) >= 0
+          ? newer.length
+          : null
+      // Its successor: the oldest release newer than it.
+      const successor = newer[newer.length - 1]
+      stale = successor !== undefined && t - day(successor.date) > STALE_AFTER[browser]
+    }
+  }
+  let fix: UACheck["fix"] = null
+  if (parsed && !esr && (stale || unreleased || findings.length > 0)) {
+    const choice = { os: parsed.os, browser: parsed.browser, behind: defaultBehind(parsed.browser, now) }
+    const ua2 = generateUserAgent(choice, now)
+    if (ua2 !== s) fix = { ua: ua2, version: uaVersion(choice, now) }
+  }
+  return { parsed, behind, esr, stale, findings, fix }
+}
+
+/** The line under a User-Agent field: what it is and how current ("Chrome 150 on Windows · 7 versions behind, outdated"). */
+export function describeUserAgent(c: UACheck): string | null {
+  const p = c.parsed
+  if (!p) return null
+  const what = `${UA_BROWSER_LABELS[p.browser]} ${p.version} on ${UA_OS_LABELS[p.os]}`
+  if (c.esr) return `${what} · an extended support release`
+  if (c.behind === 0) return `${what} · latest`
+  if (c.behind !== null) {
+    return `${what} · ${c.behind} ${c.behind === 1 ? "version" : "versions"} behind${c.stale ? ", outdated" : ""}`
+  }
+  return c.stale ? `${what} · outdated` : what
 }

@@ -96,6 +96,19 @@ committed file names an icon the installed set no longer has, or if coverage
 falls below 85% — a bump nobody regenerated otherwise shows up as nothing worse
 than thinner search results.
 
+### User-Agent release tables
+
+`frontend/src/lib/user-agent-releases.ts` holds Chrome's, Edge's, Firefox's
+and Safari's release dates, read from their vendors (the file names each
+source), behind the User-Agent generator and the check under a
+`user_agent` field (`lib/user-agent.ts`). A date after `RELEASES_AS_OF` was
+a schedule when read, and counts two weeks late: a version that is not out
+yet is the one thing that makes a UA stand out. `user-agent.test.ts` fails
+once Chrome's, Edge's or Firefox's table has under three months left, or
+the tables were read over six months ago: that failure comes from the
+calendar, not a change. Read the sources again, extend the tables and move
+`RELEASES_AS_OF` to that day.
+
 Frontend lint carries documented debt. `eslint-plugin-react-hooks` v7 applies
 the React Compiler's own analysis and is stricter than the set this code was
 written against, so eight pre-existing errors across six files are downgraded

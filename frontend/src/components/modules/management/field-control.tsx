@@ -19,7 +19,7 @@ import { CONNECTION_FORMAT, choiceDetail } from "@/components/minion-sessions/co
 import { useConnectionChoices } from "@/components/minion-sessions/use-connection-choices"
 import { move } from "@/components/builds/build-values"
 import { FORMATS as GENERATED_FORMATS } from "@/lib/word-generator"
-import { UserAgentGenerator } from "./user-agent-generator"
+import { UserAgentCheck, UserAgentGenerator } from "./user-agent-generator"
 import { WordGenerator } from "./word-generator"
 import {
   BYTE_UNITS,
@@ -352,10 +352,16 @@ export function FieldControl({
       )
       // A helper for what the field holds, when the module says so.
       if (field.type === "string" && field.format === "user_agent") {
+        // Checked under it: the value, or the module's default while empty.
+        const empty = text.trim() === ""
+        const checked = empty ? (typeof defaultValue === "string" ? defaultValue : "") : text
         return (
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">{input}</div>
-            <UserAgentGenerator onUse={setText} disabled={disabled} />
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">{input}</div>
+              <UserAgentGenerator value={text} onUse={setText} disabled={disabled} />
+            </div>
+            <UserAgentCheck value={checked} isDefault={empty} onUpdate={setText} disabled={disabled} />
           </div>
         )
       }
