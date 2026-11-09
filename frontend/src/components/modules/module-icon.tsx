@@ -1,9 +1,16 @@
 import type { CSSProperties, ReactNode } from "react"
-import { BlocksIcon, FactoryIcon, RadioTowerIcon } from "lucide-react"
+import { BlocksIcon, RadioTowerIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { defaultIconFor, iconMaskImage, type ModuleIconSvgs } from "./module-icon-values"
+import { DEFAULT_FACTORY_ICON, defaultIconFor, iconMaskImage, type ModuleIconSvgs } from "./module-icon-values"
 
-const DEFAULT_ICONS = { channel: RadioTowerIcon, factory: FactoryIcon, module: BlocksIcon }
+const DEFAULT_ICONS = { channel: RadioTowerIcon, module: BlocksIcon }
+
+/**
+ * The lucide defaults' line, in the 24-unit grid: the modules' own icons'
+ * (the HTTP, TCP and SSH channels draw at 0.85), not lucide's 2, so a module
+ * without an icon sits beside the others at the same weight.
+ */
+const DEFAULT_STROKE = 0.85
 
 /**
  * A module's icon: the SVG it sent at registration, drawn in the text colour,
@@ -22,24 +29,45 @@ export function ModuleIcon({
   className?: string
 }) {
   if (icon?.icon) {
-    if (icon.iconLight) {
-      // Both drawn, one hidden: the theme is a class on the page, so CSS picks.
-      return (
-        <>
-          <IconGlyph svg={icon.iconLight} className={cn(className, "dark:hidden")} />
-          <IconGlyph svg={icon.icon} className={cn(className, "hidden dark:inline-block")} />
-        </>
-      )
-    }
-    return <IconGlyph svg={icon.icon} className={className} />
+    return (
+      <IconPair
+        image={iconMaskImage(icon.icon)}
+        lightImage={icon.iconLight ? iconMaskImage(icon.iconLight) : null}
+        className={className}
+      />
+    )
   }
-  const Icon = DEFAULT_ICONS[defaultIconFor(type)]
-  return <Icon aria-hidden className={cn("size-4 shrink-0", className)} />
+  const kind = defaultIconFor(type)
+  if (kind === "factory") {
+    // Files of the app's own (public/module-icons), drawn as a module's pair.
+    return (
+      <IconPair
+        image={`url("${DEFAULT_FACTORY_ICON.icon}")`}
+        lightImage={`url("${DEFAULT_FACTORY_ICON.iconLight}")`}
+        className={className}
+      />
+    )
+  }
+  const Icon = DEFAULT_ICONS[kind]
+  return <Icon aria-hidden strokeWidth={DEFAULT_STROKE} className={cn("size-4 shrink-0", className)} />
 }
 
-/** One SVG, drawn through a mask in the text colour. */
-function IconGlyph({ svg, className }: { svg: string; className?: string }) {
-  const image = iconMaskImage(svg)
+/**
+ * An icon and, when it has one, the one drawn instead on light themes: both
+ * drawn, one hidden, as the theme is a class on the page and CSS picks.
+ */
+function IconPair({ image, lightImage, className }: { image: string; lightImage: string | null; className?: string }) {
+  if (!lightImage) return <IconGlyph image={image} className={className} />
+  return (
+    <>
+      <IconGlyph image={lightImage} className={cn(className, "dark:hidden")} />
+      <IconGlyph image={image} className={cn(className, "hidden dark:inline-block")} />
+    </>
+  )
+}
+
+/** One image (a CSS url()), drawn through a mask in the text colour. */
+function IconGlyph({ image, className }: { image: string; className?: string }) {
   const style: CSSProperties = {
     maskImage: image,
     WebkitMaskImage: image,

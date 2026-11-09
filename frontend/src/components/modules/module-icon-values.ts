@@ -20,6 +20,16 @@ export interface ModuleIconSvgs {
 
 export type DefaultIcon = "channel" | "factory" | "module"
 
+/**
+ * The default factory icon, files of the app's own in public/module-icons:
+ * a factory with smoke, filled for dark themes and drawn in lines (at the
+ * channels' 0.85) for light ones. Served as files, never in the bundle.
+ */
+export const DEFAULT_FACTORY_ICON: ModuleIconSvgs = {
+  icon: "/module-icons/factory.svg",
+  iconLight: "/module-icons/factory-light.svg",
+}
+
 /** The built-in icon a module without its own shows, by module type. */
 export function defaultIconFor(type: string): DefaultIcon {
   if (type === "channel" || type === "factory") return type
