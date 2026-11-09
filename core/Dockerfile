@@ -1,5 +1,9 @@
 ARG GO_VERSION=1.25
 ARG ALPINE_VERSION=3.20
+# Where the binary comes from: built here from source (builder, the
+# default), or by CI before the image, with Go's build cache (prebuilt:
+# publish-core.yml builds it into ci-bin/, a minute less than here).
+ARG BINARY_FROM=builder
 
 FROM golang:${GO_VERSION}-alpine AS builder
 
@@ -23,6 +27,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
         -o /out/logos-core \
         .
 
+# The binary CI built, in ci-bin/. The directory is committed (.keep) so a
+# builder that builds every stage, Docker's classic one, finds it; BuildKit
+# builds only the stage BINARY_FROM names.
+FROM scratch AS prebuilt
+COPY ci-bin/ /out/
+
+FROM ${BINARY_FROM} AS binary
 
 # logos-vpn's binaries, the release vpn-client.version names, checked
 # against its SHA256SUMS: what the VPN tab offers for download.
@@ -42,7 +53,7 @@ RUN apk add --no-cache ca-certificates tzdata wget \
 
 WORKDIR /app
 
-COPY --from=builder /out/logos-core /app/logos-core
+COPY --from=binary /out/logos-core /app/logos-core
 COPY --from=vpnclients /out/vpn-clients /app/vpn-clients
 
 USER app

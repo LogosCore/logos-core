@@ -87,7 +87,20 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: core/go.mod
-          cache-dependency-path: core/go.sum
+          cache: false
+
+      # The test job's Go caches, read only: the linter type-checks from
+      # compiled packages, which its `go build ./...` leaves there.
+      - name: Go caches
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: core-test-${{ runner.os }}-${{ hashFiles('core/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            core-test-${{ runner.os }}-${{ hashFiles('core/go.sum') }}-
+            core-test-${{ runner.os }}-
 
       # Config lives at core/.golangci.yml, which documents the enabled set and
       # why the excluded linters are excluded.

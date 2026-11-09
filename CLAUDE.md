@@ -72,6 +72,11 @@ images keep their layer caches out of it, in the registry beside each image
 (`:buildcache`, frontend, Hocuspocus, nginx), and core's image keeps none
 (its export cost more than the module download it saved). Docker's
 `type=gha` cache had filled it, and evicted the frontend's `npm ci` layer.
+Core's binary is built before its image, on the runner with a Go cache of
+its own (`core-image-…`), and copied in: `core/Dockerfile` takes it from
+`ci-bin/` when `BINARY_FROM=prebuilt`, and builds from source otherwise
+(the default, so the Dockerfile still builds alone; `ci-bin/.keep` is there
+for Docker's classic builder, which builds every stage).
 
 The third job is a bundle budget: `frontend/scripts/check-bundle-budget.mjs`
 fails the build when the first-paint critical path — the entry plus every

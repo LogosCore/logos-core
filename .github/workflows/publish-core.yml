@@ -76,6 +76,39 @@ jobs:
         working-directory: frontend
         run: npm run build:viewer
 
+      # The binary built here, not in the image (core/Dockerfile's prebuilt
+      # stage): with Go's build cache, saved under each commit and restored
+      # from the newest, only what changed compiles, where the image's own
+      # build took a minute every time. After the viewer, which it embeds.
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+          cache: false
+
+      - name: Go caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: core-image-${{ runner.os }}-${{ hashFiles('core/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            core-image-${{ runner.os }}-${{ hashFiles('core/go.sum') }}-
+            core-image-${{ runner.os }}-
+
+      # The flags core/Dockerfile's builder builds with.
+      - name: Build the binary
+        working-directory: core
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: amd64
+        run: >-
+          go build -trimpath
+          -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }} -X main.buildDate=${{ github.event.repository.updated_at }}"
+          -o ci-bin/logos-core .
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -115,6 +148,7 @@ jobs:
           # No layer cache: exporting it took 37s and saved only go mod
           # download (about 10s); the Go build itself changes every commit.
           build-args: |
+            BINARY_FROM=prebuilt
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}
             BUILD_DATE=${{ github.event.repository.updated_at }}

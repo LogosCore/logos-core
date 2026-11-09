@@ -1,6 +1,8 @@
 .env
 .mcp.json
 core/tmp/
+# The binary publish-core.yml builds before the image (core/Dockerfile: prebuilt).
+core/ci-bin/logos-core
 docs/debug/
 node_modules/
 
