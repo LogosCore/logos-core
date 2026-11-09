@@ -112,8 +112,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # No layer cache: exporting it took 37s and saved only go mod
+          # download (about 10s); the Go build itself changes every commit.
           build-args: |
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}

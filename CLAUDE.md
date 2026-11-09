@@ -67,6 +67,11 @@ the newest (setup-go's own went stale, saved only when `go.sum` changed);
 both `ci-frontend.yml` and `publish-core.yml`: keep them the same; and
 `publish-core.yml` restores the HTML export viewer by a hash of every
 frontend file, so a push that leaves the frontend alone builds no viewer.
+That cache is 10 GB a repository, the oldest entries evicted past it: the
+images keep their layer caches out of it, in the registry beside each image
+(`:buildcache`, frontend, Hocuspocus, nginx), and core's image keeps none
+(its export cost more than the module download it saved). Docker's
+`type=gha` cache had filled it, and evicted the frontend's `npm ci` layer.
 
 The third job is a bundle budget: `frontend/scripts/check-bundle-budget.mjs`
 fails the build when the first-paint critical path — the entry plus every
