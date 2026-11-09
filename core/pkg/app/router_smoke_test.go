@@ -66,6 +66,8 @@ func TestRouteTable(t *testing.T) {
 		"GET /api/v1/status",
 		"GET /api/v1/vpn",
 		"GET /api/v1/vpn/client/:platform",
+		"GET /api/v1/vpn/install.ps1",
+		"GET /api/v1/vpn/install.sh",
 		"GET /api/v1/wiki/files/:id",
 		"GET /api/v1/wiki/images/:id",
 		"GET /api/v1/wiki/transfer/jobs",
@@ -166,7 +168,10 @@ func TestRouteAuthTiers(t *testing.T) {
 		"GET /swagger/*any":  200,
 		"GET /api/v1/status": 500,
 		// Its VPN key is its sign-in: a plain GET is no WebSocket.
-		"GET /api/v1/vpn":                    400,
+		"GET /api/v1/vpn": 400,
+		// logos-vpn's installers, for anyone: none in a test's core.
+		"GET /api/v1/vpn/install.sh":         404,
+		"GET /api/v1/vpn/install.ps1":        404,
 		"POST /api/v1/enroll":                500,
 		"POST /api/v1/login":                 403,
 		"POST /api/v1/internal/wiki/webhook": 400,

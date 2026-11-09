@@ -620,6 +620,27 @@ func TestVPNKeys(t *testing.T) {
 	if _, _, err := v.svc.ConnectVPN(ctx, lapsed, hello(4), "x"); !errors.Is(err, ErrVPNRefused) {
 		t.Errorf("a lapsed key: %v", err)
 	}
+	// The installer's download: a key not lapsed, or taken; not one lapsed,
+	// unknown, or of another secret. Checking takes nothing.
+	fresh := v.key(t)
+	for name, c := range map[string]struct {
+		raw string
+		ok  bool
+	}{
+		"fresh": {fresh, true}, "taken": {key, true}, "lapsed": {lapsed, false},
+		"unknown": {"lgv_000000000000_nope", false}, "not a key": {"secret", false},
+		"another secret": {strings.TrimSuffix(fresh, fresh[len(fresh)-4:]) + "AAAA", false},
+	} {
+		if err := v.svc.CheckVPNKey(ctx, c.raw); (err == nil) != c.ok || (err != nil && !errors.Is(err, ErrVPNRefused)) {
+			t.Errorf("check, %s: %v", name, err)
+		}
+	}
+	freshID, _, _ := strings.Cut(strings.TrimPrefix(fresh, protocol.VPNKeyPrefix), "_")
+	v.keys.mu.Lock()
+	if k := v.keys.keys[freshID]; k.Instance != "" || k.LapsesAt == nil {
+		t.Errorf("a checked key taken: %+v", k)
+	}
+	v.keys.mu.Unlock()
 	// Bye: the client ends, its key goes.
 	vt.mu.Lock()
 	l := vt.link

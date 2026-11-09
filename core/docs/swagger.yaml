@@ -218,6 +218,19 @@ definitions:
       error:
         type: string
     type: object
+  responses.FrontCert:
+    properties:
+      pin:
+        description: |-
+          Pin is its public key's, as curl's --pinnedpubkey takes it
+          (sha256//base64).
+        type: string
+      sha256:
+        description: |-
+          SHA256 is its fingerprint, as openssl prints it (AB:CD:…): logos-vpn's
+          -cert-sha256, a module's LOGOS_CORE_CERT_SHA256.
+        type: string
+    type: object
   responses.OIDCStatus:
     properties:
       display_name:
@@ -252,6 +265,13 @@ definitions:
     properties:
       enrolled:
         type: boolean
+      front_cert:
+        allOf:
+        - $ref: '#/definitions/responses.FrontCert'
+        description: |-
+          FrontCert is the certificate core's front serves when no system
+          trusts it (a self-signed one), as the front says it: what Connect a
+          machine's lines pin. Absent otherwise.
       local_login_enabled:
         description: |-
           LocalLoginEnabled is false when the deployment is SSO-only; the SPA
@@ -972,6 +992,14 @@ paths:
       security:
       - BearerAuth: []
       summary: Download logos-vpn for a system
+      tags:
+      - VPN
+  /vpn/install.sh:
+    get:
+      produces:
+      - text/plain
+      responses: {}
+      summary: 'logos-vpn''s installer (install.sh: Linux, macOS; install.ps1: Windows)'
       tags:
       - VPN
   /wiki/collab-ticket:

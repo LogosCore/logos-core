@@ -1057,6 +1057,18 @@ const docTemplate = `{
                 "responses": {}
             }
         },
+        "/vpn/install.sh": {
+            "get": {
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "VPN"
+                ],
+                "summary": "logos-vpn's installer (install.sh: Linux, macOS; install.ps1: Windows)",
+                "responses": {}
+            }
+        },
         "/wiki/collab-ticket": {
             "post": {
                 "security": [
@@ -1879,6 +1891,19 @@ const docTemplate = `{
                 }
             }
         },
+        "responses.FrontCert": {
+            "type": "object",
+            "properties": {
+                "pin": {
+                    "description": "Pin is its public key's, as curl's --pinnedpubkey takes it\n(sha256//base64).",
+                    "type": "string"
+                },
+                "sha256": {
+                    "description": "SHA256 is its fingerprint, as openssl prints it (AB:CD:…): logos-vpn's\n-cert-sha256, a module's LOGOS_CORE_CERT_SHA256.",
+                    "type": "string"
+                }
+            }
+        },
         "responses.OIDCStatus": {
             "type": "object",
             "properties": {
@@ -1926,6 +1951,14 @@ const docTemplate = `{
             "properties": {
                 "enrolled": {
                     "type": "boolean"
+                },
+                "front_cert": {
+                    "description": "FrontCert is the certificate core's front serves when no system\ntrusts it (a self-signed one), as the front says it: what Connect a\nmachine's lines pin. Absent otherwise.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/responses.FrontCert"
+                        }
+                    ]
                 },
                 "local_login_enabled": {
                     "description": "LocalLoginEnabled is false when the deployment is SSO-only; the SPA\nthen hides the password form.",

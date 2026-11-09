@@ -1,7 +1,10 @@
 package controller
 
 import (
+	"encoding/hex"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logoscore/logos-core/core/pkg/logger"
@@ -66,5 +69,34 @@ func (ctrl *statusController) Status(c *gin.Context) {
 		Enrolled:          count > 0,
 		LocalLoginEnabled: ctrl.opts.LocalLoginEnabled,
 		OIDC:              ctrl.opts.OIDCStatus(),
+		FrontCert:         FrontCert(c.Request),
 	})
+}
+
+// The headers core's front (logos-nginx) sets on a request that came over
+// HTTPS with a certificate no system trusts: its fingerprint and its
+// public key's pin.
+const (
+	HeaderFrontCertSHA256 = "X-Logos-Cert-SHA256"
+	HeaderFrontCertPin    = "X-Logos-Cert-Pin"
+)
+
+var frontPin = regexp.MustCompile(`^sha256//[A-Za-z0-9+/]{43}=$`)
+
+// FrontCert is the certificate the front says a request came in with, both
+// headers well formed (the fingerprint as openssl prints it); nil
+// otherwise. A client that reaches core without the front can say any it
+// likes: it is told it back, nobody else.
+func FrontCert(r *http.Request) *responses.FrontCert {
+	fp := strings.ReplaceAll(strings.TrimSpace(r.Header.Get(HeaderFrontCertSHA256)), ":", "")
+	pin := strings.TrimSpace(r.Header.Get(HeaderFrontCertPin))
+	b, err := hex.DecodeString(fp)
+	if err != nil || len(b) != 32 || !frontPin.MatchString(pin) {
+		return nil
+	}
+	parts := make([]string, len(b))
+	for i, x := range b {
+		parts[i] = strings.ToUpper(hex.EncodeToString([]byte{x}))
+	}
+	return &responses.FrontCert{SHA256: strings.Join(parts, ":"), Pin: pin}
 }

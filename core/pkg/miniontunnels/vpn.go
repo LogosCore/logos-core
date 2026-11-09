@@ -344,23 +344,13 @@ func (s *Service) ConnectVPN(ctx context.Context, raw string, hello protocol.VPN
 	if err := hello.Validate(); err != nil {
 		return nil, protocol.VPNWelcome{}, fmt.Errorf("%w: %v", ErrVPNHello, err)
 	}
-	const unknown = "the key is unknown, lapsed or used: make a new one (Connect a machine, on the task's VPN tab)"
-	keyID, hash, ok := auth.ParseKey(protocol.VPNKeyPrefix, raw)
-	if !ok {
-		return nil, protocol.VPNWelcome{}, refused("no VPN key (lgv_…)")
-	}
-	k, err := s.vpnKeys.FindByKeyID(ctx, keyID)
-	switch {
-	case repository.IsNotFound(err):
-		return nil, protocol.VPNWelcome{}, refused(unknown)
-	case err != nil:
+	k, err := s.vpnKey(ctx, raw)
+	if err != nil {
 		return nil, protocol.VPNWelcome{}, err
-	case subtle.ConstantTimeCompare([]byte(k.SecretHash), []byte(hash)) != 1:
-		return nil, protocol.VPNWelcome{}, refused(unknown)
 	}
-	if k, err = s.vpnKeys.Take(ctx, keyID, hello.Instance, s.now()); err != nil {
+	if k, err = s.vpnKeys.Take(ctx, k.KeyID, hello.Instance, s.now()); err != nil {
 		if repository.IsNotFound(err) {
-			return nil, protocol.VPNWelcome{}, refused(unknown)
+			return nil, protocol.VPNWelcome{}, refused(vpnKeyUnknown)
 		}
 		return nil, protocol.VPNWelcome{}, err
 	}
@@ -396,6 +386,49 @@ func (s *Service) ConnectVPN(ctx context.Context, raw string, hello protocol.VPN
 	}
 	return c, protocol.VPNWelcome{Task: t.task.String(), Session: t.vpn.sessionNumber, Operation: t.operation.String(), User: c.username,
 		Client: c.name, Routes: slices.Clone(t.vpn.text), MaxStreams: t.maxStreams, Opens: opens}, nil
+}
+
+// vpnKeyUnknown is why a key is refused: no more is said.
+const vpnKeyUnknown = "the key is unknown, lapsed or used: make a new one (Connect a machine, on the task's VPN tab)"
+
+// vpnKey is a key's record by the key itself, its secret checked;
+// ErrVPNRefused, wrapped with why, for none.
+func (s *Service) vpnKey(ctx context.Context, raw string) (*models.VPNKey, error) {
+	keyID, hash, ok := auth.ParseKey(protocol.VPNKeyPrefix, raw)
+	if !ok {
+		return nil, fmt.Errorf("%w: no VPN key (lgv_…)", ErrVPNRefused)
+	}
+	k, err := s.vpnKeys.FindByKeyID(ctx, keyID)
+	switch {
+	case repository.IsNotFound(err):
+		return nil, fmt.Errorf("%w: %s", ErrVPNRefused, vpnKeyUnknown)
+	case err != nil:
+		return nil, err
+	case subtle.ConstantTimeCompare([]byte(k.SecretHash), []byte(hash)) != 1:
+		return nil, fmt.Errorf("%w: %s", ErrVPNRefused, vpnKeyUnknown)
+	}
+	return k, nil
+}
+
+// CheckVPNKey says whether a key may fetch this core's logos-vpn (its
+// installer's download, before it connects): one not lapsed, or taken by a
+// client, of an operator still one. ErrVPNRefused, wrapped with why, when
+// not; the key is not taken.
+func (s *Service) CheckVPNKey(ctx context.Context, raw string) error {
+	if s.vpnKeys == nil {
+		return fmt.Errorf("%w: core opens no VPN tunnels", ErrVPNRefused)
+	}
+	k, err := s.vpnKey(ctx, raw)
+	if err != nil {
+		return err
+	}
+	if k.Instance == "" && (k.LapsesAt == nil || !k.LapsesAt.After(s.now())) {
+		return fmt.Errorf("%w: %s", ErrVPNRefused, vpnKeyUnknown)
+	}
+	if s.roles != nil && !s.roles.IsOperator(ctx, k.OperationID, k.UserID) {
+		return fmt.Errorf("%w: %s is no longer an operator of the operation", ErrVPNRefused, k.Username)
+	}
+	return nil
 }
 
 // endClient ends a client (s.mu held): its streams reset on both legs, its

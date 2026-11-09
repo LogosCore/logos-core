@@ -23,10 +23,13 @@ import {
   guessPlatform,
   parseRoutes,
   vpnCommand,
+  vpnInstall,
   vpnState,
   type Tunnel,
   type TunnelStream,
 } from "./tunnel-values"
+
+const cert = { sha256: Array(32).fill("AB").join(":"), pin: "sha256//FdnJxLcRo3m7lBW8cNKY+BtHzVvZliWgUBiEZqXPYoE=" }
 
 const stream = (s: Partial<TunnelStream>): TunnelStream => ({
   stream: 1,
@@ -262,10 +265,29 @@ describe("a VPN", () => {
   })
   it("gives the command for the machine's system", () => {
     expect(vpnCommand("https://logos.example.com", "lgv_k", "linux-amd64")).toBe("sudo logos-vpn https://logos.example.com lgv_k")
-    expect(vpnCommand("https://logos.example.com", "lgv_k", "windows-amd64")).toBe(".\\logos-vpn.exe https://logos.example.com lgv_k")
+    expect(vpnCommand("https://logos.example.com", "lgv_k", "windows-amd64")).toBe("logos-vpn https://logos.example.com lgv_k")
+    expect(vpnCommand("https://logos.example.com", "lgv_k", "darwin-arm64", cert)).toBe(`sudo logos-vpn -cert-sha256 ${cert.sha256} https://logos.example.com lgv_k`)
     expect(guessPlatform("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("windows-amd64")
     expect(guessPlatform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")).toBe("darwin-arm64")
     expect(guessPlatform("Mozilla/5.0 (X11; Linux aarch64)")).toBe("linux-arm64")
+  })
+  it("installs and connects in one line", () => {
+    expect(vpnInstall("https://logos.example.com", "lgv_k", "linux-amd64")).toBe(
+      "curl -fsSL https://logos.example.com/api/v1/vpn/install.sh | sudo sh -s -- https://logos.example.com lgv_k",
+    )
+    expect(vpnInstall("https://logos.example.com", "lgv_k", "linux-arm64", cert)).toBe(
+      `curl -fsSLk --pinnedpubkey ${cert.pin} https://logos.example.com/api/v1/vpn/install.sh | ` +
+        `sudo sh -s -- --pin ${cert.pin} --cert-sha256 ${cert.sha256} https://logos.example.com lgv_k`,
+    )
+    expect(vpnInstall("https://logos.example.com", "lgv_k", "windows-amd64")).toBe(
+      "[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072;" +
+        "& ([scriptblock]::Create((New-Object Net.WebClient).DownloadString('https://logos.example.com/api/v1/vpn/install.ps1'))) 'https://logos.example.com' 'lgv_k'",
+    )
+    // Pinned on Windows: the callback wants the fingerprint without colons, the script gets it as it is.
+    const win = vpnInstall("https://logos.example.com", "lgv_k", "windows-arm64", cert)
+    expect(win.startsWith("if(-not('LogosPin'-as[type]))")).toBe(true)
+    expect(win).toContain(`[LogosPin]::Want='${cert.sha256.replaceAll(":", "")}';`)
+    expect(win.endsWith(`'lgv_k' -CertSha256 '${cert.sha256}'`)).toBe(true)
   })
   it("connects to the origin core's API is at", () => {
     expect(coreOrigin("/api/v1", "https://logos.example.com")).toBe("https://logos.example.com")

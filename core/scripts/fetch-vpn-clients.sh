@@ -1,10 +1,11 @@
 #!/bin/sh
 # fetch-vpn-clients.sh <dir>: puts the logos-vpn release that
 # vpn-client.version names into dir, for core to serve (VPN_CLIENT_DIR,
-# GET /api/v1/vpn/client/{os}-{arch}; docs: contracts/vpn-front). Every
-# binary is checked against the release's SHA256SUMS, and all six must be
-# there: any failure fails the image build. A new logos-vpn release is one
-# line in vpn-client.version.
+# GET /api/v1/vpn/client/{os}-{arch}, .../SHA256SUMS, /api/v1/vpn/install.sh
+# and install.ps1; docs: contracts/vpn-front). Every binary is checked
+# against the release's SHA256SUMS, kept for the installers to check
+# theirs; all six and both installers must be there: any failure fails the
+# image build. A new logos-vpn release is one line in vpn-client.version.
 set -eu
 dir=$1
 version=$(tr -d ' \r\n' < "$(dirname "$0")/../vpn-client.version")
@@ -19,6 +20,8 @@ for p in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 windows
   wget -q -O "$f" "$base/$f" || { echo "logos-vpn $version: $f does not download" >&2; exit 1; }
 done
 sha256sum -c SHA256SUMS
-chmod 0644 logos-vpn-*
-rm SHA256SUMS
-echo "logos-vpn $version: $(ls | wc -l) binaries"
+for f in install.sh install.ps1; do
+  wget -q -O "$f" "$base/$f" || { echo "logos-vpn $version: no $f (a release before the installers)" >&2; exit 1; }
+done
+chmod 0644 logos-vpn-* SHA256SUMS install.sh install.ps1
+echo "logos-vpn $version: $(ls logos-vpn-* | wc -l) binaries, SHA256SUMS, the installers"

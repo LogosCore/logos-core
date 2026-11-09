@@ -27,6 +27,14 @@ type refusingVPN struct {
 	addr  string
 }
 
+// CheckVPNKey takes the one key "lgv_0123456789ab_secret".
+func (f *refusingVPN) CheckVPNKey(_ context.Context, raw string) error {
+	if raw == "lgv_0123456789ab_secret" {
+		return nil
+	}
+	return fmt.Errorf("%w: the key is unknown", miniontunnels.ErrVPNRefused)
+}
+
 func (f *refusingVPN) ConnectVPN(_ context.Context, raw string, hello protocol.VPNHello, addr string) (*miniontunnels.VPNClient, protocol.VPNWelcome, error) {
 	f.key, f.hello, f.addr = raw, hello, addr
 	return nil, protocol.VPNWelcome{}, f.err
@@ -132,5 +140,63 @@ func TestVPNClientDownload(t *testing.T) {
 		case want != "" && (w.Code != http.StatusOK || !strings.Contains(w.Header().Get("Content-Disposition"), `filename="`+want+`"`)):
 			t.Errorf("%s: %d %q", platform, w.Code, w.Header().Get("Content-Disposition"))
 		}
+	}
+}
+
+// The installer's fetches: SHA256SUMS beside the builds, and a VPN key
+// signs them in, checked (the router lets a keyed request past sign-in).
+func TestVPNClientKeyed(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "logos-vpn-linux-amd64"), []byte("ELF"), 0o644)
+	vc := NewVPNController(&refusingVPN{}, dir, zap.NewNop())
+	r := gin.New()
+	r.GET("/vpn/client/:platform", vc.Client)
+	get := func(path, key string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if key != "" {
+			req.Header.Set("Authorization", "Bearer "+key)
+		}
+		r.ServeHTTP(w, req)
+		return w
+	}
+	if w := get("/vpn/client/SHA256SUMS", "lgv_0123456789ab_secret"); w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "no logos-vpn hashes") {
+		t.Errorf("no sums: %d %s", w.Code, w.Body)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "SHA256SUMS"), []byte("abc  logos-vpn-linux-amd64\n"), 0o644)
+	if w := get("/vpn/client/SHA256SUMS", "lgv_0123456789ab_secret"); w.Code != http.StatusOK || w.Body.String() != "abc  logos-vpn-linux-amd64\n" {
+		t.Errorf("sums: %d %s", w.Code, w.Body)
+	}
+	if w := get("/vpn/client/linux-amd64", "lgv_0123456789ab_secret"); w.Code != http.StatusOK || w.Body.String() != "ELF" {
+		t.Errorf("the build: %d %s", w.Code, w.Body)
+	}
+	for _, path := range []string{"/vpn/client/linux-amd64", "/vpn/client/SHA256SUMS"} {
+		if w := get(path, "lgv_000000000000_other"); w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "unknown") {
+			t.Errorf("%s, another key: %d %s", path, w.Code, w.Body)
+		}
+	}
+}
+
+// The installers: for anyone, as they are, not cached; one this core's
+// release has not is not found.
+func TestVPNInstaller(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "install.sh"), []byte("#!/bin/sh\n"), 0o644)
+	vc := NewVPNController(&refusingVPN{}, dir, zap.NewNop())
+	r := gin.New()
+	r.GET("/vpn/install.sh", vc.Installer)
+	r.GET("/vpn/install.ps1", vc.Installer)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/vpn/install.sh", nil))
+	if w.Code != http.StatusOK || w.Body.String() != "#!/bin/sh\n" || w.Header().Get("Cache-Control") != "no-store" ||
+		!strings.HasPrefix(w.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("install.sh: %d %q %v", w.Code, w.Body, w.Header())
+	}
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/vpn/install.ps1", nil))
+	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "before the installers") {
+		t.Errorf("install.ps1 missing: %d %s", w.Code, w.Body)
 	}
 }

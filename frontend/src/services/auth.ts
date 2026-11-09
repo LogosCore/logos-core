@@ -19,10 +19,20 @@ export interface OIDCStatus {
   unavailable_reason?: string
 }
 
+// Mirrors responses.FrontCert: the certificate core's front serves when no
+// system trusts it, as clients pin it.
+export interface FrontCert {
+  /** Its SHA-256 fingerprint (AB:CD:…): logos-vpn's -cert-sha256. */
+  sha256: string
+  /** Its public key's, for curl's --pinnedpubkey (sha256//…). */
+  pin: string
+}
+
 export interface StatusResponse {
   enrolled: boolean
   local_login_enabled: boolean
   oidc: OIDCStatus
+  front_cert?: FrontCert
 }
 
 async function authFetch<T>(

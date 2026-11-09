@@ -276,9 +276,60 @@ export function coreOrigin(apiURL: string, pageOrigin: string): string {
   }
 }
 
-/** The command that connects a machine with a key: as root (sudo), or in an elevated PowerShell on Windows. */
-export function vpnCommand(origin: string, key: string, platform: string): string {
-  return platform.startsWith("windows-") ? `.\\logos-vpn.exe ${origin} ${key}` : `sudo logos-vpn ${origin} ${key}`
+/** Core's certificate as clients pin it, when no system trusts it (core's /status, from its front). */
+export interface PinnedCert {
+  sha256: string
+  pin: string
+}
+
+/**
+ * The command that connects a machine where logos-vpn is installed: as root
+ * (sudo), or in an elevated PowerShell on Windows; core's certificate
+ * pinned when its front says no system trusts it.
+ */
+export function vpnCommand(origin: string, key: string, platform: string, cert?: PinnedCert | null): string {
+  const pin = cert ? `-cert-sha256 ${cert.sha256} ` : ""
+  return platform.startsWith("windows-") ? `logos-vpn ${pin}${origin} ${key}` : `sudo logos-vpn ${pin}${origin} ${key}`
+}
+
+/**
+ * What a Windows line runs before fetching the installer from a core whose
+ * certificate it pins: a compiled validation callback (a script block's
+ * would run on a thread with no runspace) checking the certificate's
+ * SHA-256. logos-vpn's install_test.go (pinPrefix) runs the same: keep the
+ * two alike.
+ */
+function windowsPin(sha256: string): string {
+  return (
+    `if(-not('LogosPin'-as[type])){Add-Type 'public static class LogosPin{public static string Want;public static bool Check(object s,System.Security.Cryptography.X509Certificates.X509Certificate c,System.Security.Cryptography.X509Certificates.X509Chain h,System.Net.Security.SslPolicyErrors e){return System.BitConverter.ToString(System.Security.Cryptography.SHA256.Create().ComputeHash(c.GetRawCertData())).Replace("-","")==Want;}}'};` +
+    `[LogosPin]::Want='${sha256.replaceAll(":", "")}';` +
+    `[Net.ServicePointManager]::ServerCertificateValidationCallback=[Delegate]::CreateDelegate([Net.Security.RemoteCertificateValidationCallback],[LogosPin].GetMethod('Check'));`
+  )
+}
+
+/**
+ * The line that installs this core's logos-vpn on a machine and connects
+ * with a key (docs: contracts/vpn-front, "Installing"): core's installer
+ * piped into sh as root on Linux and macOS, run as a script block in an
+ * elevated PowerShell on Windows; core's certificate pinned throughout
+ * when its front says no system trusts it.
+ */
+export function vpnInstall(origin: string, key: string, platform: string, cert?: PinnedCert | null): string {
+  if (platform.startsWith("windows-")) {
+    return (
+      (cert ? windowsPin(cert.sha256) : "") +
+      `[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072;` +
+      `& ([scriptblock]::Create((New-Object Net.WebClient).DownloadString('${origin}/api/v1/vpn/install.ps1'))) '${origin}' '${key}'` +
+      (cert ? ` -CertSha256 '${cert.sha256}'` : "")
+    )
+  }
+  if (cert) {
+    return (
+      `curl -fsSLk --pinnedpubkey ${cert.pin} ${origin}/api/v1/vpn/install.sh | ` +
+      `sudo sh -s -- --pin ${cert.pin} --cert-sha256 ${cert.sha256} ${origin} ${key}`
+    )
+  }
+  return `curl -fsSL ${origin}/api/v1/vpn/install.sh | sudo sh -s -- ${origin} ${key}`
 }
 
 /** What a client runs on, for a person: its machine's system and release. */

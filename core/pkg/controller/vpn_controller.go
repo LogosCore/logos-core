@@ -23,6 +23,15 @@ import (
 // VPNTunnels is what the VPN controller needs (miniontunnels.Service).
 type VPNTunnels interface {
 	ConnectVPN(ctx context.Context, raw string, hello protocol.VPNHello, addr string) (*miniontunnels.VPNClient, protocol.VPNWelcome, error)
+	CheckVPNKey(ctx context.Context, raw string) error
+}
+
+// VPNKeyed says whether a request comes with a VPN key (Authorization:
+// Bearer lgv_…): logos-vpn's installer fetching the client, which the
+// key signs in instead of a session.
+func VPNKeyed(c *gin.Context) bool {
+	raw, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
+	return ok && strings.HasPrefix(raw, protocol.VPNKeyPrefix)
 }
 
 // VPNController serves logos-vpn (docs: contracts/vpn-front): the link
@@ -115,8 +124,14 @@ func (vc *VPNController) Link(c *gin.Context) {
 // vpnPlatforms are the systems logos-vpn is built for.
 var vpnPlatforms = []string{"linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64", "windows-amd64", "windows-arm64"}
 
+// vpnSums is the release's SHA256SUMS, served beside its binaries.
+const vpnSums = "SHA256SUMS"
+
 // Client handles GET /api/v1/vpn/client/{os}-{arch}: this core's logos-vpn
-// for a system, for anyone signed in.
+// for a system, and GET /api/v1/vpn/client/SHA256SUMS, the release's
+// hashes. For anyone signed in, or a VPN key's holder (VPNKeyed: the
+// installer, which the router lets past sign-in): a key not lapsed, or
+// taken, of an operator still one.
 //
 //	@Summary	Download logos-vpn for a system
 //	@Tags		VPN
@@ -124,7 +139,29 @@ var vpnPlatforms = []string{"linux-amd64", "linux-arm64", "darwin-amd64", "darwi
 //	@Param		platform	path	string	true	"linux-amd64, darwin-arm64, windows-amd64, ..."
 //	@Router		/vpn/client/{platform} [get]
 func (vc *VPNController) Client(c *gin.Context) {
+	if VPNKeyed(c) {
+		raw := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
+		if err := vc.vpn.CheckVPNKey(c.Request.Context(), raw); err != nil {
+			if errors.Is(err, miniontunnels.ErrVPNRefused) {
+				c.JSON(http.StatusUnauthorized, responses.NewErrorResponse("%s", strings.TrimPrefix(err.Error(), miniontunnels.ErrVPNRefused.Error()+": ")))
+				return
+			}
+			vc.logger.Error("A VPN key's check failed", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
+			return
+		}
+	}
 	platform := c.Param("platform")
+	if platform == vpnSums {
+		path := filepath.Join(vc.clientDir, vpnSums)
+		if st, err := os.Stat(path); err != nil || !st.Mode().IsRegular() {
+			c.JSON(http.StatusNotFound, responses.NewErrorResponse("this core carries no logos-vpn hashes (a release before the installers)"))
+			return
+		}
+		c.Header("Content-Type", "text/plain; charset=utf-8")
+		c.File(path)
+		return
+	}
 	if !slices.Contains(vpnPlatforms, platform) {
 		c.JSON(http.StatusNotFound, responses.NewErrorResponse("logos-vpn is built for %s", strings.Join(vpnPlatforms, ", ")))
 		return
@@ -139,6 +176,36 @@ func (vc *VPNController) Client(c *gin.Context) {
 		return
 	}
 	c.FileAttachment(path, saved)
+}
+
+// vpnInstallers are logos-vpn's installers, served beside its binaries.
+var vpnInstallers = []string{"install.sh", "install.ps1"}
+
+// Installer handles GET /api/v1/vpn/install.sh and install.ps1: logos-vpn's
+// installers, for anyone (nothing in them is secret: the key they are run
+// with fetches the client). Connect a machine's line pipes one into a
+// shell, which fetches this core's logos-vpn with the key, checks it
+// against SHA256SUMS, installs it and connects.
+//
+//	@Summary	logos-vpn's installer (install.sh: Linux, macOS; install.ps1: Windows)
+//	@Tags		VPN
+//	@Produce	plain
+//	@Router		/vpn/install.sh [get]
+func (vc *VPNController) Installer(c *gin.Context) {
+	name := filepath.Base(c.Request.URL.Path)
+	if !slices.Contains(vpnInstallers, name) {
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("logos-vpn's installers are %s", strings.Join(vpnInstallers, ", ")))
+		return
+	}
+	path := filepath.Join(vc.clientDir, name)
+	if st, err := os.Stat(path); err != nil || !st.Mode().IsRegular() {
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("this core carries no %s (a logos-vpn release before the installers)", name))
+		return
+	}
+	// Fetched each time: a newer core's comes with its release.
+	c.Header("Cache-Control", "no-store")
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.File(path)
 }
 
 // wsLink is a client's link over a WebSocket (miniontunnels.VPNLink): one

@@ -36,6 +36,26 @@ func (a *App) mountPublicRoutes(v1 *gin.RouterGroup, c *controllers) {
 	// logos-vpn's link (docs: contracts/vpn-front): its key, a VPN key of
 	// one operator's for one task, is its sign-in, checked by the tunnels.
 	v1.GET("/vpn", c.vpn.Link)
+	// logos-vpn's installers, for anyone (Connect a machine's line), and
+	// this core's logos-vpn for a system: for anyone signed in, or, past
+	// sign-in, a VPN key's holder (the installer), the key checked by the
+	// handler.
+	v1.GET("/vpn/install.sh", c.vpn.Installer)
+	v1.GET("/vpn/install.ps1", c.vpn.Installer)
+	unlessVPNKeyed := func(mw gin.HandlerFunc) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			if controller.VPNKeyed(c) {
+				c.Next()
+				return
+			}
+			mw(c)
+		}
+	}
+	v1.GET("/vpn/client/:platform",
+		unlessVPNKeyed(middleware.AuthN(a.authProvider, a.repos.APIKey, a.repos.AgentKey, a.repos.User, a.cache)),
+		unlessVPNKeyed(middleware.CSRF(a.authCfg.csrfEnabled)),
+		unlessVPNKeyed(middleware.RequireHuman()),
+		c.vpn.Client)
 
 	// SSO start + provider callback. Both are top-level GET navigations with
 	// no cookie-authenticated state to protect, so they sit outside AuthN and
@@ -176,8 +196,6 @@ func (a *App) mountBuildRoutes(v1 *gin.RouterGroup, c *controllers) {
 	v1.GET("/minion-tasks/:id/data", c.task.DownloadData)
 	// A terminal task's web terminal: a WebSocket, for an operator.
 	v1.GET("/minion-tasks/:id/terminal", c.terminal.Terminal)
-	// This core's logos-vpn for a system, for anyone signed in.
-	v1.GET("/vpn/client/:platform", c.vpn.Client)
 	v1.GET("/minion-files/:id", c.task.DownloadFile)
 	v1.POST("/minion-files", c.task.UploadFile)
 }

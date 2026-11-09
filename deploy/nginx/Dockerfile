@@ -16,13 +16,16 @@ COPY 25-logos-front.sh /docker-entrypoint.d/25-logos-front.sh
 # servers answer to ("_": any); the plain HTTP server's mode (serve or
 # redirect). Certificates: mount tls.crt and tls.key at /etc/nginx/certs
 # (or name them: LOGOS_TLS_CERT, LOGOS_TLS_KEY), or keep the one the image
-# makes with a volume on /etc/nginx/logos-certs. Extra server-level
+# makes with a volume on /etc/nginx/logos-certs. Whether clients pin the
+# certificate (Connect a machine's lines): LOGOS_TLS_PIN, auto (when no
+# authority the image knows signs it), always or never. Extra server-level
 # configuration: *.conf files in /etc/nginx/logos-extra.
 ENV LOGOS_BACKEND=core:8002 \
     LOGOS_FRONTEND=frontend:80 \
     LOGOS_HOCUSPOCUS=hocuspocus:1234 \
     LOGOS_SERVER_NAME=_ \
     LOGOS_HTTP=serve \
+    LOGOS_TLS_PIN=auto \
     NGINX_ENVSUBST_FILTER=^LOGOS_
 
 EXPOSE 80 443
