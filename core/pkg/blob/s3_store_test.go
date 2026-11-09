@@ -48,17 +48,11 @@ func (f *fakeBucketClient) MakeBucket(_ context.Context, _ string, _ minio.MakeB
 	return f.makeErr
 }
 
-// newFastBucketTest shrinks the backoff so the race-handling tests run in
-// milliseconds instead of seconds. We don't rely on it elsewhere — the
-// public entry point still uses the production constants.
+// ensureBucketFast is ensureBucket with a millisecond backoff, so the tests
+// that exhaust the retry budget run in milliseconds instead of 9s each. The
+// public entry point still uses existsBackoff.
 func ensureBucketFast(ctx context.Context, c bucketClient, bucket string) error {
-	// ensureBucket's backoff is a fixed 1s; callers who want faster test
-	// loops can wrap the client in a no-wait ctx — but since the retry
-	// relies on real time, we just let the test drive with a short
-	// deadline and cancellation when the count is satisfied. For the
-	// handful of tests that need it, we cap each test's overall deadline
-	// via ctx.
-	return ensureBucket(ctx, c, bucket)
+	return ensureBucket(ctx, c, bucket, time.Millisecond)
 }
 
 func TestEnsureBucket_AlreadyExists(t *testing.T) {
@@ -224,8 +218,9 @@ func TestEnsureBucket_ContextCancelledDuringRetry(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
+	// The production backoff: cancellation must cut its 1s sleep short.
 	start := time.Now()
-	err := ensureBucketFast(ctx, f, "wiki-images")
+	err := ensureBucket(ctx, f, "wiki-images", existsBackoff)
 	elapsed := time.Since(start)
 
 	if !errors.Is(err, context.DeadlineExceeded) {

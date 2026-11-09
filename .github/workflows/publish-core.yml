@@ -40,18 +40,41 @@ jobs:
       # committed, so it is built here, into the Docker context, before the
       # image. Without it the image still builds, and HTML export fails with
       # a message saying the viewer is missing.
+      #
+      # Kept between runs, keyed on every frontend file: a push that leaves
+      # the frontend alone, as most core changes do, reuses the last build
+      # instead of two minutes of npm ci and three vite builds.
+      - name: Restore the viewer
+        id: viewer
+        uses: actions/cache@v4
+        with:
+          path: core/pkg/wikitransfer/htmlbundle/viewer
+          key: html-viewer-${{ hashFiles('frontend/**', '!frontend/node_modules/**') }}
+
       - name: Set up Node
+        if: steps.viewer.outputs.cache-hit != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+
+      # The same node_modules cache as ci-frontend.yml's (its key).
+      - name: Restore node_modules
+        id: modules
+        if: steps.viewer.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: node-modules-${{ runner.os }}-node22-${{ hashFiles('frontend/package.json', 'frontend/package-lock.json', 'frontend/patches/**') }}
+
+      - name: Install
+        if: steps.viewer.outputs.cache-hit != 'true' && steps.modules.outputs.cache-hit != 'true'
+        working-directory: frontend
+        run: npm ci
 
       - name: Build the HTML export viewer
+        if: steps.viewer.outputs.cache-hit != 'true'
         working-directory: frontend
-        run: |
-          npm ci
-          npm run build:viewer
+        run: npm run build:viewer
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

@@ -59,6 +59,15 @@ still caught, by the image build, but nothing else was.
 Its Node version is pinned in the workflow's `env` and must track
 `NODE_VERSION` in `frontend/Dockerfile`, so CI builds what the image builds.
 
+The workflows keep caches that hold between runs, as release rounds wait on
+them: Core CI's Go build cache is saved under each commit and restored from
+the newest (setup-go's own went stale, saved only when `go.sum` changed);
+`frontend/node_modules` is cached on `package.json`, the lockfile and
+`patches/` (`npm ci` took two minutes in each job), under one key written in
+both `ci-frontend.yml` and `publish-core.yml`: keep them the same; and
+`publish-core.yml` restores the HTML export viewer by a hash of every
+frontend file, so a push that leaves the frontend alone builds no viewer.
+
 The third job is a bundle budget: `frontend/scripts/check-bundle-budget.mjs`
 fails the build when the first-paint critical path — the entry plus every
 modulepreload `index.html` names — grows past the ceiling recorded in that file.

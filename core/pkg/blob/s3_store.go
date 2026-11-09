@@ -53,7 +53,7 @@ func NewS3Store(ctx context.Context, cfg S3Config) (*S3Store, error) {
 	ensureCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	if err := ensureBucket(ensureCtx, client, cfg.Bucket); err != nil {
+	if err := ensureBucket(ensureCtx, client, cfg.Bucket, existsBackoff); err != nil {
 		return nil, err
 	}
 
@@ -68,6 +68,13 @@ type bucketClient interface {
 	MakeBucket(ctx context.Context, bucket string, opts minio.MakeBucketOptions) error
 }
 
+// ensureBucket's BucketExists poll: how many attempts, and the wait between
+// them (about 10s for a cold gateway to rebuild its state).
+const (
+	existsAttempts = 10
+	existsBackoff  = 1 * time.Second
+)
+
 // ensureBucket bootstraps the bucket, tolerating a brief startup window
 // where the S3 gateway hasn't rebuilt its state from the filer yet: the
 // BucketExists poll gives it ~10s to warm up before we try to create.
@@ -77,12 +84,10 @@ type bucketClient interface {
 // requires operator action, not silent retry. The filer is expected to
 // persist its metadata (see docker-compose.yml's seaweedfs_filer_data
 // volume); without that, this zombie state recurs on every restart.
-func ensureBucket(ctx context.Context, c bucketClient, bucket string) error {
-	const (
-		existsAttempts = 10
-		existsBackoff  = 1 * time.Second
-	)
-
+//
+// backoff is the wait between BucketExists attempts: existsBackoff, or
+// less in tests.
+func ensureBucket(ctx context.Context, c bucketClient, bucket string, backoff time.Duration) error {
 	// Poll BucketExists briefly. A warm gateway answers on the first
 	// attempt; a cold one may need several seconds to rebuild state
 	// from the filer.
@@ -100,7 +105,7 @@ func ensureBucket(ctx context.Context, c bucketClient, bucket string) error {
 			// window has a chance to convert this into a yes.
 			lastErr = nil
 			if i+1 < existsAttempts {
-				if err := sleepCtx(ctx, existsBackoff); err != nil {
+				if err := sleepCtx(ctx, backoff); err != nil {
 					return err
 				}
 				continue
@@ -109,7 +114,7 @@ func ensureBucket(ctx context.Context, c bucketClient, bucket string) error {
 		}
 		lastErr = err
 		if i+1 < existsAttempts {
-			if err := sleepCtx(ctx, existsBackoff); err != nil {
+			if err := sleepCtx(ctx, backoff); err != nil {
 				return err
 			}
 		}

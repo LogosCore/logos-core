@@ -36,7 +36,23 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: core/go.mod
-          cache-dependency-path: core/go.sum
+          # setup-go saves its cache only when go.sum changes, so it went
+          # stale: the race build of the whole suite took two minutes. The
+          # step below saves one every run.
+          cache: false
+
+      # Go's build and module caches, saved under each commit and restored
+      # from the newest: only what changed since compiles.
+      - name: Go caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: core-test-${{ runner.os }}-${{ hashFiles('core/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            core-test-${{ runner.os }}-${{ hashFiles('core/go.sum') }}-
+            core-test-${{ runner.os }}-
 
       - name: Verify go.mod is tidy
         working-directory: core
