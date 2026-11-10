@@ -16,13 +16,12 @@ import type { BuildRecord } from "@/components/builds/build-record"
  * left. It changes as the build runs (the build query polls while it does).
  */
 export function BuildRun({ build: b }: { build: BuildRecord }) {
-  const now = useNow()
   const running = isUnfinished(b.state)
   return (
     <div className="flex min-h-full min-w-0 flex-col gap-6 px-4 py-6">
       <Section title="Pipeline" className="dot-grid">
         <div className="py-3">
-          <BuildPipeline stages={b.stages} now={now} />
+          <LiveBuildPipeline stages={b.stages} />
         </div>
       </Section>
 
@@ -31,6 +30,12 @@ export function BuildRun({ build: b }: { build: BuildRecord }) {
       <BuildLog log={b.log ?? ""} running={running} fileName={`${b.id}.log`} />
     </div>
   )
+}
+
+/** The pipeline, timing a running stage on the shared clock: a tick re-renders it, not the tab. */
+function LiveBuildPipeline({ stages }: { stages: BuildRecord["stages"] }) {
+  const now = useNow()
+  return <BuildPipeline stages={stages} now={now} />
 }
 
 /**

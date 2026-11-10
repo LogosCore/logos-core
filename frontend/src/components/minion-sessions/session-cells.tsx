@@ -25,16 +25,18 @@ import { OsIcon } from "./os-icon"
 import { MARK_TONE_CLASSES, isMarkColor } from "./session-mark-colors"
 import { cn } from "@/lib/utils"
 import { useRecordModals } from "@/hooks/use-record-modals"
+import { useNow } from "@/hooks/use-now"
 import { FEEDBACK_TONE, feedbackSummary } from "./feedback-values"
 import { ELEVATED, identityLabel, identityUser, shortUser } from "./identity-values"
 import { formatAgo, formatAgoExact, formatInterval, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
 // How each Sessions column shows a session: one line each, the full value on
-// hover where a cell may cut it.
+// hover where a cell may cut it. The cells that count time (Last seen, an
+// external address's last seen) read the clock themselves: the rest of the
+// row is not rendered again every second.
 
 export interface CellContext {
   icons: ReadonlyMap<string, ModuleIconSvgs>
-  now: number
   /** The address the filters or the search matched, if any. */
   matchAddress: (addrs: readonly string[]) => string | undefined
   /** Picks a session's shown address; absent where the viewer may not. */
@@ -109,11 +111,54 @@ function connNote(s: MinionSessionFieldsFragment, now: number): string[] {
 }
 
 /** When an external address was last seen, and how many messages came from it. */
-function PeerSeen({ lastSeen, count, now }: { lastSeen: string; count: number; now: number }) {
+function PeerSeen({ lastSeen, count }: { lastSeen: string; count: number }) {
+  const now = useNow(1_000)
   return (
     <span title={`Last seen ${formatAbsolute(lastSeen)}`}>
       <Ago at={lastSeen} now={now} /> · {count}×
     </span>
+  )
+}
+
+/**
+ * Last seen: green while on time by its schedule, yellow once late, red once
+ * lost; plain when the minion never said its schedule. Counts a silent
+ * minion's seconds, on the shared one-second clock.
+ */
+function LastSeen({ s }: { s: MinionSessionFieldsFragment }) {
+  const now = useNow(1_000)
+  // A persistent connection open: the minion is there now.
+  const state = s.connected ? "live" : lateness(s, now)
+  const KindIcon = CONN_KIND_ICONS[connKindKey(s)]
+  return (
+    <div
+      // A marked row's style recolors these (session-mark-styles.css).
+      data-seen={state ?? undefined}
+      className={cn(
+        "flex min-w-0 items-baseline gap-1",
+        state === "live" && "text-emerald-600 dark:text-emerald-400",
+        state === "late" && "text-amber-600 dark:text-amber-400",
+        state === "lost" && "text-red-600 dark:text-red-400",
+        state === null && "text-muted-foreground",
+      )}
+      title={[
+        s.connected ? "Connected: a connection to the minion is open, and core sends to it at once" : state && scheduleNote(s, state, now),
+        s.lastSeenAt &&
+          `Last seen ${formatAbsolute(s.lastSeenAt)} (${formatAgoExact(now - Date.parse(s.lastSeenAt))})`,
+        ...connNote(s, now),
+        viaNote(s.via, s.viaSince),
+        `Opened ${formatAbsolute(s.createdAt)}`,
+      ]
+        .filter(Boolean)
+        .join("\n")}
+    >
+      {KindIcon && <KindIcon className="size-3.5 shrink-0 self-center" aria-label={s.connKind ?? undefined} />}
+      <span className="truncate">
+        {s.connected ? "connected" : s.lastSeenAt ? <Ago at={s.lastSeenAt} now={now} /> : "not yet"}
+      </span>
+      {/* Through a delegate: the nearest, in the row's own tone. */}
+      {s.via.length > 0 && <span className="shrink-0 text-xs opacity-75">{viaShort(s.via)}</span>}
+    </div>
   )
 }
 
@@ -155,7 +200,7 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
           noun="external addresses"
           detail={(address) => {
             const p = s.peers.find((x) => x.address === address)
-            return p && <PeerSeen lastSeen={p.lastSeen} count={p.count} now={ctx.now} />
+            return p && <PeerSeen lastSeen={p.lastSeen} count={p.count} />
           }}
         />
       )
@@ -210,43 +255,8 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
           <span className="truncate font-mono text-xs text-muted-foreground">{s.arch}</span>
         </div>
       )
-    case "lastSeen": {
-      // Green while on time by its schedule, yellow once late, red once
-      // lost; plain when the minion never said its schedule.
-      // A persistent connection open: the minion is there now.
-      const state = s.connected ? "live" : lateness(s, ctx.now)
-      const KindIcon = CONN_KIND_ICONS[connKindKey(s)]
-      return (
-        <div
-          // A marked row's style recolors these (session-mark-styles.css).
-          data-seen={state ?? undefined}
-          className={cn(
-            "flex min-w-0 items-baseline gap-1",
-            state === "live" && "text-emerald-600 dark:text-emerald-400",
-            state === "late" && "text-amber-600 dark:text-amber-400",
-            state === "lost" && "text-red-600 dark:text-red-400",
-            state === null && "text-muted-foreground",
-          )}
-          title={[
-            s.connected ? "Connected: a connection to the minion is open, and core sends to it at once" : state && scheduleNote(s, state, ctx.now),
-            s.lastSeenAt &&
-              `Last seen ${formatAbsolute(s.lastSeenAt)} (${formatAgoExact(ctx.now - Date.parse(s.lastSeenAt))})`,
-            ...connNote(s, ctx.now),
-            viaNote(s.via, s.viaSince),
-            `Opened ${formatAbsolute(s.createdAt)}`,
-          ]
-            .filter(Boolean)
-            .join("\n")}
-        >
-          {KindIcon && <KindIcon className="size-3.5 shrink-0 self-center" aria-label={s.connKind ?? undefined} />}
-          <span className="truncate">
-            {s.connected ? "connected" : s.lastSeenAt ? <Ago at={s.lastSeenAt} now={ctx.now} /> : "not yet"}
-          </span>
-          {/* Through a delegate: the nearest, in the row's own tone. */}
-          {s.via.length > 0 && <span className="shrink-0 text-xs opacity-75">{viaShort(s.via)}</span>}
-        </div>
-      )
-    }
+    case "lastSeen":
+      return <LastSeen s={s} />
     case "build":
       return (
         <div className="flex min-w-0 items-baseline" title={buildTitle(s)}>

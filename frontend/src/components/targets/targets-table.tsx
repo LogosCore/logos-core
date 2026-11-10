@@ -49,7 +49,6 @@ export function TargetsTable({
   emptyState: ReactNode
 }) {
   const modals = useRecordModals()
-  const now = useNow()
   const openSession = (t: Target) => t.sessionId && modals.open({ kind: "session", id: t.sessionId })
   const interact = useInteractWithSession()
   const interactWith = (t: Target) => t.sessionId && interact({ id: t.sessionId, operationId: t.operationId })
@@ -147,7 +146,7 @@ export function TargetsTable({
                   </span>
                 ) : (t.stateDetail || t.unreachableSince) && (
                   <span className="max-w-full truncate text-xs text-muted-foreground" title={t.stateDetail ?? undefined}>
-                    {t.unreachableSince && t.state !== "connected" && <>since {ago(t.unreachableSince, now)}</>}
+                    {t.unreachableSince && t.state !== "connected" && <>since <Ago at={t.unreachableSince} /></>}
                     {t.unreachableSince && t.stateDetail && t.state !== "connected" && " · "}
                     {t.stateDetail}
                   </span>
@@ -161,10 +160,10 @@ export function TargetsTable({
                 )}
               </div>
               <div className="flex min-w-0 flex-col gap-0.5 text-sm">
-                <span className="truncate">{t.lastCallAt ? ago(t.lastCallAt, now) : <span className="text-muted-foreground">never</span>}</span>
+                <span className="truncate">{t.lastCallAt ? <Ago at={t.lastCallAt} /> : <span className="text-muted-foreground">never</span>}</span>
                 <span className="truncate text-xs text-muted-foreground">
                   {t.calls} {t.calls === 1 ? "call" : "calls"}
-                  {t.nextCallAt && <> · next {inFuture(t.nextCallAt, now)}</>}
+                  {t.nextCallAt && <> · next <InFuture at={t.nextCallAt} /></>}
                 </span>
               </div>
               <div>{menuButton}</div>
@@ -176,14 +175,19 @@ export function TargetsTable({
   )
 }
 
+// The times count on the shared clock, each where it shows: a tick
+// re-renders them, not the table.
+
 /** How long ago, within a day; older, the date and time. */
-function ago(at: string, now: number): ReactNode {
+function Ago({ at }: { at: string }): ReactNode {
+  const now = useNow()
   const text = formatAgo(now - Date.parse(at))
   return text === null ? <FormattedDateTimeText date={at} /> : text
 }
 
 /** When a call is due: "in 4m", "now", or the date and time past a day. */
-function inFuture(at: string, now: number): ReactNode {
+function InFuture({ at }: { at: string }): ReactNode {
+  const now = useNow()
   const ms = Date.parse(at) - now
   if (ms <= 0) return "now"
   const text = formatAgo(ms)

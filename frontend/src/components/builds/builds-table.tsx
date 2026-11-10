@@ -64,7 +64,6 @@ export function BuildsTable({
   emptyState: ReactNode
 }) {
   const modals = useRecordModals()
-  const now = useNow()
   const open = (b: BuildFieldsFragment) => modals.open({ kind: "build", id: b.id })
   const again = (b: BuildFieldsFragment) => modals.open({ kind: "new-build", factory: b.moduleName, from: b.id })
   const download = (b: BuildFieldsFragment) => {
@@ -185,7 +184,7 @@ export function BuildsTable({
                   {b.description || <span className="text-muted-foreground">—</span>}
                 </div>
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <PipelineDots stages={b.stages} now={now} />
+                  <LivePipelineDots stages={b.stages} />
                   {/* Where the build is, or where it stopped and why. */}
                   {(at || b.error) && (
                     <span
@@ -209,4 +208,10 @@ export function BuildsTable({
       }}
     />
   )
+}
+
+/** A build's pipeline dots, timing a running stage on the shared clock: a tick re-renders them, not the table. */
+function LivePipelineDots({ stages }: { stages: Parameters<typeof PipelineDots>[0]["stages"] }) {
+  const now = useNow()
+  return <PipelineDots stages={stages} now={now} />
 }

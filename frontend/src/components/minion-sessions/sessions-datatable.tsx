@@ -75,7 +75,6 @@ import { Popover, PopoverContent } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { MinionSessionFieldsFragment, MinionSessionFolderFieldsFragment, SetMinionSessionsFolderMutationVariables } from "@/graphql/gql/graphql"
 import { PLACEHOLDER_DELAY_MS, useDelayedFlag } from "@/hooks/use-delayed-flag"
-import { useNow } from "@/hooks/use-now"
 import { cn } from "@/lib/utils"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { useRecordModals } from "@/hooks/use-record-modals"
@@ -222,9 +221,8 @@ export function SessionsDatatable({
   fetchNextPage: () => void
   emptyState: ReactNode
 }) {
-  // Ticks the relative times every second: "Last seen" counts a silent
-  // minion's seconds, and turns late on time.
-  const now = useNow(1_000)
+  // No clock here: the cells that count time read it themselves
+  // (session-cells.tsx), so a tick re-renders them, not the table.
   const [filterTarget, setFilterTarget] = useState<FilterTarget | null>(null)
   // The session whose description is being edited.
   const [describing, setDescribing] = useState<MinionSessionFieldsFragment | null>(null)
@@ -247,13 +245,12 @@ export function SessionsDatatable({
   const ctx = useMemo(
     () => ({
       icons,
-      now,
       matchAddress,
       pickAddress: canWrite
         ? (s: MinionSessionFieldsFragment, address: string) => pick({ id: s.id, address })
         : undefined,
     }),
-    [icons, now, matchAddress, canWrite, pick],
+    [icons, matchAddress, canWrite, pick],
   )
 
   // The selection for bulk actions, made under this view and these filters
