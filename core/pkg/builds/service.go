@@ -51,12 +51,6 @@ type Store interface {
 	Delete(ctx context.Context, key string) error
 }
 
-// Signer signs the URLs factories download files and upload artifacts with.
-type Signer interface {
-	GetURL(ctx context.Context, key string, expiry time.Duration) (string, error)
-	PutURL(ctx context.Context, key string, expiry time.Duration) (string, error)
-}
-
 // Repos are the stores the service writes.
 type Repos struct {
 	Files   repository.IBuildFileRepository
@@ -149,7 +143,7 @@ type Service struct {
 	channels Channels
 	rpc      Caller
 	store    Store
-	signer   Signer
+	links    *Links // a factory.build's links to core's transfer endpoints
 	creds    Credentials
 	// factoryKeys makes the keys of a factory's own suite.
 	factoryKeys FactoryKeys
@@ -184,9 +178,9 @@ func (s *Service) WithCredentials(c Credentials) *Service {
 	return s
 }
 
-func NewService(repos Repos, registry Registry, channels Channels, rpc Caller, store Store, signer Signer, cfg Config, logger *zap.Logger) *Service {
+func NewService(repos Repos, registry Registry, channels Channels, rpc Caller, store Store, links *Links, cfg Config, logger *zap.Logger) *Service {
 	return &Service{
-		repos: repos, registry: registry, channels: channels, rpc: rpc, store: store, signer: signer,
+		repos: repos, registry: registry, channels: channels, rpc: rpc, store: store, links: links,
 		cfg:    cfg.withDefaults(),
 		logger: logger,
 		now:    func() time.Time { return time.Now().UTC() },

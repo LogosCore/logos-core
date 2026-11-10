@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -233,4 +234,14 @@ func parseEndpoint(endpoint string) (string, bool, error) {
 		return "", false, fmt.Errorf("missing host in %q", endpoint)
 	}
 	return host, u.Scheme == "https", nil
+}
+
+// IsNotFound reports whether err says the object does not exist, as opposed
+// to the store failing to answer.
+func IsNotFound(err error) bool {
+	var resp minio.ErrorResponse
+	if errors.As(err, &resp) {
+		return resp.Code == "NoSuchKey" || resp.StatusCode == http.StatusNotFound
+	}
+	return false
 }

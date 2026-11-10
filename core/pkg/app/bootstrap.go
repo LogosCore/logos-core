@@ -487,18 +487,13 @@ func newBuildService(ctx context.Context, e *environment.EnvironmentSettings, l 
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize the build store: %w", err)
 	}
-	signer, err := blob.NewPresigner(blob.S3Config{
-		Endpoint:  e.BuildStorageEndpoint,
-		AccessKey: e.SeaweedFSS3AccessKey,
-		SecretKey: e.SeaweedFSS3SecretKey,
-		Bucket:    e.BuildBucket,
-	})
+	links, err := builds.NewLinks(e.JWTSecretKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize the build URL signer: %w", err)
+		return nil, fmt.Errorf("failed to initialize the build links: %w", err)
 	}
 	return builds.NewService(
 		builds.Repos{Files: repos.BuildFile, Builds: repos.Build, Minions: repos.Minion, Sessions: repos.MinionSession, Reservations: repos.MinionReservation},
-		repos.ModuleRegistry, endpoints, rpc, store, signer,
+		repos.ModuleRegistry, endpoints, rpc, store, links,
 		builds.Config{Timeout: e.BuildTimeout, FileMaxSize: e.BuildFileMaxSize, ArtifactMaxSize: e.BuildArtifactMaxSize},
 		l.Named("builds"),
 	), nil

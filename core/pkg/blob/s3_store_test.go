@@ -3,6 +3,7 @@ package blob
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -251,5 +252,16 @@ func TestEnsureBucket_TransientErrorsRecover(t *testing.T) {
 	}
 	if got := atomic.LoadUint32(&f.existsCalls); got != 3 {
 		t.Errorf("BucketExists calls = %d, want 3", got)
+	}
+}
+
+func TestIsNotFound(t *testing.T) {
+	missing := fmt.Errorf("blob: stat %q: %w", "k", minio.ErrorResponse{Code: "NoSuchKey", StatusCode: 404})
+	if !IsNotFound(missing) {
+		t.Error("a wrapped NoSuchKey is not found")
+	}
+	if IsNotFound(fmt.Errorf("blob: stat: %w", minio.ErrorResponse{Code: "InternalError", StatusCode: 500})) ||
+		IsNotFound(errors.New("connection refused")) {
+		t.Error("a store failure taken for a missing object")
 	}
 }

@@ -90,10 +90,6 @@ type EnvironmentSettings struct {
 	// Minion builds (contracts/minion-build.md): build files and artifacts
 	// in one bucket, under files/ and artifacts/.
 	BuildBucket string
-	// BuildStorageEndpoint is the S3 address the presigned URLs handed to
-	// factories point at: the one factories reach, which may differ from
-	// SEAWEEDFS_S3_ENDPOINT. Defaults to it.
-	BuildStorageEndpoint string
 	// BuildTimeout bounds the time a build spends queued, and then building.
 	BuildTimeout         time.Duration
 	BuildFileMaxSize     int64 // bytes; cap on one uploaded build file
@@ -321,7 +317,6 @@ func init() {
 
 		// Minion builds
 		BuildBucket:          viper.GetString("BUILD_BUCKET"),
-		BuildStorageEndpoint: firstNonEmpty(viper.GetString("BUILD_STORAGE_ENDPOINT"), viper.GetString("SEAWEEDFS_S3_ENDPOINT")),
 		BuildTimeout:         parseDurationOrFatal("BUILD_TIMEOUT", viper.GetString("BUILD_TIMEOUT")),
 		BuildFileMaxSize:     sizeUpTo("BUILD_FILE_MAX_SIZE", viper.GetInt64("BUILD_FILE_MAX_SIZE"), 1<<30),
 		MinionFileBucket:     viper.GetString("MINION_FILE_BUCKET"),
@@ -474,16 +469,6 @@ func parseCSV(raw string) []string {
 		out = append(out, trimmed)
 	}
 	return out
-}
-
-// firstNonEmpty returns the first of values that is not empty.
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 // portsOrFatal reads a list of ports and ranges ("41000-41063,42000").

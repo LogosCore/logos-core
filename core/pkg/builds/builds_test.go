@@ -116,7 +116,7 @@ func newRig(t *testing.T) *rig {
 	r.sessions = &fakeSessions{rows: map[uuid.UUID]*models.MinionSession{}}
 	r.reserved = &fakeReservations{rows: map[uuid.UUID]models.MinionSessionReservation{}}
 	r.svc = NewService(Repos{Files: r.files, Builds: r.builds, Minions: r.minions, Sessions: r.sessions, Reservations: r.reserved},
-		r.reg, r.chs, r.rpc, r.store, fakeSigner{}, Config{}, zap.NewNop())
+		r.reg, r.chs, r.rpc, r.store, testLinks, Config{}, zap.NewNop())
 	r.svc.now = func() time.Time { return r.clock }
 	t.Cleanup(r.svc.Stop)
 	return r
@@ -412,9 +412,10 @@ func TestOfferAccepted(t *testing.T) {
 	if raw, _ := json.Marshal(req); strings.Contains(string(raw), "first stage") || strings.Contains(string(raw), "dry run") {
 		t.Fatalf("a description went to the factory: %s", raw)
 	}
-	key := artifactKey(opID, b.BuildID)
-	if req.Artifact.UploadURL != "http://store.test/"+key+"?sig=put" || req.Artifact.MaxSize != 256<<20 ||
-		req.Files[badge.FileID.String()].URL != "http://store.test/"+badge.ObjectKey+"?sig=get" ||
+	// Its links are core's own, good until a minute past the deadline.
+	expires := req.Deadline.Add(time.Minute)
+	if req.Artifact.UploadURL != testLinks.Sign(ArtifactPath(b.BuildID), expires) || req.Artifact.MaxSize != 256<<20 ||
+		req.Files[badge.FileID.String()].URL != testLinks.Sign(FilePath(b.BuildID, badge.FileID), expires) ||
 		req.Files[badge.FileID.String()].SHA256 != sha("png!") || req.Actor.ID != "u-alice" {
 		t.Fatalf("request %+v", req)
 	}

@@ -86,8 +86,9 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 		return recorded, nil
 	}
 
-	// A presigned upload cannot be capped, so the limit is kept here: an
-	// artifact over it is never read, and never becomes a minion.
+	// Core refuses an upload over the limit (transfer.go); the factory's
+	// word is checked against it too: an artifact over it is never read,
+	// and never becomes a minion.
 	limit := b.ArtifactMaxSize
 	if limit <= 0 {
 		limit = s.cfg.ArtifactMaxSize // offered before core kept the limit

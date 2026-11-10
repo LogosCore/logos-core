@@ -46,7 +46,14 @@ func (a *App) NewRouter() *gin.Engine {
 	channel.GET("/link", c.link.Link)
 	// A factory that translates its minions' codec keeps its link here,
 	// behind the same registration gate (docs: Codecs, The factory link).
-	r.Group("/api/factory").GET("/link", c.factory.Link)
+	factory := r.Group("/api/factory")
+	factory.GET("/link", c.factory.Link)
+	// A build's files and its artifact, for the factory building it: the
+	// links its factory.build carries, signed for the build (the link is the
+	// credential), so a factory needs to reach core alone (docs:
+	// minion-build, Files).
+	factory.GET("/builds/:build/files/:file", c.build.FactoryFile)
+	factory.PUT("/builds/:build/artifact", c.build.FactoryArtifact)
 
 	v1 := r.Group("/api/v1")
 

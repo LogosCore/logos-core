@@ -423,9 +423,11 @@ ingress:
   #   /api/v1/minion-streams/ (stream_download, stream_upload): no body
   #     limit, nothing buffered either way, an hour's timeouts (a stream
   #     waits on the minion's check-ins; curl resumes one cut off).
+  #   /api/factory/builds/ (a factory's build files and artifacts, the
+  #     links its factory.build carries): the same; core caps the artifact.
   minionTransfers:
     enabled: true
-    # Extra annotations for both transfer Ingresses only.
+    # Extra annotations for the transfer Ingresses only.
     annotations: {}
 
   tls:

@@ -48,7 +48,7 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	signer, err := blob.NewPresigner(s3)
+	links, err := NewLinks(e.JWTSecretKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	svc := NewService(Repos{
 		Files: repository.NewBuildFileRepository(db), Builds: repository.NewBuildRepository(db),
 		Minions: repository.NewMinionRepository(db),
-	}, registry, channels, rpc, store, signer, Config{}, zap.NewNop())
+	}, registry, channels, rpc, store, links, Config{}, zap.NewNop())
 
 	op := uuid.New()
 	t.Cleanup(func() {

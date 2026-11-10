@@ -564,12 +564,18 @@ func (f *fakeStore) has(key string) bool {
 	return ok
 }
 
-type fakeSigner struct{}
+// testLinks signs the builds tests' links.
+var testLinks = func() *Links {
+	l, err := NewLinks("builds test secret")
+	if err != nil {
+		panic(err)
+	}
+	return l
+}()
 
-func (fakeSigner) GetURL(_ context.Context, key string, _ time.Duration) (string, error) {
-	return "http://store.test/" + key + "?sig=get", nil
-}
-
-func (fakeSigner) PutURL(_ context.Context, key string, _ time.Duration) (string, error) {
-	return "http://store.test/" + key + "?sig=put", nil
+// setBuild changes a stored build, as another core's write would.
+func (f *fakeBuilds) setBuild(id uuid.UUID, change func(b *models.Build)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	change(f.rows[id])
 }

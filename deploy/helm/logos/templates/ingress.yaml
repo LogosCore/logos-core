@@ -76,7 +76,8 @@ spec:
       "nginx.ingress.kubernetes.io/proxy-send-timeout" "3600" }}
 {{- range $t := list
       (dict "name" "minion-files" "path" "/api/v1/minion-files" "pathType" "Exact" "body" $filesBody)
-      (dict "name" "minion-streams" "path" "/api/v1/minion-streams/" "pathType" "Prefix" "body" "0") }}
+      (dict "name" "minion-streams" "path" "/api/v1/minion-streams/" "pathType" "Prefix" "body" "0")
+      (dict "name" "build-transfers" "path" "/api/factory/builds/" "pathType" "Prefix" "body" "0") }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress

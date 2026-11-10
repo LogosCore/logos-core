@@ -23,10 +23,14 @@ type BuildService interface {
 	UploadFile(ctx context.Context, op uuid.UUID, name, mediaType string, body io.Reader, size int64, actor models.ModuleActor) (*models.BuildFile, error)
 	Build(ctx context.Context, id string) (*models.Build, error)
 	OpenArtifact(ctx context.Context, buildID string) (io.ReadCloser, *models.Build, error)
+	CheckLink(path, expires, sig string) error
+	FactoryFile(ctx context.Context, build, file uuid.UUID) (io.ReadCloser, *models.BuildFile, error)
+	FactoryArtifact(ctx context.Context, build uuid.UUID, body io.Reader, size int64, contentType string) error
 }
 
 // BuildController serves the byte paths of minion builds: build file uploads
-// and artifact downloads. Everything else is GraphQL (builds.graphql).
+// and artifact downloads, and a factory's side of them (the links its
+// factory.build carries). Everything else is GraphQL (builds.graphql).
 type BuildController struct {
 	builds  BuildService
 	opRepo  repository.IOperationRepository
@@ -158,4 +162,120 @@ func (bc *BuildController) DownloadArtifact(c *gin.Context) {
 	if _, err := io.Copy(c.Writer, r); err != nil {
 		bc.logger.Debug("Artifact stream aborted", zap.Error(err))
 	}
+}
+
+// FactoryFile handles GET /api/factory/builds/{build}/files/{file}: one of a
+// build's files, for the factory building it, from the link its
+// factory.build carries (docs: minion-build, Files). The link is the
+// credential, signed for the build and the file until a minute past the
+// build's deadline; the factory follows it from wherever it reaches core.
+//
+//	@Summary		A build file, for its factory
+//	@Tags			Factories
+//	@Produce		octet-stream
+//	@Param			build	path	string	true	"Build ID"
+//	@Param			file	path	string	true	"File ID"
+//	@Param			expires	query	int		true	"The link's expiry, Unix seconds"
+//	@Param			sig		query	string	true	"The link's signature"
+//	@Success		200
+//	@Failure		403	{object}	responses.ErrorResponse	"not a link of core's, or expired"
+//	@Failure		404	{object}	responses.ErrorResponse
+//	@Failure		409	{object}	responses.ErrorResponse	"the build has ended"
+//	@Router			/factory/builds/{build}/files/{file} [get]
+func (bc *BuildController) FactoryFile(c *gin.Context) {
+	build, err := uuid.Parse(c.Param("build"))
+	file, ferr := uuid.Parse(c.Param("file"))
+	if err != nil || ferr != nil {
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("%s", builds.ErrTransferNotFound.Error()))
+		return
+	}
+	if !bc.linkOK(c, builds.FilePath(build, file)) {
+		return
+	}
+	r, f, err := bc.builds.FactoryFile(c.Request.Context(), build, file)
+	if !bc.transferOK(c, build, err) {
+		return
+	}
+	defer r.Close()
+
+	mediaType := f.MediaType
+	if mediaType == "" {
+		mediaType = "application/octet-stream"
+	}
+	c.Header("Content-Type", mediaType)
+	c.Header("Content-Length", strconv.FormatInt(f.Size, 10))
+	c.Header("Cache-Control", "private, no-store")
+	c.Status(http.StatusOK)
+	if _, err := io.Copy(c.Writer, r); err != nil {
+		bc.logger.Debug("Build file stream aborted", zap.String("build_id", build.String()), zap.Error(err))
+	}
+}
+
+// FactoryArtifact handles PUT /api/factory/builds/{build}/artifact: the
+// artifact, from the factory building it, through the link its
+// factory.build carries. Core streams it into storage, and refuses one
+// that does not say its length or is over the build's limit before reading
+// a byte. Another upload replaces it.
+//
+//	@Summary		A build's artifact, from its factory
+//	@Tags			Factories
+//	@Accept			octet-stream
+//	@Param			build	path	string	true	"Build ID"
+//	@Param			expires	query	int		true	"The link's expiry, Unix seconds"
+//	@Param			sig		query	string	true	"The link's signature"
+//	@Param			request	body	string	true	"The artifact"	format(binary)
+//	@Success		204
+//	@Failure		403	{object}	responses.ErrorResponse	"not a link of core's, or expired"
+//	@Failure		404	{object}	responses.ErrorResponse
+//	@Failure		409	{object}	responses.ErrorResponse	"the build has ended"
+//	@Failure		411	{object}	responses.ErrorResponse
+//	@Failure		413	{object}	responses.ErrorResponse
+//	@Router			/factory/builds/{build}/artifact [put]
+func (bc *BuildController) FactoryArtifact(c *gin.Context) {
+	build, err := uuid.Parse(c.Param("build"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("%s", builds.ErrTransferNotFound.Error()))
+		return
+	}
+	if !bc.linkOK(c, builds.ArtifactPath(build)) {
+		return
+	}
+	err = bc.builds.FactoryArtifact(c.Request.Context(), build, c.Request.Body, c.Request.ContentLength,
+		canonicalContentType(c.GetHeader("Content-Type")))
+	if !bc.transferOK(c, build, err) {
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// linkOK checks the link a factory followed to path: false once it has
+// answered.
+func (bc *BuildController) linkOK(c *gin.Context, path string) bool {
+	err := bc.builds.CheckLink(path, c.Query("expires"), c.Query("sig"))
+	if err == nil {
+		return true
+	}
+	c.JSON(http.StatusForbidden, responses.NewErrorResponse("%s", err.Error()))
+	return false
+}
+
+// transferOK answers a transfer's error: false once it has.
+func (bc *BuildController) transferOK(c *gin.Context, build uuid.UUID, err error) bool {
+	var tooLarge *builds.ArtifactTooLargeError
+	switch {
+	case err == nil:
+		return true
+	case errors.Is(err, builds.ErrTransferNotFound):
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("%s", err.Error()))
+	case errors.Is(err, builds.ErrBuildEnded):
+		c.JSON(http.StatusConflict, responses.NewErrorResponse("%s", err.Error()))
+	case errors.Is(err, builds.ErrLengthRequired):
+		c.JSON(http.StatusLengthRequired, responses.NewErrorResponse("%s", err.Error()))
+	case errors.As(err, &tooLarge):
+		c.JSON(http.StatusRequestEntityTooLarge, responses.NewErrorResponse("%s", err.Error()))
+	default:
+		bc.logger.Error("Build transfer failed", zap.String("build_id", build.String()), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
+	}
+	return false
 }

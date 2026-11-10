@@ -268,10 +268,11 @@ func (s *Service) factoryCrypto(ctx context.Context, b *models.Build) bool {
 	return true
 }
 
-// request is the factory.build request of b, with URLs valid until
-// deadline, and the revision of each credential it carries.
+// request is the factory.build request of b, with links (links.go) good
+// until a minute past deadline, and the revision of each credential it
+// carries.
 func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Time) (protocol.BuildRequest, map[string]int64, error) {
-	expiry := time.Until(deadline) + time.Minute
+	expires := deadline.Add(time.Minute)
 	req := protocol.BuildRequest{
 		BuildID: b.BuildID.String(), Target: b.Target, Platform: b.Platform,
 		SchemaVersion: b.SchemaVersion, Values: b.Values, Commands: b.Commands, Connections: b.Connections.Items,
@@ -297,9 +298,7 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 			return req, nil, fmt.Errorf("build file %s: %w", id, err)
 		}
 		pf := f.Protocol()
-		if pf.URL, err = s.signer.GetURL(ctx, f.ObjectKey, expiry); err != nil {
-			return req, nil, err
-		}
+		pf.URL = s.links.Sign(FilePath(b.BuildID, f.FileID), expires)
 		req.Files[pf.ID] = pf
 	}
 	var revs map[string]int64
@@ -312,11 +311,7 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 			return req, nil, err
 		}
 	}
-	upload, err := s.signer.PutURL(ctx, artifactKey(b.OperationID, b.BuildID), expiry)
-	if err != nil {
-		return req, nil, err
-	}
-	req.Artifact = protocol.ArtifactUpload{UploadURL: upload, MaxSize: s.cfg.ArtifactMaxSize}
+	req.Artifact = protocol.ArtifactUpload{UploadURL: s.links.Sign(ArtifactPath(b.BuildID), expires), MaxSize: s.cfg.ArtifactMaxSize}
 	return req, revs, nil
 }
 

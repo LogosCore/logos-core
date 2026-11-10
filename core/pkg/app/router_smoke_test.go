@@ -49,6 +49,7 @@ func TestRouteTable(t *testing.T) {
 		"DELETE /api/v1/mcp",
 		"GET /api/channel/connection",
 		"GET /api/channel/link",
+		"GET /api/factory/builds/:build/files/:file",
 		"GET /api/factory/link",
 		"GET /api/v1/",
 		"GET /api/v1/builds/:id/artifact",
@@ -95,6 +96,7 @@ func TestRouteTable(t *testing.T) {
 		"POST /api/v1/wiki/images",
 		"POST /api/v1/wiki/transfer/exports",
 		"POST /api/v1/wiki/transfer/imports",
+		"PUT /api/factory/builds/:build/artifact",
 		"PUT /api/v1/minion-streams/:id",
 	}
 	got := routeTable(t)
@@ -179,6 +181,11 @@ func TestRouteAuthTiers(t *testing.T) {
 		"GET /api/channel/connection":        400,
 		"GET /api/channel/link":              400,
 		"GET /api/factory/link":              400,
+		// A factory's build transfers: the link is the credential, checked
+		// by the handler (an unsigned one is refused, 403); a path naming no
+		// build ends there first.
+		"GET /api/factory/builds/:build/files/:file": 404,
+		"PUT /api/factory/builds/:build/artifact":    404,
 	}
 
 	r := testRouter(t).NewRouter()
