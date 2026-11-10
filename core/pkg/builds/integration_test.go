@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -22,9 +24,11 @@ import (
 
 // TestIntegrationBuildWithBOB runs one build through the whole dev stack: a
 // running core (whose scheduler offers the build and whose RPC server takes the
-// progress and result), BOB (logos-bob-factory) building it, and SeaweedFS in
-// between. The test only queues the build, in a throwaway operation, and reads
-// what happened.
+// progress and result), BOB (logos-bob-factory) compiling its minion for
+// linux/amd64, and core's transfer endpoints between BOB and SeaweedFS (the
+// badge down, the binary up). The test only queues the build, in a throwaway
+// operation, and reads what happened; the minion, core-dev's own platform,
+// says what it was built with when run with "describe".
 //
 // Opt-in through INTEGRATION_BUILDS, and run inside core-dev, where the
 // environment and the store's address are the stack's:
@@ -76,7 +80,7 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 
 	b, err := svc.CreateBuild(ctx, op, BuildInput{
 		Description: "integration test build, core's own",
-		ModuleName:  "bob", Target: "dummy", Platform: "any/any",
+		ModuleName:  "bob", Target: "linux-elf", Platform: "linux/amd64",
 		Values: map[string]any{"kill_date": "2027-01-31T00:00:00Z", "punches": []any{"jab", "uppercut"}, "badge": badge.FileID.String()},
 		Connections: []ConnectionInput{{ModuleName: "http", Name: "it-edge", Description: "integration note, core's own",
 			Settings: map[string]any{"base_url": "https://edge.example.com"}, Values: map[string]any{"path_prefix": "/cdn/assets/"}}},
@@ -119,6 +123,14 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	}
 	defer func() { _ = r.Close() }()
 	raw, _ := io.ReadAll(r)
+	bin := filepath.Join(t.TempDir(), b.Artifact.Filename)
+	if err := os.WriteFile(bin, raw, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	described, err := exec.CommandContext(ctx, bin, "describe").Output()
+	if err != nil {
+		t.Fatalf("%s describe: %v", b.Artifact.Filename, err)
+	}
 	var minion struct {
 		BuildID     string                  `json:"build_id"`
 		Punches     []string                `json:"punches"`
@@ -127,17 +139,17 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 			Values map[string]any `json:"values"`
 		} `json:"connections"`
 	}
-	if err := json.Unmarshal(raw, &minion); err != nil {
-		t.Fatalf("artifact %s: %v", raw, err)
+	if err := json.Unmarshal(described, &minion); err != nil {
+		t.Fatalf("description %s: %v", described, err)
 	}
 	if minion.BuildID != b.BuildID.String() || minion.Badge.SHA256 != badge.SHA256 || len(minion.Punches) != 2 ||
 		minion.Connections[0].Values["path_prefix"] != "/cdn/assets/" {
-		t.Fatalf("artifact %s", raw)
+		t.Fatalf("description %s", described)
 	}
 	// The descriptions stayed in core.
 	if strings.Contains(string(raw), "integration note") || b.ConnectionDescriptions[0] != "integration note, core's own" ||
 		strings.Contains(string(raw), "integration test build") || b.Description != "integration test build, core's own" {
-		t.Fatalf("descriptions %q %q, artifact %s", b.Description, b.ConnectionDescriptions, raw)
+		t.Fatalf("descriptions %q %q, minion %s", b.Description, b.ConnectionDescriptions, described)
 	}
-	t.Logf("artifact %s (%d bytes):\n%s", b.Artifact.Filename, b.Artifact.Size, raw)
+	t.Logf("artifact %s (%d bytes), describing itself:\n%s", b.Artifact.Filename, b.Artifact.Size, described)
 }
