@@ -4,7 +4,8 @@ import { defineConfig } from "vitest/config"
 // Standalone Vitest config — deliberately not reusing vite.config.ts, which
 // carries the lucide/tailwind build plumbing the tests don't need. The only
 // thing tests require is the `@/` source alias. The topology derivation is
-// pure (no DOM), so no jsdom environment is configured.
+// pure (no DOM), so no jsdom environment is configured. The build's own
+// plugins (vite-plugins/) are tested here too.
 export default defineConfig({
   resolve: {
     alias: {
@@ -12,6 +13,6 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "vite-plugins/**/*.test.ts"],
   },
 })

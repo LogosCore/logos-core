@@ -3,6 +3,7 @@ import path from "path"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig, type Plugin } from "vite"
+import { splitGraphqlDocuments } from "./vite-plugins/split-graphql-documents"
 
 // lucide-react@1.6.0 ships a broken dist tree:
 //   - direct imports use `.ts` extensions instead of `.js`
@@ -225,6 +226,9 @@ function precompressAssets({ brotli = false } = {}): Plugin {
 export default defineConfig({
   plugins: [
     lucideFixTsExtension(),
+    // Each GraphQL document in a module of its own, so first paint carries
+    // the few the shell uses, not all of them (vite-plugins/).
+    splitGraphqlDocuments(path.resolve(__dirname, "src/graphql/gql/graphql.ts")),
     excalidrawAssets(),
     // React Compiler on, via plugin-react's own `compiler` option (it drives
     // the Oxc-native `oxc-transform-react`, so there is no Babel pass in the
