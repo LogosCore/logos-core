@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react"
-import { CrosshairIcon, DownloadIcon, HammerIcon, RotateCcwIcon, SquareIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react"
+import {
+  CrosshairIcon,
+  DownloadIcon,
+  EllipsisIcon,
+  HammerIcon,
+  RotateCcwIcon,
+  SquareIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,6 +20,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  RECORD_TABS_LIST,
+  RECORD_TABS_TRIGGER,
   RecordModalBody,
   RecordModalHeader,
   RecordModalMessage,
@@ -19,16 +36,30 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
 import { formatJson } from "@/lib/json-edit"
+import { formatAbsolute } from "@/lib/relative-time"
+import { useNow } from "@/hooks/use-now"
 import { whenIdle } from "@/lib/preloadable"
 import type { BuildTab } from "@/lib/record-modals"
 import { artifactUrl } from "@/lib/build-file-upload"
 import { useRecordModals } from "@/hooks/use-record-modals"
-import { isUnfinished, useBuild, useCancelBuild, useDeleteBuildArtifact, useFactoryIcons } from "@/graphql/hooks/builds"
+import {
+  isUnfinished,
+  useBuild,
+  useCancelBuild,
+  useDeleteBuildArtifact,
+  useFactoryIcons,
+  useFactoryKinds,
+} from "@/graphql/hooks/builds"
 import { errorMessage } from "@/components/modules/management/api-errors"
+import { formatElapsed } from "@/components/modules/management/field-values"
 import { useCanBuild } from "@/components/builds/build-access"
 import { BuildOverview } from "@/components/builds/build-overview"
+import { BuildCommands } from "@/components/builds/build-commands"
+import { BuildConnections } from "@/components/builds/build-connections"
 import { BuildRun } from "@/components/builds/build-run"
 import { StageIcon } from "@/components/builds/build-pipeline"
+import { BuildStateBadge } from "@/components/builds/build-state-badge"
+import { buildElapsed, factoryKindsByName, platformLabel, recordedConnections } from "@/components/builds/build-values"
 import { buildRecordJson, defaultBuildTab, type BuildRecord as Build } from "@/components/builds/build-record"
 import { ModuleIcon } from "@/components/modules/module-icon"
 import { DeleteBuildDialog } from "@/components/builds/delete-build-dialog"
@@ -36,11 +67,13 @@ import { BuildTargets } from "@/components/targets/build-targets"
 import { useBindConnections } from "@/graphql/hooks/minion-targets"
 
 /**
- * One build (the build modal, ?build=<id>[&buildTab=]): Overview, what it is;
- * JSON, its record as the API gives it; Pipeline, how it went; Targets, for a
- * build with a bind connection, where its pages are. Without a tab
- * in the URL it opens on its pipeline while that is where to look, on its
- * overview once it has succeeded.
+ * One build (the build modal, ?build=<id>[&buildTab=]). Its header says what
+ * it is (its description) and how it went, from every tab; the tabs under it:
+ * Overview, what it is; Pipeline, how it went; Connections, how its minion
+ * reaches its channels; Commands, what it can do (where its factory has
+ * commands); Targets, for a build with a bind connection, where its pages
+ * are; JSON, its record as the API gives it. Without a tab in the URL it opens on its pipeline while that is where
+ * to look, on its overview once it has succeeded.
  */
 export function BuildDetails({ id, tab }: { id: string; tab: BuildTab | null }) {
   const { data, isLoading, error } = useBuild(id)
@@ -72,6 +105,11 @@ const STAGE_OF_STATE: Record<string, string> = {
 function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | null }) {
   const { open, close } = useRecordModals()
   const icons = useFactoryIcons()
+  const kinds = useFactoryKinds()
+  const connections = recordedConnections(b).length
+  // A tab for the minion's commands, unless neither it nor its factory has any.
+  const hasCommands =
+    b.commands.length > 0 || (factoryKindsByName(kinds.data?.factoryKinds ?? []).get(b.moduleName)?.commands.length ?? 0) > 0
   const { canWrite } = useCanBuild(b.operationId)
   const cancel = useCancelBuild()
   const [deleting, setDeleting] = useState(false)
@@ -83,6 +121,8 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
   const [firstTab] = useState(() => defaultBuildTab(b.state))
   const tab = urlTab ?? firstTab
   const json = useMemo(() => formatJson(buildRecordJson(b)), [b])
+  // The title: the description's first line (the Overview shows a longer one whole).
+  const title = b.description?.split("\n")[0].trim() ?? ""
   // A build whose minion only answers (a bind connection) has targets.
   const bind = useBindConnections(b.id)
   const bindConnections = bind.data ?? []
@@ -104,21 +144,16 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
       <Tabs
         value={tab}
         onValueChange={(v) => {
-          if (v === "overview" || v === "json" || v === "pipeline" || v === "targets") open({ kind: "build", id: b.id, tab: v })
+          if (v === "overview" || v === "json" || v === "pipeline" || v === "connections" || v === "commands" || v === "targets") {
+            open({ kind: "build", id: b.id, tab: v })
+          }
         }}
         className="min-h-0 flex-1 gap-0"
       >
-        <RecordModalHeader>
-          {/* The factory's icon as large as in the builds table, beside the title. */}
-          <div className="flex min-w-0 items-center gap-3">
-            <ModuleIcon type="factory" icon={icons.get(b.moduleName)} className="size-9" />
-            <RecordModalTitle>
-              <span className="font-mono">{b.moduleName}</span> · {b.target}
-            </RecordModalTitle>
-          </div>
-          <div className="flex items-center gap-2 sm:ml-auto">
-            <TabsList>
-              <TabsTrigger value="overview">
+        <RecordModalHeader
+          below={
+            <TabsList className={RECORD_TABS_LIST}>
+              <TabsTrigger value="overview" className={RECORD_TABS_TRIGGER}>
                 Overview
                 {/* The factory's warnings, flagged from every tab. */}
                 {b.warnings.length > 0 && (
@@ -129,23 +164,59 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="json">JSON</TabsTrigger>
-              <TabsTrigger value="pipeline">
+              <TabsTrigger value="pipeline" className={RECORD_TABS_TRIGGER}>
                 {/* The build's state from every tab: spinning while it runs. */}
                 <StageIcon state={STAGE_OF_STATE[b.state] ?? "PENDING"} className="size-3.5" />
                 Pipeline
               </TabsTrigger>
+              {connections > 0 && (
+                <TabsTrigger value="connections" className={RECORD_TABS_TRIGGER}>
+                  Connections
+                  <span className="text-xs text-muted-foreground tabular-nums">{connections}</span>
+                </TabsTrigger>
+              )}
+              {hasCommands && (
+                <TabsTrigger value="commands" className={RECORD_TABS_TRIGGER}>
+                  Commands
+                  <span className="text-xs text-muted-foreground tabular-nums">{b.commands.length}</span>
+                </TabsTrigger>
+              )}
               {hasTargets && (
-                <TabsTrigger value="targets">
+                <TabsTrigger value="targets" className={RECORD_TABS_TRIGGER}>
                   <CrosshairIcon className="size-3.5" />
                   Targets
                 </TabsTrigger>
               )}
+              <TabsTrigger value="json" className={RECORD_TABS_TRIGGER}>
+                JSON
+              </TabsTrigger>
             </TabsList>
+          }
+        >
+          {/* The factory's icon as large as in the builds table, beside the
+              build's description and, under it, what built it and how it went. */}
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <ModuleIcon type="factory" icon={icons.get(b.moduleName)} className="size-9" />
+            <div className="flex min-w-0 flex-col">
+              <RecordModalTitle>
+                {title ? (
+                  <span className="block truncate" title={b.description ?? undefined}>
+                    {title}
+                  </span>
+                ) : (
+                  <>
+                    <span className="font-mono">{b.moduleName}</span> · {b.target}
+                  </>
+                )}
+              </RecordModalTitle>
+              <BuildHeadline build={b} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
             {canWrite && running && (
               <Button variant="outline" onClick={stop} disabled={cancel.isPending}>
                 <SquareIcon />
-                {cancel.isPending ? "Cancelling..." : "Cancel"}
+                {cancel.isPending ? "Cancelling..." : "Cancel build"}
               </Button>
             )}
             {canWrite && !running && (
@@ -161,15 +232,21 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
               </Button>
             )}
             {canWrite && (
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setDeletingBuild(true)}
-                title="Delete the build"
-                aria-label="Delete the build"
-              >
-                <Trash2Icon />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button variant="ghost" size="icon" title="More" aria-label="More for this build">
+                      <EllipsisIcon />
+                    </Button>
+                  }
+                />
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem variant="destructive" onClick={() => setDeletingBuild(true)}>
+                    <Trash2Icon />
+                    Delete build…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </RecordModalHeader>
@@ -179,6 +256,22 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
             <BuildOverview build={b} canWrite={canWrite} onDeleteArtifact={() => setDeleting(true)} />
           </RecordModalBody>
         </TabsContent>
+
+        {connections > 0 && (
+          <TabsContent value="connections" className="flex min-h-0 flex-col">
+            <RecordModalBody>
+              <BuildConnections build={b} />
+            </RecordModalBody>
+          </TabsContent>
+        )}
+
+        {hasCommands && (
+          <TabsContent value="commands" className="flex min-h-0 flex-col">
+            <RecordModalBody>
+              <BuildCommands build={b} />
+            </RecordModalBody>
+          </TabsContent>
+        )}
 
         <TabsContent value="json" className="flex min-h-0 flex-col px-4 py-4">
           <LazyJsonEditor
@@ -215,6 +308,35 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
 
 /** The JSON tab only shows the build: nothing it could change. */
 function noChange() {}
+
+/**
+ * Under the build's title: its factory, target and platform, its state, and
+ * how long it took and when it ended (counting while it runs).
+ */
+function BuildHeadline({ build: b }: { build: Build }) {
+  const kinds = useFactoryKinds()
+  const now = useNow()
+  const target = factoryKindsByName(kinds.data?.factoryKinds ?? [])
+    .get(b.moduleName)
+    ?.targets.find((t) => t.id === b.target)
+  const running = isUnfinished(b.state)
+  // Nothing to time while it waits in the queue.
+  const elapsed = b.startedAt || !running ? formatElapsed(buildElapsed(b, now)) : null
+  return (
+    <div className="flex min-w-0 items-baseline gap-2 text-sm text-muted-foreground">
+      <span className="truncate">
+        <span className="font-mono">{b.moduleName}</span> factory · {target?.label ?? b.target} · {platformLabel(b.platform)}
+      </span>
+      <BuildStateBadge build={b} />
+      {(elapsed || b.finishedAt) && (
+        <span className="shrink-0 tabular-nums">
+          {elapsed && (running ? `${elapsed} so far` : `took ${elapsed}`)}
+          {b.finishedAt && ` · ${formatAbsolute(b.finishedAt)}`}
+        </span>
+      )}
+    </div>
+  )
+}
 
 function DeleteArtifactDialog({ build, onClose }: { build: Build | null; onClose: () => void }) {
   const del = useDeleteBuildArtifact()

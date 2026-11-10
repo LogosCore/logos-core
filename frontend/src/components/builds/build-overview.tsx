@@ -1,41 +1,33 @@
-import { CredentialValueNames } from "@/components/findings/credential-field-control"
 import { useMemo, type ReactNode } from "react"
 import { CopyIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CardColumns } from "@/components/ui/card-columns"
-import { failoverAuto, failoverSummary, recordFailover } from "./failover-values"
-import { IdRows, InfoCard, LabelRow, NoteRow, SectionRow, type IdRow } from "@/components/ui/info-card"
+import { IdRows, InfoCard, LabelRow, NoteRow } from "@/components/ui/info-card"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
-import { cn } from "@/lib/utils"
 import { formatBytes } from "@/lib/format-bytes"
 import { formatAbsolute, relativeTime } from "@/lib/relative-time"
 import { useBuildFiles, useFactoryIcons, useFactoryKinds } from "@/graphql/hooks/builds"
 import { useMinionSession } from "@/graphql/hooks/minion-sessions"
-import { useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
-import { kindsByName } from "@/components/endpoints/endpoint-values"
-import { formatElapsed, formatValue, type FieldDef } from "@/components/modules/management/field-values"
-import { KindName, ModuleIcon } from "@/components/modules/module-icon"
-import { BuildStateBadge } from "@/components/builds/build-state-badge"
+import { formatElapsed } from "@/components/modules/management/field-values"
+import { KindName } from "@/components/modules/module-icon"
 import {
   buildElapsed,
   factoryKindsByName,
-  paramFields,
   platformLabel,
-  recordedConnections,
-  settingFields,
   targetFields,
-  type Command,
 } from "@/components/builds/build-values"
-import { valueRows, type BuildRecord, type ValueRow } from "@/components/builds/build-record"
+import { valueRows, type BuildRecord } from "@/components/builds/build-record"
 import { BuildNotices } from "@/components/builds/build-detail-parts"
+import { rowsOf } from "@/components/builds/build-value-rows"
 
 /**
  * The build modal's Overview tab: what the JSON tab holds, for reading, in
  * cards each as tall as it needs, as a factory's page has them. What went
- * wrong first, then the build's summary, its artifact, what the minion can
- * do (its commands), the values it was given, and each connection with its
- * channel's settings and the factory's values for it. Values equal to their
- * default are dimmed, so the ones somebody chose stand out.
+ * wrong first, then the build's summary (its description and state are the
+ * modal's header) and the values it was given side by side, its artifact
+ * under the summary. Its connections and what the minion can do have tabs
+ * of their own. Values equal to their default are dimmed, so the ones
+ * somebody chose stand out.
  */
 export function BuildOverview({
   build: b,
@@ -47,20 +39,15 @@ export function BuildOverview({
   onDeleteArtifact: () => void
 }) {
   const kinds = useFactoryKinds()
-  const channelKinds = useChannelKinds()
   const files = useBuildFiles(b.operationId)
   const icons = useFactoryIcons()
-  const channelIcons = useChannelIcons()
   const kind = useMemo(() => factoryKindsByName(kinds.data?.factoryKinds ?? []).get(b.moduleName), [kinds.data, b.moduleName])
-  const channels = useMemo(() => kindsByName(channelKinds.data?.channelKinds ?? []), [channelKinds.data])
   const fileNames = useMemo(
     () => new Map((files.data?.buildFiles ?? []).map((f) => [f.id, f.name])),
     [files.data],
   )
   const target = kind?.targets.find((t) => t.id === b.target)
   const values = valueRows(kind ? targetFields(kind, target) : [], b.values)
-  const connections = recordedConnections(b)
-  const failover = recordFailover(b.failover)
   const a = b.artifact
 
   return (
@@ -69,14 +56,12 @@ export function BuildOverview({
       <BuildNotices build={b} />
       <CardColumns>
         <InfoCard title="Summary">
-          {b.description && (
+          {/* The header shows the description's first line: here, one longer. */}
+          {b.description?.includes("\n") && (
             <LabelRow label="Description">
               <span className="whitespace-pre-line">{b.description}</span>
             </LabelRow>
           )}
-          <LabelRow label="State">
-            <BuildStateBadge build={b} />
-          </LabelRow>
           <LabelRow label="Factory">
             {/* KindName keeps the name on the text's baseline, with what follows. */}
             <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />
@@ -145,6 +130,10 @@ export function BuildOverview({
           )}
         </InfoCard>
 
+        <InfoCard title="Values" note={values.length}>
+          {values.length === 0 ? <NoteRow>None.</NoteRow> : <IdRows rows={rowsOf(values, fileNames)} />}
+        </InfoCard>
+
         {a && (
           <InfoCard
             title="Artifact"
@@ -169,76 +158,6 @@ export function BuildOverview({
             {a.deleted && <NoteRow>The artifact&apos;s bytes were deleted; the build record stays.</NoteRow>}
           </InfoCard>
         )}
-
-        <InfoCard title="Commands" note={b.commands.length}>
-          {b.commands.length === 0 ? (
-            <NoteRow>None: the minion was built without commands.</NoteRow>
-          ) : (
-            <IdRows rows={commandRows(b.commands, kind?.commands ?? [])} />
-          )}
-        </InfoCard>
-
-        <InfoCard title="Values" note={values.length}>
-          {values.length === 0 ? <NoteRow>None.</NoteRow> : <IdRows rows={rowsOf(values, fileNames)} />}
-        </InfoCard>
-
-        {connections.length > 1 && (
-          <InfoCard title="Failover" note={failover.enabled ? "on" : "off"}>
-            <NoteRow>
-              {failoverSummary(failover)}
-              {kind && !kind.failover && `. ${b.moduleName} does not say its minions apply these.`}
-            </NoteRow>
-            <IdRows
-              rows={[
-                { id: "enabled", content: failover.enabled ? "yes" : "no" },
-                { id: "fail_after", content: `${failover.fail_after} failures in a row` },
-                { id: "fail_for", content: failover.fail_for },
-                { id: "wrap", content: failover.wrap ? "yes" : "no" },
-                { id: "cycle_pause", content: failover.cycle_pause },
-                { id: "failback_after", content: failover.failback_after },
-              ]}
-            />
-          </InfoCard>
-        )}
-
-        {connections.map((c, i) => {
-          const settings = valueRows(settingFields(channels.get(c.moduleName), c.kind), c.params)
-          const own = valueRows(kind ? paramFields(kind, c.moduleName, c.kind) : [], c.values)
-          // Headed only when the factory has values for the channel too.
-          const parts = own.length > 0
-          return (
-            <InfoCard
-              key={i}
-              title={
-                <span className="flex min-w-0 items-baseline gap-2">
-                  <ModuleIcon type="channel" icon={channelIcons.get(c.moduleName)} className="size-4 self-center" />
-                  <span className="truncate font-mono">{c.name}</span>
-                </span>
-              }
-              note={`${c.moduleName} · ${c.kind} · connection ${i + 1} of ${connections.length}`}
-            >
-              {c.description && <NoteRow>{c.description}</NoteRow>}
-              {connections.length > 1 && (!failoverAuto(c.kind, c.failover) || c.failover?.fail_after !== undefined) && (
-                <NoteRow>
-                  {[
-                    !failoverAuto(c.kind, c.failover) && "Failover does not move the minion here (a switch does)",
-                    c.failover?.fail_after !== undefined && `moves off after ${c.failover.fail_after} failures`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </NoteRow>
-              )}
-              {parts && <SectionRow title="Settings" note={c.moduleName} />}
-              {settings.length === 0 ? <NoteRow>No settings.</NoteRow> : <IdRows rows={rowsOf(settings, fileNames)} />}
-              {parts && (
-                <>
-                  <SectionRow title={`${b.moduleName}'s values`} note={`for ${c.moduleName}`} />
-                  <IdRows rows={rowsOf(own, fileNames)} />
-                </>
-              )}
-            </InfoCard>
-          )
-        })}
       </CardColumns>
     </div>
   )
@@ -261,61 +180,6 @@ function Copyable({ text, what }: { text: string; what: string }) {
       </Button>
     </span>
   )
-}
-
-/**
- * The build's commands in the factory's order: each id, and its label and
- * description by today's schema; one the factory no longer has says so.
- */
-function commandRows(ids: readonly string[], known: readonly Command[]): IdRow[] {
-  const byId = new Map(known.map((c) => [c.id, c]))
-  return ids.map((id) => {
-    const c = byId.get(id)
-    return {
-      id,
-      content: c ? (
-        <>
-          <div>
-            {c.label}
-            {c.required && <span className="text-xs text-muted-foreground"> · always built in</span>}
-          </div>
-          {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
-        </>
-      ) : (
-        <div className="text-muted-foreground">No longer a command of the factory</div>
-      ),
-    }
-  })
-}
-
-/**
- * Values as rows: each key, its value (dimmed at its default, "not set" for
- * none; a file by its name), and under it the field's label.
- */
-function rowsOf(rows: readonly ValueRow[], fileNames: ReadonlyMap<string, string>): IdRow[] {
-  return rows.map((r) => ({
-    id: r.key,
-    content: (
-      <>
-        <div className={cn("whitespace-pre-line", (r.value === undefined || r.isDefault) && "text-muted-foreground")}>
-          {valueText(r, fileNames)}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          {[r.field ? r.field.label : "no longer a field of the factory", r.isDefault ? "default" : ""]
-            .filter(Boolean)
-            .join(" · ")}
-        </div>
-      </>
-    ),
-  }))
-}
-
-function valueText(r: ValueRow, fileNames: ReadonlyMap<string, string>): ReactNode {
-  if (r.value === undefined) return "not set"
-  const f: FieldDef | null = r.field
-  if (f?.type === "file" && typeof r.value === "string") return fileNames.get(r.value) ?? r.value
-  if (f?.type === "credential" || f?.type === "credential_list") return <CredentialValueNames value={r.value} />
-  return formatValue(f?.type ?? "", r.value, f?.unit)
 }
 
 /**

@@ -112,18 +112,38 @@ export function RecordModal({
   )
 }
 
-/** The header row: what children lay out (title, actions), then the close button. */
-export function RecordModalHeader({ children }: { children: ReactNode }) {
+/**
+ * The header row: what children lay out (title, actions), then the close
+ * button. below goes under that row, on the header's rule: a record's tabs
+ * (RECORD_TABS_LIST, RECORD_TABS_TRIGGER).
+ */
+export function RecordModalHeader({ children, below }: { children: ReactNode; below?: ReactNode }) {
   const requestClose = useRequestClose()
-  return (
-    <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3">
+  const row = (
+    <>
       {children}
       <Button type="button" variant="ghost" size="icon-sm" aria-label="Close" title="Close" onClick={requestClose}>
         <XIcon />
       </Button>
+    </>
+  )
+  if (!below) {
+    return <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3">{row}</header>
+  }
+  return (
+    <header className="shrink-0 border-b">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pt-3 pb-1">{row}</div>
+      <div className="px-4">{below}</div>
     </header>
   )
 }
+
+// Tabs as a bar under a record's title (RecordModalHeader's below), the
+// open one underlined on the header's rule: TabsList's and TabsTrigger's
+// classNames.
+export const RECORD_TABS_LIST = "h-auto gap-5 rounded-none bg-transparent p-0"
+export const RECORD_TABS_TRIGGER =
+  "-mb-px h-9 rounded-none border-b-2 border-transparent px-0.5 hover:text-foreground data-active:border-foreground data-active:bg-transparent data-active:shadow-none"
 
 /** The record's title, which names the dialog. */
 export function RecordModalTitle({ children }: { children: ReactNode }) {

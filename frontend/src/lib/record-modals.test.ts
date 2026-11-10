@@ -22,6 +22,8 @@ describe("recordModalOf", () => {
   it("reads a build's tab, and leaves out one it does not know", () => {
     expect(recordModalOf(params("build=b-1&buildTab=pipeline"))).toEqual({ kind: "build", id: "b-1", tab: "pipeline" })
     expect(recordModalOf(params("build=b-1&buildTab=targets"))).toEqual({ kind: "build", id: "b-1", tab: "targets" })
+    expect(recordModalOf(params("build=b-1&buildTab=commands"))).toEqual({ kind: "build", id: "b-1", tab: "commands" })
+    expect(recordModalOf(params("build=b-1&buildTab=connections"))).toEqual({ kind: "build", id: "b-1", tab: "connections" })
     expect(recordModalOf(params("build=b-1&buildTab=logs"))).toEqual({ kind: "build", id: "b-1" })
     expect(withRecordModal(params(""), { kind: "build", id: "b-1", tab: "json" }).toString()).toBe("build=b-1&buildTab=json")
     // Another modal drops it.

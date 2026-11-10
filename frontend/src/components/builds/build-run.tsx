@@ -5,39 +5,22 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { downloadBlob } from "@/lib/file-export"
 import { useNow } from "@/hooks/use-now"
 import { isUnfinished } from "@/graphql/hooks/builds"
-import { formatElapsed } from "@/components/modules/management/field-values"
 import { BuildPipeline } from "@/components/builds/build-pipeline"
-import { BuildStateBadge } from "@/components/builds/build-state-badge"
-import { buildElapsed } from "@/components/builds/build-values"
 import { BuildNotices, Section } from "@/components/builds/build-detail-parts"
 import type { BuildRecord } from "@/components/builds/build-record"
 
 /**
  * The build modal's Pipeline tab: how the build went. Its stages on the
- * dotted canvas, its state and time, the error and the factory's warnings,
- * and its log under them, filling what is left. It changes as the build
- * runs (the build query polls while it does).
+ * dotted canvas (the build's state and time are in the modal's header), the
+ * error and the factory's warnings, and its log under them, filling what is
+ * left. It changes as the build runs (the build query polls while it does).
  */
 export function BuildRun({ build: b }: { build: BuildRecord }) {
   const now = useNow()
   const running = isUnfinished(b.state)
-  const elapsed = b.startedAt || !running ? formatElapsed(buildElapsed(b, now)) : null
   return (
     <div className="flex min-h-full min-w-0 flex-col gap-6 px-4 py-6">
-      <Section
-        title="Pipeline"
-        className="dot-grid"
-        aside={
-          <>
-            <BuildStateBadge build={b} />
-            {elapsed && (
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {running ? `${elapsed} so far` : `took ${elapsed}`}
-              </span>
-            )}
-          </>
-        }
-      >
+      <Section title="Pipeline" className="dot-grid">
         <div className="py-3">
           <BuildPipeline stages={b.stages} now={now} />
         </div>
@@ -69,7 +52,6 @@ function BuildLog({ log, running, fileName }: { log: string; running: boolean; f
       <div className="mb-1 flex min-h-5 items-center gap-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Build log</h2>
         <span className="text-xs text-muted-foreground">the factory&apos;s output, its last 64 KiB</span>
-        <span className="flex-1" />
         <Button
           variant="ghost"
           size="icon-xs"
