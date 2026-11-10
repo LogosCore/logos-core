@@ -1,4 +1,4 @@
-import { ApiError, tryRefresh } from "@/services/api-client"
+import { ApiError, getCsrfToken, tryRefresh } from "@/services/api-client"
 
 /** A build file as POST /build-files returns it. */
 export interface UploadedBuildFile {
@@ -22,11 +22,6 @@ export function artifactUrl(buildId: string): string {
   return `${API_URL}/builds/${encodeURIComponent(buildId)}/artifact`
 }
 
-function readCsrfToken(): string | null {
-  if (typeof document === "undefined") return null
-  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)
-  return match ? decodeURIComponent(match[1]) : null
-}
 
 /**
  * POST a file for a build's file fields to the operation, with upload
@@ -84,7 +79,7 @@ function postFile<T>(path: string, file: File, operationId: string, opts: Upload
     const xhr = new XMLHttpRequest()
     xhr.open("POST", `${API_URL}${path}`, true)
     xhr.withCredentials = true
-    const csrf = readCsrfToken()
+    const csrf = getCsrfToken()
     if (csrf) xhr.setRequestHeader("X-CSRF-Token", csrf)
 
     if (opts.onProgress) {

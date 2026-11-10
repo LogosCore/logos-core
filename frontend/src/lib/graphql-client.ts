@@ -30,6 +30,14 @@ export class GraphQLRequestError extends Error {
   }
 }
 
+/** Whether a request failed because the server refused the caller access (FORBIDDEN). */
+export function isForbiddenError(error: unknown): boolean {
+  return (
+    error instanceof GraphQLRequestError &&
+    error.errors.some((e) => e.extensions?.code === "FORBIDDEN")
+  )
+}
+
 export async function graphqlClient<TResult, TVariables>(
   document: TypedDocumentString<TResult, TVariables>,
   ...[variables]: TVariables extends Record<string, never> ? [] : [TVariables]

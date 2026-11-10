@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { useHashChip } from "@/graphql/hooks/hashes"
 import { useHashStore } from "@/stores/hashes"
 import { useInViewport } from "@/hooks/use-in-viewport"
-import { GraphQLRequestError } from "@/lib/graphql-client"
+import { isForbiddenError } from "@/lib/graphql-client"
 import {
   hashStatusLabel,
   truncateHashValue,
@@ -285,9 +285,3 @@ export function WikiHashChipById({
   )
 }
 
-function isForbiddenError(error: unknown): boolean {
-  return (
-    error instanceof GraphQLRequestError &&
-    error.errors.some((e) => e.extensions?.code === "FORBIDDEN")
-  )
-}

@@ -6,7 +6,7 @@ import { HostIcon } from "@/components/findings/host-icon"
 import { useHost } from "@/graphql/hooks/hosts"
 import { useHostStore } from "@/stores/hosts"
 import { useInViewport } from "@/hooks/use-in-viewport"
-import { GraphQLRequestError } from "@/lib/graphql-client"
+import { isForbiddenError } from "@/lib/graphql-client"
 import { cn } from "@/lib/utils"
 import type { HostFieldsFragment } from "@/graphql/gql/graphql"
 
@@ -164,9 +164,3 @@ export function WikiHostChipById({
   )
 }
 
-function isForbiddenError(error: unknown): boolean {
-  return (
-    error instanceof GraphQLRequestError &&
-    error.errors.some((e) => e.extensions?.code === "FORBIDDEN")
-  )
-}

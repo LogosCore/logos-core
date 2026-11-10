@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
-import type { SlashItem, TableSize } from "./items"
+import { itemsEqual, type SlashItem, type TableSize } from "./items"
 import { TableSizePicker, type TableSizePickerHandle } from "./table-size-picker"
 
 export interface SlashMenuHandle {
@@ -10,15 +10,6 @@ export interface SlashMenuHandle {
 interface SlashMenuProps {
   items: SlashItem[]
   onSelect: (item: SlashItem, tableSize?: TableSize) => void
-}
-
-function itemsEqual(a: SlashItem[], b: SlashItem[]): boolean {
-  if (a === b) return true
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) {
-    if (a[i].title !== b[i].title) return false
-  }
-  return true
 }
 
 export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function SlashMenu(

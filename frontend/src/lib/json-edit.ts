@@ -74,6 +74,13 @@ export function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
+/** A text property's value: "" when absent or null, a problem when not text. */
+export function textOf(value: unknown, path: string, at: (path: string, message: string) => void): string {
+  if (typeof value === "string") return value
+  if (value !== undefined && value !== null) at(path, "Must be text")
+  return ""
+}
+
 export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v)
 }

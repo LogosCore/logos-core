@@ -3,7 +3,7 @@ import {
   jsonFieldValues,
   readFieldValues,
 } from "@/components/modules/management/field-json"
-import { childPointer, formatJson, isRecord, parseJson, sameJSON, type JsonHints, type JsonProblem } from "@/lib/json-edit"
+import { childPointer, formatJson, isRecord, parseJson, sameJSON, textOf, type JsonHints, type JsonProblem } from "@/lib/json-edit"
 import {
   ENDPOINT_EXPORT_FORMAT,
   MAX_DESCRIPTION_LENGTH,
@@ -112,13 +112,6 @@ export function readEndpointJson(text: string, kind: Kind, fallbackKind: string)
     { emptyOverridesDefault: true },
   )
   return { ok: true, doc: { name, description, kind: connKind, values }, problems }
-}
-
-/** A text property's value: "" when absent or null, a problem when not text. */
-function textOf(value: unknown, path: string, at: (path: string, message: string) => void): string {
-  if (typeof value === "string") return value
-  if (value !== undefined && value !== null) at(path, "Must be text")
-  return ""
 }
 
 /** What the JSON tab offers as you type, and says on hover: the settings of connection kind connKind. */

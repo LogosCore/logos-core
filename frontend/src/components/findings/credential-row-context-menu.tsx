@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react"
 import { toast } from "sonner"
+import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import {
   ArrowRightLeftIcon,
   CopyIcon,
@@ -72,18 +73,6 @@ export function CredentialRowContextMenu({
     convertTargets.sort((a, b) => Number(b === suggested) - Number(a === suggested))
   }
 
-  async function copy(text: string, label: string) {
-    if (!text) {
-      toast.info(`No ${label} to copy`)
-      return
-    }
-    try {
-      await navigator.clipboard.writeText(text)
-      toast.success(`Copied ${label}`)
-    } catch {
-      toast.error(`Failed to copy ${label}`)
-    }
-  }
 
   async function copyShareLink() {
     try {
@@ -135,7 +124,7 @@ export function CredentialRowContextMenu({
         {filled.map((f) => (
           <ContextMenuItem
             key={f.field}
-            onClick={() => copy(f.value, f.label.toLowerCase())}
+            onClick={() => copyToClipboard(f.value, f.label.toLowerCase())}
           >
             {f.kind === "BLOB" ? (
               <KeyIcon className="size-4" />
@@ -157,7 +146,7 @@ export function CredentialRowContextMenu({
                   <ContextMenuItem
                     key={`${i}-${k.name}`}
                     disabled={!k.content}
-                    onClick={() => copy(k.content, label)}
+                    onClick={() => copyToClipboard(k.content, label)}
                   >
                     <KeyIcon className="size-4" />
                     <span className="truncate">Copy {label}</span>
@@ -181,7 +170,7 @@ export function CredentialRowContextMenu({
                   <ContextMenuItem
                     key={p.name}
                     disabled={!p.value}
-                    onClick={() => copy(p.value, p.name)}
+                    onClick={() => copyToClipboard(p.value, p.name)}
                   >
                     <CopyIcon className="size-4" />
                     <span className="truncate">{p.name}</span>

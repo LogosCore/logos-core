@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react"
 import { toast } from "sonner"
+import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import {
   CircleDotIcon,
   CopyIcon,
@@ -57,18 +58,6 @@ export function HashRowContextMenu({
 
   const selected = { id: hash.id, label: truncateHashValue(hash.value) }
 
-  async function copy(text: string, label: string) {
-    if (!text) {
-      toast.info(`No ${label} to copy`)
-      return
-    }
-    try {
-      await navigator.clipboard.writeText(text)
-      toast.success(`Copied ${label}`)
-    } catch {
-      toast.error(`Failed to copy ${label}`)
-    }
-  }
 
   async function copyShareLink() {
     try {
@@ -98,7 +87,7 @@ export function HashRowContextMenu({
     <ContextMenu>
       <ContextMenuTrigger render={triggerRender}>{children}</ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => copy(hash.value, "hash value")}>
+        <ContextMenuItem onClick={() => copyToClipboard(hash.value, "hash value")}>
           <CopyIcon className="size-4" />
           Copy hash value
         </ContextMenuItem>

@@ -7,7 +7,7 @@ import Suggestion, {
 } from "@tiptap/suggestion"
 import { createElement } from "react"
 import { SlashMenu, type SlashMenuHandle } from "./slash-menu"
-import { filterItems, type SlashItem, type SlashItemContext, type TableSize } from "./items"
+import { filterItems, itemsEqual, type SlashItem, type SlashItemContext, type TableSize } from "./items"
 
 interface SlashCommandOptions {
   /** Runtime context exposed to slash-item commands (e.g. the current
@@ -50,15 +50,6 @@ export const WikiSlashCommand = Extension.create<SlashCommandOptions>({
     ]
   },
 })
-
-function itemsEqual(a: SlashItem[], b: SlashItem[]): boolean {
-  if (a === b) return true
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) {
-    if (a[i].title !== b[i].title) return false
-  }
-  return true
-}
 
 function rectsEqual(a: DOMRect | null, b: DOMRect | null): boolean {
   if (a === b) return true

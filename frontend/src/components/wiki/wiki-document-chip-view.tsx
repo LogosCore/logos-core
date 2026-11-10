@@ -7,7 +7,7 @@ import { DocumentIcon } from "@/components/wiki/document-icon"
 import { WikiDocumentHoverPreview } from "@/components/wiki/wiki-document-hover-preview"
 import { useWikiDocumentLite } from "@/graphql/hooks/wiki"
 import { useInViewport } from "@/hooks/use-in-viewport"
-import { GraphQLRequestError } from "@/lib/graphql-client"
+import { isForbiddenError } from "@/lib/graphql-client"
 import { cn } from "@/lib/utils"
 
 // Doc shape the view needs. Mirrors `WikiDocumentLiteFields` so the same
@@ -393,9 +393,3 @@ export function WikiDocumentChipById({
   )
 }
 
-function isForbiddenError(error: unknown): boolean {
-  return (
-    error instanceof GraphQLRequestError &&
-    error.errors.some((e) => e.extensions?.code === "FORBIDDEN")
-  )
-}

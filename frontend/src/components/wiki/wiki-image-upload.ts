@@ -1,4 +1,5 @@
 import type { Editor } from "@tiptap/core"
+import { clampToDocSize, formatSize } from "./wiki-upload-helpers"
 import { TextSelection } from "@tiptap/pm/state"
 import { toast } from "sonner"
 import {
@@ -133,18 +134,6 @@ async function readImageDimensions(
   }
 }
 
-function clampToDocSize(editor: Editor, pos: number): number {
-  const size = editor.state.doc.content.size
-  if (pos < 0) return 0
-  if (pos > size) return size
-  return pos
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 /**
  * Pull image File entries out of a ClipboardEvent's clipboardData.

@@ -8,7 +8,7 @@ import {
   useWikiDocumentPreview,
   wikiDocumentPreviewOptions,
 } from "@/graphql/hooks/wiki"
-import { GraphQLRequestError } from "@/lib/graphql-client"
+import { isForbiddenError } from "@/lib/graphql-client"
 import { relativeTime } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 
@@ -210,9 +210,3 @@ function PreviewNotice({ title, detail }: { title: string; detail: string }) {
   )
 }
 
-function isForbiddenError(error: unknown): boolean {
-  return (
-    error instanceof GraphQLRequestError &&
-    error.errors.some((e) => e.extensions?.code === "FORBIDDEN")
-  )
-}

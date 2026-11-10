@@ -394,3 +394,13 @@ export function filterItems(query: string): SlashItem[] {
   filterCache.set(q, filtered)
   return filtered
 }
+
+/** Whether two item lists show the same items, by title, in order. */
+export function itemsEqual(a: SlashItem[], b: SlashItem[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].title !== b[i].title) return false
+  }
+  return true
+}

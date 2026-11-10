@@ -12,7 +12,7 @@ import { CredentialRowContextMenu } from "@/components/findings/credential-row-c
 import { useCredentialChip } from "@/graphql/hooks/credentials"
 import { useCredentialStore } from "@/stores/credentials"
 import { useInViewport } from "@/hooks/use-in-viewport"
-import { GraphQLRequestError } from "@/lib/graphql-client"
+import { isForbiddenError } from "@/lib/graphql-client"
 import { useSha1Hashes } from "@/lib/sha1"
 import {
   credentialBlobs,
@@ -415,9 +415,3 @@ function buildTooltip({ name, segment, blobs, hashes }: TooltipArgs): string {
   return lines.join("\n")
 }
 
-function isForbiddenError(error: unknown): boolean {
-  return (
-    error instanceof GraphQLRequestError &&
-    error.errors.some((e) => e.extensions?.code === "FORBIDDEN")
-  )
-}

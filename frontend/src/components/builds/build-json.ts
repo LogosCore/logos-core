@@ -10,6 +10,7 @@ import {
   isRecord,
   parseJson,
   sameJSON,
+  textOf,
   type JsonHints,
   type JsonKeyHint,
   type JsonProblem,
@@ -425,13 +426,6 @@ function readCommands(
     else out.push(id)
   })
   return out
-}
-
-/** A text property's value: "" when absent or null, a problem when not text. */
-function textOf(value: unknown, path: string, at: (path: string, message: string) => void): string {
-  if (typeof value === "string") return value
-  if (value !== undefined && value !== null) at(path, "Must be text")
-  return ""
 }
 
 /**

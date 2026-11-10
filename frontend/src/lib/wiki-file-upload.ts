@@ -1,4 +1,4 @@
-import { ApiError, tryRefresh } from "@/services/api-client"
+import { ApiError, getCsrfToken, tryRefresh } from "@/services/api-client"
 
 /** 50MB — must match WIKI_FILE_MAX_SIZE on the backend (see .env.example). */
 export const WIKI_FILE_MAX_SIZE_BYTES = 50 * 1024 * 1024
@@ -29,11 +29,6 @@ export function isImageFile(file: File | Blob): boolean {
 /** Read the non-httpOnly csrf_token cookie set by the backend. Mirrors the
  *  logic in services/api-client.ts — duplicated here because XHR does not
  *  go through apiFetch. */
-function readCsrfToken(): string | null {
-  if (typeof document === "undefined") return null
-  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)
-  return match ? decodeURIComponent(match[1]) : null
-}
 
 /**
  * POST a file to the wiki file endpoint via XMLHttpRequest, exposing upload
@@ -90,7 +85,7 @@ function postFile(
     xhr.open("POST", `${API_URL}/wiki/files`, true)
     xhr.withCredentials = true
 
-    const csrf = readCsrfToken()
+    const csrf = getCsrfToken()
     if (csrf) xhr.setRequestHeader("X-CSRF-Token", csrf)
 
     if (opts.onProgress) {

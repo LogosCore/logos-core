@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { toast } from "sonner"
+import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import {
   CopyIcon,
   NetworkIcon,
@@ -194,29 +194,17 @@ function HostRowContextMenu({
   const openEdit = useHostStore((s) => s.openEditDialog)
   const openDelete = useHostStore((s) => s.openDeleteDialog)
 
-  async function copy(text: string, label: string) {
-    if (!text) {
-      toast.info(`No ${label} to copy`)
-      return
-    }
-    try {
-      await navigator.clipboard.writeText(text)
-      toast.success(`Copied ${label}`)
-    } catch {
-      toast.error(`Failed to copy ${label}`)
-    }
-  }
 
   return (
     <ContextMenu>
       <ContextMenuTrigger>{children}</ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => copy(host.hostname, "hostname")}>
+        <ContextMenuItem onClick={() => copyToClipboard(host.hostname, "hostname")}>
           <CopyIcon className="size-4" />
           Copy hostname
         </ContextMenuItem>
         <ContextMenuItem
-          onClick={() => copy(hostAddresses(host).join("\n"), "IP addresses")}
+          onClick={() => copyToClipboard(hostAddresses(host).join("\n"), "IP addresses")}
         >
           <CopyIcon className="size-4" />
           Copy IP addresses
