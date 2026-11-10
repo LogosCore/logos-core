@@ -129,12 +129,6 @@ export const BuildFilesQuery = graphql(`
   }
 `)
 
-export const DeleteBuildFileMutation = graphql(`
-  mutation DeleteBuildFile($id: ID!) {
-    deleteBuildFile(id: $id)
-  }
-`)
-
 export const BuildsQuery = graphql(`
   query Builds(
     $operationId: ID!

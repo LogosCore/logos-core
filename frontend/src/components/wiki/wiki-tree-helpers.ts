@@ -109,61 +109,6 @@ export function rebalancedSortOrderAt(index: number, count: number): string {
   return String.fromCharCode(65 + Math.floor(fraction * 57))
 }
 
-interface SiblingForPlacement {
-  readonly id: string
-  readonly sortOrder: string
-}
-
-/**
- * Compute the sortOrder updates needed to place a document at the TOP of its
- * destination subtree (used by both DnD "inside" drops and the move dialog).
- *
- * Three cases:
- * 1. No siblings — pick a middle-of-alphabet value so future inserts have
- *    room to land on either side.
- * 2. First sibling already has a non-empty sortOrder — just compute a value
- *    less than it via `midSortOrder(null, firstSort)`. No sibling rewrites.
- * 3. First sibling has the legacy empty "" sortOrder — we can't beat "" with
- *    a smaller string, so rebalance all siblings using the same A..z bucket
- *    scheme as the DnD before/after reorder, with the moved doc taking the
- *    first slot.
- *
- * The placed doc itself is excluded from the sibling list before placement so
- * a same-parent reorder doesn't fight against its own current position.
- */
-export function computeTopPlacement(
-  movedDocId: string,
-  siblings: readonly SiblingForPlacement[],
-): {
-  newSortOrder: string
-  siblingUpdates: ReadonlyArray<{ id: string; sortOrder: string }>
-} {
-  const others = sortByOrder(siblings.filter((s) => s.id !== movedDocId))
-
-  if (others.length === 0) {
-    return { newSortOrder: "M", siblingUpdates: [] }
-  }
-
-  const firstSort = others[0].sortOrder
-  if (firstSort !== "") {
-    return {
-      newSortOrder: midSortOrder(null, firstSort),
-      siblingUpdates: [],
-    }
-  }
-
-  // Legacy empty-"" siblings — rebalance everyone so the moved doc can sit
-  // above them. Moved doc takes index 0, existing siblings shift down. Same
-  // bucketing as the DnD before/after path so the two flows can't disagree.
-  const count = others.length + 1
-  const newSortOrder = rebalancedSortOrderAt(0, count)
-  const siblingUpdates = others.flatMap((s, i) => {
-    const updated = rebalancedSortOrderAt(i + 1, count)
-    return updated === s.sortOrder ? [] : [{ id: s.id, sortOrder: updated }]
-  })
-  return { newSortOrder, siblingUpdates }
-}
-
 /**
  * Promote a flat tree-row fragment to the recursive TreeNode shape consumed
  * by the sidebar. `children` is initialized empty — lazy hooks fill it in

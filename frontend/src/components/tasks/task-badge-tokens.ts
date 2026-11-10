@@ -44,10 +44,6 @@ export const STATUS_CLASSNAME: Record<TaskStatus, string> = {
     "bg-rose-500/15 text-rose-700 border-rose-500/30 dark:text-rose-300",
 }
 
-export function statusLabel(status: TaskStatus): string {
-  return STATUS_LABEL[status]
-}
-
 // Risk and profit scores share a 1–10 scale but read inversely:
 //   risk:   higher → worse (red)
 //   profit: higher → better (green)

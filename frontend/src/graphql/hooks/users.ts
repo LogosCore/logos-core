@@ -15,7 +15,6 @@ import {
   CreateUserDocument,
   UpdateUserDocument,
   DeleteUserDocument,
-  UpdateOwnProfileDocument,
   SetHiddenIdentitiesDocument,
   CompleteGuideDocument,
   UserChangedDocument,
@@ -49,13 +48,6 @@ export function useUser(id: string) {
     queryKey: userKeys.detail(id),
     queryFn: () => graphqlClient(UserDocument, { id }),
     enabled: !!id,
-  })
-}
-
-export function useUsers(params: { search?: string | null; first?: number; after?: string } = {}) {
-  return useQuery({
-    queryKey: userKeys.list(params),
-    queryFn: () => graphqlClient(UsersDocument, params),
   })
 }
 
@@ -128,18 +120,6 @@ export function useDeleteUser() {
     onSuccess: (_data, id) => {
       queryClient.removeQueries({ queryKey: userKeys.detail(id) })
       // List invalidation is handled by the SSE subscription.
-    },
-  })
-}
-
-export function useUpdateOwnProfile() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (input: UpdateUserInput) =>
-      graphqlClient(UpdateOwnProfileDocument, { input }),
-    onSuccess: () => {
-      // Own profile isn't covered by the userChanged subscription.
-      queryClient.invalidateQueries({ queryKey: userKeys.me() })
     },
   })
 }

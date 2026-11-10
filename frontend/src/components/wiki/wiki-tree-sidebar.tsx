@@ -341,7 +341,7 @@ export function WikiTreeSidebar({
         readChildrenFromCache(queryClient, operationId, destinationParentId),
       ).filter((d) => d.id !== draggedId)
       // Drop-into-folder places the dragged row at the TOP of the
-      // destination — matches the historical computeTopPlacement behaviour.
+      // destination, the moved doc taking the first slot.
       destinationOrderedIds = [draggedId, ...siblings.map((d) => d.id)]
     } else {
       // Reorder: insert before/after the target among its siblings.

@@ -26,7 +26,6 @@ import {
   WikiDocumentBackupsDocument,
   WikiDocumentBackupDetailDocument,
   WikiDocumentPresenceDocument,
-  WikiOperationPresenceDocument,
   WikiDocumentHistoryDocument,
   CreateWikiDocumentDocument,
   UpdateWikiDocumentDocument,
@@ -44,8 +43,6 @@ import {
   TrackWikiDocumentVisitDocument,
   WikiDocumentChangedDocument,
   WikiDocumentPresenceChangedDocument,
-  WikiDocumentTagsDocument,
-  WikiDocumentPageTypesDocument,
   type WikiDocumentTreeFieldsFragment,
   type WikiDocumentChildrenQuery,
   type WikiDocumentSort,
@@ -487,22 +484,6 @@ export function useWikiDocumentBacklinks(documentId: string) {
   })
 }
 
-export function useWikiDocumentTags(operationId: string) {
-  return useQuery({
-    queryKey: wikiKeys.tags(operationId),
-    queryFn: () => graphqlClient(WikiDocumentTagsDocument, { operationId }),
-    enabled: !!operationId,
-  })
-}
-
-export function useWikiDocumentPageTypes(operationId: string) {
-  return useQuery({
-    queryKey: wikiKeys.pageTypes(operationId),
-    queryFn: () => graphqlClient(WikiDocumentPageTypesDocument, { operationId }),
-    enabled: !!operationId,
-  })
-}
-
 // Recent-documents feed for the "Latest documents" sidebar modal. Cursor
 // pagination over the wikiDocuments field with a tight row projection
 // (ancestors + lastUpdatedAt for the breadcrumb / timestamp column) and a
@@ -622,14 +603,6 @@ export function useWikiDocumentPresence(documentId: string) {
     queryKey: wikiKeys.presence(documentId),
     queryFn: () => graphqlClient(WikiDocumentPresenceDocument, { documentId }),
     enabled: !!documentId,
-  })
-}
-
-export function useWikiOperationPresence(operationId: string) {
-  return useQuery({
-    queryKey: wikiKeys.operationPresence(operationId),
-    queryFn: () => graphqlClient(WikiOperationPresenceDocument, { operationId }),
-    enabled: !!operationId,
   })
 }
 

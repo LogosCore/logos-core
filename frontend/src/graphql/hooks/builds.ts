@@ -4,7 +4,6 @@ import { graphqlClient } from "@/lib/graphql-client"
 import {
   FactoryKindsDocument,
   BuildFilesDocument,
-  DeleteBuildFileDocument,
   BuildsDocument,
   BuildDocument,
   CreateBuildDocument,
@@ -65,14 +64,6 @@ export function useBuildFiles(operationId: string) {
 export function useInvalidateBuildFiles() {
   const queryClient = useQueryClient()
   return (operationId: string) => queryClient.invalidateQueries({ queryKey: buildKeys.files(operationId) })
-}
-
-export function useDeleteBuildFile() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => graphqlClient(DeleteBuildFileDocument, { id }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [...buildKeys.all, "files"] }),
-  })
 }
 
 /** What the Builds page lists: the server searches and filters. */

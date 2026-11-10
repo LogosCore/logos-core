@@ -7,8 +7,6 @@ import {
   RevokeSessionDocument,
   RevokeAllMySessionsDocument,
   AdminRevokeSessionDocument,
-  AdminRevokeAllUserSessionsDocument,
-  MySessionChangedDocument,
   SessionChangedDocument,
 } from "@/graphql/gql/graphql"
 
@@ -110,40 +108,7 @@ export function useAdminRevokeSession() {
   })
 }
 
-export function useAdminRevokeAllUserSessions() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (userId: string) =>
-      graphqlClient(AdminRevokeAllUserSessionsDocument, { userId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: sessionKeys.adminInfiniteLists() })
-      queryClient.invalidateQueries({ queryKey: sessionKeys.adminLists() })
-    },
-  })
-}
-
 // --- Subscriptions ---
-
-/**
- * Subscribe to real-time session changes for the current user via SSE.
- * Invalidates my-session caches when sessions are created, refreshed, or terminated.
- */
-export function useMySessionChangedSubscription() {
-  const queryClient = useQueryClient()
-
-  useSubscription(MySessionChangedDocument, undefined, {
-    onData: (data) => {
-      const { session } = data.mySessionChanged
-
-      if (session) {
-        queryClient.setQueryData(sessionKeys.detail(session.id), { session })
-      }
-
-      queryClient.invalidateQueries({ queryKey: sessionKeys.myInfiniteLists() })
-      queryClient.invalidateQueries({ queryKey: sessionKeys.myLists() })
-    },
-  })
-}
 
 /**
  * Subscribe to real-time session changes for all users (admin only) via SSE.

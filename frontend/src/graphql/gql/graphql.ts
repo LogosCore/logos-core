@@ -4141,13 +4141,6 @@ export type BuildFilesQueryVariables = Exact<{
 
 export type BuildFilesQuery = { buildFiles: Array<{ id: string, operationId: string, name: string, size: number, sha256: string, mediaType?: string | null, createdAt: string }> };
 
-export type DeleteBuildFileMutationVariables = Exact<{
-  id: Scalars['ID']['input'];
-}>;
-
-
-export type DeleteBuildFileMutation = { deleteBuildFile: boolean };
-
 export type BuildsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
   search?: InputMaybe<Scalars['String']['input']>;
@@ -5364,13 +5357,6 @@ export type AdminRevokeSessionMutationVariables = Exact<{
 
 export type AdminRevokeSessionMutation = { adminRevokeSession: boolean };
 
-export type AdminRevokeAllUserSessionsMutationVariables = Exact<{
-  userId: Scalars['ID']['input'];
-}>;
-
-
-export type AdminRevokeAllUserSessionsMutation = { adminRevokeAllUserSessions: number };
-
 export type MySessionChangedSubscriptionVariables = Exact<{ [key: string]: never; }>;
 
 
@@ -5454,28 +5440,12 @@ export type TasksQueryVariables = Exact<{
 
 export type TasksQuery = { tasks: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
-export type TaskTrashQueryVariables = Exact<{
-  operationId: Scalars['ID']['input'];
-  first?: InputMaybe<Scalars['Int']['input']>;
-  after?: InputMaybe<Scalars['String']['input']>;
-}>;
-
-
-export type TaskTrashQuery = { taskTrash: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
-
 export type TasksReferencingWikiDocumentQueryVariables = Exact<{
   documentId: Scalars['ID']['input'];
 }>;
 
 
 export type TasksReferencingWikiDocumentQuery = { tasksReferencingWikiDocument: Array<{ id: string, operationId: string, name: string, stage: TaskStage, status: TaskStatus, riskScore: number, profitScore: number, assignees: Array<{ id: string, username: string }> }> };
-
-export type TasksReferencingCredentialQueryVariables = Exact<{
-  credentialId: Scalars['ID']['input'];
-}>;
-
-
-export type TasksReferencingCredentialQuery = { tasksReferencingCredential: Array<{ id: string, operationId: string, name: string, stage: TaskStage, status: TaskStatus, riskScore: number, profitScore: number, assignees: Array<{ id: string, username: string }> }> };
 
 export type CreateTaskMutationVariables = Exact<{
   input: CreateTaskInput;
@@ -5537,20 +5507,6 @@ export type DeleteTaskMutationVariables = Exact<{
 
 
 export type DeleteTaskMutation = { deleteTask: boolean };
-
-export type RestoreTaskMutationVariables = Exact<{
-  id: Scalars['ID']['input'];
-}>;
-
-
-export type RestoreTaskMutation = { restoreTask: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
-
-export type PurgeTaskMutationVariables = Exact<{
-  id: Scalars['ID']['input'];
-}>;
-
-
-export type PurgeTaskMutation = { purgeTask: boolean };
 
 export type TaskChangedSubscriptionVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -5692,13 +5648,6 @@ export type DeleteUserMutationVariables = Exact<{
 
 
 export type DeleteUserMutation = { deleteUser: boolean };
-
-export type UpdateOwnProfileMutationVariables = Exact<{
-  input: UpdateUserInput;
-}>;
-
-
-export type UpdateOwnProfileMutation = { updateOwnProfile: { id: string, username: string, roles: Array<string>, active: boolean, authSource: string, createdAt: string, updatedAt: string } };
 
 export type SetHiddenIdentitiesMutationVariables = Exact<{
   names: Array<Scalars['String']['input']> | Scalars['String']['input'];
@@ -5884,13 +5833,6 @@ export type WikiDocumentPresenceQueryVariables = Exact<{
 
 export type WikiDocumentPresenceQuery = { wikiDocumentPresence: { documentId: string, activeEditors: Array<{ userId: string, username: string, connectedAt: string }> } };
 
-export type WikiOperationPresenceQueryVariables = Exact<{
-  operationId: Scalars['ID']['input'];
-}>;
-
-
-export type WikiOperationPresenceQuery = { wikiOperationPresence: Array<{ documentId: string, activeEditors: Array<{ userId: string, username: string, connectedAt: string }> }> };
-
 export type WikiDocumentHistoryQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
   offset?: InputMaybe<Scalars['Int']['input']>;
@@ -5899,20 +5841,6 @@ export type WikiDocumentHistoryQueryVariables = Exact<{
 
 
 export type WikiDocumentHistoryQuery = { wikiDocumentHistory: { totalCount: number, edges: Array<{ node: { id: string, visitedAt: string, document: { id: string, title: string, emoji: string, icon: string, color: string, kind: WikiDocumentKind, ancestors: Array<{ id: string, title: string, emoji: string, icon: string, color: string, kind: WikiDocumentKind, isDeleted: boolean }> } } }> } };
-
-export type WikiDocumentTagsQueryVariables = Exact<{
-  operationId: Scalars['ID']['input'];
-}>;
-
-
-export type WikiDocumentTagsQuery = { wikiDocumentTags: Array<{ tag: string, count: number }> };
-
-export type WikiDocumentPageTypesQueryVariables = Exact<{
-  operationId: Scalars['ID']['input'];
-}>;
-
-
-export type WikiDocumentPageTypesQuery = { wikiDocumentPageTypes: Array<{ pageType: string, count: number }> };
 
 export type CreateWikiDocumentMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -7929,11 +7857,6 @@ export const BuildFilesDocument = new TypedDocumentString(`
   mediaType
   createdAt
 }`) as unknown as TypedDocumentString<BuildFilesQuery, BuildFilesQueryVariables>;
-export const DeleteBuildFileDocument = new TypedDocumentString(`
-    mutation DeleteBuildFile($id: ID!) {
-  deleteBuildFile(id: $id)
-}
-    `) as unknown as TypedDocumentString<DeleteBuildFileMutation, DeleteBuildFileMutationVariables>;
 export const BuildsDocument = new TypedDocumentString(`
     query Builds($operationId: ID!, $search: String, $states: [String!], $moduleNames: [String!], $first: Int, $after: String) {
   builds(
@@ -13666,11 +13589,6 @@ export const AdminRevokeSessionDocument = new TypedDocumentString(`
   adminRevokeSession(id: $id)
 }
     `) as unknown as TypedDocumentString<AdminRevokeSessionMutation, AdminRevokeSessionMutationVariables>;
-export const AdminRevokeAllUserSessionsDocument = new TypedDocumentString(`
-    mutation AdminRevokeAllUserSessions($userId: ID!) {
-  adminRevokeAllUserSessions(userId: $userId)
-}
-    `) as unknown as TypedDocumentString<AdminRevokeAllUserSessionsMutation, AdminRevokeAllUserSessionsMutationVariables>;
 export const MySessionChangedDocument = new TypedDocumentString(`
     subscription MySessionChanged {
   mySessionChanged {
@@ -13923,63 +13841,6 @@ export const TasksDocument = new TypedDocumentString(`
   createdAt
   updatedAt
 }`) as unknown as TypedDocumentString<TasksQuery, TasksQueryVariables>;
-export const TaskTrashDocument = new TypedDocumentString(`
-    query TaskTrash($operationId: ID!, $first: Int, $after: String) {
-  taskTrash(operationId: $operationId, first: $first, after: $after) {
-    edges {
-      node {
-        ...TaskFields
-      }
-      cursor
-    }
-    pageInfo {
-      hasNextPage
-      endCursor
-    }
-    totalCount
-  }
-}
-    fragment TaskFields on Task {
-  id
-  rev
-  operationId
-  name
-  description
-  riskScore
-  riskDescription
-  profitScore
-  profitDescription
-  stage
-  status
-  summary
-  assignees {
-    id
-    username
-  }
-  wikiReferences {
-    id
-    title
-    emoji
-  }
-  credentialReferences {
-    id
-    name
-    type
-  }
-  createdBy {
-    id
-    username
-  }
-  lastUpdatedBy {
-    id
-    username
-  }
-  lastUpdatedAt
-  deletedAt
-  doneAt
-  createdAt
-  updatedAt
-}`) as unknown as TypedDocumentString<TaskTrashQuery, TaskTrashQueryVariables>;
 export const TasksReferencingWikiDocumentDocument = new TypedDocumentString(`
     query TasksReferencingWikiDocument($documentId: ID!) {
   tasksReferencingWikiDocument(documentId: $documentId) {
@@ -13999,25 +13860,6 @@ export const TasksReferencingWikiDocumentDocument = new TypedDocumentString(`
     username
   }
 }`) as unknown as TypedDocumentString<TasksReferencingWikiDocumentQuery, TasksReferencingWikiDocumentQueryVariables>;
-export const TasksReferencingCredentialDocument = new TypedDocumentString(`
-    query TasksReferencingCredential($credentialId: ID!) {
-  tasksReferencingCredential(credentialId: $credentialId) {
-    ...TaskBacklinkFields
-  }
-}
-    fragment TaskBacklinkFields on Task {
-  id
-  operationId
-  name
-  stage
-  status
-  riskScore
-  profitScore
-  assignees {
-    id
-    username
-  }
-}`) as unknown as TypedDocumentString<TasksReferencingCredentialQuery, TasksReferencingCredentialQueryVariables>;
 export const CreateTaskDocument = new TypedDocumentString(`
     mutation CreateTask($input: CreateTaskInput!) {
   createTask(input: $input) {
@@ -14352,58 +14194,6 @@ export const DeleteTaskDocument = new TypedDocumentString(`
   deleteTask(id: $id)
 }
     `) as unknown as TypedDocumentString<DeleteTaskMutation, DeleteTaskMutationVariables>;
-export const RestoreTaskDocument = new TypedDocumentString(`
-    mutation RestoreTask($id: ID!) {
-  restoreTask(id: $id) {
-    ...TaskFields
-  }
-}
-    fragment TaskFields on Task {
-  id
-  rev
-  operationId
-  name
-  description
-  riskScore
-  riskDescription
-  profitScore
-  profitDescription
-  stage
-  status
-  summary
-  assignees {
-    id
-    username
-  }
-  wikiReferences {
-    id
-    title
-    emoji
-  }
-  credentialReferences {
-    id
-    name
-    type
-  }
-  createdBy {
-    id
-    username
-  }
-  lastUpdatedBy {
-    id
-    username
-  }
-  lastUpdatedAt
-  deletedAt
-  doneAt
-  createdAt
-  updatedAt
-}`) as unknown as TypedDocumentString<RestoreTaskMutation, RestoreTaskMutationVariables>;
-export const PurgeTaskDocument = new TypedDocumentString(`
-    mutation PurgeTask($id: ID!) {
-  purgeTask(id: $id)
-}
-    `) as unknown as TypedDocumentString<PurgeTaskMutation, PurgeTaskMutationVariables>;
 export const TaskChangedDocument = new TypedDocumentString(`
     subscription TaskChanged($operationId: ID!) {
   taskChanged(operationId: $operationId) {
@@ -14743,21 +14533,6 @@ export const DeleteUserDocument = new TypedDocumentString(`
   deleteUser(id: $id)
 }
     `) as unknown as TypedDocumentString<DeleteUserMutation, DeleteUserMutationVariables>;
-export const UpdateOwnProfileDocument = new TypedDocumentString(`
-    mutation UpdateOwnProfile($input: UpdateUserInput!) {
-  updateOwnProfile(input: $input) {
-    ...UserFields
-  }
-}
-    fragment UserFields on User {
-  id
-  username
-  roles
-  active
-  authSource
-  createdAt
-  updatedAt
-}`) as unknown as TypedDocumentString<UpdateOwnProfileMutation, UpdateOwnProfileMutationVariables>;
 export const SetHiddenIdentitiesDocument = new TypedDocumentString(`
     mutation SetHiddenIdentities($names: [String!]!) {
   setHiddenIdentities(names: $names) {
@@ -15294,18 +15069,6 @@ export const WikiDocumentPresenceDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<WikiDocumentPresenceQuery, WikiDocumentPresenceQueryVariables>;
-export const WikiOperationPresenceDocument = new TypedDocumentString(`
-    query WikiOperationPresence($operationId: ID!) {
-  wikiOperationPresence(operationId: $operationId) {
-    documentId
-    activeEditors {
-      userId
-      username
-      connectedAt
-    }
-  }
-}
-    `) as unknown as TypedDocumentString<WikiOperationPresenceQuery, WikiOperationPresenceQueryVariables>;
 export const WikiDocumentHistoryDocument = new TypedDocumentString(`
     query WikiDocumentHistory($operationId: ID!, $offset: Int, $limit: Int) {
   wikiDocumentHistory(operationId: $operationId, offset: $offset, limit: $limit) {
@@ -15338,22 +15101,6 @@ export const WikiDocumentHistoryDocument = new TypedDocumentString(`
     }
   }
 }`) as unknown as TypedDocumentString<WikiDocumentHistoryQuery, WikiDocumentHistoryQueryVariables>;
-export const WikiDocumentTagsDocument = new TypedDocumentString(`
-    query WikiDocumentTags($operationId: ID!) {
-  wikiDocumentTags(operationId: $operationId) {
-    tag
-    count
-  }
-}
-    `) as unknown as TypedDocumentString<WikiDocumentTagsQuery, WikiDocumentTagsQueryVariables>;
-export const WikiDocumentPageTypesDocument = new TypedDocumentString(`
-    query WikiDocumentPageTypes($operationId: ID!) {
-  wikiDocumentPageTypes(operationId: $operationId) {
-    pageType
-    count
-  }
-}
-    `) as unknown as TypedDocumentString<WikiDocumentPageTypesQuery, WikiDocumentPageTypesQueryVariables>;
 export const CreateWikiDocumentDocument = new TypedDocumentString(`
     mutation CreateWikiDocument($operationId: ID!, $input: CreateWikiDocumentInput!) {
   createWikiDocument(operationId: $operationId, input: $input) {

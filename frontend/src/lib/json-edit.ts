@@ -58,11 +58,6 @@ export function childPointer(parent: string, token: string | number): string {
   return `${parent}/${String(token).replaceAll("~", "~0").replaceAll("/", "~1")}`
 }
 
-/** The pointer of a path of keys and indexes from the document. */
-export function pointerOf(path: readonly (string | number)[]): string {
-  return path.reduce<string>((p, token) => childPointer(p, token), "")
-}
-
 /** A JSON document's value, or why it is not JSON. */
 export type JsonParse = { ok: true; value: unknown } | { ok: false; message: string }
 

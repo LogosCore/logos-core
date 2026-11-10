@@ -12,11 +12,7 @@ import {
   type CredentialValueField,
   type TypedCredentialFields,
 } from "@/lib/credential-fields"
-import {
-  keyDraftsFromWire,
-  keyDraftsToInputs,
-  type KeyDraft,
-} from "@/components/findings/credential-key-drafts"
+import { keyDraftsToInputs, type KeyDraft } from "@/components/findings/credential-key-drafts"
 import type { PropertyDraft } from "@/components/findings/credential-property-drafts"
 
 /** The one-value fields' drafts, every field at once: switching the type
@@ -75,10 +71,6 @@ export function credentialFieldDraftsFrom(
       f === "EXPIRES_AT" ? toDateTimeLocal(c.expiresAt) : credentialFieldValue(c, f)
   }
   return drafts
-}
-
-export function credentialKeyDraftsFrom(c: TypedCredentialFields): KeyDraft[] {
-  return keyDraftsFromWire(c.keys)
 }
 
 function takes(spec: CredentialTypeSpec | undefined, field: string): boolean {

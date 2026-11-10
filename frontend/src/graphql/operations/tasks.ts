@@ -121,28 +121,6 @@ export const TasksQuery = graphql(`
   }
 `)
 
-export const TaskTrashQuery = graphql(`
-  query TaskTrash(
-    $operationId: ID!
-    $first: Int
-    $after: String
-  ) {
-    taskTrash(operationId: $operationId, first: $first, after: $after) {
-      edges {
-        node {
-          ...TaskFields
-        }
-        cursor
-      }
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      totalCount
-    }
-  }
-`)
-
 // Cross-domain backlinks: tasks that reference a given wiki document or
 // credential. Returned ordered by -updateAt, capped at 200 server-side.
 // Trashed tasks are excluded. Used by the wiki editor footer ("Task backlinks"
@@ -150,14 +128,6 @@ export const TaskTrashQuery = graphql(`
 export const TasksReferencingWikiDocumentQuery = graphql(`
   query TasksReferencingWikiDocument($documentId: ID!) {
     tasksReferencingWikiDocument(documentId: $documentId) {
-      ...TaskBacklinkFields
-    }
-  }
-`)
-
-export const TasksReferencingCredentialQuery = graphql(`
-  query TasksReferencingCredential($credentialId: ID!) {
-    tasksReferencingCredential(credentialId: $credentialId) {
       ...TaskBacklinkFields
     }
   }
@@ -235,20 +205,6 @@ export const SetTaskCredentialReferencesMutation = graphql(`
 export const DeleteTaskMutation = graphql(`
   mutation DeleteTask($id: ID!) {
     deleteTask(id: $id)
-  }
-`)
-
-export const RestoreTaskMutation = graphql(`
-  mutation RestoreTask($id: ID!) {
-    restoreTask(id: $id) {
-      ...TaskFields
-    }
-  }
-`)
-
-export const PurgeTaskMutation = graphql(`
-  mutation PurgeTask($id: ID!) {
-    purgeTask(id: $id)
   }
 `)
 

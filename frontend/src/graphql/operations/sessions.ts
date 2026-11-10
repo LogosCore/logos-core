@@ -91,12 +91,6 @@ export const AdminRevokeSessionMutation = graphql(`
   }
 `)
 
-export const AdminRevokeAllUserSessionsMutation = graphql(`
-  mutation AdminRevokeAllUserSessions($userId: ID!) {
-    adminRevokeAllUserSessions(userId: $userId)
-  }
-`)
-
 // --- Subscriptions ---
 
 // Real-time subscription for the caller's own session changes via SSE.

@@ -437,15 +437,6 @@ export const WikiDocumentPresenceQuery = graphql(`
   }
 `)
 
-export const WikiOperationPresenceQuery = graphql(`
-  query WikiOperationPresence($operationId: ID!) {
-    wikiOperationPresence(operationId: $operationId) {
-      documentId
-      activeEditors { userId username connectedAt }
-    }
-  }
-`)
-
 export const WikiDocumentHistoryQuery = graphql(`
   query WikiDocumentHistory($operationId: ID!, $offset: Int, $limit: Int) {
     wikiDocumentHistory(operationId: $operationId, offset: $offset, limit: $limit) {
@@ -460,24 +451,6 @@ export const WikiDocumentHistoryQuery = graphql(`
 `)
 
 // --- Vocabulary ---
-
-export const WikiDocumentTagsQuery = graphql(`
-  query WikiDocumentTags($operationId: ID!) {
-    wikiDocumentTags(operationId: $operationId) {
-      tag
-      count
-    }
-  }
-`)
-
-export const WikiDocumentPageTypesQuery = graphql(`
-  query WikiDocumentPageTypes($operationId: ID!) {
-    wikiDocumentPageTypes(operationId: $operationId) {
-      pageType
-      count
-    }
-  }
-`)
 
 // --- Mutations ---
 

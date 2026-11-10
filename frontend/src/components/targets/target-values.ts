@@ -5,19 +5,6 @@ import type { MinionTargetFieldsFragment } from "@/graphql/gql/graphql"
 
 export type Target = MinionTargetFieldsFragment
 
-export const TARGET_STATES = [
-  "new",
-  "connected",
-  "unreachable",
-  "not_the_minion",
-  "refused",
-  "stopped",
-  "no_channel",
-  "needs_editing",
-  "connecting",
-  "not_connected",
-] as const
-
 export const TARGET_STATE_LABEL: Record<string, string> = {
   new: "New",
   connected: "Connected",

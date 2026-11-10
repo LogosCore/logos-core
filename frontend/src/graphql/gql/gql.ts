@@ -38,7 +38,6 @@ type Documents = {
     "\n  fragment BuildFields on Build {\n    id\n    operationId\n    persistedSession\n    description\n    moduleName\n    target\n    platform\n    schemaVersion\n    state\n    factoryVersion\n    stages {\n      id\n      label\n      core\n      state\n      message\n      startedAt\n      finishedAt\n    }\n    artifact {\n      filename\n      size\n      sha256\n      mediaType\n      deleted\n    }\n    error {\n      code\n      message\n    }\n    createdBy {\n      type\n      id\n      name\n    }\n    createdAt\n    startedAt\n    finishedAt\n    deadline\n  }\n": typeof types.BuildFieldsFragmentDoc,
     "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      icon\n      iconLight\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n": typeof types.FactoryKindsDocument,
     "\n  query BuildFiles($operationId: ID!) {\n    buildFiles(operationId: $operationId) {\n      ...BuildFileFields\n    }\n  }\n": typeof types.BuildFilesDocument,
-    "\n  mutation DeleteBuildFile($id: ID!) {\n    deleteBuildFile(id: $id)\n  }\n": typeof types.DeleteBuildFileDocument,
     "\n  query Builds(\n    $operationId: ID!\n    $search: String\n    $states: [String!]\n    $moduleNames: [String!]\n    $first: Int\n    $after: String\n  ) {\n    builds(\n      operationId: $operationId\n      search: $search\n      states: $states\n      moduleNames: $moduleNames\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...BuildFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.BuildsDocument,
     "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      commands\n      connections\n      connectionDescriptions\n      failover\n      maxTasks\n      compression\n      crypto\n      envelope\n      codec\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": typeof types.BuildDocument,
     "\n  mutation CreateBuild($operationId: ID!, $input: BuildInput!) {\n    createBuild(operationId: $operationId, input: $input) {\n      ...BuildFields\n    }\n  }\n": typeof types.CreateBuildDocument,
@@ -209,7 +208,6 @@ type Documents = {
     "\n  mutation RevokeSession($id: ID!) {\n    revokeSession(id: $id)\n  }\n": typeof types.RevokeSessionDocument,
     "\n  mutation RevokeAllMySessions {\n    revokeAllMySessions\n  }\n": typeof types.RevokeAllMySessionsDocument,
     "\n  mutation AdminRevokeSession($id: ID!) {\n    adminRevokeSession(id: $id)\n  }\n": typeof types.AdminRevokeSessionDocument,
-    "\n  mutation AdminRevokeAllUserSessions($userId: ID!) {\n    adminRevokeAllUserSessions(userId: $userId)\n  }\n": typeof types.AdminRevokeAllUserSessionsDocument,
     "\n  subscription MySessionChanged {\n    mySessionChanged {\n      action\n      sessionId\n      userId\n      session {\n        ...SessionFields\n      }\n    }\n  }\n": typeof types.MySessionChangedDocument,
     "\n  subscription SessionChanged($userId: ID) {\n    sessionChanged(userId: $userId) {\n      action\n      sessionId\n      userId\n      session {\n        ...SessionFields\n      }\n    }\n  }\n": typeof types.SessionChangedDocument,
     "\n  query SkillChangelog {\n    skillChangelog {\n      currentVersion\n      releases {\n        version\n        date\n        notes\n      }\n    }\n  }\n": typeof types.SkillChangelogDocument,
@@ -223,9 +221,7 @@ type Documents = {
     "\n  fragment TaskBacklinkFields on Task {\n    id\n    operationId\n    name\n    stage\n    status\n    riskScore\n    profitScore\n    assignees {\n      id\n      username\n    }\n  }\n": typeof types.TaskBacklinkFieldsFragmentDoc,
     "\n  query Task($id: ID!) {\n    task(id: $id) {\n      ...TaskFields\n    }\n  }\n": typeof types.TaskDocument,
     "\n  query Tasks(\n    $operationId: ID!\n    $stage: TaskStage\n    $excludeStages: [TaskStage!]\n    $riskScoreMin: Int\n    $riskScoreMax: Int\n    $profitScoreMin: Int\n    $profitScoreMax: Int\n    $search: String\n    $first: Int\n    $after: String\n  ) {\n    tasks(\n      operationId: $operationId\n      stage: $stage\n      excludeStages: $excludeStages\n      riskScoreMin: $riskScoreMin\n      riskScoreMax: $riskScoreMax\n      profitScoreMin: $profitScoreMin\n      profitScoreMax: $profitScoreMax\n      search: $search\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...TaskFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.TasksDocument,
-    "\n  query TaskTrash(\n    $operationId: ID!\n    $first: Int\n    $after: String\n  ) {\n    taskTrash(operationId: $operationId, first: $first, after: $after) {\n      edges {\n        node {\n          ...TaskFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.TaskTrashDocument,
     "\n  query TasksReferencingWikiDocument($documentId: ID!) {\n    tasksReferencingWikiDocument(documentId: $documentId) {\n      ...TaskBacklinkFields\n    }\n  }\n": typeof types.TasksReferencingWikiDocumentDocument,
-    "\n  query TasksReferencingCredential($credentialId: ID!) {\n    tasksReferencingCredential(credentialId: $credentialId) {\n      ...TaskBacklinkFields\n    }\n  }\n": typeof types.TasksReferencingCredentialDocument,
     "\n  mutation CreateTask($input: CreateTaskInput!) {\n    createTask(input: $input) {\n      ...TaskFields\n    }\n  }\n": typeof types.CreateTaskDocument,
     "\n  mutation UpdateTask($id: ID!, $input: UpdateTaskInput!) {\n    updateTask(id: $id, input: $input) {\n      ...TaskFields\n    }\n  }\n": typeof types.UpdateTaskDocument,
     "\n  mutation ChangeTaskStage($input: ChangeTaskStageInput!) {\n    changeTaskStage(input: $input) {\n      ...TaskFields\n    }\n  }\n": typeof types.ChangeTaskStageDocument,
@@ -234,8 +230,6 @@ type Documents = {
     "\n  mutation AddTaskWikiReference($taskId: ID!, $wikiId: ID!) {\n    addTaskWikiReference(taskId: $taskId, wikiId: $wikiId) {\n      ...TaskFields\n    }\n  }\n": typeof types.AddTaskWikiReferenceDocument,
     "\n  mutation SetTaskCredentialReferences(\n    $taskId: ID!\n    $credentialIds: [ID!]!\n  ) {\n    setTaskCredentialReferences(\n      taskId: $taskId\n      credentialIds: $credentialIds\n    ) {\n      ...TaskFields\n    }\n  }\n": typeof types.SetTaskCredentialReferencesDocument,
     "\n  mutation DeleteTask($id: ID!) {\n    deleteTask(id: $id)\n  }\n": typeof types.DeleteTaskDocument,
-    "\n  mutation RestoreTask($id: ID!) {\n    restoreTask(id: $id) {\n      ...TaskFields\n    }\n  }\n": typeof types.RestoreTaskDocument,
-    "\n  mutation PurgeTask($id: ID!) {\n    purgeTask(id: $id)\n  }\n": typeof types.PurgeTaskDocument,
     "\n  subscription TaskChanged($operationId: ID!) {\n    taskChanged(operationId: $operationId) {\n      action\n      taskId\n      operationId\n      task {\n        ...TaskFields\n      }\n    }\n  }\n": typeof types.TaskChangedDocument,
     "\n  fragment TimelineEventFields on TimelineEvent {\n    id\n    operationId\n    topic\n    subjectKind\n    subjectId\n    subjectName\n    occurredAt\n    metadata\n    actor {\n      id\n      username\n    }\n    # For an agent's action, actor resolves to the OWNER of the agent key —\n    # so filtering by an operator still finds what their agent did for them.\n    # actorKind and actorLabel are what distinguish the two.\n    actorKind\n    actorLabel\n  }\n": typeof types.TimelineEventFieldsFragmentDoc,
     "\n  query TimelineBuckets(\n    $operationId: ID!\n    $granularity: TimelineGranularity = DAY\n    $timezone: String!\n    $from: String\n    $to: String\n    $types: [String!]\n    $actorIds: [ID!]\n  ) {\n    timelineBuckets(\n      operationId: $operationId\n      granularity: $granularity\n      timezone: $timezone\n      from: $from\n      to: $to\n      types: $types\n      actorIds: $actorIds\n    ) {\n      bucketStart\n      count\n      topicCounts {\n        topic\n        subjectKind\n        count\n        emoji\n        icon\n        color\n      }\n    }\n  }\n": typeof types.TimelineBucketsDocument,
@@ -255,7 +249,6 @@ type Documents = {
     "\n  mutation CreateUser($input: CreateUserInput!) {\n    createUser(input: $input) {\n      ...UserFields\n    }\n  }\n": typeof types.CreateUserDocument,
     "\n  mutation UpdateUser($id: ID!, $input: UpdateUserInput!) {\n    updateUser(id: $id, input: $input) {\n      ...UserFields\n    }\n  }\n": typeof types.UpdateUserDocument,
     "\n  mutation DeleteUser($id: ID!) {\n    deleteUser(id: $id)\n  }\n": typeof types.DeleteUserDocument,
-    "\n  mutation UpdateOwnProfile($input: UpdateUserInput!) {\n    updateOwnProfile(input: $input) {\n      ...UserFields\n    }\n  }\n": typeof types.UpdateOwnProfileDocument,
     "\n  mutation SetHiddenIdentities($names: [String!]!) {\n    setHiddenIdentities(names: $names) {\n      id\n      hiddenIdentities\n    }\n  }\n": typeof types.SetHiddenIdentitiesDocument,
     "\n  subscription UserChanged {\n    userChanged {\n      action\n      userId\n      username\n      user {\n        ...UserFields\n      }\n    }\n  }\n": typeof types.UserChangedDocument,
     "\n  fragment VPNTunnelFields on VPNTunnel {\n    id\n    routes\n    sessionId\n    sessionNumber\n    taskId\n    openedBy\n    openedByName\n    openedAt\n    listening\n    clients\n    open\n    streams\n    stopsAt\n  }\n": typeof types.VpnTunnelFieldsFragmentDoc,
@@ -286,10 +279,7 @@ type Documents = {
     "\n  query WikiDocumentBackups($documentId: ID!, $first: Int, $after: String) {\n    wikiDocumentBackups(documentId: $documentId, first: $first, after: $after) {\n      edges {\n        node {\n          ...WikiDocumentBackupListFields\n        }\n        cursor\n      }\n      pageInfo { hasNextPage endCursor }\n      totalCount\n    }\n  }\n": typeof types.WikiDocumentBackupsDocument,
     "\n  query WikiDocumentBackupDetail($id: ID!) {\n    wikiDocumentBackup(id: $id) {\n      ...WikiDocumentBackupDetailFields\n    }\n  }\n": typeof types.WikiDocumentBackupDetailDocument,
     "\n  query WikiDocumentPresence($documentId: ID!) {\n    wikiDocumentPresence(documentId: $documentId) {\n      documentId\n      activeEditors { userId username connectedAt }\n    }\n  }\n": typeof types.WikiDocumentPresenceDocument,
-    "\n  query WikiOperationPresence($operationId: ID!) {\n    wikiOperationPresence(operationId: $operationId) {\n      documentId\n      activeEditors { userId username connectedAt }\n    }\n  }\n": typeof types.WikiOperationPresenceDocument,
     "\n  query WikiDocumentHistory($operationId: ID!, $offset: Int, $limit: Int) {\n    wikiDocumentHistory(operationId: $operationId, offset: $offset, limit: $limit) {\n      edges {\n        node {\n          ...WikiDocumentVisitListFields\n        }\n      }\n      totalCount\n    }\n  }\n": typeof types.WikiDocumentHistoryDocument,
-    "\n  query WikiDocumentTags($operationId: ID!) {\n    wikiDocumentTags(operationId: $operationId) {\n      tag\n      count\n    }\n  }\n": typeof types.WikiDocumentTagsDocument,
-    "\n  query WikiDocumentPageTypes($operationId: ID!) {\n    wikiDocumentPageTypes(operationId: $operationId) {\n      pageType\n      count\n    }\n  }\n": typeof types.WikiDocumentPageTypesDocument,
     "\n  mutation CreateWikiDocument($operationId: ID!, $input: CreateWikiDocumentInput!) {\n    createWikiDocument(operationId: $operationId, input: $input) {\n      id operationId title emoji color icon sortOrder\n      parentDocumentId\n      pageType tags status\n      createdBy { id username }\n      createdAt updatedAt\n    }\n  }\n": typeof types.CreateWikiDocumentDocument,
     "\n  mutation UpdateWikiDocument($id: ID!, $input: UpdateWikiDocumentInput!) {\n    updateWikiDocument(id: $id, input: $input) {\n      id title emoji color icon sortOrder\n      parentDocumentId\n      pageType tags status\n      updatedAt\n    }\n  }\n": typeof types.UpdateWikiDocumentDocument,
     "\n  mutation ReorderWikiDocumentSiblings($input: ReorderWikiDocumentSiblingsInput!) {\n    reorderWikiDocumentSiblings(input: $input) {\n      id sortOrder parentDocumentId updatedAt\n    }\n  }\n": typeof types.ReorderWikiDocumentSiblingsDocument,
@@ -332,7 +322,6 @@ const documents: Documents = {
     "\n  fragment BuildFields on Build {\n    id\n    operationId\n    persistedSession\n    description\n    moduleName\n    target\n    platform\n    schemaVersion\n    state\n    factoryVersion\n    stages {\n      id\n      label\n      core\n      state\n      message\n      startedAt\n      finishedAt\n    }\n    artifact {\n      filename\n      size\n      sha256\n      mediaType\n      deleted\n    }\n    error {\n      code\n      message\n    }\n    createdBy {\n      type\n      id\n      name\n    }\n    createdAt\n    startedAt\n    finishedAt\n    deadline\n  }\n": types.BuildFieldsFragmentDoc,
     "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      icon\n      iconLight\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n": types.FactoryKindsDocument,
     "\n  query BuildFiles($operationId: ID!) {\n    buildFiles(operationId: $operationId) {\n      ...BuildFileFields\n    }\n  }\n": types.BuildFilesDocument,
-    "\n  mutation DeleteBuildFile($id: ID!) {\n    deleteBuildFile(id: $id)\n  }\n": types.DeleteBuildFileDocument,
     "\n  query Builds(\n    $operationId: ID!\n    $search: String\n    $states: [String!]\n    $moduleNames: [String!]\n    $first: Int\n    $after: String\n  ) {\n    builds(\n      operationId: $operationId\n      search: $search\n      states: $states\n      moduleNames: $moduleNames\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...BuildFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.BuildsDocument,
     "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      commands\n      connections\n      connectionDescriptions\n      failover\n      maxTasks\n      compression\n      crypto\n      envelope\n      codec\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": types.BuildDocument,
     "\n  mutation CreateBuild($operationId: ID!, $input: BuildInput!) {\n    createBuild(operationId: $operationId, input: $input) {\n      ...BuildFields\n    }\n  }\n": types.CreateBuildDocument,
@@ -503,7 +492,6 @@ const documents: Documents = {
     "\n  mutation RevokeSession($id: ID!) {\n    revokeSession(id: $id)\n  }\n": types.RevokeSessionDocument,
     "\n  mutation RevokeAllMySessions {\n    revokeAllMySessions\n  }\n": types.RevokeAllMySessionsDocument,
     "\n  mutation AdminRevokeSession($id: ID!) {\n    adminRevokeSession(id: $id)\n  }\n": types.AdminRevokeSessionDocument,
-    "\n  mutation AdminRevokeAllUserSessions($userId: ID!) {\n    adminRevokeAllUserSessions(userId: $userId)\n  }\n": types.AdminRevokeAllUserSessionsDocument,
     "\n  subscription MySessionChanged {\n    mySessionChanged {\n      action\n      sessionId\n      userId\n      session {\n        ...SessionFields\n      }\n    }\n  }\n": types.MySessionChangedDocument,
     "\n  subscription SessionChanged($userId: ID) {\n    sessionChanged(userId: $userId) {\n      action\n      sessionId\n      userId\n      session {\n        ...SessionFields\n      }\n    }\n  }\n": types.SessionChangedDocument,
     "\n  query SkillChangelog {\n    skillChangelog {\n      currentVersion\n      releases {\n        version\n        date\n        notes\n      }\n    }\n  }\n": types.SkillChangelogDocument,
@@ -517,9 +505,7 @@ const documents: Documents = {
     "\n  fragment TaskBacklinkFields on Task {\n    id\n    operationId\n    name\n    stage\n    status\n    riskScore\n    profitScore\n    assignees {\n      id\n      username\n    }\n  }\n": types.TaskBacklinkFieldsFragmentDoc,
     "\n  query Task($id: ID!) {\n    task(id: $id) {\n      ...TaskFields\n    }\n  }\n": types.TaskDocument,
     "\n  query Tasks(\n    $operationId: ID!\n    $stage: TaskStage\n    $excludeStages: [TaskStage!]\n    $riskScoreMin: Int\n    $riskScoreMax: Int\n    $profitScoreMin: Int\n    $profitScoreMax: Int\n    $search: String\n    $first: Int\n    $after: String\n  ) {\n    tasks(\n      operationId: $operationId\n      stage: $stage\n      excludeStages: $excludeStages\n      riskScoreMin: $riskScoreMin\n      riskScoreMax: $riskScoreMax\n      profitScoreMin: $profitScoreMin\n      profitScoreMax: $profitScoreMax\n      search: $search\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...TaskFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.TasksDocument,
-    "\n  query TaskTrash(\n    $operationId: ID!\n    $first: Int\n    $after: String\n  ) {\n    taskTrash(operationId: $operationId, first: $first, after: $after) {\n      edges {\n        node {\n          ...TaskFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.TaskTrashDocument,
     "\n  query TasksReferencingWikiDocument($documentId: ID!) {\n    tasksReferencingWikiDocument(documentId: $documentId) {\n      ...TaskBacklinkFields\n    }\n  }\n": types.TasksReferencingWikiDocumentDocument,
-    "\n  query TasksReferencingCredential($credentialId: ID!) {\n    tasksReferencingCredential(credentialId: $credentialId) {\n      ...TaskBacklinkFields\n    }\n  }\n": types.TasksReferencingCredentialDocument,
     "\n  mutation CreateTask($input: CreateTaskInput!) {\n    createTask(input: $input) {\n      ...TaskFields\n    }\n  }\n": types.CreateTaskDocument,
     "\n  mutation UpdateTask($id: ID!, $input: UpdateTaskInput!) {\n    updateTask(id: $id, input: $input) {\n      ...TaskFields\n    }\n  }\n": types.UpdateTaskDocument,
     "\n  mutation ChangeTaskStage($input: ChangeTaskStageInput!) {\n    changeTaskStage(input: $input) {\n      ...TaskFields\n    }\n  }\n": types.ChangeTaskStageDocument,
@@ -528,8 +514,6 @@ const documents: Documents = {
     "\n  mutation AddTaskWikiReference($taskId: ID!, $wikiId: ID!) {\n    addTaskWikiReference(taskId: $taskId, wikiId: $wikiId) {\n      ...TaskFields\n    }\n  }\n": types.AddTaskWikiReferenceDocument,
     "\n  mutation SetTaskCredentialReferences(\n    $taskId: ID!\n    $credentialIds: [ID!]!\n  ) {\n    setTaskCredentialReferences(\n      taskId: $taskId\n      credentialIds: $credentialIds\n    ) {\n      ...TaskFields\n    }\n  }\n": types.SetTaskCredentialReferencesDocument,
     "\n  mutation DeleteTask($id: ID!) {\n    deleteTask(id: $id)\n  }\n": types.DeleteTaskDocument,
-    "\n  mutation RestoreTask($id: ID!) {\n    restoreTask(id: $id) {\n      ...TaskFields\n    }\n  }\n": types.RestoreTaskDocument,
-    "\n  mutation PurgeTask($id: ID!) {\n    purgeTask(id: $id)\n  }\n": types.PurgeTaskDocument,
     "\n  subscription TaskChanged($operationId: ID!) {\n    taskChanged(operationId: $operationId) {\n      action\n      taskId\n      operationId\n      task {\n        ...TaskFields\n      }\n    }\n  }\n": types.TaskChangedDocument,
     "\n  fragment TimelineEventFields on TimelineEvent {\n    id\n    operationId\n    topic\n    subjectKind\n    subjectId\n    subjectName\n    occurredAt\n    metadata\n    actor {\n      id\n      username\n    }\n    # For an agent's action, actor resolves to the OWNER of the agent key —\n    # so filtering by an operator still finds what their agent did for them.\n    # actorKind and actorLabel are what distinguish the two.\n    actorKind\n    actorLabel\n  }\n": types.TimelineEventFieldsFragmentDoc,
     "\n  query TimelineBuckets(\n    $operationId: ID!\n    $granularity: TimelineGranularity = DAY\n    $timezone: String!\n    $from: String\n    $to: String\n    $types: [String!]\n    $actorIds: [ID!]\n  ) {\n    timelineBuckets(\n      operationId: $operationId\n      granularity: $granularity\n      timezone: $timezone\n      from: $from\n      to: $to\n      types: $types\n      actorIds: $actorIds\n    ) {\n      bucketStart\n      count\n      topicCounts {\n        topic\n        subjectKind\n        count\n        emoji\n        icon\n        color\n      }\n    }\n  }\n": types.TimelineBucketsDocument,
@@ -549,7 +533,6 @@ const documents: Documents = {
     "\n  mutation CreateUser($input: CreateUserInput!) {\n    createUser(input: $input) {\n      ...UserFields\n    }\n  }\n": types.CreateUserDocument,
     "\n  mutation UpdateUser($id: ID!, $input: UpdateUserInput!) {\n    updateUser(id: $id, input: $input) {\n      ...UserFields\n    }\n  }\n": types.UpdateUserDocument,
     "\n  mutation DeleteUser($id: ID!) {\n    deleteUser(id: $id)\n  }\n": types.DeleteUserDocument,
-    "\n  mutation UpdateOwnProfile($input: UpdateUserInput!) {\n    updateOwnProfile(input: $input) {\n      ...UserFields\n    }\n  }\n": types.UpdateOwnProfileDocument,
     "\n  mutation SetHiddenIdentities($names: [String!]!) {\n    setHiddenIdentities(names: $names) {\n      id\n      hiddenIdentities\n    }\n  }\n": types.SetHiddenIdentitiesDocument,
     "\n  subscription UserChanged {\n    userChanged {\n      action\n      userId\n      username\n      user {\n        ...UserFields\n      }\n    }\n  }\n": types.UserChangedDocument,
     "\n  fragment VPNTunnelFields on VPNTunnel {\n    id\n    routes\n    sessionId\n    sessionNumber\n    taskId\n    openedBy\n    openedByName\n    openedAt\n    listening\n    clients\n    open\n    streams\n    stopsAt\n  }\n": types.VpnTunnelFieldsFragmentDoc,
@@ -580,10 +563,7 @@ const documents: Documents = {
     "\n  query WikiDocumentBackups($documentId: ID!, $first: Int, $after: String) {\n    wikiDocumentBackups(documentId: $documentId, first: $first, after: $after) {\n      edges {\n        node {\n          ...WikiDocumentBackupListFields\n        }\n        cursor\n      }\n      pageInfo { hasNextPage endCursor }\n      totalCount\n    }\n  }\n": types.WikiDocumentBackupsDocument,
     "\n  query WikiDocumentBackupDetail($id: ID!) {\n    wikiDocumentBackup(id: $id) {\n      ...WikiDocumentBackupDetailFields\n    }\n  }\n": types.WikiDocumentBackupDetailDocument,
     "\n  query WikiDocumentPresence($documentId: ID!) {\n    wikiDocumentPresence(documentId: $documentId) {\n      documentId\n      activeEditors { userId username connectedAt }\n    }\n  }\n": types.WikiDocumentPresenceDocument,
-    "\n  query WikiOperationPresence($operationId: ID!) {\n    wikiOperationPresence(operationId: $operationId) {\n      documentId\n      activeEditors { userId username connectedAt }\n    }\n  }\n": types.WikiOperationPresenceDocument,
     "\n  query WikiDocumentHistory($operationId: ID!, $offset: Int, $limit: Int) {\n    wikiDocumentHistory(operationId: $operationId, offset: $offset, limit: $limit) {\n      edges {\n        node {\n          ...WikiDocumentVisitListFields\n        }\n      }\n      totalCount\n    }\n  }\n": types.WikiDocumentHistoryDocument,
-    "\n  query WikiDocumentTags($operationId: ID!) {\n    wikiDocumentTags(operationId: $operationId) {\n      tag\n      count\n    }\n  }\n": types.WikiDocumentTagsDocument,
-    "\n  query WikiDocumentPageTypes($operationId: ID!) {\n    wikiDocumentPageTypes(operationId: $operationId) {\n      pageType\n      count\n    }\n  }\n": types.WikiDocumentPageTypesDocument,
     "\n  mutation CreateWikiDocument($operationId: ID!, $input: CreateWikiDocumentInput!) {\n    createWikiDocument(operationId: $operationId, input: $input) {\n      id operationId title emoji color icon sortOrder\n      parentDocumentId\n      pageType tags status\n      createdBy { id username }\n      createdAt updatedAt\n    }\n  }\n": types.CreateWikiDocumentDocument,
     "\n  mutation UpdateWikiDocument($id: ID!, $input: UpdateWikiDocumentInput!) {\n    updateWikiDocument(id: $id, input: $input) {\n      id title emoji color icon sortOrder\n      parentDocumentId\n      pageType tags status\n      updatedAt\n    }\n  }\n": types.UpdateWikiDocumentDocument,
     "\n  mutation ReorderWikiDocumentSiblings($input: ReorderWikiDocumentSiblingsInput!) {\n    reorderWikiDocumentSiblings(input: $input) {\n      id sortOrder parentDocumentId updatedAt\n    }\n  }\n": types.ReorderWikiDocumentSiblingsDocument,
@@ -695,10 +675,6 @@ export function graphql(source: "\n  query FactoryKinds {\n    factoryKinds {\n 
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query BuildFiles($operationId: ID!) {\n    buildFiles(operationId: $operationId) {\n      ...BuildFileFields\n    }\n  }\n"): typeof import('./graphql').BuildFilesDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation DeleteBuildFile($id: ID!) {\n    deleteBuildFile(id: $id)\n  }\n"): typeof import('./graphql').DeleteBuildFileDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -1382,10 +1358,6 @@ export function graphql(source: "\n  mutation AdminRevokeSession($id: ID!) {\n  
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  mutation AdminRevokeAllUserSessions($userId: ID!) {\n    adminRevokeAllUserSessions(userId: $userId)\n  }\n"): typeof import('./graphql').AdminRevokeAllUserSessionsDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
 export function graphql(source: "\n  subscription MySessionChanged {\n    mySessionChanged {\n      action\n      sessionId\n      userId\n      session {\n        ...SessionFields\n      }\n    }\n  }\n"): typeof import('./graphql').MySessionChangedDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
@@ -1438,15 +1410,7 @@ export function graphql(source: "\n  query Tasks(\n    $operationId: ID!\n    $s
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query TaskTrash(\n    $operationId: ID!\n    $first: Int\n    $after: String\n  ) {\n    taskTrash(operationId: $operationId, first: $first, after: $after) {\n      edges {\n        node {\n          ...TaskFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n"): typeof import('./graphql').TaskTrashDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
 export function graphql(source: "\n  query TasksReferencingWikiDocument($documentId: ID!) {\n    tasksReferencingWikiDocument(documentId: $documentId) {\n      ...TaskBacklinkFields\n    }\n  }\n"): typeof import('./graphql').TasksReferencingWikiDocumentDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  query TasksReferencingCredential($credentialId: ID!) {\n    tasksReferencingCredential(credentialId: $credentialId) {\n      ...TaskBacklinkFields\n    }\n  }\n"): typeof import('./graphql').TasksReferencingCredentialDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -1479,14 +1443,6 @@ export function graphql(source: "\n  mutation SetTaskCredentialReferences(\n    
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation DeleteTask($id: ID!) {\n    deleteTask(id: $id)\n  }\n"): typeof import('./graphql').DeleteTaskDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation RestoreTask($id: ID!) {\n    restoreTask(id: $id) {\n      ...TaskFields\n    }\n  }\n"): typeof import('./graphql').RestoreTaskDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation PurgeTask($id: ID!) {\n    purgeTask(id: $id)\n  }\n"): typeof import('./graphql').PurgeTaskDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -1563,10 +1519,6 @@ export function graphql(source: "\n  mutation UpdateUser($id: ID!, $input: Updat
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation DeleteUser($id: ID!) {\n    deleteUser(id: $id)\n  }\n"): typeof import('./graphql').DeleteUserDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation UpdateOwnProfile($input: UpdateUserInput!) {\n    updateOwnProfile(input: $input) {\n      ...UserFields\n    }\n  }\n"): typeof import('./graphql').UpdateOwnProfileDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -1690,19 +1642,7 @@ export function graphql(source: "\n  query WikiDocumentPresence($documentId: ID!
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query WikiOperationPresence($operationId: ID!) {\n    wikiOperationPresence(operationId: $operationId) {\n      documentId\n      activeEditors { userId username connectedAt }\n    }\n  }\n"): typeof import('./graphql').WikiOperationPresenceDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
 export function graphql(source: "\n  query WikiDocumentHistory($operationId: ID!, $offset: Int, $limit: Int) {\n    wikiDocumentHistory(operationId: $operationId, offset: $offset, limit: $limit) {\n      edges {\n        node {\n          ...WikiDocumentVisitListFields\n        }\n      }\n      totalCount\n    }\n  }\n"): typeof import('./graphql').WikiDocumentHistoryDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  query WikiDocumentTags($operationId: ID!) {\n    wikiDocumentTags(operationId: $operationId) {\n      tag\n      count\n    }\n  }\n"): typeof import('./graphql').WikiDocumentTagsDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  query WikiDocumentPageTypes($operationId: ID!) {\n    wikiDocumentPageTypes(operationId: $operationId) {\n      pageType\n      count\n    }\n  }\n"): typeof import('./graphql').WikiDocumentPageTypesDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

@@ -19,7 +19,7 @@ import type { Rgba } from "./session-fire-model"
 
 // ---- Heat: how fast keys come, as lightning's charge (prompt-fx-model.ts)
 
-export { HEAT_BUMP, HEAT_TAU, cooled, fed } from "./prompt-fx-model"
+export { HEAT_BUMP, cooled, fed } from "./prompt-fx-model"
 
 /** What a line that does not read leaves of the heat, and of the fire. */
 export const DOUSE = 0.5

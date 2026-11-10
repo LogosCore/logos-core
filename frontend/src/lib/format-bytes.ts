@@ -7,7 +7,3 @@ export function formatBytes(bytes: number): string {
   const precision = value >= 10 || exponent === 0 ? 0 : 1
   return `${value.toFixed(precision)} ${UNITS[exponent]}`
 }
-
-export function byteSizeOf(text: string): number {
-  return new Blob([text]).size
-}

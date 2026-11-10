@@ -25,7 +25,6 @@ import type {
 import {
   TaskDocument,
   TasksDocument,
-  TaskTrashDocument,
   CreateTaskDocument,
   UpdateTaskDocument,
   ChangeTaskStageDocument,
@@ -34,11 +33,8 @@ import {
   AddTaskWikiReferenceDocument,
   SetTaskCredentialReferencesDocument,
   DeleteTaskDocument,
-  RestoreTaskDocument,
-  PurgeTaskDocument,
   TaskChangedDocument,
   TasksReferencingWikiDocumentDocument,
-  TasksReferencingCredentialDocument,
 } from "@/graphql/gql/graphql"
 
 export type TaskListParams = {
@@ -58,11 +54,6 @@ export type TaskListParams = {
   first?: number
 }
 
-export type TaskTrashParams = {
-  operationId: string
-  first?: number
-}
-
 // Query key factory — mirrors credentialKeys layout so the invalidation
 // helpers in subscription handlers stay consistent across features.
 export const taskKeys = {
@@ -71,8 +62,6 @@ export const taskKeys = {
   infiniteList: (params: TaskListParams) =>
     [...taskKeys.lists(), "infinite", params] as const,
   trashLists: () => [...taskKeys.all, "trash"] as const,
-  infiniteTrash: (params: TaskTrashParams) =>
-    [...taskKeys.trashLists(), "infinite", params] as const,
   details: () => [...taskKeys.all, "detail"] as const,
   detail: (id: string) => [...taskKeys.details(), id] as const,
   // Cross-domain reverse-reference queries. Keyed under their own prefix so
@@ -160,27 +149,6 @@ export function useInfiniteTasks(
   })
 }
 
-export function useInfiniteTaskTrash(
-  params: TaskTrashParams,
-  options: { enabled?: boolean } = {},
-) {
-  return useInfiniteQuery({
-    queryKey: taskKeys.infiniteTrash(params),
-    queryFn: ({ pageParam }) =>
-      graphqlClient(TaskTrashDocument, {
-        operationId: params.operationId,
-        first: params.first ?? 50,
-        after: pageParam,
-      }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) =>
-      lastPage.taskTrash.pageInfo.hasNextPage
-        ? lastPage.taskTrash.pageInfo.endCursor ?? undefined
-        : undefined,
-    enabled: !!params.operationId && (options.enabled ?? true),
-  })
-}
-
 // useTasksReferencingWikiDocument fetches the active tasks that link to the
 // given wiki document. Drives the "Task backlinks" section in the wiki editor
 // footer. Live-updated through useTaskChangedSubscription, which invalidates
@@ -194,20 +162,6 @@ export function useTasksReferencingWikiDocument(
     queryFn: () =>
       graphqlClient(TasksReferencingWikiDocumentDocument, { documentId }),
     enabled: !!documentId && (options?.enabled ?? true),
-  })
-}
-
-// useTasksReferencingCredential is the credential counterpart — drives the
-// "Referenced by tasks" section in the credential details dialog.
-export function useTasksReferencingCredential(
-  credentialId: string,
-  options?: { enabled?: boolean },
-) {
-  return useQuery({
-    queryKey: taskKeys.credentialBacklinksFor(credentialId),
-    queryFn: () =>
-      graphqlClient(TasksReferencingCredentialDocument, { credentialId }),
-    enabled: !!credentialId && (options?.enabled ?? true),
   })
 }
 
@@ -420,29 +374,6 @@ export function useDeleteTask() {
     onSuccess: (_data, id) => {
       queryClient.removeQueries({ queryKey: taskKeys.detail(id) })
       applyRowRemoval(queryClient, taskLists, id)
-      scheduleRefresh(queryClient, taskKeys.trashLists())
-    },
-  })
-}
-
-export function useRestoreTask() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => graphqlClient(RestoreTaskDocument, { id }),
-    onSuccess: (data, id) => {
-      setNewer(queryClient, taskKeys.detail(id), "task", data.restoreTask)
-      scheduleRefresh(queryClient, taskKeys.lists())
-      scheduleRefresh(queryClient, taskKeys.trashLists())
-    },
-  })
-}
-
-export function usePurgeTask() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => graphqlClient(PurgeTaskDocument, { id }),
-    onSuccess: (_data, id) => {
-      queryClient.removeQueries({ queryKey: taskKeys.detail(id) })
       scheduleRefresh(queryClient, taskKeys.trashLists())
     },
   })
