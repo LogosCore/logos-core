@@ -29,8 +29,8 @@ export default defineConfig([
 
   // Pre-existing debt from eslint-plugin-react-hooks v7, whose rules are the
   // React Compiler's own analysis and stricter than the v6 set this code was
-  // written against. Eight errors across six files, all predating the lint gate
-  // in .github/workflows/ci-frontend.yml.
+  // written against. Eight errors across six files predated the lint gate in
+  // .github/workflows/ci-frontend.yml; one is left.
   //
   // Same policy core/.golangci.yml states for the Go side: a linter that fires
   // on existing code gets the code fixed, or stays out with a note saying why.
@@ -38,31 +38,17 @@ export default defineConfig([
   // rules stay at error everywhere else and a NEW violation still fails the
   // build — the list only shrinks.
   //
-  // Each needs its own judgement, which is why none is done here:
-  //
-  //   - set-state-in-effect is a real cascading-render cost, and the fix differs
-  //     every time: useIsMobile wants useSyncExternalStore, sha1 is an async
-  //     result landing in state, timeline is windowing bookkeeping, search-input
-  //     and hash-details-dialog are syncing from props.
-  //   - only-export-components wants credential-validity-utils.tsx split into a
-  //     module of components and a module of helpers; mechanical, but it touches
-  //     every importer.
+  // Fixed since: useIsMobile reads an external store (useSyncExternalStore);
+  // sha1, search-input, hash-details-dialog and timeline's window reset set
+  // state while rendering where it follows its inputs, or not at all; the
+  // credential validity helpers are a module of their own
+  // (credential-validity-values.ts). Left: timeline's pull of an older window
+  // while the loaded ones are empty, an effect answering its queries' results
+  // (windowing bookkeeping), so set-state-in-effect stays a warning there.
   {
-    files: [
-      'src/components/findings/hash-details-dialog.tsx',
-      'src/components/ui/search-input.tsx',
-      'src/graphql/hooks/timeline.ts',
-      'src/hooks/use-mobile.ts',
-      'src/lib/sha1.ts',
-    ],
+    files: ['src/graphql/hooks/timeline.ts'],
     rules: {
       'react-hooks/set-state-in-effect': 'warn',
-    },
-  },
-  {
-    files: ['src/components/findings/credential-validity-utils.tsx'],
-    rules: {
-      'react-refresh/only-export-components': 'warn',
     },
   },
 ])

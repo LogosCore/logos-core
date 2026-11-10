@@ -22,11 +22,8 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { useCredentialStore } from "@/stores/credentials"
-import {
-  CREDENTIAL_VALIDITIES,
-  CredentialValidityIcon,
-  credentialValidity,
-} from "@/components/findings/credential-validity-utils"
+import { CredentialValidityIcon } from "@/components/findings/credential-validity-utils"
+import { CREDENTIAL_VALIDITIES, credentialValidity } from "@/components/findings/credential-validity-values"
 import { useUpdateCredential } from "@/graphql/hooks/credentials"
 import {
   CREDENTIAL_TYPES,

@@ -75,14 +75,19 @@ export function HashDetailsDialog() {
   // Reseed drafts only when the underlying hash identity changes (dialog
   // opened on a different row). We intentionally do NOT reseed on every
   // hash.value change so an in-flight save echoing back through the cache
-  // can't clobber what the operator is mid-typing.
-  useEffect(() => {
+  // can't clobber what the operator is mid-typing. Adjusted while rendering,
+  // keyed on the id as the effect it replaces was (an id gone and back
+  // reseeds too).
+  // null: not seeded yet (no id is), so the first render seeds, as the
+  // effect did on mount.
+  const [seededFor, setSeededFor] = useState<string | null | undefined>(null)
+  if (hash?.id !== seededFor) {
+    setSeededFor(hash?.id)
     if (hash) {
       setValueDraft(hash.value)
       setCommentDraft(hash.comment)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hash?.id])
+  }
 
   // Resize the comment box to fit its content whenever the text changes or the
   // dialog (re)opens. "auto" first so it can shrink as well as grow.

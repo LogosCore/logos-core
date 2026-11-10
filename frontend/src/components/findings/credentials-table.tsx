@@ -22,10 +22,8 @@ import {
   credentialExpired,
   filledCredentialFields,
 } from "@/lib/credential-fields"
-import {
-  CredentialValidityIcon,
-  credentialValidity,
-} from "@/components/findings/credential-validity-utils"
+import { CredentialValidityIcon } from "@/components/findings/credential-validity-utils"
+import { credentialValidity } from "@/components/findings/credential-validity-values"
 import { CredentialRowContextMenu } from "@/components/findings/credential-row-context-menu"
 import type { CredentialFieldsFragment } from "@/graphql/gql/graphql"
 

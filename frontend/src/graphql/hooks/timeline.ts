@@ -336,7 +336,7 @@ export function useTimelineBucketsWindowed(
 
   // Initial window set, recomputed when the user-controlled inputs change.
   // pinnedDay is intentionally part of this memo so a deep link reflects on
-  // mount, but the reset effect below doesn't depend on it — clicking a
+  // mount, but the reset below doesn't depend on it — clicking a
   // different bucket should not blow away already-loaded older windows.
   const initialWindows = useMemo<WindowRange[]>(() => {
     if (hasUserFilter) {
@@ -344,8 +344,6 @@ export function useTimelineBucketsWindowed(
     }
     return [computeInitialWindow(granularity, timezone, pinnedDay ?? null)]
   }, [hasUserFilter, userFrom, userTo, granularity, timezone, pinnedDay])
-
-  const [windows, setWindows] = useState<WindowRange[]>(initialWindows)
 
   // Reset windows when filters/granularity change. Excludes pinnedDay (see
   // initialWindows comment above) — capture pinnedDay at reset time via the
@@ -364,12 +362,15 @@ export function useTimelineBucketsWindowed(
     [hasUserFilter, userFrom, userTo, granularity, timezone, types, actorIds],
   )
 
-  useEffect(() => {
+  const [windows, setWindows] = useState<WindowRange[]>(initialWindows)
+  // Adjusted while rendering, as React has it for state that follows its
+  // inputs: the render that sees new filters already asks for their
+  // windows, rather than the old windows under the new filters first.
+  const [windowsFor, setWindowsFor] = useState(resetKey)
+  if (resetKey !== windowsFor) {
+    setWindowsFor(resetKey)
     setWindows(initialWindows)
-    // resetKey changes are the trigger; initialWindows is the latest value
-    // captured by the closure at fire time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetKey])
+  }
 
   const results = useQueries({
     queries: windows.map((w) => ({

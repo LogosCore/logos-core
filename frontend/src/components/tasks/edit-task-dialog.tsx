@@ -116,7 +116,6 @@ export function EditTaskDialog() {
     // clobber in-flight typing. This is intentionally effect-shaped (sync
     // external store → local form state); the guard above runs it once per
     // task id, so there is no cascading-render loop.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setValues(nextValues);
     setRelations(nextRelations);
     lastSavedValuesRef.current = nextValues;

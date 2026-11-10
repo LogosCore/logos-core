@@ -24,16 +24,19 @@ export function SearchInput({
 }: SearchInputProps) {
   // Debounce search input — local state syncs to caller after delay
   const [inputValue, setInputValue] = useState(value)
+  // Keep local input in sync if external value is reset: adjusted while
+  // rendering (as React has it for state that follows a prop), not in an
+  // effect a render later.
+  const [syncedValue, setSyncedValue] = useState(value)
+  if (value !== syncedValue) {
+    setSyncedValue(value)
+    setInputValue(value)
+  }
 
   useEffect(() => {
     const timeout = setTimeout(() => onValueChange(inputValue), debounceMs)
     return () => clearTimeout(timeout)
   }, [inputValue, onValueChange, debounceMs])
-
-  // Keep local input in sync if external value is reset
-  useEffect(() => {
-    setInputValue(value)
-  }, [value])
 
   return (
     <div className={className ?? "relative w-full max-w-md"}>

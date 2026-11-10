@@ -29,11 +29,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SearchInput } from "@/components/ui/search-input"
 import { TagFilterPanel } from "@/components/findings/tag-filter-panel"
-import {
-  CREDENTIAL_VALIDITIES,
-  CredentialValidityIcon,
-  credentialValidity,
-} from "@/components/findings/credential-validity-utils"
+import { CredentialValidityIcon } from "@/components/findings/credential-validity-utils"
+import { CREDENTIAL_VALIDITIES, credentialValidity } from "@/components/findings/credential-validity-values"
 import {
   shownValidities,
   toggleValidity,

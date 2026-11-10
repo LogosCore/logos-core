@@ -42,10 +42,8 @@ import {
   useDeleteCredentialComment,
   useCredentialSourceHashes,
 } from "@/graphql/hooks/credentials"
-import {
-  CredentialValidityIcon,
-  credentialValidity,
-} from "@/components/findings/credential-validity-utils"
+import { CredentialValidityIcon } from "@/components/findings/credential-validity-utils"
+import { credentialValidity } from "@/components/findings/credential-validity-values"
 import {
   CREDENTIAL_TYPES,
   credentialTypeLabel,
