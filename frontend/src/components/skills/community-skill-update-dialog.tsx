@@ -1,19 +1,12 @@
+import { lazy, Suspense } from "react"
 import { useNavigate } from "react-router"
-import { PackageIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { useSkillRegistry, useSnoozeSkill } from "@/graphql/hooks/skills"
 import { useMe } from "@/graphql/hooks/users"
 import { useSkillChangelog } from "@/graphql/hooks/skill"
 import { findSkillsToPromptFor } from "@/lib/community-skill-update"
 import { decideSkillUpdate } from "@/lib/skill-update"
+
+const CommunitySkillUpdatePrompt = lazy(() => import("./community-skill-update-prompt"))
 
 /**
  * Tells an operator when a skill they downloaded has been republished.
@@ -25,7 +18,8 @@ import { decideSkillUpdate } from "@/lib/skill-update"
  * and the page is where they are laid out.
  *
  * Which skills qualify is decided by findSkillsToPromptFor, which is unit
- * tested; this component only renders the result.
+ * tested; this component only renders the result. The dialog itself loads
+ * the first time it shows (community-skill-update-prompt.tsx).
  */
 export function CommunitySkillUpdateDialog() {
   const navigate = useNavigate()
@@ -53,48 +47,9 @@ export function CommunitySkillUpdateDialog() {
   }
 
   return (
-    <Dialog open onOpenChange={(next) => { if (!next) dismiss() }}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <PackageIcon className="size-4 text-muted-foreground" />
-            {stale.length === 1
-              ? "A skill you use has been updated"
-              : `${stale.length} skills you use have been updated`}
-          </DialogTitle>
-          <DialogDescription>
-            Published by other operators on this server. Your copy stays as it
-            is until you download the new one.
-          </DialogDescription>
-        </DialogHeader>
-
-        <ul className="max-h-[45vh] space-y-3 overflow-y-auto">
-          {stale.map((skill) => (
-            <li key={skill.name} className="space-y-0.5">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-sm font-medium">{skill.name}</span>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  v{skill.installedVersion} → v{skill.currentVersion}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                by {skill.ownerUsername}
-                {skill.description ? ` — ${skill.description}` : ""}
-              </p>
-            </li>
-          ))}
-        </ul>
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={dismiss}>
-            Remind me later
-          </Button>
-          <Button type="button" onClick={openSkills}>
-            Open skills
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <Suspense fallback={null}>
+      <CommunitySkillUpdatePrompt stale={stale} dismiss={dismiss} openSkills={openSkills} />
+    </Suspense>
   )
 }
 
