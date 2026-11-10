@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import { HOP, KIND_FLOWS, KNOWN_KINDS, crossing, hops, stepAt } from "./connection-kind-flows"
 
 describe("connection kind flows", () => {
-  test("every kind the protocol defines has a flow, its events in order and in its loop, each step reached", () => {
+  test("every kind the protocol defines has a flow and a summary, its events in order and in its loop, each step reached", () => {
     for (const k of KNOWN_KINDS) {
       const f = KIND_FLOWS[k]
       expect(f, k).toBeDefined()
@@ -11,6 +11,7 @@ describe("connection kind flows", () => {
       for (const e of f.events) {
         expect(e.at + (e.path ? hops(e.path).length * HOP : 0), `${k} ${e.label ?? e.badge}`).toBeLessThanOrEqual(f.period)
       }
+      expect(f.summary, k).toMatch(/^[A-Z].*\.$/)
       const reached = new Set(f.events.map((e) => e.step))
       f.steps.forEach((_, i) => expect(reached.has(i), `${k} step ${i}`).toBe(true))
     }

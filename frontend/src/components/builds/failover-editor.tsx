@@ -187,7 +187,7 @@ export function ConnectionFailoverSettings({
   const auto = failoverAuto(connKind, value)
   const listening = connKind === "bind-persistent"
   return (
-    <SettingsSection title="Failover">
+    <SettingsSection title="Failover" sub>
       <SettingRow
         id={`${idPrefix}-auto`}
         label="Failover may move here"

@@ -16,7 +16,7 @@ import {
   useCloseGuard,
   useRequestClose,
 } from "@/components/ui/record-modal"
-import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
+import { SettingRow } from "@/components/ui/settings-rows"
 import { SettingsNav } from "@/components/ui/settings-nav"
 import { sectionId, useActiveSection } from "@/hooks/use-active-section"
 import { childPointer, type JsonProblem } from "@/lib/json-edit"
@@ -35,7 +35,7 @@ import {
   useUpdateChannelEndpoint,
 } from "@/graphql/hooks/channel-endpoints"
 import { ModuleIcon } from "@/components/modules/module-icon"
-import { EndpointSettings } from "@/components/endpoints/endpoint-settings"
+import { EndpointSettings, GENERAL_SECTION } from "@/components/endpoints/endpoint-settings"
 import { errorMessage, graphqlErrorCode } from "@/components/modules/management/api-errors"
 import { groupByField, type Draft, type FieldDef } from "@/components/modules/management/field-values"
 import {
@@ -149,7 +149,7 @@ function NotFound({ title, text }: { title: string; text: string }) {
   return <RecordModalMessage icon={<RadioTowerIcon className="size-8 opacity-50" />} title={title} text={text} />
 }
 
-const GENERAL = "General"
+const GENERAL = GENERAL_SECTION
 
 /** One section of the form, as the side list shows it. */
 interface Section {
@@ -160,8 +160,9 @@ interface Section {
 
 /**
  * The editor: a section list on the left, one column of label | control rows
- * on the right, actions in a header that stays in view. Descriptions sit
- * behind an info icon so the rows read as a list of settings.
+ * on the right, each setting's first sentence of help under its control,
+ * actions in a header that stays in view. The modal is as wide as the form
+ * (EndpointModal), so the header's actions end where the rows do.
  */
 function EndpointEditor({
   operationId,
@@ -374,14 +375,13 @@ function EndpointEditor({
       >
       <RecordModalHeader>
         {/* The channel's icon as large as in the endpoints table, beside the
-            title and, under it, what the endpoint is for. */}
+            title and, under it, the channel (the kind is General's last row). */}
         <div className="flex min-w-0 items-center gap-3">
           <ModuleIcon type="channel" icon={kind.icon} className="size-9" />
           <div className="flex min-w-0 flex-col">
             <RecordModalTitle>{endpoint ? endpoint.name : "New endpoint"}</RecordModalTitle>
             <span className="truncate text-sm text-muted-foreground">
-              <span className="font-mono">{kind.name}</span> · <span className="font-mono">{connKind}</span> · schema v
-              {kind.version}
+              <span className="font-mono">{kind.name}</span> channel
               {source && <> · {source.label}</>}
             </span>
           </div>
@@ -421,19 +421,7 @@ function EndpointEditor({
         />
 
         <div className="@container/settings min-w-0 flex-1">
-        <div className="flex max-w-3xl flex-col gap-8 @6xl/settings:max-w-[80rem]">
-          <EndpointSettings
-            channel={kind}
-            kind={connKind}
-            onKind={changeKind}
-            kindError={serverErrors.kind}
-            drafts={drafts}
-            onDraft={setDraft}
-            errorOf={(key) => shownErrors[key]}
-            disabled={disabled}
-            idPrefix="endpoint"
-            sectionIdOf={sectionId}
-          >
+        <div className="flex flex-col gap-8">
           {saveError && (
             <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>
           )}
@@ -451,38 +439,50 @@ function EndpointEditor({
             </div>
           )}
 
-          <SettingsSection id={sectionId(GENERAL)} title={GENERAL}>
-            <SettingRow
-              id="endpoint-name"
-              label="Name"
-              required
-              help="What you call this endpoint: any text."
-              error={submitted ? (nameErr ?? undefined) : undefined}
-            >
-              <Input
-                id="endpoint-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="EU CDN"
-                maxLength={MAX_ENDPOINT_NAME_LENGTH}
-                autoComplete="off"
-                disabled={disabled}
-                aria-invalid={(submitted && !!nameErr) || undefined}
-              />
-            </SettingRow>
-            <SettingRow id="endpoint-description" label="Description" help="What this endpoint is for, for the rest of the team.">
-              <Textarea
-                id="endpoint-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={2}
-                maxLength={MAX_DESCRIPTION_LENGTH}
-                disabled={disabled}
-              />
-            </SettingRow>
-          </SettingsSection>
-
-          </EndpointSettings>
+          <EndpointSettings
+            channel={kind}
+            kind={connKind}
+            onKind={changeKind}
+            kindError={serverErrors.kind}
+            drafts={drafts}
+            onDraft={setDraft}
+            errorOf={(key) => shownErrors[key]}
+            disabled={disabled}
+            idPrefix="endpoint"
+            sectionIdOf={sectionId}
+            general={
+              <>
+                <SettingRow
+                  id="endpoint-name"
+                  label="Name"
+                  required
+                  help="What you call this endpoint: any text."
+                  error={submitted ? (nameErr ?? undefined) : undefined}
+                >
+                  <Input
+                    id="endpoint-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="EU CDN"
+                    maxLength={MAX_ENDPOINT_NAME_LENGTH}
+                    autoComplete="off"
+                    disabled={disabled}
+                    aria-invalid={(submitted && !!nameErr) || undefined}
+                  />
+                </SettingRow>
+                <SettingRow id="endpoint-description" label="Description" help="What this endpoint is for, for the rest of the team.">
+                  <Textarea
+                    id="endpoint-description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={2}
+                    maxLength={MAX_DESCRIPTION_LENGTH}
+                    disabled={disabled}
+                  />
+                </SettingRow>
+              </>
+            }
+          />
         </div>
         </div>
       </div>

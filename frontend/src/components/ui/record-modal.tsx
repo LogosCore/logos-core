@@ -11,9 +11,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { leavesRecordModal } from "@/lib/record-modals"
+import { cn } from "@/lib/utils"
 
 // The frame of the build and endpoint modals (components/layout/
-// record-modals.tsx): near full screen, a header row with the record's title,
+// record-modals.tsx): near full screen (a modal may narrow it with className:
+// the endpoint form's), a header row with the record's title,
 // its actions and a close button, and a body that scrolls. It appears and
 // goes at once: duration-0 zeroes the fade and zoom the other dialogs have.
 //
@@ -46,7 +48,19 @@ export function useCloseGuard(dirty: boolean): () => void {
   return useContext(SavedContext)
 }
 
-export function RecordModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+/** RecordModal's className for a form: as wide as a section list and one column of setting rows. */
+export const RECORD_FORM_WIDTH = "sm:max-w-[min(calc(100%-4rem),64rem)]"
+
+export function RecordModal({
+  onClose,
+  className,
+  children,
+}: {
+  onClose: () => void
+  /** Added to the dialog's own, after them: a max width, say. */
+  className?: string
+  children: ReactNode
+}) {
   const [dirty, setDirty] = useState(false)
   // One navigation let through, set by saved(). Whichever navigation comes
   // next uses it up, so it cannot wait around for a later one.
@@ -75,9 +89,13 @@ export function RecordModal({ onClose, children }: { onClose: () => void; childr
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         showCloseButton={false}
-        // The page behind it blurred, so the record in front is what reads.
-        overlayClassName="backdrop-blur-sm duration-0"
-        className="flex h-[calc(100svh-2rem)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:h-[calc(100svh-4rem)] sm:max-w-[calc(100%-4rem)] max-sm:h-svh max-sm:max-w-none max-sm:rounded-none duration-0"
+        // The page behind it dimmed (not blurred), so the record in front is
+        // what reads: darker in the dark theme, where the page already is.
+        overlayClassName="bg-black/50 duration-0 dark:bg-black/70"
+        className={cn(
+          "flex h-[calc(100svh-2rem)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:h-[calc(100svh-4rem)] sm:max-w-[calc(100%-4rem)] max-sm:h-svh max-sm:max-w-none max-sm:rounded-none duration-0",
+          className,
+        )}
       >
         <RequestCloseContext.Provider value={onClose}>
           <GuardContext.Provider value={setDirty}>

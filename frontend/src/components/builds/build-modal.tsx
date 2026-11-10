@@ -1,4 +1,4 @@
-import { RecordModal } from "@/components/ui/record-modal"
+import { RECORD_FORM_WIDTH, RecordModal } from "@/components/ui/record-modal"
 import { buildEditorCode } from "@/components/layout/record-modal-code"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { useLoaded } from "@/lib/preloadable"
@@ -8,12 +8,13 @@ import { BuildDetails } from "./build-details"
 /**
  * The build modal (components/layout/record-modals.tsx): a build's details,
  * or the form for a new one. Keyed by what it shows, so moving from one to
- * the other (Build again, a build started) starts that one afresh.
+ * the other (Build again, a build started) starts that one afresh. The form
+ * is as wide as itself, as the endpoint form is; the details take the screen.
  */
 export function BuildModal({ modal }: { modal: Extract<RecordModalTarget, { kind: "build" | "new-build" }> }) {
   const { close } = useRecordModals()
   return (
-    <RecordModal onClose={close}>
+    <RecordModal onClose={close} className={modal.kind === "new-build" ? RECORD_FORM_WIDTH : undefined}>
       {modal.kind === "build" ? (
         <BuildDetails key={`build:${modal.id}`} id={modal.id} tab={modal.tab ?? null} />
       ) : (

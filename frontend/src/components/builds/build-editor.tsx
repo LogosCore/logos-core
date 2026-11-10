@@ -52,6 +52,7 @@ import {
   connectionDraft,
   connectionNames,
   defaultCommands,
+  defaultConnectionName,
   evaluateForm,
   factoryKindsByName,
   fillFromEndpoint,
@@ -236,6 +237,18 @@ function Editor({
   const body = useRef<HTMLDivElement>(null)
   // The endpoint picker: adding a connection, or filling the one keyed fill.
   const [picker, setPicker] = useState<{ open: boolean; fill: string | null }>({ open: false, fill: null })
+  // The connections shown open, by key. They start folded, the build's first
+  // ones and those filled from an endpoint alike: a blank one opens, as its
+  // settings are what comes next, and so does one picked in the side list.
+  const [openConnections, setOpenConnections] = useState<ReadonlySet<string>>(() => new Set())
+  const showConnection = (key: string, open: boolean) =>
+    setOpenConnections((prev) => {
+      if (prev.has(key) === open) return prev
+      const next = new Set(prev)
+      if (open) next.add(key)
+      else next.delete(key)
+      return next
+    })
   // Saving the connection keyed key as an endpoint.
   const [saving, setSaving] = useState<{ open: boolean; key: string | null }>({ open: false, key: null })
   const [submitted, setSubmitted] = useState(false)
@@ -350,6 +363,9 @@ function Editor({
     if (!ch) return
     const c = connectionDraft(kind, ch, { moduleName }, target)
     setConnections((cs) => [...cs, ep ? fillFromEndpoint(c, ch, kind, ep, connectionNames(cs)) : c])
+    // A blank one opens: its settings are to be filled in. One from an
+    // endpoint has them, and stays a line.
+    if (!ep) showConnection(c.key, true)
   }
 
   function fillConnection(key: string, ep: EndpointOption) {
@@ -368,10 +384,22 @@ function Editor({
     )
   }
 
+  /**
+   * Opens the connections errs marks, to stay open once fixed: a card shows
+   * its errors open anyway, but would fold again under the hand fixing them.
+   */
+  function openFailing(errs: Record<string, string>) {
+    const keys = form.connections
+      .filter((_, i) => Object.keys(errs).some((k) => k === `connections[${i}]` || k.startsWith(`connections[${i}].`)))
+      .map((c) => c.key)
+    if (keys.length > 0) setOpenConnections((prev) => new Set([...prev, ...keys]))
+  }
+
   async function submit() {
     setSubmitted(true)
     setSaveError(null)
     if (read && !read.ok) setSaveError(`The JSON is not a build: ${read.message}`)
+    openFailing(errors)
     if (hasErrors || readOnly) return
     // From the JSON tab, what it holds as it reads, without a trip through
     // the form's fields.
@@ -399,6 +427,7 @@ function Editor({
     } catch (err) {
       const problems = problemsFromError(err)
       setServerErrors(problems)
+      openFailing(problems)
       setSaveError(
         problems[""] ??
           (problems.persistedSession && `The persisted session: ${problems.persistedSession}`) ??
@@ -490,6 +519,15 @@ function Editor({
           ? "set"
           : null,
     },
+    // Each connection, under them: most of the form once there are some.
+    ...form.connections.map(
+      (c, i): SettingsNavSection => ({
+        id: connectionSectionId(c.key),
+        title: `${i + 1}. ${c.moduleName} · ${c.name.trim() || defaultConnectionName(c.moduleName, i)}`,
+        state: Object.keys(shown).some((k) => k === `connections[${i}]` || k.startsWith(`connections[${i}].`)) ? "error" : null,
+        sub: true,
+      }),
+    ),
     {
       id: sectionId(FAILOVER),
       title: FAILOVER,
@@ -505,6 +543,13 @@ function Editor({
     navSections.map((s) => s.id),
     body,
   )
+  // A connection picked in the side list opens, then is scrolled to once open.
+  const pickSection = (id: string) => {
+    const c = form.connections.find((x) => connectionSectionId(x.key) === id)
+    if (!c) return goTo(id)
+    showConnection(c.key, true)
+    requestAnimationFrame(() => goTo(id))
+  }
 
   return (
     <BuildFilesContext.Provider value={filesCtx}>
@@ -522,13 +567,13 @@ function Editor({
         >
         <RecordModalHeader>
           {/* The factory's icon as large as in the builds table, beside the
-              title and, under it, what builds. */}
+              title and, under it, the factory and how many of it run. */}
           <div className="flex min-w-0 items-center gap-3">
             <ModuleIcon type="factory" icon={kind.icon} className="size-9" />
             <div className="flex min-w-0 flex-col">
               <RecordModalTitle>New build</RecordModalTitle>
               <span className="truncate text-sm text-muted-foreground">
-                <span className="font-mono">{kind.name}</span> · schema v{kind.version} · {kind.instances} running
+                <span className="font-mono">{kind.name}</span> factory · {kind.instances} running
                 {persisted.kind === "same" && <PersistedSessionNote id={persisted.id} />}
                 {persisted.kind === "new" && <span className="text-foreground"> · a new persisted session</span>}
               </span>
@@ -562,9 +607,9 @@ function Editor({
         <TabsContent value="form" className="flex min-h-0 flex-col">
         <RecordModalBody ref={body}>
         <div className="flex gap-10 px-4 py-6">
-        <SettingsNav sections={navSections} active={active} onPick={goTo} />
+        <SettingsNav sections={navSections} active={active} onPick={pickSection} />
         <div className="@container/settings min-w-0 flex-1">
-        <div className="flex max-w-3xl flex-col gap-8 @6xl/settings:max-w-[80rem]">
+        <div className="flex flex-col gap-8">
           {saveError && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>}
 
           <SettingsSection id={sectionId(WHAT_TO_BUILD)} title={WHAT_TO_BUILD}>
@@ -712,7 +757,7 @@ function Editor({
           ))}
 
           <section id={sectionId(CONNECTIONS)} className="scroll-mt-6" aria-labelledby={`${sectionId(CONNECTIONS)}-title`}>
-            <h2 id={`${sectionId(CONNECTIONS)}-title`} className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <h2 id={`${sectionId(CONNECTIONS)}-title`} className="mb-3 border-b pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {CONNECTIONS}
             </h2>
             <div className="flex flex-col gap-3">
@@ -728,6 +773,9 @@ function Editor({
                 return (
                   <ConnectionCard
                     key={c.key}
+                    id={connectionSectionId(c.key)}
+                    open={openConnections.has(c.key)}
+                    onOpenChange={(open) => showConnection(c.key, open)}
                     operationId={operationId}
                     index={i}
                     count={form.connections.length}
@@ -736,7 +784,6 @@ function Editor({
                     kinds={usableKinds(target, ch, c.moduleName)}
                     channel={ch}
                     channelIcon={channelIcons.get(c.moduleName)}
-                    settings={input.connections[i]?.settings ?? {}}
                     errors={shown}
                     disabled={disabled}
                     onKind={(k) =>
@@ -873,6 +920,11 @@ function snapshotOf(form: Form): string {
 }
 
 /** The form's own sections, around the factory's groups of fields. */
+/** A connection's card, as the side list goes to it. */
+function connectionSectionId(key: string): string {
+  return `section-${key}`
+}
+
 const WHAT_TO_BUILD = "What to build"
 const COMMANDS = "Commands"
 const CONNECTIONS = "Connections"

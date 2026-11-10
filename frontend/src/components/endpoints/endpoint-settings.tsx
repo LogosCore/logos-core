@@ -5,11 +5,16 @@ import { groupByField, initialDraft, type Draft } from "@/components/modules/man
 import { ConnectionKindPicker } from "./connection-kind-picker"
 import { connectionKind, type Kind } from "./endpoint-values"
 
+/** The first section of a connection's settings: the caller's rows, then the kind. */
+export const GENERAL_SECTION = "General"
+
 // A connection's settings as one form, the same wherever they are set: the
-// endpoint modal, and each connection of a build. The kind first (a switch,
-// its flow played under it), then the caller's own rows (children: a name,
-// a description), then the channel's settings for that kind, a section per
-// group. Values live with the caller, by field key.
+// endpoint modal, and each connection of a build. General first: the
+// caller's own rows (a name, a description), then the kind, which decides
+// what follows; then the channel's settings for that kind, a section per
+// group. Values live with the caller, by field key. Inside a build's
+// connection (sub) the sections are a level down, General untitled: the
+// connection's header says what they belong to.
 
 export function EndpointSettings({
   channel,
@@ -24,7 +29,8 @@ export function EndpointSettings({
   disabled,
   idPrefix,
   sectionIdOf,
-  children,
+  general,
+  sub = false,
 }: {
   channel: Kind
   /** The connection kind whose settings these are. */
@@ -42,27 +48,31 @@ export function EndpointSettings({
   disabled: boolean
   /** Prefixes the controls' ids, unique on the page. */
   idPrefix: string
-  /** A group's section id, for a side list to jump to; none without. */
-  sectionIdOf?: (group: string) => string
-  /** The caller's own rows, between the kind and the settings. */
-  children?: ReactNode
+  /** A section's id, for a side list to jump to; none without. */
+  sectionIdOf?: (title: string) => string
+  /** The caller's own rows in General, above the kind. */
+  general?: ReactNode
+  /** Sections a level down, inside a group of their own (a build's connection). */
+  sub?: boolean
 }) {
   const fields = connectionKind(channel, kind)?.fields ?? []
   return (
     <>
-      <ConnectionKindPicker
-        channel={channel}
-        value={kind}
-        onChange={onKind}
-        disabled={disabled}
-        error={kindError}
-        usable={usable}
-        why={why}
-        idPrefix={idPrefix}
-      />
-      {children}
+      <SettingsSection id={sectionIdOf?.(GENERAL_SECTION)} title={sub ? undefined : GENERAL_SECTION} sub={sub}>
+        {general}
+        <ConnectionKindPicker
+          channel={channel}
+          value={kind}
+          onChange={onKind}
+          disabled={disabled}
+          error={kindError}
+          usable={usable}
+          why={why}
+          idPrefix={idPrefix}
+        />
+      </SettingsSection>
       {groupByField(fields, (f) => f).map((g) => (
-        <SettingsSection key={g.group} id={sectionIdOf?.(g.group)} title={g.group}>
+        <SettingsSection key={g.group} id={sectionIdOf?.(g.group)} title={g.group} sub={sub}>
           {g.items.map((f) => {
             const id = `${idPrefix}-${f.key}`
             const error = errorOf(f.key)

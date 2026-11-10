@@ -6,6 +6,8 @@ export interface SettingsNavSection {
   title: string
   /** A marker: something wrong in it, or values set. */
   state: "error" | "set" | null
+  /** One of the section above's parts (a build's connection), indented under it. */
+  sub?: boolean
 }
 
 /**
@@ -31,15 +33,17 @@ export function SettingsNav({
             <button
               type="button"
               onClick={() => onPick(s.id)}
+              title={s.sub ? s.title : undefined}
               className={cn(
-                "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm",
+                "flex w-full min-w-0 items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm",
+                s.sub && "py-1 pl-5 text-xs",
                 active === s.id ? "bg-foreground/10 font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {s.title}
+              <span className="truncate">{s.title}</span>
               {s.state && (
                 <span
-                  className={cn("size-1.5 rounded-full", s.state === "error" ? "bg-destructive" : "bg-foreground/50")}
+                  className={cn("size-1.5 shrink-0 rounded-full", s.state === "error" ? "bg-destructive" : "bg-foreground/50")}
                   aria-label={s.state === "error" ? "has errors" : "has values"}
                 />
               )}

@@ -1,14 +1,17 @@
 import { useRef, useState, type KeyboardEvent } from "react"
+import { ChevronRightIcon } from "lucide-react"
+import { SettingRow } from "@/components/ui/settings-rows"
 import { cn } from "@/lib/utils"
 import { ConnectionKindDiagram } from "./connection-kind-diagram"
-import { KIND_FLOWS, KNOWN_KINDS } from "./connection-kind-flows"
+import { KIND_FLOWS } from "./connection-kind-flows"
 import { kindLabels, kindNames, type Kind } from "./endpoint-values"
 
-// A connection's kind, above the rest of its settings (it decides which
-// they are): a segmented switch of the kinds, those that cannot be picked
-// shown and disabled with the reason; under it the picked kind's flow,
-// played, its steps lit in time with it. The endpoint form and a build's
-// connection both use it (EndpointSettings).
+// A connection's kind, as a settings row (the rest of its settings follow
+// from it): a segmented switch of the kinds the channel carries, those that
+// cannot be picked here disabled with the reason; under it one sentence on
+// the picked kind and "How it works", which opens its flow, played, its steps
+// lit in time with it, at a size that does not grow with the form. The
+// endpoint form and a build's connection both use it (EndpointSettings).
 
 export function ConnectionKindPicker({
   channel,
@@ -32,13 +35,14 @@ export function ConnectionKindPicker({
   idPrefix?: string
 }) {
   const carried = kindNames(channel)
-  // The protocol's kinds, then any other the channel names.
-  const options = [...KNOWN_KINDS, ...carried.filter((k) => !KNOWN_KINDS.includes(k))]
-  const usable = options.filter((k) => carried.includes(k) && (!allowed || allowed.includes(k)))
+  // The channel's kinds, and the one picked when the channel no longer carries it.
+  const options = value && !carried.includes(value) ? [value, ...carried] : carried
+  const usable = carried.filter((k) => !allowed || allowed.includes(k))
   const reason = (k: string) =>
-    !carried.includes(k) ? `The ${channel.name} channel does not carry it` : usable.includes(k) ? undefined : (why?.(k) ?? "Not usable here")
-  const titleId = `${idPrefix}-kind-title`
+    !carried.includes(k) ? `The ${channel.name} channel no longer carries it` : usable.includes(k) ? undefined : (why?.(k) ?? "Not usable here")
+  const id = `${idPrefix}-kind`
   const buttons = useRef(new Map<string, HTMLButtonElement>())
+  const [explained, setExplained] = useState(false)
   const [step, setStep] = useState<number | null>(null)
   const flow = KIND_FLOWS[value]
 
@@ -52,14 +56,47 @@ export function ConnectionKindPicker({
   }
 
   return (
-    <section aria-labelledby={titleId} className="flex flex-col gap-3">
-      <h2 id={titleId} className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Kind
-      </h2>
+    <SettingRow
+      id={id}
+      label="Kind"
+      error={error}
+      hint={
+        flow && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-muted-foreground">
+              {flow.summary}{" "}
+              <button
+                type="button"
+                className="inline-flex items-center gap-0.5 font-medium text-foreground/80 hover:text-foreground"
+                aria-expanded={explained}
+                aria-controls={`${id}-flow`}
+                onClick={() => setExplained((on) => !on)}
+              >
+                How it works
+                <ChevronRightIcon className={cn("size-3 transition-transform", explained && "rotate-90")} />
+              </button>
+            </p>
+            {explained && (
+              <div id={`${id}-flow`} className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3">
+                <ConnectionKindDiagram key={value} flow={flow} kind={value} onStep={setStep} className="max-w-sm" />
+                <ol className="flex list-decimal flex-col gap-1 pl-4 text-xs text-muted-foreground">
+                  {flow.steps.map((s, i) => (
+                    <li key={s} className={cn("transition-colors", i === step && "text-foreground")}>
+                      {s}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
+        )
+      }
+    >
       <div
+        id={id}
         role="radiogroup"
-        aria-labelledby={titleId}
-        className="flex flex-wrap gap-1 self-start rounded-lg border bg-muted/40 p-1"
+        aria-label="Kind"
+        className="flex flex-wrap gap-0.5 self-start rounded-lg border bg-muted/40 p-0.5"
         onKeyDown={onKeyDown}
       >
         {options.map((k) => {
@@ -77,38 +114,19 @@ export function ConnectionKindPicker({
               aria-checked={on}
               tabIndex={on ? 0 : -1}
               disabled={disabled || off}
-              title={reason(k) ?? kindLabels[k]}
+              title={reason(k) ?? `${kindLabels[k] ?? k} (${k})`}
               onClick={() => !on && onChange(k)}
               className={cn(
-                "flex flex-col items-start rounded-md px-3 py-1.5 text-left transition-colors disabled:cursor-not-allowed",
-                on ? "bg-card shadow-sm ring-1 ring-border" : "hover:bg-card/60",
+                "h-6.5 rounded-md px-3 text-sm transition-colors disabled:cursor-not-allowed",
+                on ? "bg-card shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-card/60 hover:text-foreground",
                 off && "opacity-40",
               )}
             >
-              <span className="text-sm">{KIND_FLOWS[k]?.label ?? k}</span>
-              <span className="font-mono text-xs text-muted-foreground">{k}</span>
+              {KIND_FLOWS[k]?.label ?? k}
             </button>
           )
         })}
       </div>
-      {flow && (
-        <div className="grid items-center gap-4 rounded-xl border bg-card p-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-          <ConnectionKindDiagram key={value} flow={flow} kind={value} onStep={setStep} />
-          <div className="flex flex-col gap-1.5">
-            <h3 className="text-sm font-medium">
-              {flow.label}: {flow.sub}
-            </h3>
-            <ol className="flex list-decimal flex-col gap-1 pl-4 text-sm text-muted-foreground">
-              {flow.steps.map((s, i) => (
-                <li key={s} className={cn("transition-colors", i === step && "text-foreground")}>
-                  {s}
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-      )}
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </section>
+    </SettingRow>
   )
 }
