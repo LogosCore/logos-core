@@ -113,6 +113,42 @@ export function recordModalKey(modal: RecordModal | null): string {
   return modal ? withRecordModal(new URLSearchParams(), modal).toString() : ""
 }
 
+/** Whether a and b show the same record: another tab of a build or a session is still it. */
+export function sameRecord(a: RecordModal, b: RecordModal): boolean {
+  const record = (m: RecordModal): RecordModal => (m.kind === "build" || m.kind === "session" ? { kind: m.kind, id: m.id } : m)
+  return recordModalKey(record(a)) === recordModalKey(record(b))
+}
+
+/**
+ * How a modal comes to the URL: replace, in place of the current entry, or
+ * in an entry of its own; inApp, whether an entry of the app's is under it,
+ * for closing it to go back to (a modal opened from a link has none).
+ */
+export interface RecordModalMove {
+  replace: boolean
+  inApp: boolean
+}
+
+/**
+ * Opening next with current open (null: none), whose entry has one of the
+ * app's under it when currentInApp. Over the page, or over another record
+ * (a session's build, a build's target's session), an entry of its own:
+ * closing it, or Back, returns to what it was opened from. Another tab of
+ * the same record takes its entry's place, as it came.
+ */
+export function openMove(current: RecordModal | null, next: RecordModal, currentInApp: boolean): RecordModalMove {
+  if (current !== null && sameRecord(current, next)) return { replace: true, inApp: currentInApp }
+  return { replace: false, inApp: true }
+}
+
+/**
+ * Moving the open modal on to next, in its place (a new build's form to
+ * the build it started): closing next returns where closing current would.
+ */
+export function replaceMove(current: RecordModal | null, currentInApp: boolean): RecordModalMove {
+  return current === null ? { replace: false, inApp: true } : { replace: true, inApp: currentInApp }
+}
+
 interface Place {
   pathname: string
   search: string

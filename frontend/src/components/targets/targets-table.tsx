@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { ExternalLinkIcon, PencilIcon, PlugIcon, RefreshCwIcon, Trash2Icon, UnplugIcon } from "lucide-react"
+import { ExternalLinkIcon, PencilIcon, PlugIcon, RefreshCwIcon, SquareTerminalIcon, Trash2Icon, UnplugIcon } from "lucide-react"
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
 import { ContextMenuRow } from "@/components/ui/context-menu-row"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
@@ -7,6 +7,7 @@ import { VirtualizedDataTable } from "@/components/ui/virtualized-data-table"
 import { useNow } from "@/hooks/use-now"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { formatAgo } from "@/components/minion-sessions/sessions-layout"
+import { useInteractWithSession } from "@/components/minion-sessions/use-interact"
 import { TargetStateBadge } from "./target-state-badge"
 import { TARGET_POLICY_LABEL, isPersistent, problemsText, shownState, type Target } from "./target-values"
 
@@ -14,8 +15,9 @@ const GRID_COLS = "grid-cols-[minmax(0,1.8fr)_minmax(0,1.4fr)_minmax(0,0.6fr)_mi
 
 /**
  * Targets, newest first: where each minion is, what the latest call to it came
- * to, its session, and its calls. A row opens its session; its menu calls it
- * now, edits it or removes it.
+ * to, its session, and its calls. A row opens its session; its menu
+ * interacts with that session (on the Sessions page), calls the target now,
+ * edits it or removes it.
  */
 export function TargetsTable({
   targets,
@@ -49,6 +51,8 @@ export function TargetsTable({
   const modals = useRecordModals()
   const now = useNow()
   const openSession = (t: Target) => t.sessionId && modals.open({ kind: "session", id: t.sessionId })
+  const interact = useInteractWithSession()
+  const interactWith = (t: Target) => t.sessionId && interact({ id: t.sessionId, operationId: t.operationId })
 
   return (
     <VirtualizedDataTable
@@ -77,10 +81,16 @@ export function TargetsTable({
           menu={
             <>
               {t.sessionId && (
-                <ContextMenuItem onClick={() => openSession(t)}>
-                  <ExternalLinkIcon className="size-4" />
-                  Open session
-                </ContextMenuItem>
+                <>
+                  <ContextMenuItem onClick={() => interactWith(t)}>
+                    <SquareTerminalIcon className="size-4" />
+                    Interact
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => openSession(t)}>
+                    <ExternalLinkIcon className="size-4" />
+                    Open session
+                  </ContextMenuItem>
+                </>
               )}
               {canWrite && (
                 <>

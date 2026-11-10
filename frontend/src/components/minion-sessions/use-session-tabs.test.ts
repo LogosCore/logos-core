@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { load, save } from "./use-session-tabs"
+import { load, openSessionTab, save } from "./use-session-tabs"
 
 const KEY = "logos.sessionTabs.op1"
 
@@ -31,6 +31,26 @@ describe("session tabs storage", () => {
     save("op1", { ids: [], active: null })
     localStorage.setItem(KEY, JSON.stringify({ ids: ["y"], active: "y" }))
     expect(load("op1")).toEqual({ ids: [], active: null })
+  })
+})
+
+describe("opening a session's tab from elsewhere", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", memoryStorage())
+    vi.stubGlobal("sessionStorage", memoryStorage())
+  })
+
+  it("adds it after the open ones, in front, kept for the Sessions page to find", () => {
+    // Its own operation: what the page keeps is by operation, for the page's life.
+    save("op-interact", { ids: ["a"], active: "a" })
+    openSessionTab("op-interact", "b")
+    expect(load("op-interact")).toEqual({ ids: ["a", "b"], active: "b" })
+  })
+
+  it("brings one already open to the front", () => {
+    save("op-again", { ids: ["a", "b"], active: "b" })
+    openSessionTab("op-again", "a")
+    expect(load("op-again")).toEqual({ ids: ["a", "b"], active: "a" })
   })
 })
 

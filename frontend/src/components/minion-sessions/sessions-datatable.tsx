@@ -25,6 +25,7 @@ import {
   ArrowRightIcon,
   ArrowUpIcon,
   Columns3Icon,
+  CrosshairIcon,
   EyeOffIcon,
   FilterIcon,
   FilterXIcon,
@@ -87,6 +88,7 @@ import {
   useSetMinionSessionMark,
   useSetMinionSessionsMark,
 } from "@/graphql/hooks/minion-sessions"
+import { useBindConnections } from "@/graphql/hooks/minion-targets"
 import { Checkbox } from "@/components/ui/checkbox"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { toast } from "sonner"
@@ -1094,7 +1096,11 @@ function FilterChips({
   )
 }
 
-/** A session row's menu: build a minion that comes back to this session, copy its id. */
+/**
+ * A session row's menu: interact with it, its details (the session's, its
+ * build's, and its build's targets where the build has a bind connection),
+ * mark it, file it, build a minion that comes back to it.
+ */
 function SessionMenu({
   session: s,
   canWrite,
@@ -1138,6 +1144,8 @@ function SessionMenu({
 }) {
   const modals = useRecordModals()
   const archive = useSetMinionSessionArchived()
+  // Fetched as the menu opens (it mounts then), so Details knows by the time it is pointed at.
+  const hasTargets = (useBindConnections(s.buildId).data ?? []).length > 0
   const why = !canWrite
     ? "Needs operator in this operation"
     : !persistable
@@ -1179,6 +1187,12 @@ function SessionMenu({
             <HammerIcon />
             Build details
           </ContextMenuItem>
+          {hasTargets && (
+            <ContextMenuItem onClick={() => modals.open({ kind: "build", id: s.buildId, tab: "targets" })}>
+              <CrosshairIcon />
+              Targets
+            </ContextMenuItem>
+          )}
         </ContextMenuSubContent>
       </ContextMenuSub>
       <ContextMenuSeparator />
@@ -1242,11 +1256,6 @@ function SessionMenu({
       >
         {s.archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
         {s.archived ? "Restore" : "Archive"}
-      </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem onClick={() => void copyToClipboard(s.id, "session id")}>
-        <CopyIcon />
-        Copy session id
       </ContextMenuItem>
       <ContextMenuSeparator />
       <TableMenuItems {...table} />

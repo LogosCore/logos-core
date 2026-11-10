@@ -1,5 +1,13 @@
 import { useLocation, useNavigate, useSearchParams } from "react-router"
-import { recordModalOf, searchOf, withRecordModal, type RecordModal } from "@/lib/record-modals"
+import {
+  openMove,
+  recordModalOf,
+  replaceMove,
+  searchOf,
+  withRecordModal,
+  type RecordModal,
+  type RecordModalMove,
+} from "@/lib/record-modals"
 
 /**
  * History state of a record modal's entry: inApp is set when the app opened
@@ -16,10 +24,11 @@ function openedInApp(state: unknown): boolean {
 }
 
 /**
- * Opens and closes the build and endpoint modals (lib/record-modals.ts).
- * Opening one over a page adds a history entry, so Back closes it; opening
- * one from another replaces that one's entry, so a single Back still returns
- * to the page.
+ * Opens and closes the record modals (lib/record-modals.ts). Opening one
+ * over a page, or over another record (a session's build), adds a history
+ * entry: closing it, or Back, returns to what it was opened from. Another
+ * tab of the same record replaces its entry, and replace() moves a modal on
+ * to what it made in its place.
  */
 export function useRecordModals() {
   const navigate = useNavigate()
@@ -27,10 +36,10 @@ export function useRecordModals() {
   const [params] = useSearchParams()
   const current = recordModalOf(params)
 
-  const go = (modal: RecordModal | null, replace: boolean, state: object) =>
+  const go = (modal: RecordModal | null, move: RecordModalMove, extraState: object) =>
     navigate(
       { pathname: location.pathname, search: searchOf(withRecordModal(params, modal)), hash: location.hash },
-      { replace, state },
+      { replace: move.replace, state: { ...extraState, inApp: move.inApp } },
     )
 
   return {
@@ -38,14 +47,17 @@ export function useRecordModals() {
     current,
     /** Opens modal; extraState rides along in the history entry (an endpoint import's values). */
     open(modal: RecordModal, extraState: object = {}) {
-      const inApp = current === null || openedInApp(location.state)
-      go(modal, current !== null, { ...extraState, inApp })
+      go(modal, openMove(current, modal, openedInApp(location.state)), extraState)
+    },
+    /** Puts modal in the open one's place: a form moving on to what it made. */
+    replace(modal: RecordModal, extraState: object = {}) {
+      go(modal, replaceMove(current, openedInApp(location.state)), extraState)
     },
     /** Closes the open modal; nothing when none is open. */
     close() {
       if (current === null) return
       if (openedInApp(location.state)) navigate(-1)
-      else go(null, true, {})
+      else go(null, { replace: true, inApp: false }, {})
     },
   }
 }

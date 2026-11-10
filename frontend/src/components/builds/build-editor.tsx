@@ -191,7 +191,7 @@ function Editor({
     const doc = formDocument(kind, channels, f)
     return persistedOptions ? { ...doc, persisted } : doc
   }
-  const { open } = useRecordModals()
+  const { replace } = useRecordModals()
   const requestClose = useRequestClose()
   const { canWrite, loading: roleLoading } = useCanBuild(operationId)
   const readOnly = !roleLoading && !canWrite
@@ -423,7 +423,8 @@ function Editor({
       })
       toast.success("Build queued")
       saved()
-      open({ kind: "build", id: res.createBuild.id })
+      // In the form's place: closing the build goes back where the form would.
+      replace({ kind: "build", id: res.createBuild.id })
     } catch (err) {
       const problems = problemsFromError(err)
       setServerErrors(problems)

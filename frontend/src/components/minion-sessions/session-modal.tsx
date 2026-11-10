@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type ReactNode } from "react"
-import { MonitorDotIcon } from "lucide-react"
+import { MonitorDotIcon, SquareTerminalIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CardColumns } from "@/components/ui/card-columns"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
@@ -34,12 +34,14 @@ import { MaxTasksValue } from "./max-tasks"
 import { FeedbackCounts } from "./feedback-parts"
 import { FeedbackView } from "./feedback-view"
 import { IdentityView } from "./identity-view"
+import { useInteractWithSession } from "./use-interact"
 import { identityLabel } from "./identity-values"
 
 // One minion session (?session=<id>[&sessionTab=]), over any page, laid out
 // as a build's details are: its header says which session it is (its number,
 // mark and description) and how it stands (where it runs, live, late or
-// lost, last seen), from every tab; the tabs under it: Overview, what it is
+// lost, last seen), from every tab, and Interact, which takes it to the
+// Sessions page's work pane; the tabs under it: Overview, what it is
 // and where it runs, in cards; Connections, how its minion reaches core;
 // Feedback; Identity; JSON, its record as the API gives it. Live where the
 // page keeps sessions live (the Sessions page): the list's updates reach the
@@ -78,6 +80,7 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
   const icons = useFactoryIcons()
   const json = useMemo(() => formatJson(s), [s])
   const connections = useMinionSessionConnections(s.id).data?.minionSession?.connections.length ?? 0
+  const interact = useInteractWithSession()
   // Fetched once the modal has settled, so the JSON tab opens at once.
   useEffect(() => whenIdle(preloadJsonEditor), [])
   return (
@@ -132,6 +135,10 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
             <SessionHeadline s={s} />
           </div>
         </div>
+        <Button onClick={() => interact(s)}>
+          <SquareTerminalIcon />
+          Interact
+        </Button>
       </RecordModalHeader>
 
       <TabsContent value="overview" className="flex min-h-0 flex-col">

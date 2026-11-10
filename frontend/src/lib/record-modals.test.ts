@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest"
 import {
   leavesRecordModal,
+  openMove,
   recordModalKey,
   recordModalOf,
+  replaceMove,
+  sameRecord,
   searchOf,
   withRecordModal,
   type RecordModal,
@@ -112,5 +115,37 @@ describe("searchOf", () => {
   it("is ?query, or nothing", () => {
     expect(searchOf(params("a=1"))).toBe("?a=1")
     expect(searchOf(params(""))).toBe("")
+  })
+})
+
+describe("opening a modal over another", () => {
+  const session: RecordModal = { kind: "session", id: "s-1" }
+  const build: RecordModal = { kind: "build", id: "b-1" }
+
+  it("knows another tab of a record is still it", () => {
+    expect(sameRecord(session, { kind: "session", id: "s-1", tab: "connections" })).toBe(true)
+    expect(sameRecord(build, { kind: "build", id: "b-1", tab: "targets" })).toBe(true)
+    expect(sameRecord(session, { kind: "session", id: "s-2" })).toBe(false)
+    expect(sameRecord(build, { kind: "new-build", factory: "bob", from: "b-1" })).toBe(false)
+  })
+
+  it("gives another record an entry of its own, so closing it returns to the one it was opened from", () => {
+    // A session's build, a build's target's session: over the open one.
+    expect(openMove(session, build, true)).toEqual({ replace: false, inApp: true })
+    expect(openMove(build, session, false)).toEqual({ replace: false, inApp: true })
+    // Over the page.
+    expect(openMove(null, session, false)).toEqual({ replace: false, inApp: true })
+  })
+
+  it("puts another tab in the record's entry, as the record came", () => {
+    expect(openMove(session, { kind: "session", id: "s-1", tab: "json" }, true)).toEqual({ replace: true, inApp: true })
+    // Opened from a link: no entry of the app's under it, still.
+    expect(openMove(build, { kind: "build", id: "b-1", tab: "pipeline" }, false)).toEqual({ replace: true, inApp: false })
+  })
+
+  it("moves a form on to what it made in its place", () => {
+    expect(replaceMove({ kind: "new-build", factory: "bob", from: null }, true)).toEqual({ replace: true, inApp: true })
+    expect(replaceMove({ kind: "new-build", factory: "bob", from: null }, false)).toEqual({ replace: true, inApp: false })
+    expect(replaceMove(null, false)).toEqual({ replace: false, inApp: true })
   })
 })
