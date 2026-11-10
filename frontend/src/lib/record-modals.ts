@@ -17,9 +17,9 @@ export type BuildTab = "overview" | "json" | "pipeline" | "connections" | "comma
 const BUILD_TABS: readonly BuildTab[] = ["overview", "json", "pipeline", "connections", "commands", "targets"]
 
 /** A session modal's tabs (?sessionTab=); without one, its overview. */
-export type SessionTab = "overview" | "feedback" | "identity" | "json"
+export type SessionTab = "overview" | "connections" | "feedback" | "identity" | "json"
 
-const SESSION_TABS: readonly SessionTab[] = ["overview", "feedback", "identity", "json"]
+const SESSION_TABS: readonly SessionTab[] = ["overview", "connections", "feedback", "identity", "json"]
 
 /** The modal the URL opens. */
 export type RecordModal =

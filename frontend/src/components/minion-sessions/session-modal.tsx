@@ -6,6 +6,8 @@ import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { IdRows, InfoCard, LabelRow, NoteRow } from "@/components/ui/info-card"
 import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
 import {
+  RECORD_TABS_LIST,
+  RECORD_TABS_TRIGGER,
   RecordModal,
   RecordModalBody,
   RecordModalHeader,
@@ -18,7 +20,7 @@ import { KindName, ModuleIcon } from "@/components/modules/module-icon"
 import { MarkIcon } from "./mark-icon"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { useFactoryIcons } from "@/graphql/hooks/builds"
-import { useMinionSession } from "@/graphql/hooks/minion-sessions"
+import { useMinionSession, useMinionSessionConnections } from "@/graphql/hooks/minion-sessions"
 import { useNow } from "@/hooks/use-now"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { formatJson } from "@/lib/json-edit"
@@ -34,10 +36,14 @@ import { FeedbackView } from "./feedback-view"
 import { IdentityView } from "./identity-view"
 import { identityLabel } from "./identity-values"
 
-// One minion session (?session=<id>[&sessionTab=]), over any page: Overview,
-// what it is and where it runs, in cards; JSON, its record as the API gives
-// it. Live where the page keeps sessions live (the Sessions page): the list's
-// updates reach the session's own query too.
+// One minion session (?session=<id>[&sessionTab=]), over any page, laid out
+// as a build's details are: its header says which session it is (its number,
+// mark and description) and how it stands (where it runs, live, late or
+// lost, last seen), from every tab; the tabs under it: Overview, what it is
+// and where it runs, in cards; Connections, how its minion reaches core;
+// Feedback; Identity; JSON, its record as the API gives it. Live where the
+// page keeps sessions live (the Sessions page): the list's updates reach the
+// session's own query too.
 
 type Session = MinionSessionFieldsFragment
 
@@ -71,38 +77,60 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
   const { open } = useRecordModals()
   const icons = useFactoryIcons()
   const json = useMemo(() => formatJson(s), [s])
+  const connections = useMinionSessionConnections(s.id).data?.minionSession?.connections.length ?? 0
   // Fetched once the modal has settled, so the JSON tab opens at once.
   useEffect(() => whenIdle(preloadJsonEditor), [])
   return (
     <Tabs
       value={tab}
       onValueChange={(v) => {
-        if (v === "overview" || v === "feedback" || v === "identity" || v === "json") open({ kind: "session", id: s.id, tab: v })
+        if (v === "overview" || v === "connections" || v === "feedback" || v === "identity" || v === "json") {
+          open({ kind: "session", id: s.id, tab: v })
+        }
       }}
       className="min-h-0 flex-1 gap-0"
     >
-      <RecordModalHeader>
-        <div className="flex min-w-0 items-center gap-3">
-          <ModuleIcon type="factory" icon={icons.get(s.moduleName)} className="size-9" />
-          <RecordModalTitle>
-            <span className="inline-flex items-center gap-2">
-              {s.state === "RESERVED" ? "Reserved session" : `Session ${s.number}`}
-              {(s.mark?.icon || s.mark?.emoji) && <MarkIcon icon={s.mark.icon} emoji={s.mark.emoji} size={18} />}
-            </span>
-          </RecordModalTitle>
-          {s.archived && <Badge>Archived</Badge>}
-          {s.state === "CLOSED" && <Badge>Closed</Badge>}
-        </div>
-        <div className="flex items-center gap-2 sm:ml-auto">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="feedback">
+      <RecordModalHeader
+        below={
+          <TabsList className={RECORD_TABS_LIST}>
+            <TabsTrigger value="overview" className={RECORD_TABS_TRIGGER}>
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="connections" className={RECORD_TABS_TRIGGER}>
+              Connections
+              {connections > 0 && <span className="text-xs text-muted-foreground tabular-nums">{connections}</span>}
+            </TabsTrigger>
+            <TabsTrigger value="feedback" className={RECORD_TABS_TRIGGER}>
               Feedback
               <FeedbackCounts errors={s.feedbackErrors} warnings={s.feedbackWarnings} className="text-xs" />
             </TabsTrigger>
-            <TabsTrigger value="identity">Identity</TabsTrigger>
-            <TabsTrigger value="json">JSON</TabsTrigger>
+            <TabsTrigger value="identity" className={RECORD_TABS_TRIGGER}>
+              Identity
+            </TabsTrigger>
+            <TabsTrigger value="json" className={RECORD_TABS_TRIGGER}>
+              JSON
+            </TabsTrigger>
           </TabsList>
+        }
+      >
+        {/* The factory's icon, beside the session's number, mark and
+            description and, under them, where it runs and how it stands. */}
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <ModuleIcon type="factory" icon={icons.get(s.moduleName)} className="size-9" />
+          <div className="flex min-w-0 flex-col">
+            <RecordModalTitle>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="shrink-0">{s.state === "RESERVED" ? "Reserved session" : `Session ${s.number}`}</span>
+                {(s.mark?.icon || s.mark?.emoji) && <MarkIcon icon={s.mark.icon} emoji={s.mark.emoji} size={18} />}
+                {s.description && (
+                  <span className="truncate font-normal" title={s.description}>
+                    · {s.description}
+                  </span>
+                )}
+              </span>
+            </RecordModalTitle>
+            <SessionHeadline s={s} />
+          </div>
         </div>
       </RecordModalHeader>
 
@@ -112,12 +140,19 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
             <SessionCard s={s} />
             <HostCard s={s} />
             <BuildCard s={s} onOpenBuild={() => open({ kind: "build", id: s.buildId })} icons={icons} />
-            <ConnectionsCard s={s} />
-            {s.connChanges.length > 0 && <ConnectionChangesCard s={s} />}
             <AddressesCard s={s} />
-            <PeersCard s={s} />
             {s.restarts.length > 0 && <RestartsCard s={s} />}
             {extras(s).length > 0 && <ExtrasCard s={s} />}
+          </CardColumns>
+        </RecordModalBody>
+      </TabsContent>
+
+      <TabsContent value="connections" className="flex min-h-0 flex-col">
+        <RecordModalBody>
+          <CardColumns className="p-4">
+            <ConnectionsCard s={s} />
+            <PeersCard s={s} />
+            {s.connChanges.length > 0 && <ConnectionChangesCard s={s} />}
           </CardColumns>
         </RecordModalBody>
       </TabsContent>
@@ -147,8 +182,48 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
 /** The JSON tab only shows the session: nothing it could change. */
 function noChange() {}
 
-function Badge({ children }: { children: ReactNode }) {
-  return <span className="rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground">{children}</span>
+function Badge({ children, className }: { children: ReactNode; className?: string }) {
+  return <span className={cn("rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground", className)}>{children}</span>
+}
+
+/** The process's user as the session shows it: domain\user where the domain is apart. */
+function userOf(s: Session): string | null {
+  return s.user ? (s.domain && !s.user.includes("\\") ? `${s.domain}\\${s.user}` : s.user) : null
+}
+
+/** How a session stands, as the badge by its last seen says it. */
+const STANDING: Record<string, { label: string; className: string }> = {
+  live: { label: "Live", className: "border-emerald-600/40 text-emerald-600 dark:text-emerald-400" },
+  late: { label: "Late", className: "border-amber-600/40 text-amber-600 dark:text-amber-400" },
+  lost: { label: "Lost", className: "border-red-600/40 text-red-600 dark:text-red-400" },
+}
+
+/**
+ * Under the session's title: where it runs (host, user, OS), how it stands
+ * (live, late or lost by its schedule, or connected; closed, reserved,
+ * archived) and when it was last seen, ticking as the table's column does.
+ */
+function SessionHeadline({ s }: { s: Session }) {
+  const now = useNow(1_000)
+  const standing = s.connected ? "live" : lateness(s, now)
+  const where = [s.host || "unknown host", userOf(s), platformLabel(`${s.os}/${s.arch}`)].filter(Boolean).join(" · ")
+  const ago = s.lastSeenAt ? formatAgo(now - Date.parse(s.lastSeenAt)) : null
+  return (
+    <div className="flex min-w-0 items-baseline gap-2 text-sm text-muted-foreground">
+      <span className="truncate">{where}</span>
+      {s.state === "CLOSED" ? (
+        <Badge>Closed</Badge>
+      ) : s.state === "RESERVED" ? (
+        <Badge>Reserved</Badge>
+      ) : (
+        standing && <Badge className={STANDING[standing].className}>{STANDING[standing].label}</Badge>
+      )}
+      {s.archived && <Badge>Archived</Badge>}
+      <span className="shrink-0 tabular-nums" title={s.lastSeenAt ? formatAbsolute(s.lastSeenAt) : undefined}>
+        {s.connected ? "connected" : s.lastSeenAt ? `seen ${ago ?? formatAbsolute(s.lastSeenAt)}` : "not seen yet"}
+      </span>
+    </div>
+  )
 }
 
 const none = <span className="text-muted-foreground">—</span>
@@ -164,16 +239,13 @@ function When({ at, now }: { at: string; now: number }) {
   )
 }
 
-const STATE_LABEL: Record<string, string> = { OPEN: "Open", CLOSED: "Closed", RESERVED: "Reserved for its build's first minion" }
-
 function SessionCard({ s }: { s: Session }) {
   // Ticks, as the table does: Last seen counts a silent minion's seconds.
   const now = useNow(1_000)
   const state = s.connected ? "live" : lateness(s, now)
   return (
     <InfoCard title="Session" note={s.persisted ? "persisted" : undefined}>
-      <LabelRow label="Description">{s.description || none}</LabelRow>
-      <LabelRow label="State">{STATE_LABEL[s.state] ?? s.state}</LabelRow>
+      {s.state === "RESERVED" && <NoteRow>Reserved for its build&apos;s first minion.</NoteRow>}
       <LabelRow label="Opened">
         <When at={s.createdAt} now={now} />
       </LabelRow>
@@ -234,7 +306,7 @@ function SessionCard({ s }: { s: Session }) {
 }
 
 function HostCard({ s }: { s: Session }) {
-  const user = s.user ? (s.domain && !s.user.includes("\\") ? `${s.domain}\\${s.user}` : s.user) : null
+  const user = userOf(s)
   return (
     <InfoCard title="Host">
       <LabelRow label="Host">{s.host || none}</LabelRow>
