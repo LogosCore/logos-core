@@ -49,8 +49,15 @@ import zlib from "node:zlib"
 // BIND: the new tunnel and stream fields in the generated document map and
 // the classes the terminal front's view uses (xterm.js itself, 337 KB, is
 // a lazy chunk: web-terminal-code.ts).
-const BUDGET_RAW_KB = 1_050
-const BUDGET_SERVED_KB = 280
+// Lowered from 1 050 / 280 at 1 048.2 / 278.7 → 905.7 / 259.1: the generated
+// GraphQL documents are a module each in the build
+// (vite-plugins/split-graphql-documents.ts), so first paint carries the
+// shell's documents and no longer the whole map (graphql-client.js, 132 KB
+// raw, is under 1 KB); the skill prompts, the guide overlay and the
+// sidebar's phone sheet load when they show. Room for ordinary feature work
+// kept.
+const BUDGET_RAW_KB = 925
+const BUDGET_SERVED_KB = 265
 
 const dist = path.resolve(import.meta.dirname, "..", "dist")
 const indexHtml = path.join(dist, "index.html")

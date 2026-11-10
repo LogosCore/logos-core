@@ -130,11 +130,21 @@ calendar, not a change. Read the sources again, extend the tables and move
 
 Frontend lint carries documented debt. `eslint-plugin-react-hooks` v7 applies
 the React Compiler's own analysis and is stricter than the set this code was
-written against, so eight pre-existing errors across six files are downgraded
-to warnings **per file** in `frontend/eslint.config.js`, with the reasoning for
-each. Scoping them per file rather than per rule keeps every rule at error
-everywhere else, so a new violation still fails; the list is meant to shrink.
-Same policy as `core/.golangci.yml`: fix the code, or stay out with a note.
+written against: of the eight pre-existing errors across six files, one is
+left (`src/graphql/hooks/timeline.ts`), downgraded to a warning **per file** in
+`frontend/eslint.config.js` with the reasoning. Scoping it per file rather
+than per rule keeps every rule at error everywhere else, so a new violation
+still fails; the list is meant to shrink. The other warnings `eslint .`
+prints are the components the React Compiler skips (`useVirtualizer`, an
+incompatible library). Same policy as `core/.golangci.yml`: fix the code, or
+stay out with a note.
+
+The build splits the generated GraphQL documents (`src/graphql/gql/graphql.ts`)
+one module each (`frontend/vite-plugins/split-graphql-documents.ts`, build
+only): a chunk carries the documents its code imports, so first paint holds
+only the shell's. The plugin reads the file as the client preset writes it
+and fails the build on anything else; after a codegen upgrade that changes
+the class or the constants' shape, update the plugin and its test.
 
 ### Repository integration tests
 
