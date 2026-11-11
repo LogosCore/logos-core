@@ -56,27 +56,35 @@ pushes the image. Before this workflow existed nothing ran the frontend suite on
 a push, which is how two tests came to sit failing on `main` — type errors were
 still caught, by the image build, but nothing else was.
 
-Its Node version is pinned in the workflow's `env` and must track
-`NODE_VERSION` in `frontend/Dockerfile`, so CI builds what the image builds.
+Its Node version is pinned in the workflow's `env` (and
+`publish-frontend.yml`'s) and must track `NODE_VERSION` in
+`frontend/Dockerfile`, so CI builds what the image builds.
 
 The workflows keep caches that hold between runs, as release rounds wait on
 them: Core CI's Go build cache is saved under each commit and restored from
 the newest (setup-go's own went stale, saved only when `go.sum` changed);
 `frontend/node_modules` is cached on `package.json`, the lockfile and
 `patches/` (`npm ci` took two minutes in each job), under one key written in
-both `ci-frontend.yml` and `publish-core.yml`: keep them the same; and
+`ci-frontend.yml`, `publish-core.yml` and `publish-frontend.yml`: keep them
+the same; and
 `publish-core.yml` restores the HTML export viewer by a hash of every
 frontend file, so a push that leaves the frontend alone builds no viewer.
 That cache is 10 GB a repository, the oldest entries evicted past it: the
 images keep their layer caches out of it, in the registry beside each image
-(`:buildcache`, frontend, Hocuspocus, nginx), and core's image keeps none
-(its export cost more than the module download it saved). Docker's
-`type=gha` cache had filled it, and evicted the frontend's `npm ci` layer.
+(`:buildcache`, Hocuspocus, nginx), and core's and the frontend's keep none
+(core's export cost more than the module download it saved; the frontend's
+build no longer runs in its image). Docker's `type=gha` cache had filled
+it, and evicted the frontend's `npm ci` layer.
 Core's binary is built before its image, on the runner with a Go cache of
 its own (`core-image-…`), and copied in: `core/Dockerfile` takes it from
 `ci-bin/` when `BINARY_FROM=prebuilt`, and builds from source otherwise
 (the default, so the Dockerfile still builds alone; `ci-bin/.keep` is there
-for Docker's classic builder, which builds every stage).
+for Docker's classic builder, which builds every stage). The frontend's app
+likewise: `publish-frontend.yml` builds it on the runner, with that
+`node_modules` cache, into `frontend/ci-dist/`, which `frontend/Dockerfile`
+copies when `DIST_FROM=prebuilt` (the default builds it in the image;
+`ci-dist/.keep` for the classic builder). Built in the image, its `npm ci`
+ran again whenever `node:22-alpine` moved: 156s of round 37's 281s publish.
 
 The third job is a bundle budget: `frontend/scripts/check-bundle-budget.mjs`
 fails the build when the first-paint critical path — the entry plus every

@@ -28,8 +28,9 @@ concurrency:
   group: frontend-ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Must track NODE_VERSION in frontend/Dockerfile. CI builds what the image build
-# builds, or CI is not testing the thing that ships. There is no .nvmrc to read
+# Must track NODE_VERSION in frontend/Dockerfile, and publish-frontend.yml's,
+# which builds the app the image ships. CI builds what the image build builds,
+# or CI is not testing the thing that ships. There is no .nvmrc to read
 # it from — the Dockerfile ARG is the existing pin, so keep the two in step.
 env:
   NODE_VERSION: "22"

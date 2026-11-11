@@ -18,6 +18,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: logoscore/logos-frontend
+  # ci-frontend.yml's, and frontend/Dockerfile's NODE_VERSION: keep them in step.
+  NODE_VERSION: "22"
 
 jobs:
   build-and-push:
@@ -30,6 +32,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # The app built here, not in the image (frontend/Dockerfile's prebuilt
+      # stage), with ci-frontend.yml's node_modules cache (its key). Built in
+      # the image, npm ci ran again whenever the node image moved (156s of
+      # round 37's 281s), and its layer went up to the registry cache again.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Restore node_modules
+        id: modules
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: node-modules-${{ runner.os }}-node${{ env.NODE_VERSION }}-${{ hashFiles('frontend/package.json', 'frontend/package-lock.json', 'frontend/patches/**') }}
+
+      - name: Install
+        if: steps.modules.outputs.cache-hit != 'true'
+        working-directory: frontend
+        run: npm ci
+
+      # Into ci-dist/, the directory the image's prebuilt stage copies, less
+      # its placeholder.
+      - name: Build the app
+        working-directory: frontend
+        run: |
+          npm run build
+          rm ci-dist/.keep
+          cp -a dist/. ci-dist/
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -67,9 +99,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Layers cached in the registry, beside the image: the Actions cache
-          # (10 GB a repo, shared with CI's caches) kept evicting them, and a
-          # registry cache is neither counted there nor evicted. Pull requests
-          # read it and write nothing (no login).
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}:buildcache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+          # The app comes built (ci-dist/): what is left is nginx and a copy,
+          # so no layer cache, whose export took 5 to 44s.
+          build-args: |
+            DIST_FROM=prebuilt

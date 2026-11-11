@@ -10,6 +10,10 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# The app publish-frontend.yml builds for the image; the directory stays
+# (frontend/Dockerfile's prebuilt stage).
+ci-dist/*
+!ci-dist/.keep
 *.local
 
 # Editor directories and files
