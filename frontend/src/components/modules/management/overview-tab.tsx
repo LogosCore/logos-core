@@ -16,6 +16,11 @@ type Management = NonNullable<ModuleDetailFieldsFragment["management"]>
 type Connection = NonNullable<ModuleDetailFieldsFragment["connection"]>
 type Build = NonNullable<ModuleDetailFieldsFragment["build"]>
 
+// The first column of the cards below, laid out together: a key of 17
+// characters after its number on one line (checkin_interval,
+// reconnect_backoff); a longer one wraps at an underscore.
+const KEYS = "w-44"
+
 /**
  * The minion connection settings this instance declared (read-only), per
  * connection kind it carries, each under a row saying which, and whether the
@@ -26,7 +31,7 @@ type Build = NonNullable<ModuleDetailFieldsFragment["build"]>
  */
 export function ConnectionSchema({ connection }: { connection: Connection }) {
   return (
-    <InfoCard title="Minion connection settings" note={`schema v${connection.version}`}>
+    <InfoCard title="Minion connection settings" note={`schema v${connection.version}`} labelWidth={KEYS}>
       {connection.kinds.map((k) => {
         const label = kindLabels[k.kind] ?? k.kind
         return (
@@ -56,7 +61,7 @@ export function ConnectionSchema({ connection }: { connection: Connection }) {
 export function BuildParameters({ build }: { build: Build }) {
   const crypto = build.crypto ? `payload crypto ${build.crypto}` : "no payload crypto"
   return (
-    <InfoCard title="Build parameters" note={`schema v${build.version} · ${crypto}`}>
+    <InfoCard title="Build parameters" note={`schema v${build.version} · ${crypto}`} labelWidth={KEYS}>
       {build.fields.length > 0 && (
         <>
           <SectionRow title="Every target" />
@@ -115,7 +120,7 @@ function fieldRows(fields: readonly FieldDef[]): IdRow[] {
  */
 export function BuildTargets({ build }: { build: Build }) {
   return (
-    <InfoCard title="Targets" note={build.targets.length}>
+    <InfoCard title="Targets" note={build.targets.length} labelWidth={KEYS}>
       <IdRows
         rows={build.targets.map((t) => ({
           id: t.id,
@@ -144,7 +149,7 @@ export function BuildTargets({ build }: { build: Build }) {
  */
 export function BuildCommands({ build }: { build: Build }) {
   return (
-    <InfoCard title="Commands" note={build.commands.length}>
+    <InfoCard title="Commands" note={build.commands.length} labelWidth={KEYS}>
       <IdRows
         rows={build.commands.map((c) => ({
           id: c.id,

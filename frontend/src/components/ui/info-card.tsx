@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { Fragment, type ReactNode } from "react"
 import { TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 
@@ -69,24 +69,47 @@ export function IdRows({ rows }: { rows: readonly IdRow[] }) {
   const numbered = rows.some((r) => r.num != null)
   return rows.map((r) => (
     <TableRow key={r.id} className="hover:bg-transparent">
-      <TableCell className={cn(FIRST, "break-all")}>
-        {numbered && (
-          <span
-            title="Its number on the wire"
-            className="mr-2 inline-block min-w-[3ch] text-right font-mono text-xs text-muted-foreground tabular-nums"
-          >
-            {r.num != null && (
-              <>
-                <span className="sr-only">number </span>
-                {r.num}
-              </>
-            )}
-          </span>
-        )}
-        <code className="font-mono text-xs">{r.id}</code>
-      </TableCell>
+      {numbered ? (
+        // The number in a slot of its own, and the id after it, wrapping at
+        // its underscores first, its lines under one another.
+        <TableCell className={FIRST}>
+          <div className="flex items-baseline gap-1.5">
+            <span
+              title="Its number on the wire"
+              className="min-w-[2ch] shrink-0 text-right font-mono text-xs text-muted-foreground tabular-nums"
+            >
+              {r.num != null && (
+                <>
+                  <span className="sr-only">number </span>
+                  {r.num}
+                </>
+              )}
+            </span>
+            <code className="min-w-0 font-mono text-xs [overflow-wrap:anywhere]">{breakAtUnderscores(r.id)}</code>
+          </div>
+        </TableCell>
+      ) : (
+        <TableCell className={cn(FIRST, "break-all")}>
+          <code className="font-mono text-xs">{r.id}</code>
+        </TableCell>
+      )}
       <TableCell className="px-4 py-2 align-baseline break-words whitespace-normal">{r.content}</TableCell>
     </TableRow>
+  ))
+}
+
+/** id, free to wrap after each of its underscores (checkin_interval: "checkin_" / "interval"). */
+function breakAtUnderscores(id: string): ReactNode {
+  const parts = id.split("_")
+  return parts.map((part, i) => (
+    <Fragment key={i}>
+      {part}
+      {i < parts.length - 1 && (
+        <>
+          _<wbr />
+        </>
+      )}
+    </Fragment>
   ))
 }
 
