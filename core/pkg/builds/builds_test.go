@@ -401,6 +401,11 @@ func TestOfferAccepted(t *testing.T) {
 	if len(calls) != 1 || calls[0].queue != bobQueue || calls[0].op != protocol.TypeFactoryBuild {
 		t.Fatalf("calls %+v", calls)
 	}
+	// The build keeps the request as it went, byte for byte: its JSON tab
+	// shows what the factory got.
+	if got.Request == "" || got.Request != string(calls[0].raw) {
+		t.Fatalf("the build keeps %s\nthe factory got %s", got.Request, calls[0].raw)
+	}
 	req := calls[0].payload.(protocol.BuildRequest)
 	if p := protocol.ValidateBuildRequest(bobSchema(), req); p != nil {
 		t.Fatalf("the request a factory gets does not pass its check: %v", p)
@@ -409,7 +414,7 @@ func TestOfferAccepted(t *testing.T) {
 		t.Fatalf("the factory got commands %s", got)
 	}
 	// The operators' notes never reach a factory, nor so an artifact.
-	if raw, _ := json.Marshal(req); strings.Contains(string(raw), "first stage") || strings.Contains(string(raw), "dry run") {
+	if raw := string(calls[0].raw); strings.Contains(raw, "first stage") || strings.Contains(raw, "dry run") {
 		t.Fatalf("a description went to the factory: %s", raw)
 	}
 	// Its links are core's own, good until a minute past the deadline.
@@ -570,8 +575,20 @@ func TestOfferPassesBusyAndUnreachable(t *testing.T) {
 	}
 	b := r.queue(t, nil)
 	r.svc.Tick(context.Background())
-	if got := r.get(t, b.BuildID.String(), models.BuildStateBuilding); got.Instance != "bob-3" {
+	got := r.get(t, b.BuildID.String(), models.BuildStateBuilding)
+	if got.Instance != "bob-3" {
 		t.Fatalf("built on %s", got.Instance)
+	}
+	// Each instance offered it got the same request; the build keeps it, for
+	// the one that took it.
+	calls := r.rpc.recorded()
+	if len(calls) < 2 || got.Request == "" {
+		t.Fatalf("calls %d, request %q", len(calls), got.Request)
+	}
+	for _, c := range calls {
+		if string(c.raw) != got.Request {
+			t.Errorf("%s got %s\nthe build keeps %s", c.queue, c.raw, got.Request)
+		}
 	}
 }
 
@@ -580,7 +597,7 @@ func TestOfferWhenNoneTakesIt(t *testing.T) {
 	r.rpc.answer = func(c call) (protocol.ReplyEnvelope, error) { return refuse(c, protocol.CodeBusy, "busy"), nil }
 	b := r.queue(t, nil)
 	r.svc.Tick(context.Background())
-	if got := r.get(t, b.BuildID.String(), models.BuildStateQueued); got.LeaseUntil != nil || got.Instance != "" || got.StartedAt != nil {
+	if got := r.get(t, b.BuildID.String(), models.BuildStateQueued); got.LeaseUntil != nil || got.Instance != "" || got.StartedAt != nil || got.Request != "" {
 		t.Fatalf("not put back in the queue: %+v", got)
 	}
 
@@ -684,6 +701,10 @@ func TestOfferRefused(t *testing.T) {
 	got := r.get(t, b.BuildID.String(), models.BuildStateFailed)
 	if got.Error.Code != models.BuildErrorRefused || !strings.Contains(got.Error.Message, "too loud") {
 		t.Fatalf("error %+v", got.Error)
+	}
+	// What was refused stays to be seen.
+	if calls := r.rpc.recorded(); got.Request == "" || got.Request != string(calls[0].raw) {
+		t.Fatalf("the build keeps %q", got.Request)
 	}
 }
 

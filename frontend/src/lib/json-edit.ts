@@ -74,6 +74,58 @@ export function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
+/**
+ * A JSON document's text indented as formatJson indents a value, without
+ * reading it into one: strings (escapes and all), numbers and key order stay
+ * as they are, only the whitespace between them changes. For a record kept
+ * as it was sent, which formatJson(JSON.parse(text)) would not keep: it writes
+ * "&" as "&", 2.50 as 2.5, and rounds integers past 2^53. Text that is
+ * not JSON comes back as it is.
+ */
+export function indentJsonText(text: string): string {
+  if (!parseJson(text).ok) return text
+  const pad = (depth: number) => "\n" + "  ".repeat(depth)
+  const blank = (c: string) => c === " " || c === "\n" || c === "\r" || c === "\t"
+  let out = ""
+  let depth = 0
+  let i = 0
+  while (i < text.length) {
+    const c = text[i]
+    if (c === '"') {
+      // To its closing quote, past every escaped character.
+      let j = i + 1
+      while (text[j] !== '"') j += text[j] === "\\" ? 2 : 1
+      out += text.slice(i, j + 1)
+      i = j + 1
+    } else if (c === "{" || c === "[") {
+      let j = i + 1
+      while (blank(text[j])) j++
+      if (text[j] === (c === "{" ? "}" : "]")) {
+        out += c + text[j] // empty, as formatJson writes it
+        i = j + 1
+      } else {
+        depth++
+        out += c + pad(depth)
+        i++
+      }
+    } else if (c === "}" || c === "]") {
+      depth--
+      out += pad(depth) + c
+      i++
+    } else if (c === ",") {
+      out += "," + pad(depth)
+      i++
+    } else if (c === ":") {
+      out += ": "
+      i++
+    } else {
+      if (!blank(c)) out += c // a number's, true's, false's or null's
+      i++
+    }
+  }
+  return out
+}
+
 /** A text property's value: "" when absent or null, a problem when not text. */
 export function textOf(value: unknown, path: string, at: (path: string, message: string) => void): string {
   if (typeof value === "string") return value

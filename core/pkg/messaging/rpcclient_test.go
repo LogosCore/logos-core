@@ -102,6 +102,37 @@ func TestRPCClient_PublishesEnvelopeWithContractProperties(t *testing.T) {
 	}
 }
 
+// A payload encoded beforehand (a build's request, which the build keeps as
+// sent) goes in the envelope byte for byte: escapes, number forms and key
+// order as they were.
+func TestRPCClient_EncodedPayloadGoesAsItsBytes(t *testing.T) {
+	ft := &fakeTransport{gen: 1}
+	c := newRPCClient(ft, zap.NewNop())
+	ft.onPublish = func(p published) {
+		go c.deliver(p.msg.CorrelationId, replyBody(t, p.msg.CorrelationId, map[string]any{}))
+	}
+	raw, err := json.Marshal(struct {
+		URL  string  `json:"upload_url"`
+		Size float64 `json:"size"`
+		Keys []any   `json:"keys"`
+	}{URL: "/api/factory/builds/b/artifact?expires=1&sig=<f>", Size: 2.5, Keys: []any{"z", "a", 1e21}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Call(context.Background(), "logos.factory.rpc.bob-1", protocol.TypeFactoryBuild, json.RawMessage(raw), time.Second); err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	var env struct {
+		Payload json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal(ft.published[0].msg.Body, &env); err != nil {
+		t.Fatal(err)
+	}
+	if string(env.Payload) != string(raw) {
+		t.Errorf("payload sent = %s\nwant %s", env.Payload, raw)
+	}
+}
+
 func TestRPCClient_ConcurrentCallsGetTheirOwnReplies(t *testing.T) {
 	ft := &fakeTransport{gen: 1}
 	c := newRPCClient(ft, zap.NewNop())

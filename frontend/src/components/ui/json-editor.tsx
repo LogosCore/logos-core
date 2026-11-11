@@ -96,6 +96,11 @@ export interface JsonEditorProps {
   readOnly?: boolean
   /** The name Download saves the text under; without one, no Download. */
   fileName?: string
+  /**
+   * What Download saves instead of the text shown, byte for byte (no newline
+   * added): a record kept as it was sent, shown indented.
+   */
+  downloadText?: string
   className?: string
   "aria-label"?: string
 }
@@ -121,6 +126,7 @@ export function JsonEditor({
   hints = NO_HINTS,
   readOnly = false,
   fileName,
+  downloadText,
   className,
   "aria-label": ariaLabel = "JSON",
 }: JsonEditorProps) {
@@ -255,7 +261,10 @@ export function JsonEditor({
           <CopyIcon />
         </Tool>
         {fileName && (
-          <Tool label={`Download as ${fileName}`} onClick={() => downloadBlob(withNewline(text()), fileName, "application/json")}>
+          <Tool
+            label={`Download as ${fileName}`}
+            onClick={() => downloadBlob(downloadText ?? withNewline(text()), fileName, "application/json")}
+          >
             <DownloadIcon />
           </Tool>
         )}

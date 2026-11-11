@@ -140,6 +140,15 @@ type Build struct {
 	// a result reporting a larger artifact fails the build. Zero for a
 	// build offered before core kept it.
 	ArtifactMaxSize int64 `bson:"artifact_max_size,omitempty" json:"-"`
+	// Request is the factory.build payload core sent Instance, byte for
+	// byte: the protocol.BuildRequest JSON that went as the message's
+	// payload, kept with Instance when it is offered there and dropped
+	// with it when that instance does not take the build. The build's
+	// JSON tab shows it as what went to the factory. It holds what the
+	// request does, the minion's keys and its credentials' secrets among
+	// them. Empty for a build never offered, or offered before core kept
+	// it.
+	Request string `bson:"request,omitempty" json:"-"`
 	// ResultReceived is set when a succeeded result arrived and its artifact
 	// is being checked; ResultAt is when.
 	ResultReceived bool       `bson:"result_received,omitempty" json:"-"`

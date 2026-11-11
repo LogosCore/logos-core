@@ -4,12 +4,14 @@ import { isRecord, sameJSON } from "@/lib/json-edit"
 import type { BuildTab } from "@/lib/record-modals"
 import { recordedConnections } from "@/components/builds/build-values"
 import { recordFailover } from "@/components/builds/failover-values"
+import { formatAbsolute } from "@/lib/relative-time"
 
 // A finished or running build as its modal shows it (build-details.tsx):
 // which tab it opens on, the record its JSON tab shows, and its values as
 // Overview lists them. Which factory instance took the build is core's own
 // business (it sends cancels there and takes reports only from there), so
-// the modal leaves it out.
+// the modal leaves it out, but for the JSON tab's Sent to factory view,
+// which says where its request went (build-json-tab.tsx).
 
 export type BuildRecord = NonNullable<BuildQuery["build"]>
 
@@ -56,6 +58,16 @@ export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
     ...(b.crypto ? { crypto: b.crypto } : {}),
     ...(b.persistedSession ? { persisted_session: b.persistedSession } : {}),
   }
+}
+
+/**
+ * What the JSON tab's Sent to factory view says of the request it shows:
+ * where it went and when (the instance offered the build, and when).
+ */
+export function sentNote(instance: string | null, startedAt: string | null): string {
+  const to = instance ? ` to ${instance}` : ""
+  const at = startedAt ? ` on ${formatAbsolute(startedAt)}` : ""
+  return `The factory.build request core sent${to}${at}, as it went. Download saves its exact bytes.`
 }
 
 /** One value of a build (or of a connection's settings), as Overview lists it. */

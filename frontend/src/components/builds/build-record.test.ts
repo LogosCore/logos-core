@@ -1,7 +1,7 @@
 import { DEFAULT_FAILOVER } from "./failover-values"
 import { describe, expect, it } from "vitest"
 import type { FieldDef } from "@/components/modules/management/field-values"
-import { buildRecordJson, defaultBuildTab, valueRows, type BuildRecord } from "./build-record"
+import { buildRecordJson, defaultBuildTab, sentNote, valueRows, type BuildRecord } from "./build-record"
 
 function field(f: Partial<FieldDef> & Pick<FieldDef, "key" | "type">): FieldDef {
   return { label: f.key, order: 0, required: false, ...f } as FieldDef
@@ -98,5 +98,17 @@ describe("valueRows", () => {
 
   it("survives values that are not an object", () => {
     expect(valueRows(fields, null).map((r) => r.value)).toEqual([undefined, undefined, undefined])
+  })
+})
+
+describe("sentNote", () => {
+  it("says where the request went and when", () => {
+    expect(sentNote("bob-local", "2026-11-11T09:20:00Z")).toMatch(
+      /^The factory\.build request core sent to bob-local on \d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}, as it went\. Download saves its exact bytes\.$/,
+    )
+  })
+
+  it("leaves out what it does not know", () => {
+    expect(sentNote(null, null)).toBe("The factory.build request core sent, as it went. Download saves its exact bytes.")
   })
 })

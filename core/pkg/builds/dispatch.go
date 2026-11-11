@@ -149,14 +149,22 @@ func (s *Service) offer(ctx context.Context, b *models.Build) {
 	if err := s.repos.Builds.SetCredentialRevs(ctx, b.BuildID, revs); err != nil {
 		s.logger.Warn("record a build's credentials", zap.String("build_id", b.BuildID.String()), zap.Error(err))
 	}
+	// Encoded once: the message carries these bytes and the build keeps
+	// them, so what its JSON tab shows is what the factory got.
+	payload, err := json.Marshal(req)
+	if err != nil {
+		s.logger.Warn("encode a build request", zap.String("build_id", b.BuildID.String()), zap.Error(err))
+		release()
+		return
+	}
 	start := int(s.next.Add(1))
 	for i := range insts {
 		inst := insts[(start+i)%len(insts)]
-		ok, err := s.repos.Builds.MarkBuilding(ctx, b.BuildID, inst.Instance, inst.Version, deadline, req.Artifact.MaxSize, s.now())
+		ok, err := s.repos.Builds.MarkBuilding(ctx, b.BuildID, inst.Instance, inst.Version, deadline, req.Artifact.MaxSize, string(payload), s.now())
 		if err != nil || !ok {
 			return // cancelled meanwhile
 		}
-		if s.offerTo(ctx, b, inst, req) {
+		if s.offerTo(ctx, b, inst, payload) {
 			return
 		}
 		// Not taken there: back in the queue with its queue deadline (b is
@@ -169,11 +177,12 @@ func (s *Service) offer(ctx context.Context, b *models.Build) {
 	release()
 }
 
-// offerTo offers a build marked BUILDING on inst there. False when inst did
-// not take it: busy, unreachable, or an answer that is not an acceptance. A
-// refusal fails the build, and counts as taken (nothing more to do).
-func (s *Service) offerTo(ctx context.Context, b *models.Build, inst models.Module, req protocol.BuildRequest) bool {
-	rep, err := s.rpc.Call(ctx, inst.RPCQueue, protocol.TypeFactoryBuild, req, s.cfg.CallTimeout)
+// offerTo offers a build marked BUILDING on inst there, payload being its
+// factory.build request as the build keeps it. False when inst did not take
+// it: busy, unreachable, or an answer that is not an acceptance. A refusal
+// fails the build, and counts as taken (nothing more to do).
+func (s *Service) offerTo(ctx context.Context, b *models.Build, inst models.Module, payload json.RawMessage) bool {
+	rep, err := s.rpc.Call(ctx, inst.RPCQueue, protocol.TypeFactoryBuild, payload, s.cfg.CallTimeout)
 	if err != nil {
 		s.logger.Debug("factory did not answer a build offer", zap.String("instance", inst.Instance), zap.Error(err))
 		return false

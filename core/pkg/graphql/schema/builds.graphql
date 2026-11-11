@@ -346,6 +346,12 @@ type Build {
   # The factory instance building it.
   instance: String
   factoryVersion: String
+  # The factory.build request core sent that instance, as JSON text exactly
+  # as it went: the message's payload, its key order, escapes and numbers
+  # untouched. All the factory got, the minion's keys and its credentials'
+  # secret values among it. Null while queued, and for a build that never
+  # reached a factory or reached one before core kept the request.
+  request: String
   # The build's pipeline, in order.
   stages: [BuildStage!]!
   artifact: BuildArtifact

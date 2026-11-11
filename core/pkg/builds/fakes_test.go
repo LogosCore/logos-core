@@ -3,6 +3,8 @@ package builds
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"slices"
 	"sort"
@@ -224,7 +226,7 @@ func (f *fakeBuilds) ReleaseClaim(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (f *fakeBuilds) MarkBuilding(_ context.Context, id uuid.UUID, instance, version string, deadline time.Time, maxSize int64, at time.Time) (bool, error) {
+func (f *fakeBuilds) MarkBuilding(_ context.Context, id uuid.UUID, instance, version string, deadline time.Time, maxSize int64, request string, at time.Time) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
@@ -232,7 +234,7 @@ func (f *fakeBuilds) MarkBuilding(_ context.Context, id uuid.UUID, instance, ver
 		return false, nil
 	}
 	b.State, b.Instance, b.FactoryVersion, b.Deadline, b.StartedAt, b.LeaseUntil = models.BuildStateBuilding, instance, version, deadline, &at, nil
-	b.ArtifactMaxSize = maxSize
+	b.ArtifactMaxSize, b.Request = maxSize, request
 	return true, nil
 }
 
@@ -244,7 +246,7 @@ func (f *fakeBuilds) Unoffer(_ context.Context, id uuid.UUID, instance string, q
 		return false, nil
 	}
 	b.State, b.Deadline, b.LeaseUntil, b.Instance, b.FactoryVersion, b.StartedAt = models.BuildStateQueued, queueDeadline, &until, "", "", nil
-	b.ArtifactMaxSize, b.Plan, b.StepReports = 0, nil, nil
+	b.ArtifactMaxSize, b.Request, b.Plan, b.StepReports = 0, "", nil, nil
 	return true, nil
 }
 
@@ -472,10 +474,13 @@ func (f *fakeChannels) Schema(_ context.Context, moduleName string) (*protocol.C
 	return f.schemas[moduleName], nil
 }
 
-// call is one call to a factory's rpc_queue.
+// call is one call to a factory's rpc_queue. A factory.build goes as the
+// bytes the build keeps (raw); its payload is them read as a factory reads
+// them.
 type call struct {
 	queue, op string
 	payload   any
+	raw       json.RawMessage
 }
 
 // fakeCaller answers factory calls with answer, recording them.
@@ -487,6 +492,17 @@ type fakeCaller struct {
 
 func (f *fakeCaller) Call(_ context.Context, queue, op string, payload any, _ time.Duration) (protocol.ReplyEnvelope, error) {
 	c := call{queue: queue, op: op, payload: payload}
+	if op == protocol.TypeFactoryBuild {
+		raw, ok := payload.(json.RawMessage)
+		if !ok {
+			return protocol.ReplyEnvelope{}, fmt.Errorf("fake factory: a build request goes encoded, as the build keeps it; got %T", payload)
+		}
+		var req protocol.BuildRequest
+		if err := json.Unmarshal(raw, &req); err != nil {
+			return protocol.ReplyEnvelope{}, fmt.Errorf("fake factory: %w", err)
+		}
+		c.payload, c.raw = req, raw
+	}
 	f.mu.Lock()
 	f.calls = append(f.calls, c)
 	answer := f.answer

@@ -87,6 +87,7 @@ type Build struct {
 	State                  string            `json:"state"`
 	Instance               *string           `json:"instance,omitempty"`
 	FactoryVersion         *string           `json:"factoryVersion,omitempty"`
+	Request                *string           `json:"request,omitempty"`
 	Stages                 []*BuildStage     `json:"stages"`
 	Artifact               *BuildArtifact    `json:"artifact,omitempty"`
 	Warnings               []string          `json:"warnings"`

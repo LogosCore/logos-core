@@ -16,8 +16,9 @@ import (
 // TestIntegrationBuildStepReports pins how a build's plan and step reports
 // are stored: a step keeps the time of its first report whatever order the
 // reports arrive in, its message is the latest (an empty one clears it), only
-// the instance building it can report, and a build put back in the queue
-// forgets them and has its queue deadline again.
+// the instance building it can report, the request it was offered with is
+// kept as sent, and a build put back in the queue forgets them and the
+// request, and has its queue deadline again.
 func TestIntegrationBuildStepReports(t *testing.T) {
 	db := integrationDB(t)
 	ctx := context.Background()
@@ -31,7 +32,9 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 	if err := repo.Insert(ctx, b); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := repo.MarkBuilding(ctx, b.BuildID, "bob-1", "dev", now.Add(time.Hour), 1<<20, now); !ok || err != nil {
+	// The request as it went: its bytes kept, escapes and all.
+	const sent = `{"build_id":"b","artifact":{"upload_url":"/a?expires=1\u0026sig=f"},"n":2.50}`
+	if ok, err := repo.MarkBuilding(ctx, b.BuildID, "bob-1", "dev", now.Add(time.Hour), 1<<20, sent, now); !ok || err != nil {
 		t.Fatalf("mark building: %v %v", ok, err)
 	}
 
@@ -71,8 +74,8 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 	if len(got.Plan) != 2 || got.Plan[1] != plan[1] {
 		t.Errorf("plan %+v", got.Plan)
 	}
-	if !got.Deadline.Equal(now.Add(time.Hour)) || got.ArtifactMaxSize != 1<<20 {
-		t.Errorf("building: deadline %s, artifact limit %d", got.Deadline, got.ArtifactMaxSize)
+	if !got.Deadline.Equal(now.Add(time.Hour)) || got.ArtifactMaxSize != 1<<20 || got.Request != sent {
+		t.Errorf("building: deadline %s, artifact limit %d, request %s", got.Deadline, got.ArtifactMaxSize, got.Request)
 	}
 
 	// Not taken after all: back in the queue, with nothing of that instance.
@@ -80,9 +83,9 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 		t.Fatalf("unoffer: %v %v", ok, err)
 	}
 	if got, _ := repo.FindByBuildID(ctx, b.BuildID); got.Plan != nil || got.StepReports != nil || got.StartedAt != nil ||
-		!got.Deadline.Equal(b.Deadline) || got.ArtifactMaxSize != 0 {
-		t.Errorf("after unoffer: plan %+v, reports %+v, deadline %s (queued with %s), artifact limit %d",
-			got.Plan, got.StepReports, got.Deadline, b.Deadline, got.ArtifactMaxSize)
+		!got.Deadline.Equal(b.Deadline) || got.ArtifactMaxSize != 0 || got.Request != "" {
+		t.Errorf("after unoffer: plan %+v, reports %+v, deadline %s (queued with %s), artifact limit %d, request %q",
+			got.Plan, got.StepReports, got.Deadline, b.Deadline, got.ArtifactMaxSize, got.Request)
 	}
 }
 

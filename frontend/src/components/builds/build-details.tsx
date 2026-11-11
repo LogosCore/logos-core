@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import {
   CrosshairIcon,
   DownloadIcon,
@@ -34,8 +34,7 @@ import {
   RecordModalTitle,
 } from "@/components/ui/record-modal"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
-import { formatJson } from "@/lib/json-edit"
+import { preloadJsonEditor } from "@/components/ui/lazy-json-editor"
 import { formatAbsolute } from "@/lib/relative-time"
 import { useNow } from "@/hooks/use-now"
 import { whenIdle } from "@/lib/preloadable"
@@ -60,7 +59,8 @@ import { BuildRun } from "@/components/builds/build-run"
 import { StageIcon } from "@/components/builds/build-pipeline"
 import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import { buildElapsed, factoryKindsByName, platformLabel, recordedConnections } from "@/components/builds/build-values"
-import { buildRecordJson, defaultBuildTab, type BuildRecord as Build } from "@/components/builds/build-record"
+import { defaultBuildTab, type BuildRecord as Build } from "@/components/builds/build-record"
+import { BuildJsonTab, type BuildJsonView } from "@/components/builds/build-json-tab"
 import { ModuleIcon } from "@/components/modules/module-icon"
 import { DeleteBuildDialog } from "@/components/builds/delete-build-dialog"
 import { BuildTargets } from "@/components/targets/build-targets"
@@ -72,8 +72,9 @@ import { useBindConnections } from "@/graphql/hooks/minion-targets"
  * Overview, what it is; Pipeline, how it went; Connections, how its minion
  * reaches its channels; Commands, what it can do (where its factory has
  * commands); Targets, for a build with a bind connection, where its pages
- * are; JSON, its record as the API gives it. Without a tab in the URL it opens on its pipeline while that is where
- * to look, on its overview once it has succeeded.
+ * are; JSON, the build to build again or the request its factory got. Without
+ * a tab in the URL it opens on its pipeline while that is where to look, on
+ * its overview once it has succeeded.
  */
 export function BuildDetails({ id, tab }: { id: string; tab: BuildTab | null }) {
   const { data, isLoading, error } = useBuild(id)
@@ -120,7 +121,8 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
   // the modal opened, kept, so a build finishing does not move the reader.
   const [firstTab] = useState(() => defaultBuildTab(b.state))
   const tab = urlTab ?? firstTab
-  const json = useMemo(() => formatJson(buildRecordJson(b)), [b])
+  // The JSON tab's view, kept while the reader moves between tabs.
+  const [jsonView, setJsonView] = useState<BuildJsonView>("build")
   // The title: the description's first line (the Overview shows a longer one whole).
   const title = b.description?.split("\n")[0].trim() ?? ""
   // A build whose minion only answers (a bind connection) has targets.
@@ -274,14 +276,7 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
         )}
 
         <TabsContent value="json" className="flex min-h-0 flex-col px-4 py-4">
-          <LazyJsonEditor
-            value={json}
-            onChange={noChange}
-            readOnly
-            fileName={`${b.id}.build.json`}
-            aria-label="The build as JSON"
-            className="flex-1 rounded-md border"
-          />
+          <BuildJsonTab build={b} view={jsonView} onViewChange={setJsonView} />
         </TabsContent>
 
         <TabsContent value="pipeline" className="flex min-h-0 flex-col">
@@ -305,9 +300,6 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
     </>
   )
 }
-
-/** The JSON tab only shows the build: nothing it could change. */
-function noChange() {}
 
 /**
  * Under the build's title: its factory, target and platform, its state, and

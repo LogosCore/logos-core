@@ -179,6 +179,7 @@ type ComplexityRoot struct {
 		OperationID            func(childComplexity int) int
 		PersistedSession       func(childComplexity int) int
 		Platform               func(childComplexity int) int
+		Request                func(childComplexity int) int
 		SchemaVersion          func(childComplexity int) int
 		Stages                 func(childComplexity int) int
 		StartedAt              func(childComplexity int) int
@@ -3128,6 +3129,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.Platform(childComplexity), true
+	case "Build.request":
+		if e.ComplexityRoot.Build.Request == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Build.Request(childComplexity), true
 	case "Build.schemaVersion":
 		if e.ComplexityRoot.Build.SchemaVersion == nil {
 			break
@@ -13553,6 +13560,12 @@ type Build {
   # The factory instance building it.
   instance: String
   factoryVersion: String
+  # The factory.build request core sent that instance, as JSON text exactly
+  # as it went: the message's payload, its key order, escapes and numbers
+  # untouched. All the factory got, the minion's keys and its credentials'
+  # secret values among it. Null while queued, and for a build that never
+  # reached a factory or reached one before core kept the request.
+  request: String
   # The build's pipeline, in order.
   stages: [BuildStage!]!
   artifact: BuildArtifact
@@ -25380,6 +25393,35 @@ func (ec *executionContext) fieldContext_Build_factoryVersion(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _Build_request(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Build_request,
+		func(ctx context.Context) (any, error) {
+			return obj.Request, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Build_request(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Build",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Build_stages(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26769,6 +26811,8 @@ func (ec *executionContext) fieldContext_BuildEdge_node(_ context.Context, field
 				return ec.fieldContext_Build_instance(ctx, field)
 			case "factoryVersion":
 				return ec.fieldContext_Build_factoryVersion(ctx, field)
+			case "request":
+				return ec.fieldContext_Build_request(ctx, field)
 			case "stages":
 				return ec.fieldContext_Build_stages(ctx, field)
 			case "artifact":
@@ -55233,6 +55277,8 @@ func (ec *executionContext) fieldContext_Mutation_createBuild(ctx context.Contex
 				return ec.fieldContext_Build_instance(ctx, field)
 			case "factoryVersion":
 				return ec.fieldContext_Build_factoryVersion(ctx, field)
+			case "request":
+				return ec.fieldContext_Build_request(ctx, field)
 			case "stages":
 				return ec.fieldContext_Build_stages(ctx, field)
 			case "artifact":
@@ -55360,6 +55406,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 				return ec.fieldContext_Build_instance(ctx, field)
 			case "factoryVersion":
 				return ec.fieldContext_Build_factoryVersion(ctx, field)
+			case "request":
+				return ec.fieldContext_Build_request(ctx, field)
 			case "stages":
 				return ec.fieldContext_Build_stages(ctx, field)
 			case "artifact":
@@ -55487,6 +55535,8 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 				return ec.fieldContext_Build_instance(ctx, field)
 			case "factoryVersion":
 				return ec.fieldContext_Build_factoryVersion(ctx, field)
+			case "request":
+				return ec.fieldContext_Build_request(ctx, field)
 			case "stages":
 				return ec.fieldContext_Build_stages(ctx, field)
 			case "artifact":
@@ -67274,6 +67324,8 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 				return ec.fieldContext_Build_instance(ctx, field)
 			case "factoryVersion":
 				return ec.fieldContext_Build_factoryVersion(ctx, field)
+			case "request":
+				return ec.fieldContext_Build_request(ctx, field)
 			case "stages":
 				return ec.fieldContext_Build_stages(ctx, field)
 			case "artifact":
@@ -90052,6 +90104,8 @@ func (ec *executionContext) _Build(ctx context.Context, sel ast.SelectionSet, ob
 			out.Values[i] = ec._Build_instance(ctx, field, obj)
 		case "factoryVersion":
 			out.Values[i] = ec._Build_factoryVersion(ctx, field, obj)
+		case "request":
+			out.Values[i] = ec._Build_request(ctx, field, obj)
 		case "stages":
 			out.Values[i] = ec._Build_stages(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

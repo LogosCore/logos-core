@@ -456,7 +456,7 @@ func toBuildModel(b *models.Build) *model.Build {
 		ID: b.BuildID.String(), OperationID: b.OperationID.String(), Description: b.Description, ModuleName: b.ModuleName, Target: b.Target,
 		Platform: b.Platform, SchemaVersion: b.SchemaVersion, Values: copyMap(b.Values),
 		Connections: b.Connections.Items, State: b.State,
-		Instance: strPtr(b.Instance), FactoryVersion: strPtr(b.FactoryVersion),
+		Instance: strPtr(b.Instance), FactoryVersion: strPtr(b.FactoryVersion), Request: strPtr(b.Request),
 		Commands: orEmpty(b.Commands), Stages: []*model.BuildStage{}, Warnings: orEmpty(b.Warnings),
 		Log: strPtr(b.Log), CreatedBy: toActorModel(b.CreatedBy),
 		CreatedAt: b.CreatedAt.Format(time.RFC3339), StartedAt: timePtr(b.StartedAt), FinishedAt: timePtr(b.FinishedAt),

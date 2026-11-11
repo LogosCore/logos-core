@@ -139,6 +139,7 @@ export type Build = {
   operationId: Scalars['ID']['output'];
   persistedSession?: Maybe<Scalars['ID']['output']>;
   platform: Scalars['String']['output'];
+  request?: Maybe<Scalars['String']['output']>;
   schemaVersion: Scalars['Int']['output'];
   stages: Array<BuildStage>;
   startedAt?: Maybe<Scalars['String']['output']>;
@@ -4160,6 +4161,13 @@ export type BuildQueryVariables = Exact<{
 
 export type BuildQuery = { build?: { values: unknown, commands: Array<string>, connections: unknown, connectionDescriptions: Array<string>, failover: unknown, maxTasks?: number | null, compression?: string | null, crypto?: unknown | null, envelope: string, codec?: unknown | null, warnings: Array<string>, log?: string | null, id: string, operationId: string, persistedSession?: string | null, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, cancelledBy?: { type: string, id: string, name?: string | null } | null, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
 
+export type BuildRequestQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type BuildRequestQuery = { build?: { id: string, request?: string | null, instance?: string | null, startedAt?: string | null } | null };
+
 export type CreateBuildMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
   input: BuildInput;
@@ -7985,6 +7993,16 @@ export const BuildDocument = new TypedDocumentString(`
   finishedAt
   deadline
 }`) as unknown as TypedDocumentString<BuildQuery, BuildQueryVariables>;
+export const BuildRequestDocument = new TypedDocumentString(`
+    query BuildRequest($id: ID!) {
+  build(id: $id) {
+    id
+    request
+    instance
+    startedAt
+  }
+}
+    `) as unknown as TypedDocumentString<BuildRequestQuery, BuildRequestQueryVariables>;
 export const CreateBuildDocument = new TypedDocumentString(`
     mutation CreateBuild($operationId: ID!, $input: BuildInput!) {
   createBuild(operationId: $operationId, input: $input) {

@@ -186,6 +186,20 @@ export const BuildQuery = graphql(`
   }
 `)
 
+// What core sent the factory, fetched apart: the JSON tab's Sent to factory
+// view asks for it, so the build's own query (polled while it runs) does not
+// carry it.
+export const BuildRequestQuery = graphql(`
+  query BuildRequest($id: ID!) {
+    build(id: $id) {
+      id
+      request
+      instance
+      startedAt
+    }
+  }
+`)
+
 export const CreateBuildMutation = graphql(`
   mutation CreateBuild($operationId: ID!, $input: BuildInput!) {
     createBuild(operationId: $operationId, input: $input) {

@@ -6,6 +6,7 @@ import {
   BuildFilesDocument,
   BuildsDocument,
   BuildDocument,
+  BuildRequestDocument,
   CreateBuildDocument,
   CancelBuildDocument,
   DeleteBuildArtifactDocument,
@@ -23,6 +24,8 @@ export const buildKeys = {
   list: (operationId: string) => [...buildKeys.all, "list", operationId] as const,
   infiniteList: (params: BuildListParams) => [...buildKeys.list(params.operationId), params] as const,
   detail: (id: string) => [...buildKeys.all, "detail", id] as const,
+  /** What core sent the factory, per offer: a build offered again has a new startedAt. */
+  request: (id: string, startedAt: string | null) => [...buildKeys.all, "request", id, startedAt] as const,
 }
 
 /** How often a list or a build with unfinished builds is refreshed. */
@@ -102,6 +105,21 @@ export function useBuild(id: string) {
       const b = query.state.data?.build
       return b && isUnfinished(b.state) ? LIVE_BUILD_MS : false
     },
+  })
+}
+
+/**
+ * The factory.build request core sent for build, as it went, with the
+ * instance and when; fetched only while enabled (the JSON tab's Sent to
+ * factory view). One offer's request never changes, so it is not refetched
+ * until the build is offered again.
+ */
+export function useBuildRequest(id: string, startedAt: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: buildKeys.request(id, startedAt),
+    queryFn: () => graphqlClient(BuildRequestDocument, { id }),
+    enabled: enabled && id !== "",
+    staleTime: Infinity,
   })
 }
 
