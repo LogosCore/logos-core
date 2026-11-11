@@ -55,8 +55,13 @@ type FsEntry {
   listErr: String
   listErrAt: String
   listErrBy: FsTaskRef
+  # Files core keeps of it: a download's, or a stream's copy kept as it
+  # passed (stream).
   downloaded: [FsTransfer!]!
   uploaded: [FsTransfer!]!
+  # Streams of it core kept no copy of (over its file size cap, or not
+  # passed through whole): the file went to the downloader alone.
+  streamed: [FsTransfer!]!
   # A volume's files are here (a drive's root, a mount point), as the
   # newest volumes task of the machine said; null once a later one no
   # longer had it.
@@ -89,8 +94,8 @@ type FsTaskRef {
   user: String
 }
 
-# A file a task moved: downloaded (fileId: the kept file's; none for a
-# stream) or uploaded (by: the operator).
+# A file a task moved: downloaded (fileId: the kept file's), streamed (no
+# file: core kept no copy) or uploaded (by: the operator).
 type FsTransfer {
   taskId: ID!
   fileId: ID

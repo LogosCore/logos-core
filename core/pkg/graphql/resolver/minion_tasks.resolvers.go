@@ -55,8 +55,9 @@ func (r *minionTaskResolver) Data(ctx context.Context, obj *model.MinionTask) (a
 
 // File is the resolver for the file field.
 func (r *minionTaskResolver) File(ctx context.Context, obj *model.MinionTask) (*model.MinionFile, error) {
-	// Only a file_download task has one: no read for the others.
-	if obj.Result == nil || *obj.Result != protocol.ResultFileDownload {
+	// Only a file_download task has one, and a file_stream task whose file
+	// core kept as it passed: no read for the others.
+	if obj.Result == nil || (*obj.Result != protocol.ResultFileDownload && *obj.Result != protocol.ResultFileStream) {
 		return nil, nil
 	}
 	return r.MinionTaskResolver.File(ctx, obj.ID)

@@ -301,7 +301,7 @@ func (s *Service) take(ctx context.Context, t *models.MinionTask, machine string
 		}
 		var path string
 		var tr models.FsTransfer
-		up := false
+		list := models.FsDownloaded
 		switch t.Result {
 		case protocol.ResultFileDownload:
 			d, err := protocol.ReadFileDownload(p.Seq, p.DataCBOR)
@@ -319,13 +319,18 @@ func (s *Service) take(ctx context.Context, t *models.MinionTask, machine string
 				return "", err
 			}
 			path, tr = d.Path, models.FsTransfer{Size: int64(d.Size), SHA256: d.SHA256, Stream: true}
+			var kept *models.MinionFile
+			if f, err := s.files.File(ctx, t.TaskID); err == nil {
+				kept = f
+			}
+			list, tr.FileID = streamList(kept)
 		case protocol.ResultFileUpload:
 			d, err := protocol.ReadFileUpload(p.Seq, p.DataCBOR)
 			if err != nil {
 				return "", err
 			}
 			by := t.IssuedBy
-			path, tr, up = d.Path, models.FsTransfer{Size: int64(d.Size), SHA256: d.SHA256, By: &by, Stream: t.Upload != nil && t.Upload.Stream}, true
+			path, tr, list = d.Path, models.FsTransfer{Size: int64(d.Size), SHA256: d.SHA256, By: &by, Stream: t.Upload != nil && t.Upload.Stream}, models.FsUploaded
 		}
 		if path == "" {
 			continue
@@ -335,7 +340,7 @@ func (s *Service) take(ctx context.Context, t *models.MinionTask, machine string
 		if err := s.entries.Ensure(ctx, op, machine, ancestors(e)); err != nil {
 			return "", err
 		}
-		if err := s.entries.Transfer(ctx, op, machine, e, up, tr, ref); err != nil {
+		if err := s.entries.Transfer(ctx, op, machine, e, list, tr, ref); err != nil {
 			return "", err
 		}
 		return e.Parent, nil
@@ -384,4 +389,16 @@ func (s *Service) Children(ctx context.Context, op uuid.UUID, machine, path stri
 // name, or a glob (* and ?), any case.
 func (s *Service) Search(ctx context.Context, op uuid.UUID, machine, query string, showDeleted bool, after string, first int64) ([]models.FsEntry, string, error) {
 	return s.entries.Search(ctx, op, machine, pattern(query), showDeleted, after, first)
+}
+
+// streamList is where a stream's transfer goes: downloaded, with the file,
+// when core kept its copy (all of it came: joining or complete; minionfiles,
+// streams.go); streamed otherwise, a file that went to the downloader
+// alone.
+func streamList(kept *models.MinionFile) (string, *uuid.UUID) {
+	if kept != nil && (kept.State == models.MinionFileJoining || kept.State == models.MinionFileComplete) {
+		id := kept.FileID
+		return models.FsDownloaded, &id
+	}
+	return models.FsStreamed, nil
 }

@@ -270,8 +270,10 @@ func NewApp() (*App, error) {
 		return nil, err
 	}
 	fileBrowser := filebrowser.NewService(repos.FsEntry, repos.FsListing, repos.MinionTask, repos.MinionSession, minionFiles, bus, l)
+	// A stream's file within core's file cap is kept as it passes, as a
+	// download's is.
 	minionStreams := minionstreams.NewService(repos.MinionTask, infra.cache, bus, auth.DeriveKey(e.JWTSecretKey, "minion-stream"),
-		minionstreams.DefaultConfig(), l)
+		minionstreams.DefaultConfig(), l).WithKeeper(minionFiles)
 	tunnelsCfg := miniontunnels.DefaultConfig()
 	tunnelsCfg.Ports, tunnelsCfg.Bind, tunnelsCfg.Address = e.OperationalPorts, e.OperationalBind, e.OperationalAddress
 	minionTunnels := miniontunnels.New(tunnelsCfg, repos.OperationalPort, repos.MinionTask, bus, l).

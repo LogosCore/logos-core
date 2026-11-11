@@ -132,7 +132,7 @@ func fsEntryModel(e models.FsEntry) *model.FsEntry {
 		SeenAt: taskTime(e.SeenAt), SeenBy: fsRefModel(e.SeenBy), GoneAt: taskTime(e.GoneAt), GoneBy: fsRefModel(e.GoneBy),
 		GoneHow: strPtr(e.GoneHow), ListedAt: taskTime(e.ListedAt), ListedBy: fsRefModel(e.ListedBy),
 		ListErr: strPtr(e.ListErr), ListErrAt: taskTime(e.ListErrAt), ListErrBy: fsRefModel(e.ListErrBy),
-		Downloaded: fsTransfersModel(e.Downloaded), Uploaded: fsTransfersModel(e.Uploaded)}
+		Downloaded: fsTransfersModel(e.Downloaded), Uploaded: fsTransfersModel(e.Uploaded), Streamed: fsTransfersModel(e.Streamed)}
 	if e.Size != nil {
 		n := int(*e.Size)
 		m.Size = &n

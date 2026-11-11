@@ -754,6 +754,7 @@ function EntryRow({
   const gone = !!e.goneAt
   const kept = e.downloaded.findLast((d) => !!d.fileId)
   const lastDownload = e.downloaded.at(-1)
+  const lastStream = e.streamed.at(-1)
   const lastUpload = e.uploaded.at(-1)
   const isDir = e.type === "dir"
   const isFile = e.type === "file"
@@ -825,7 +826,7 @@ function EntryRow({
             <button
               type="button"
               className={cn("shrink-0 self-center text-sky-600 dark:text-sky-400", kept && "cursor-pointer hover:text-foreground")}
-              title={`Downloaded ${formatDateTime(lastDownload.at)}${lastDownload.stream ? " (streamed: core keeps no copy)" : ""}${e.downloaded.length > 1 ? `, ${e.downloaded.length} times` : ""}${kept ? ": open the file" : ""}`}
+              title={`Downloaded ${formatDateTime(lastDownload.at)}${lastDownload.stream ? (lastDownload.fileId ? " (streamed; core kept a copy)" : " (streamed: core keeps no copy)") : ""}${e.downloaded.length > 1 ? `, ${e.downloaded.length} times` : ""}${kept ? ": open the file" : ""}`}
               aria-label="Downloaded"
               onClick={(ev) => {
                 ev.stopPropagation()
@@ -834,6 +835,17 @@ function EntryRow({
             >
               <DownloadIcon className="size-3" />
             </button>
+          )}
+          {lastStream && (
+            // Streamed with no copy kept: the file went to its downloader
+            // alone, so nothing here opens it.
+            <span
+              className="shrink-0 self-center text-muted-foreground"
+              title={`Streamed ${formatDateTime(lastStream.at)}${e.streamed.length > 1 ? `, ${e.streamed.length} times` : ""}: core kept no copy (over its file size cap, or the stream did not pass through whole)${lastStream.sha256 ? `\nSHA-256 ${lastStream.sha256}` : ""}`}
+              aria-label="Streamed, no copy kept"
+            >
+              <RadioTowerIcon className="size-3" />
+            </span>
           )}
           {lastUpload && (
             <span

@@ -534,6 +534,7 @@ type FsEntry struct {
 	ListErrBy  *FsTaskRef    `json:"listErrBy,omitempty"`
 	Downloaded []*FsTransfer `json:"downloaded"`
 	Uploaded   []*FsTransfer `json:"uploaded"`
+	Streamed   []*FsTransfer `json:"streamed"`
 	Volume     *FsVolume     `json:"volume,omitempty"`
 }
 

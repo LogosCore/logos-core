@@ -126,7 +126,9 @@ export function StreamView({ task: t, stream: st }: { task: Task; stream: Stream
           >
             {st.state === "WAITING" && (
               <p className="text-xs text-muted-foreground">
-                The minion holds the file open. Nothing is kept in core: it streams as it is downloaded. With no downloader for an hour, the stream stops.
+                The minion holds the file open: it streams as it is downloaded
+                {t.file ? ", and core keeps a copy as it passes" : ". Core keeps no copy: the file is over its size cap"}. With
+                no downloader for an hour, the stream stops.
               </p>
             )}
           </FileProgress>

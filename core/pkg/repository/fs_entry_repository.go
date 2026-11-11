@@ -44,7 +44,9 @@ type IFsEntryRepository interface {
 	Gone(ctx context.Context, op uuid.UUID, machine string, e models.FsEntry, how string, at time.Time, ref models.FsTaskRef) error
 	// Transfer records a file a task moved: the entry seen (a file of its
 	// size), and the transfer in its downloaded or uploaded.
-	Transfer(ctx context.Context, op uuid.UUID, machine string, e models.FsEntry, up bool, t models.FsTransfer, ref models.FsTaskRef) error
+	// Transfer records t in the entry's list (models.FsDownloaded,
+	// FsUploaded, FsStreamed).
+	Transfer(ctx context.Context, op uuid.UUID, machine string, e models.FsEntry, list string, t models.FsTransfer, ref models.FsTaskRef) error
 	// Ensure makes the entries on the way to one (its parents), as folders,
 	// where there are none.
 	Ensure(ctx context.Context, op uuid.UUID, machine string, entries []models.FsEntry) error
@@ -275,7 +277,12 @@ func (r *fsEntryRepository) Gone(ctx context.Context, op uuid.UUID, machine stri
 	return err
 }
 
-func (r *fsEntryRepository) Transfer(ctx context.Context, op uuid.UUID, machine string, e models.FsEntry, up bool, t models.FsTransfer, ref models.FsTaskRef) error {
+func (r *fsEntryRepository) Transfer(ctx context.Context, op uuid.UUID, machine string, e models.FsEntry, list string, t models.FsTransfer, ref models.FsTaskRef) error {
+	switch list {
+	case models.FsDownloaded, models.FsUploaded, models.FsStreamed:
+	default:
+		return fmt.Errorf("no transfer list %q", list)
+	}
 	c, err := r.raw()
 	if err != nil {
 		return err
@@ -296,12 +303,8 @@ func (r *fsEntryRepository) Transfer(ctx context.Context, op uuid.UUID, machine 
 	if err != nil && !mongo.IsDuplicateKeyError(err) {
 		return err
 	}
-	field := "downloaded"
-	if up {
-		field = "uploaded"
-	}
 	_, err = c.UpdateOne(ctx, bson.M{"operation_id": op, "machine": machine, "path_key": e.PathKey},
-		bson.M{"$push": bson.M{field: t}})
+		bson.M{"$push": bson.M{list: t}})
 	return err
 }
 

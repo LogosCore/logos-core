@@ -175,8 +175,10 @@ export function TaskDetail({
   const isFile = t.result === "file_download"
   // A file_upload task's upload shows from its queueing, before its data.
   const isUpload = t.result === "file_upload" && t.upload != null
-  // A file_stream task's stream shows from the minion's announcement.
+  // A file_stream task's stream shows from the minion's announcement; its
+  // file, once core kept a copy of all of it, as a download's.
   const isStream = t.result === "file_stream" && t.stream != null
+  const keptStream = t.result === "file_stream" && t.file?.state === "COMPLETE"
   // A tunnel task's proxy shows from its queueing: core took its port then.
   const isTunnel = t.tunnel != null
   // A delegate task's: what it serves and carries.
@@ -355,7 +357,7 @@ export function TaskDetail({
             <DelegateView delegate={t.delegate} />
           ) : isTunnel && t.tunnel ? (
             <TunnelView key={t.id} task={t} tunnel={t.tunnel} />
-          ) : isFile && t.file && !rawData ? (
+          ) : (isFile || keptStream) && t.file && !rawData ? (
             <FileView key={t.file.id} file={t.file} />
           ) : isUpload && !(rawData && data) ? (
             <UploadView task={t} data={data} />

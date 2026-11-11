@@ -244,7 +244,7 @@ func (s *Service) join(ctx context.Context, f models.MinionFile) {
 		problem = "could not join its chunks: " + err.Error()
 	case size != f.Total:
 		problem = fmt.Sprintf("it is %d bytes, not the %d said", size, f.Total)
-	case !bytes.Equal(sum.Sum(nil), f.SHA256):
+	case f.SHA256 != nil && !bytes.Equal(sum.Sum(nil), f.SHA256):
 		problem = "its SHA-256 is not the one the minion said"
 	}
 	now := s.now()
@@ -255,8 +255,10 @@ func (s *Service) join(ctx context.Context, f models.MinionFile) {
 			bson.M{"err": problem, "done_at": now})
 		s.logger.Warn("minion file did not check out", zap.String("file_id", f.FileID.String()), zap.String("problem", problem))
 	} else {
+		// A stream resumed from the middle ends without the minion's SHA-256
+		// (streams.go): the copy's own is kept.
 		after, err = s.files.Move(ctx, f.FileID, []string{models.MinionFileJoining}, models.MinionFileComplete,
-			bson.M{"done_at": now, "content_type": mimetype.Detect(head.b).String()})
+			bson.M{"done_at": now, "content_type": mimetype.Detect(head.b).String(), "sha256": sum.Sum(nil)})
 		s.logger.Info("minion file kept", zap.String("file_id", f.FileID.String()), zap.Int64("size", size))
 	}
 	if err != nil {

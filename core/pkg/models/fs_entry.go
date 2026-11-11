@@ -64,8 +64,13 @@ type FsEntry struct {
 	ListErrAt *time.Time `bson:"list_err_at,omitempty" json:"list_err_at,omitempty"`
 	ListErrBy *FsTaskRef `bson:"list_err_by,omitempty" json:"list_err_by,omitempty"`
 
+	// Downloaded: transfers core keeps the file of, a download's or a
+	// stream's kept as it passed (Stream). Streamed: a stream core kept no
+	// copy of (over its file size cap, or not passed through whole): it
+	// went to the downloader alone.
 	Downloaded []FsTransfer `bson:"downloaded,omitempty" json:"downloaded,omitempty"`
 	Uploaded   []FsTransfer `bson:"uploaded,omitempty" json:"uploaded,omitempty"`
+	Streamed   []FsTransfer `bson:"streamed,omitempty" json:"streamed,omitempty"`
 
 	// Volume: a volume's files are here (a drive's root, a mount point),
 	// as the newest volumes task of the machine said; none once a later
@@ -109,6 +114,13 @@ type FsTransfer struct {
 	By     *uuid.UUID `bson:"by,omitempty" json:"by,omitempty"`
 	At     time.Time  `bson:"at" json:"at"`
 }
+
+// An entry's lists of transfers (FsEntry).
+const (
+	FsDownloaded = "downloaded"
+	FsUploaded   = "uploaded"
+	FsStreamed   = "streamed"
+)
 
 // How an entry went.
 const (

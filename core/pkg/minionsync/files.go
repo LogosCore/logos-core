@@ -69,7 +69,9 @@ func (s *Service) takeChunk(ctx context.Context, session *models.MinionSession, 
 
 // endFile ends the file of a task that ended before all of it came.
 func (s *Service) endFile(ctx context.Context, task *models.MinionTask) {
-	if s.files == nil || task.Result != protocol.ResultFileDownload {
+	// A stream's copy too (minionfiles, streams.go): one the stream did not
+	// pass through whole.
+	if s.files == nil || (task.Result != protocol.ResultFileDownload && task.Result != protocol.ResultFileStream) {
 		return
 	}
 	reason := "the task ended before all of its file came"

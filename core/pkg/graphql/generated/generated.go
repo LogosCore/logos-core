@@ -511,6 +511,7 @@ type ComplexityRoot struct {
 		SeenBy     func(childComplexity int) int
 		Sep        func(childComplexity int) int
 		Size       func(childComplexity int) int
+		Streamed   func(childComplexity int) int
 		Target     func(childComplexity int) int
 		Type       func(childComplexity int) int
 		Uploaded   func(childComplexity int) int
@@ -4502,6 +4503,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FsEntry.Size(childComplexity), true
+	case "FsEntry.streamed":
+		if e.ComplexityRoot.FsEntry.Streamed == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Streamed(childComplexity), true
 	case "FsEntry.target":
 		if e.ComplexityRoot.FsEntry.Target == nil {
 			break
@@ -14570,8 +14577,13 @@ type FsEntry {
   listErr: String
   listErrAt: String
   listErrBy: FsTaskRef
+  # Files core keeps of it: a download's, or a stream's copy kept as it
+  # passed (stream).
   downloaded: [FsTransfer!]!
   uploaded: [FsTransfer!]!
+  # Streams of it core kept no copy of (over its file size cap, or not
+  # passed through whole): the file went to the downloader alone.
+  streamed: [FsTransfer!]!
   # A volume's files are here (a drive's root, a mount point), as the
   # newest volumes task of the machine said; null once a later one no
   # longer had it.
@@ -14604,8 +14616,8 @@ type FsTaskRef {
   user: String
 }
 
-# A file a task moved: downloaded (fileId: the kept file's; none for a
-# stream) or uploaded (by: the operator).
+# A file a task moved: downloaded (fileId: the kept file's), streamed (no
+# file: core kept no copy) or uploaded (by: the operator).
 type FsTransfer {
   taskId: ID!
   fileId: ID
@@ -33222,6 +33234,51 @@ func (ec *executionContext) fieldContext_FsEntry_uploaded(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _FsEntry_streamed(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_streamed,
+		func(ctx context.Context) (any, error) {
+			return obj.Streamed, nil
+		},
+		nil,
+		ec.marshalNFsTransfer2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsTransferᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_streamed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "taskId":
+				return ec.fieldContext_FsTransfer_taskId(ctx, field)
+			case "fileId":
+				return ec.fieldContext_FsTransfer_fileId(ctx, field)
+			case "size":
+				return ec.fieldContext_FsTransfer_size(ctx, field)
+			case "sha256":
+				return ec.fieldContext_FsTransfer_sha256(ctx, field)
+			case "stream":
+				return ec.fieldContext_FsTransfer_stream(ctx, field)
+			case "by":
+				return ec.fieldContext_FsTransfer_by(ctx, field)
+			case "at":
+				return ec.fieldContext_FsTransfer_at(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsTransfer", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _FsEntry_volume(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -33347,6 +33404,8 @@ func (ec *executionContext) fieldContext_FsEntryPage_entries(_ context.Context, 
 				return ec.fieldContext_FsEntry_downloaded(ctx, field)
 			case "uploaded":
 				return ec.fieldContext_FsEntry_uploaded(ctx, field)
+			case "streamed":
+				return ec.fieldContext_FsEntry_streamed(ctx, field)
 			case "volume":
 				return ec.fieldContext_FsEntry_volume(ctx, field)
 			}
@@ -33459,6 +33518,8 @@ func (ec *executionContext) fieldContext_FsEntryPage_folder(_ context.Context, f
 				return ec.fieldContext_FsEntry_downloaded(ctx, field)
 			case "uploaded":
 				return ec.fieldContext_FsEntry_uploaded(ctx, field)
+			case "streamed":
+				return ec.fieldContext_FsEntry_streamed(ctx, field)
 			case "volume":
 				return ec.fieldContext_FsEntry_volume(ctx, field)
 			}
@@ -93303,6 +93364,11 @@ func (ec *executionContext) _FsEntry(ctx context.Context, sel ast.SelectionSet, 
 			}
 		case "uploaded":
 			out.Values[i] = ec._FsEntry_uploaded(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "streamed":
+			out.Values[i] = ec._FsEntry_streamed(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

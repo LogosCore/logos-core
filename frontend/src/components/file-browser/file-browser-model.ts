@@ -93,13 +93,15 @@ export const LISTED_FOLDER = "text-amber-600 dark:text-amber-400"
 export const UNLISTED_FOLDER = "text-muted-foreground [stroke-dasharray:3_2]"
 /** A folder a task could not read: its lock. */
 export const UNREADABLE_FOLDER = "text-red-600 dark:text-red-400"
-/** A file core has a download of (or streamed): its icon. */
+/** A file core has a copy of (a download, or a stream kept as it passed): its icon. */
 export const DOWNLOADED_FILE = "text-sky-600 dark:text-sky-400"
 
 /**
- * Whether an entry is one a task has taken in: a folder listed, a file
- * downloaded (or streamed); a root always. Its name shows bright, and the
- * rest dimmed: what is known only by name, or as the way to something else.
+ * Whether an entry is one a task has taken in: a folder listed, a file core
+ * has a copy of (downloaded, or streamed and kept); a root always. Its name
+ * shows bright, and the rest dimmed: what is known only by name, or as the
+ * way to something else. A file streamed with no copy kept stays dim: core
+ * does not have it.
  */
 export function takenIn(e: { type: string; parent?: string | null; listedAt?: string | null; downloaded: readonly unknown[] }): boolean {
   if (!e.parent) return true

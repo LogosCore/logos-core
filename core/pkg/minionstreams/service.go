@@ -29,6 +29,16 @@ import (
 	"go.uber.org/zap"
 )
 
+// Keeper keeps a copy of a stream's file as core relays it (minionfiles:
+// one within core's file size cap), so core has the file as it has a
+// download's. It never fails the stream.
+type Keeper interface {
+	// KeepStream starts the copy of an announced stream (c: its first chunk).
+	KeepStream(ctx context.Context, session *models.MinionSession, t *models.MinionTask, c protocol.ChunkItem)
+	// StreamChunk adds a chunk core took for the downloader.
+	StreamChunk(ctx context.Context, session *models.MinionSession, c protocol.ChunkItem)
+}
+
 // Buffer keeps a stream's chunks between the minion's exchange and the
 // downloader (Redis: core's cache), shared by core's instances.
 type Buffer interface {
@@ -95,6 +105,9 @@ type Service struct {
 	// waker pushes a session's stream acks to its minion at once; nil:
 	// they go with its next message.
 	waker Waker
+	// keeper keeps a copy of each stream's file within core's cap; nil:
+	// none is kept.
+	keeper Keeper
 	// full are the streams (by xfer) the minion was told to hold because
 	// the downloader's window was full: the downloader taking a chunk wakes
 	// the minion once (core is one instance: docs, One core instance).
@@ -125,6 +138,12 @@ func (s *Service) WithWaker(w Waker) *Service {
 }
 
 // wake tells the waker, if any, that t's stream may go.
+// WithKeeper keeps a copy of the files streamed (minionfiles).
+func (s *Service) WithKeeper(k Keeper) *Service {
+	s.keeper = k
+	return s
+}
+
 func (s *Service) wake(t *models.MinionTask) {
 	if s.waker != nil {
 		s.waker.WakeStreams(t.SessionID)
@@ -198,6 +217,9 @@ func (s *Service) TakeChunk(ctx context.Context, session *models.MinionSession, 
 		}
 		s.logger.Info("minion stream announced", zap.String("task_id", taskID.String()), zap.String("name", c.Name),
 			zap.Uint64("size", *c.Total))
+		if s.keeper != nil {
+			s.keeper.KeepStream(ctx, session, after, c)
+		}
 		s.publish(after)
 		a := s.ack(after.Stream)
 		return Reply{Ack: &a}, true, nil
@@ -228,6 +250,9 @@ func (s *Service) TakeChunk(ctx context.Context, session *models.MinionSession, 
 		}
 		if took {
 			st.Want += n
+			if s.keeper != nil {
+				s.keeper.StreamChunk(ctx, session, c)
+			}
 		}
 	}
 	a := s.ack(st)

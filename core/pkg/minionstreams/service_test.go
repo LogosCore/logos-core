@@ -450,3 +450,52 @@ func (m *memTasks) UploadDetach(_ context.Context, _ uuid.UUID, gen int64, at ti
 	}
 	return nil
 }
+
+// keeps records what a Keeper was given.
+type keeps struct {
+	mu        sync.Mutex
+	announced int
+	offs      []uint64
+	n         int
+}
+
+func (k *keeps) KeepStream(context.Context, *models.MinionSession, *models.MinionTask, protocol.ChunkItem) {
+	k.mu.Lock()
+	k.announced++
+	k.mu.Unlock()
+}
+
+func (k *keeps) StreamChunk(_ context.Context, _ *models.MinionSession, c protocol.ChunkItem) {
+	k.mu.Lock()
+	k.offs = append(k.offs, c.Off)
+	k.n += len(c.Data)
+	k.mu.Unlock()
+}
+
+// The keeper hears of the announce, and of each chunk core takes for the
+// downloader: not one held while nobody downloads.
+func TestStreamKeeper(t *testing.T) {
+	s, tasks, session, body, xfer := setup(t, 2*protocol.MaxChunkData+10)
+	k := &keeps{}
+	s.WithKeeper(k)
+	a := announce(t, s, tasks, session, body, xfer)
+	if _, _, err := s.TakeChunk(context.Background(), session, protocol.ChunkItem{Xfer: xfer, Off: 0, Data: body[:10]}); err != nil {
+		t.Fatal(err)
+	}
+	if k.announced != 1 || len(k.offs) != 0 {
+		t.Fatalf("before a downloader: %d announces, chunks at %v", k.announced, k.offs)
+	}
+	done := make(chan int64)
+	go func() {
+		n, _ := s.Read(context.Background(), tasks.t.TaskID, 0, int64(len(body)), func([]byte) error { return nil })
+		done <- n
+	}()
+	waitFor(t, "downloader", func() bool { return tasks.get().Stream.Reader != "" })
+	minion(t, s, session, body, xfer, a, 40)
+	<-done
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.n != len(body) || len(k.offs) != 3 || k.offs[0] != 0 || k.offs[1] != protocol.MaxChunkData {
+		t.Fatalf("kept %d of %d bytes, chunks at %v", k.n, len(body), k.offs)
+	}
+}

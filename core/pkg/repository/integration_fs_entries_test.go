@@ -98,7 +98,7 @@ func TestIntegrationFsEntries(t *testing.T) {
 
 	// A download of a.txt: recorded, the entry kept.
 	fid := uuid.New()
-	if err := repo.Transfer(ctx, op, m, fsEntry("/tmp/a.txt", "/tmp", "a.txt", "file", 0), false,
+	if err := repo.Transfer(ctx, op, m, fsEntry("/tmp/a.txt", "/tmp", "a.txt", "file", 0), models.FsDownloaded,
 		models.FsTransfer{TaskID: uuid.New(), FileID: &fid, Size: 5, At: t1.Add(2 * time.Second)}, ref); err != nil {
 		t.Fatal(err)
 	}

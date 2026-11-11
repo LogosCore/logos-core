@@ -53,6 +53,12 @@ export const FsEntryFields = graphql(`
       stream
       at
     }
+    streamed {
+      taskId
+      size
+      sha256
+      at
+    }
     uploaded {
       taskId
       size
