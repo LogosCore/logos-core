@@ -369,6 +369,16 @@ export function CommandBar({
         return
       }
     }
+    // Tab completes (above), or stays: with nothing to complete ("tub", an
+    // empty line, a value with no suggestions) it said nothing and moved the
+    // focus off the prompt. Now it says so, as ↑ past the oldest line does.
+    // Shift+Tab keeps the browser's way: the keyboard's way out.
+    if (e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      e.preventDefault()
+      const el = input.current
+      if (el) fx?.refused(el)
+      return
+    }
     if (e.key === "Enter") {
       e.preventDefault()
       if (line.trim() !== "") run(line)
