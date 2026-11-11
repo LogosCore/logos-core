@@ -169,6 +169,12 @@ type BuildError struct {
 	Message string `json:"message"`
 }
 
+type BuildErrorCode struct {
+	Code        int     `json:"code"`
+	Label       string  `json:"label"`
+	Description *string `json:"description,omitempty"`
+}
+
 type BuildFile struct {
 	ID          string       `json:"id"`
 	OperationID string       `json:"operationId"`
@@ -207,16 +213,17 @@ type BuildProblem struct {
 }
 
 type BuildSchema struct {
-	Version           int             `json:"version"`
-	Channels          []*BuildChannel `json:"channels"`
-	Crypto            *string         `json:"crypto,omitempty"`
-	Fields            []*ModuleField  `json:"fields"`
-	Targets           []*BuildTarget  `json:"targets"`
-	Commands          []*BuildCommand `json:"commands"`
-	PersistedSessions bool            `json:"persistedSessions"`
-	Failover          bool            `json:"failover"`
-	MaxTasks          bool            `json:"maxTasks"`
-	Compression       []string        `json:"compression"`
+	Version           int               `json:"version"`
+	Channels          []*BuildChannel   `json:"channels"`
+	Crypto            *string           `json:"crypto,omitempty"`
+	Fields            []*ModuleField    `json:"fields"`
+	Targets           []*BuildTarget    `json:"targets"`
+	Commands          []*BuildCommand   `json:"commands"`
+	ErrorCodes        []*BuildErrorCode `json:"errorCodes"`
+	PersistedSessions bool              `json:"persistedSessions"`
+	Failover          bool              `json:"failover"`
+	MaxTasks          bool              `json:"maxTasks"`
+	Compression       []string          `json:"compression"`
 }
 
 type BuildServe struct {

@@ -29,6 +29,7 @@ const schema: BuildSchemaFieldsFragment = {
   maxTasks: false,
   compression: [],
   persistedSessions: false,
+  errorCodes: [],
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
     field({ key: "punches", type: "enum_list", order: 2, options: [{ value: "jab" }, { value: "hook" }] }),

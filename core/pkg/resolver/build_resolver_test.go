@@ -89,6 +89,23 @@ func TestToBuildSchemaModelCommands(t *testing.T) {
 	}
 }
 
+// A factory's error codes go out as declared, in its order; none is an
+// empty list.
+func TestToBuildSchemaModelErrorCodes(t *testing.T) {
+	s := &protocol.BuildSchema{ErrorCodes: []protocol.ErrorCode{
+		{Code: 5, Label: "No connection it can use", Description: "Build it with an http or tcp connection."},
+		{Code: 3, Label: "Its config does not read"},
+	}}
+	got := toBuildSchemaModel(s).ErrorCodes
+	if len(got) != 2 || got[0].Code != 5 || got[0].Label != "No connection it can use" || got[0].Description == nil ||
+		*got[0].Description != "Build it with an http or tcp connection." || got[1].Code != 3 || got[1].Description != nil {
+		t.Errorf("error codes %+v", got)
+	}
+	if got := toBuildSchemaModel(&protocol.BuildSchema{}).ErrorCodes; got == nil || len(got) != 0 {
+		t.Errorf("no error codes: %#v, want an empty list", got)
+	}
+}
+
 func TestToBuildModelCommands(t *testing.T) {
 	if c := toBuildModel(&models.Build{}).Commands; c == nil || len(c) != 0 {
 		t.Errorf("a build without commands: %#v, want an empty list", c)

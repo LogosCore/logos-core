@@ -15,6 +15,7 @@ import { ModuleAdminDialogs, ModuleBlockButton } from "@/components/modules/modu
 import { ModuleSyncIndicator } from "@/components/modules/management/module-sync-indicator"
 import {
   BuildCommands,
+  BuildErrorCodes,
   BuildParameters,
   BuildTargets,
   ConnectionSchema,
@@ -135,6 +136,7 @@ export function ModuleDetailPage() {
                 {build && <BuildTargets build={build} />}
                 {build && <BuildParameters build={build} />}
                 {build && build.commands.length > 0 && <BuildCommands build={build} />}
+                {build && build.errorCodes.length > 0 && <BuildErrorCodes build={build} />}
               </CardColumns>
             </div>
           ) : (
@@ -179,6 +181,7 @@ export function ModuleDetailPage() {
                   {build && <BuildTargets build={build} />}
                   {build && <BuildParameters build={build} />}
                   {build && build.commands.length > 0 && <BuildCommands build={build} />}
+                  {build && build.errorCodes.length > 0 && <BuildErrorCodes build={build} />}
                 </CardColumns>
               </TabsContent>
               {/* Kept mounted: unsaved edits survive a look at another tab. */}

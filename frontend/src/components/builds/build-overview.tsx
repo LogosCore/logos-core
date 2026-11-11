@@ -19,6 +19,7 @@ import {
 import { valueRows, type BuildRecord } from "@/components/builds/build-record"
 import { BuildNotices } from "@/components/builds/build-detail-parts"
 import { rowsOf } from "@/components/builds/build-value-rows"
+import { ErrorCodes } from "@/components/builds/error-codes"
 
 /**
  * The build modal's Overview tab: what the JSON tab holds, for reading, in
@@ -27,7 +28,9 @@ import { rowsOf } from "@/components/builds/build-value-rows"
  * modal's header) and the values it was given side by side, its artifact
  * under the summary. Its connections and what the minion can do have tabs
  * of their own. Values equal to their default are dimmed, so the ones
- * somebody chose stand out.
+ * somebody chose stand out. Last, the factory's error codes, when it
+ * declares any (by today's schema, as the Commands tab's labels): what the
+ * minion's exit code means.
  */
 export function BuildOverview({
   build: b,
@@ -158,6 +161,8 @@ export function BuildOverview({
             {a.deleted && <NoteRow>The artifact&apos;s bytes were deleted; the build record stays.</NoteRow>}
           </InfoCard>
         )}
+
+        {kind && kind.errorCodes.length > 0 && <ErrorCodes codes={kind.errorCodes} />}
       </CardColumns>
     </div>
   )

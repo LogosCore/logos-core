@@ -246,6 +246,12 @@ type ComplexityRoot struct {
 		Message func(childComplexity int) int
 	}
 
+	BuildErrorCode struct {
+		Code        func(childComplexity int) int
+		Description func(childComplexity int) int
+		Label       func(childComplexity int) int
+	}
+
 	BuildFile struct {
 		CreatedAt   func(childComplexity int) int
 		ID          func(childComplexity int) int
@@ -267,6 +273,7 @@ type ComplexityRoot struct {
 		Commands          func(childComplexity int) int
 		Compression       func(childComplexity int) int
 		Crypto            func(childComplexity int) int
+		ErrorCodes        func(childComplexity int) int
 		Failover          func(childComplexity int) int
 		Fields            func(childComplexity int) int
 		MaxTasks          func(childComplexity int) int
@@ -3387,6 +3394,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.BuildError.Message(childComplexity), true
 
+	case "BuildErrorCode.code":
+		if e.ComplexityRoot.BuildErrorCode.Code == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildErrorCode.Code(childComplexity), true
+	case "BuildErrorCode.description":
+		if e.ComplexityRoot.BuildErrorCode.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildErrorCode.Description(childComplexity), true
+	case "BuildErrorCode.label":
+		if e.ComplexityRoot.BuildErrorCode.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildErrorCode.Label(childComplexity), true
+
 	case "BuildFile.createdAt":
 		if e.ComplexityRoot.BuildFile.CreatedAt == nil {
 			break
@@ -3473,6 +3499,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildSchema.Crypto(childComplexity), true
+	case "BuildSchema.errorCodes":
+		if e.ComplexityRoot.BuildSchema.ErrorCodes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildSchema.ErrorCodes(childComplexity), true
 	case "BuildSchema.failover":
 		if e.ComplexityRoot.BuildSchema.Failover == nil {
 			break
@@ -13278,6 +13310,10 @@ type BuildSchema {
   # What the minions can do, in the factory's order. A build picks its from
   # its target's.
   commands: [BuildCommand!]!
+  # The factory's own error codes, in its order: what a minion's exit code
+  # means when it stops on an error, for an operator to look up. Empty: it
+  # declares none. Core does nothing else with them.
+  errorCodes: [BuildErrorCode!]!
   # The minions can claim a persisted session: a build can be made from a
   # session for them (BuildInput.persistedSession).
   persistedSessions: Boolean!
@@ -13294,6 +13330,16 @@ type BuildSchema {
   # packs its messages with the first unless turned off
   # (BuildInput.compression). Empty: none.
   compression: [String!]!
+}
+
+# One of a factory's error codes.
+type BuildErrorCode {
+  # The number, 1 to 255: a minion's exit code.
+  code: Int!
+  # What it means, in a few words.
+  label: String!
+  # More: when it happens, what to do; null when the factory gave none.
+  description: String
 }
 
 # A command a factory's minions can be built with.
@@ -27027,6 +27073,93 @@ func (ec *executionContext) fieldContext_BuildError_message(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _BuildErrorCode_code(ctx context.Context, field graphql.CollectedField, obj *model.BuildErrorCode) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildErrorCode_code,
+		func(ctx context.Context) (any, error) {
+			return obj.Code, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildErrorCode_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildErrorCode",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildErrorCode_label(ctx context.Context, field graphql.CollectedField, obj *model.BuildErrorCode) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildErrorCode_label,
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildErrorCode_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildErrorCode",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildErrorCode_description(ctx context.Context, field graphql.CollectedField, obj *model.BuildErrorCode) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildErrorCode_description,
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildErrorCode_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildErrorCode",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BuildFile_id(ctx context.Context, field graphql.CollectedField, obj *model.BuildFile) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27598,6 +27731,43 @@ func (ec *executionContext) fieldContext_BuildSchema_commands(_ context.Context,
 				return ec.fieldContext_BuildCommand_params(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type BuildCommand", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildSchema_errorCodes(ctx context.Context, field graphql.CollectedField, obj *model.BuildSchema) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildSchema_errorCodes,
+		func(ctx context.Context) (any, error) {
+			return obj.ErrorCodes, nil
+		},
+		nil,
+		ec.marshalNBuildErrorCode2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildErrorCodeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildSchema_errorCodes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildSchema",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "code":
+				return ec.fieldContext_BuildErrorCode_code(ctx, field)
+			case "label":
+				return ec.fieldContext_BuildErrorCode_label(ctx, field)
+			case "description":
+				return ec.fieldContext_BuildErrorCode_description(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type BuildErrorCode", field.Name)
 		},
 	}
 	return fc, nil
@@ -32122,6 +32292,8 @@ func (ec *executionContext) fieldContext_FactoryKind_schema(_ context.Context, f
 				return ec.fieldContext_BuildSchema_targets(ctx, field)
 			case "commands":
 				return ec.fieldContext_BuildSchema_commands(ctx, field)
+			case "errorCodes":
+				return ec.fieldContext_BuildSchema_errorCodes(ctx, field)
 			case "persistedSessions":
 				return ec.fieldContext_BuildSchema_persistedSessions(ctx, field)
 			case "failover":
@@ -49867,6 +50039,8 @@ func (ec *executionContext) fieldContext_Module_build(_ context.Context, field g
 				return ec.fieldContext_BuildSchema_targets(ctx, field)
 			case "commands":
 				return ec.fieldContext_BuildSchema_commands(ctx, field)
+			case "errorCodes":
+				return ec.fieldContext_BuildSchema_errorCodes(ctx, field)
 			case "persistedSessions":
 				return ec.fieldContext_BuildSchema_persistedSessions(ctx, field)
 			case "failover":
@@ -90767,6 +90941,52 @@ func (ec *executionContext) _BuildError(ctx context.Context, sel ast.SelectionSe
 	return out
 }
 
+var buildErrorCodeImplementors = []string{"BuildErrorCode"}
+
+func (ec *executionContext) _BuildErrorCode(ctx context.Context, sel ast.SelectionSet, obj *model.BuildErrorCode) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, buildErrorCodeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BuildErrorCode")
+		case "code":
+			out.Values[i] = ec._BuildErrorCode_code(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._BuildErrorCode_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._BuildErrorCode_description(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var buildFileImplementors = []string{"BuildFile"}
 
 func (ec *executionContext) _BuildFile(ctx context.Context, sel ast.SelectionSet, obj *model.BuildFile) graphql.Marshaler {
@@ -90914,6 +91134,11 @@ func (ec *executionContext) _BuildSchema(ctx context.Context, sel ast.SelectionS
 			}
 		case "commands":
 			out.Values[i] = ec._BuildSchema_commands(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "errorCodes":
+			out.Values[i] = ec._BuildSchema_errorCodes(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -109040,6 +109265,32 @@ func (ec *executionContext) marshalNBuildEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogo
 		return graphql.Null
 	}
 	return ec._BuildEdge(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNBuildErrorCode2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildErrorCodeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildErrorCode) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNBuildErrorCode2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildErrorCode(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNBuildErrorCode2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildErrorCode(ctx context.Context, sel ast.SelectionSet, v *model.BuildErrorCode) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BuildErrorCode(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNBuildFile2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildFileᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildFile) graphql.Marshaler {

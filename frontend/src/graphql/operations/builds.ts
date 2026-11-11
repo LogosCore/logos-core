@@ -50,6 +50,11 @@ export const BuildSchemaFields = graphql(`
         ...ModuleFieldDefFields
       }
     }
+    errorCodes {
+      code
+      label
+      description
+    }
   }
 `)
 

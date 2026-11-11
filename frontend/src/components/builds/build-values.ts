@@ -104,6 +104,13 @@ export interface Target {
   channels: { moduleName: string; versions: number[]; kinds: string[] }[]
 }
 
+/** One of a factory's error codes: what a minion's exit code means. */
+export interface ErrorCode {
+  code: number
+  label: string
+  description?: string | null
+}
+
 /** A command a factory's minions can be built with. */
 export interface Command {
   id: string
@@ -144,6 +151,8 @@ export interface FactoryKind {
   targets: Target[]
   /** What the minions can do, in the factory's order. */
   commands: Command[]
+  /** The factory's error codes, in its order: what a minion's exit code means. */
+  errorCodes: ErrorCode[]
 }
 
 const asText = (f: FieldDef): FieldDef => (f.type === "secret" ? { ...f, type: "string" } : f)
@@ -194,6 +203,7 @@ export function factoryKindsByName(
         kinds: c.kinds,
         params: sorted(c.params),
       })),
+      errorCodes: k.schema.errorCodes.map((e) => ({ code: e.code, label: e.label, description: e.description ?? null })),
     })
   }
   return out

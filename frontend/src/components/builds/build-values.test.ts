@@ -41,6 +41,10 @@ const schema: BuildSchemaFieldsFragment = {
   maxTasks: false,
   compression: [],
   persistedSessions: false,
+  errorCodes: [
+    { code: 5, label: "No connection it can use", description: null },
+    { code: 3, label: "Its config does not read", description: "Build it again." },
+  ],
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
     field({ key: "kill_date", type: "datetime", order: 2 }),
@@ -174,6 +178,13 @@ describe("factoryKindsByName", () => {
     expect(kind.fields.find((f) => f.key === "token")?.type).toBe("string")
     expect(kind.channelFields.get("http")?.get("reverse-call")?.map((f) => f.key)).toEqual(["method", "path_prefix"])
     expect(kind.channelFields.get("http")?.get("reverse-persistent")?.map((f) => f.key)).toEqual(["path_prefix"])
+  })
+
+  it("keeps the error codes in the factory's order", () => {
+    expect(kind.errorCodes).toEqual([
+      { code: 5, label: "No connection it can use", description: null },
+      { code: 3, label: "Its config does not read", description: "Build it again." },
+    ])
   })
 
   it("keeps the commands in the factory's order, their params sorted", () => {

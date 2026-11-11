@@ -406,6 +406,10 @@ func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 	for i, c := range s.Commands {
 		out.Commands[i] = toBuildCommandModel(*s, c)
 	}
+	out.ErrorCodes = make([]*model.BuildErrorCode, len(s.ErrorCodes))
+	for i, e := range s.ErrorCodes {
+		out.ErrorCodes[i] = &model.BuildErrorCode{Code: e.Code, Label: e.Label, Description: strPtr(e.Description)}
+	}
 	return out
 }
 

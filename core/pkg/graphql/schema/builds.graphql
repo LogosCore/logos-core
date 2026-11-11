@@ -43,6 +43,10 @@ type BuildSchema {
   # What the minions can do, in the factory's order. A build picks its from
   # its target's.
   commands: [BuildCommand!]!
+  # The factory's own error codes, in its order: what a minion's exit code
+  # means when it stops on an error, for an operator to look up. Empty: it
+  # declares none. Core does nothing else with them.
+  errorCodes: [BuildErrorCode!]!
   # The minions can claim a persisted session: a build can be made from a
   # session for them (BuildInput.persistedSession).
   persistedSessions: Boolean!
@@ -59,6 +63,16 @@ type BuildSchema {
   # packs its messages with the first unless turned off
   # (BuildInput.compression). Empty: none.
   compression: [String!]!
+}
+
+# One of a factory's error codes.
+type BuildErrorCode {
+  # The number, 1 to 255: a minion's exit code.
+  code: Int!
+  # What it means, in a few words.
+  label: String!
+  # More: when it happens, what to do; null when the factory gave none.
+  description: String
 }
 
 # A command a factory's minions can be built with.

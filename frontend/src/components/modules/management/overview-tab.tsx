@@ -11,6 +11,7 @@ import { kindLabels } from "@/components/endpoints/endpoint-values"
 import { compareFields, formatValue, type FieldDef } from "./field-values"
 import { channelsText, fieldNotes, paramsNote, versionsText } from "./schema-notes"
 import { commandKindsNote } from "@/components/minion-sessions/command-kinds"
+import { ErrorCodes } from "@/components/builds/error-codes"
 
 type Management = NonNullable<ModuleDetailFieldsFragment["management"]>
 type Connection = NonNullable<ModuleDetailFieldsFragment["connection"]>
@@ -168,6 +169,14 @@ export function BuildCommands({ build }: { build: Build }) {
       />
     </InfoCard>
   )
+}
+
+/**
+ * The error codes this factory instance declared (read-only): what its
+ * minions' exit codes mean when they stop on an error.
+ */
+export function BuildErrorCodes({ build }: { build: Build }) {
+  return <ErrorCodes codes={build.errorCodes} labelWidth={KEYS} />
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
