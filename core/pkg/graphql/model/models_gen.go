@@ -112,6 +112,7 @@ type BuildArtifact struct {
 
 type BuildChannel struct {
 	ModuleName string              `json:"moduleName"`
+	Num        *int                `json:"num,omitempty"`
 	Versions   []int               `json:"versions"`
 	Kinds      []*BuildChannelKind `json:"kinds"`
 }
@@ -129,6 +130,7 @@ type BuildChannelVersions struct {
 
 type BuildCommand struct {
 	ID          string         `json:"id"`
+	Op          int            `json:"op"`
 	Label       string         `json:"label"`
 	Description *string        `json:"description,omitempty"`
 	Targets     []string       `json:"targets"`
@@ -1335,6 +1337,7 @@ type ModuleEvent struct {
 
 type ModuleField struct {
 	Key         string                `json:"key"`
+	Num         *int                  `json:"num,omitempty"`
 	Type        string                `json:"type"`
 	Label       string                `json:"label"`
 	Description *string               `json:"description,omitempty"`

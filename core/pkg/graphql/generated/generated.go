@@ -200,6 +200,7 @@ type ComplexityRoot struct {
 	BuildChannel struct {
 		Kinds      func(childComplexity int) int
 		ModuleName func(childComplexity int) int
+		Num        func(childComplexity int) int
 		Versions   func(childComplexity int) int
 	}
 
@@ -221,6 +222,7 @@ type ComplexityRoot struct {
 		ID          func(childComplexity int) int
 		Kinds       func(childComplexity int) int
 		Label       func(childComplexity int) int
+		Op          func(childComplexity int) int
 		Params      func(childComplexity int) int
 		Required    func(childComplexity int) int
 		Result      func(childComplexity int) int
@@ -1293,6 +1295,7 @@ type ComplexityRoot struct {
 		MaxLength   func(childComplexity int) int
 		MaxSize     func(childComplexity int) int
 		Min         func(childComplexity int) int
+		Num         func(childComplexity int) int
 		Options     func(childComplexity int) int
 		Order       func(childComplexity int) int
 		Pattern     func(childComplexity int) int
@@ -3221,6 +3224,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildChannel.ModuleName(childComplexity), true
+	case "BuildChannel.num":
+		if e.ComplexityRoot.BuildChannel.Num == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildChannel.Num(childComplexity), true
 	case "BuildChannel.versions":
 		if e.ComplexityRoot.BuildChannel.Versions == nil {
 			break
@@ -3296,6 +3305,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildCommand.Label(childComplexity), true
+	case "BuildCommand.op":
+		if e.ComplexityRoot.BuildCommand.Op == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildCommand.Op(childComplexity), true
 	case "BuildCommand.params":
 		if e.ComplexityRoot.BuildCommand.Params == nil {
 			break
@@ -7960,6 +7975,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleField.Min(childComplexity), true
+	case "ModuleField.num":
+		if e.ComplexityRoot.ModuleField.Num == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Num(childComplexity), true
 	case "ModuleField.options":
 		if e.ComplexityRoot.ModuleField.Options == nil {
 			break
@@ -13279,6 +13300,8 @@ type BuildSchema {
 type BuildCommand {
   # Names the command in builds: a slug, unique in the schema.
   id: String!
+  # The command's number: how a task names it on the wire.
+  op: Int!
   # The factory's label, or the id when it gave none.
   label: String!
   description: String
@@ -13316,6 +13339,9 @@ type BuildServe {
 
 type BuildChannel {
   moduleName: String!
+  # The channel's number in the factory's minion configs; null for a schema
+  # stored before numbers were required.
+  num: Int
   # Connection schema versions the minions read.
   versions: [Int!]!
   # The connection kinds the minions support through the channel, in the
@@ -16582,6 +16608,12 @@ type ModuleEnumOption {
 # list of ids, in order) from the operation's credentials.
 type ModuleField {
   key: String!
+  # The field's number on the wire (docs: minion-connection, Field numbers):
+  # a command param's in a task's args; a build field's, a connection
+  # parameter's, or a connection kind's or its target's field's in a minion
+  # config. Null for a module's own fields (properties, action params), and
+  # for a schema stored before numbers were required.
+  num: Int
   type: String!
   label: String!
   description: String
@@ -24619,6 +24651,8 @@ func (ec *executionContext) fieldContext_BindConnection_fields(_ context.Context
 			switch field.Name {
 			case "key":
 				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "num":
+				return ec.fieldContext_ModuleField_num(ctx, field)
 			case "type":
 				return ec.fieldContext_ModuleField_type(ctx, field)
 			case "label":
@@ -26014,6 +26048,35 @@ func (ec *executionContext) fieldContext_BuildChannel_moduleName(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _BuildChannel_num(ctx context.Context, field graphql.CollectedField, obj *model.BuildChannel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildChannel_num,
+		func(ctx context.Context) (any, error) {
+			return obj.Num, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildChannel_num(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildChannel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BuildChannel_versions(ctx context.Context, field graphql.CollectedField, obj *model.BuildChannel) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26133,6 +26196,8 @@ func (ec *executionContext) fieldContext_BuildChannelKind_fields(_ context.Conte
 			switch field.Name {
 			case "key":
 				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "num":
+				return ec.fieldContext_ModuleField_num(ctx, field)
 			case "type":
 				return ec.fieldContext_ModuleField_type(ctx, field)
 			case "label":
@@ -26293,6 +26358,35 @@ func (ec *executionContext) fieldContext_BuildCommand_id(_ context.Context, fiel
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildCommand_op(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildCommand_op,
+		func(ctx context.Context) (any, error) {
+			return obj.Op, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildCommand_op(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildCommand",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -26593,6 +26687,8 @@ func (ec *executionContext) fieldContext_BuildCommand_params(_ context.Context, 
 			switch field.Name {
 			case "key":
 				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "num":
+				return ec.fieldContext_ModuleField_num(ctx, field)
 			case "type":
 				return ec.fieldContext_ModuleField_type(ctx, field)
 			case "label":
@@ -27284,6 +27380,8 @@ func (ec *executionContext) fieldContext_BuildSchema_channels(_ context.Context,
 			switch field.Name {
 			case "moduleName":
 				return ec.fieldContext_BuildChannel_moduleName(ctx, field)
+			case "num":
+				return ec.fieldContext_BuildChannel_num(ctx, field)
 			case "versions":
 				return ec.fieldContext_BuildChannel_versions(ctx, field)
 			case "kinds":
@@ -27350,6 +27448,8 @@ func (ec *executionContext) fieldContext_BuildSchema_fields(_ context.Context, f
 			switch field.Name {
 			case "key":
 				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "num":
+				return ec.fieldContext_ModuleField_num(ctx, field)
 			case "type":
 				return ec.fieldContext_ModuleField_type(ctx, field)
 			case "label":
@@ -27474,6 +27574,8 @@ func (ec *executionContext) fieldContext_BuildSchema_commands(_ context.Context,
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_BuildCommand_id(ctx, field)
+			case "op":
+				return ec.fieldContext_BuildCommand_op(ctx, field)
 			case "label":
 				return ec.fieldContext_BuildCommand_label(ctx, field)
 			case "description":
@@ -28078,6 +28180,8 @@ func (ec *executionContext) fieldContext_BuildTarget_fields(_ context.Context, f
 			switch field.Name {
 			case "key":
 				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "num":
+				return ec.fieldContext_ModuleField_num(ctx, field)
 			case "type":
 				return ec.fieldContext_ModuleField_type(ctx, field)
 			case "label":
@@ -50033,6 +50137,8 @@ func (ec *executionContext) fieldContext_ModuleAction_params(_ context.Context, 
 			switch field.Name {
 			case "key":
 				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "num":
+				return ec.fieldContext_ModuleField_num(ctx, field)
 			case "type":
 				return ec.fieldContext_ModuleField_type(ctx, field)
 			case "label":
@@ -50989,6 +51095,8 @@ func (ec *executionContext) fieldContext_ModuleConnectionKind_fields(_ context.C
 			switch field.Name {
 			case "key":
 				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "num":
+				return ec.fieldContext_ModuleField_num(ctx, field)
 			case "type":
 				return ec.fieldContext_ModuleField_type(ctx, field)
 			case "label":
@@ -51064,6 +51172,8 @@ func (ec *executionContext) fieldContext_ModuleConnectionKind_target(_ context.C
 			switch field.Name {
 			case "key":
 				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "num":
+				return ec.fieldContext_ModuleField_num(ctx, field)
 			case "type":
 				return ec.fieldContext_ModuleField_type(ctx, field)
 			case "label":
@@ -51579,6 +51689,35 @@ func (ec *executionContext) fieldContext_ModuleField_key(_ context.Context, fiel
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_num(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_num,
+		func(ctx context.Context) (any, error) {
+			return obj.Num, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_num(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -52906,6 +53045,8 @@ func (ec *executionContext) fieldContext_ModuleProperty_field(_ context.Context,
 			switch field.Name {
 			case "key":
 				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "num":
+				return ec.fieldContext_ModuleField_num(ctx, field)
 			case "type":
 				return ec.fieldContext_ModuleField_type(ctx, field)
 			case "label":
@@ -70241,6 +70382,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionCommands(ctx context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_BuildCommand_id(ctx, field)
+			case "op":
+				return ec.fieldContext_BuildCommand_op(ctx, field)
 			case "label":
 				return ec.fieldContext_BuildCommand_label(ctx, field)
 			case "description":
@@ -90274,6 +90417,8 @@ func (ec *executionContext) _BuildChannel(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "num":
+			out.Values[i] = ec._BuildChannel_num(ctx, field, obj)
 		case "versions":
 			out.Values[i] = ec._BuildChannel_versions(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -90413,6 +90558,11 @@ func (ec *executionContext) _BuildCommand(ctx context.Context, sel ast.Selection
 			out.Values[i] = graphql.MarshalString("BuildCommand")
 		case "id":
 			out.Values[i] = ec._BuildCommand_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "op":
+			out.Values[i] = ec._BuildCommand_op(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -98882,6 +99032,8 @@ func (ec *executionContext) _ModuleField(ctx context.Context, sel ast.SelectionS
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "num":
+			out.Values[i] = ec._ModuleField_num(ctx, field, obj)
 		case "type":
 			out.Values[i] = ec._ModuleField_type(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

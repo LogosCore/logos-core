@@ -56,6 +56,10 @@ const (
 	// BuildErrorCredentials: a credential the build names is gone, or not
 	// of a type its field takes any more (converted since).
 	BuildErrorCredentials = "credentials"
+	// BuildErrorMinionConfig: the minion config its factory asks for cannot
+	// be made (protocol.MinionConfig): a channel that numbers no fields of the
+	// build's connection kind, or that follows another schema version now.
+	BuildErrorMinionConfig = "minion_config"
 )
 
 // Build is one build: what was asked for, with defaults filled in (the build

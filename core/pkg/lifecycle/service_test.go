@@ -707,7 +707,7 @@ func TestHandleRegister_CryptoSuite(t *testing.T) {
 	schema := func(suite string) *protocol.BuildSchema {
 		return &protocol.BuildSchema{
 			SchemaVersion: protocol.BuildSchemaV3, Version: 1, Crypto: suite,
-			Channels: []protocol.BuildChannel{{ModuleName: "http", Versions: []int{2}, Kinds: []protocol.BuildKind{{Kind: protocol.KindReverseCall}}}},
+			Channels: []protocol.BuildChannel{{ModuleName: "http", Num: 1, Versions: []int{2}, Kinds: []protocol.BuildKind{{Kind: protocol.KindReverseCall}}}},
 			Targets:  []protocol.BuildTarget{{ID: "linux-elf", Label: "Linux binary", Format: "elf", Platforms: []string{"linux/amd64"}}},
 		}
 	}

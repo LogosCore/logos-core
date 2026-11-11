@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 import { platformLabel } from "@/components/builds/build-values"
 import { kindLabels } from "@/components/endpoints/endpoint-values"
 import { compareFields, formatValue, type FieldDef } from "./field-values"
-import { channelsText, fieldNotes, versionsText } from "./schema-notes"
+import { channelsText, fieldNotes, paramsNote, versionsText } from "./schema-notes"
 import { commandKindsNote } from "@/components/minion-sessions/command-kinds"
 
 type Management = NonNullable<ModuleDetailFieldsFragment["management"]>
@@ -19,19 +19,29 @@ type Build = NonNullable<ModuleDetailFieldsFragment["build"]>
 /**
  * The minion connection settings this instance declared (read-only), per
  * connection kind it carries, each under a row saying which, and whether the
- * channel acts as the minion on it (agentless). Operators fill
- * them in for each connection of a build, or keep them as endpoints on an
- * operation's Endpoints page.
+ * channel acts as the minion on it (agentless); a bind kind's target fields
+ * after its own. Each field with its number, a minion config's key for it.
+ * Operators fill them in for each connection of a build (a target's for each
+ * target), or keep them as endpoints on an operation's Endpoints page.
  */
 export function ConnectionSchema({ connection }: { connection: Connection }) {
   return (
     <InfoCard title="Minion connection settings" note={`schema v${connection.version}`}>
-      {connection.kinds.map((k) => (
-        <Fragment key={k.kind}>
-          <SectionRow title={kindLabels[k.kind] ?? k.kind} note={k.agentless ? `${k.kind} · acts as the minion` : k.kind} />
-          {k.fields.length > 0 ? <IdRows rows={fieldRows(k.fields)} /> : <NoteRow>None.</NoteRow>}
-        </Fragment>
-      ))}
+      {connection.kinds.map((k) => {
+        const label = kindLabels[k.kind] ?? k.kind
+        return (
+          <Fragment key={k.kind}>
+            <SectionRow title={label} note={k.agentless ? `${k.kind} · acts as the minion` : k.kind} />
+            {k.fields.length > 0 ? <IdRows rows={fieldRows(k.fields)} /> : <NoteRow>None.</NoteRow>}
+            {k.target.length > 0 && (
+              <>
+                <SectionRow title={`${label}: each target`} note="filled in per target" />
+                <IdRows rows={fieldRows(k.target)} />
+              </>
+            )}
+          </Fragment>
+        )
+      })}
     </InfoCard>
   )
 }
@@ -64,7 +74,10 @@ export function BuildParameters({ build }: { build: Build }) {
       {build.channels.flatMap((c) =>
         c.kinds.map((k) => (
           <Fragment key={`${c.moduleName}:${k.kind}`}>
-            <SectionRow title={`${c.moduleName} ${k.kind} connection`} note={`schema ${versionsText(c.versions)}`} />
+            <SectionRow
+              title={`${c.moduleName} ${k.kind} connection`}
+              note={[c.num != null ? `channel ${c.num}` : "", `schema ${versionsText(c.versions)}`].filter(Boolean).join(" · ")}
+            />
             {k.fields.length > 0 ? (
               <IdRows rows={fieldRows(k.fields)} />
             ) : (
@@ -77,10 +90,11 @@ export function BuildParameters({ build }: { build: Build }) {
   )
 }
 
-/** A schema's fields in their declared order, as rows: the key, then the label, description, type and notes. */
+/** A schema's fields in their declared order, as rows: the number and the key, then the label, description, type and notes. */
 function fieldRows(fields: readonly FieldDef[]): IdRow[] {
   return [...fields].sort(compareFields).map((f) => ({
     id: f.key,
+    num: f.num,
     content: (
       <>
         <div>
@@ -124,8 +138,9 @@ export function BuildTargets({ build }: { build: Build }) {
 
 /**
  * The commands this factory instance declared (read-only), what its minions
- * can be built with: each one's id, and its label and description, in the
- * factory's order. Operators pick a build's in the build form.
+ * can be built with: each one's op and id, and its label, description and
+ * params by number (how a task names them), in the factory's order.
+ * Operators pick a build's in the build form.
  */
 export function BuildCommands({ build }: { build: Build }) {
   return (
@@ -133,10 +148,12 @@ export function BuildCommands({ build }: { build: Build }) {
       <IdRows
         rows={build.commands.map((c) => ({
           id: c.id,
+          num: c.op,
           content: (
             <>
               <div>{c.label}</div>
               {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
+              {paramsNote(c.params) && <div className="text-xs text-muted-foreground">{paramsNote(c.params)}</div>}
               {c.kinds.length > 0 && (
                 <div className="text-xs text-muted-foreground">{commandKindsNote(c.kinds)?.text}</div>
               )}

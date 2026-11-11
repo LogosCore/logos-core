@@ -87,6 +87,7 @@ export const ModuleChangedSubscription = graphql(`
 export const ModuleFieldDefFields = graphql(`
   fragment ModuleFieldDefFields on ModuleField {
     key
+    num
     type
     label
     description
@@ -169,6 +170,9 @@ export const ModuleDetailFields = graphql(`
         kind
         agentless
         fields {
+          ...ModuleFieldDefFields
+        }
+        target {
           ...ModuleFieldDefFields
         }
       }

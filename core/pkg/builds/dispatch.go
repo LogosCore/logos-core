@@ -133,12 +133,19 @@ func (s *Service) offer(ctx context.Context, b *models.Build) {
 		return
 	}
 	deadline := s.now().Add(s.cfg.Timeout)
-	req, revs, err := s.request(ctx, b, deadline)
+	// The instances all declare the build's schema version: the first's
+	// schema is the one the request follows.
+	req, revs, err := s.request(ctx, b, deadline, &insts[0].Build.BuildSchema)
 	var unusable *credentialrefs.Unusable
 	if errors.As(err, &unusable) {
 		// Gone, or converted since the build was queued: no retry brings it
 		// back.
 		s.fail(ctx, b, models.BuildErrorCredentials, unusable.Why)
+		return
+	}
+	var unconfigurable *Unconfigurable
+	if errors.As(err, &unconfigurable) {
+		s.fail(ctx, b, models.BuildErrorMinionConfig, unconfigurable.Why)
 		return
 	}
 	if err != nil {
@@ -277,10 +284,11 @@ func (s *Service) factoryCrypto(ctx context.Context, b *models.Build) bool {
 	return true
 }
 
-// request is the factory.build request of b, with links (links.go) good
-// until a minute past deadline, and the revision of each credential it
-// carries.
-func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Time) (protocol.BuildRequest, map[string]int64, error) {
+// request is the factory.build request of b, a build of schema, with links
+// (links.go) good until a minute past deadline, and the revision of each
+// credential it carries; for a factory that asks for one, with its minion
+// config (minion_config.go).
+func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Time, schema *protocol.BuildSchema) (protocol.BuildRequest, map[string]int64, error) {
 	expires := deadline.Add(time.Minute)
 	req := protocol.BuildRequest{
 		BuildID: b.BuildID.String(), Target: b.Target, Platform: b.Platform,
@@ -321,6 +329,12 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 		}
 	}
 	req.Artifact = protocol.ArtifactUpload{UploadURL: s.links.Sign(ArtifactPath(b.BuildID), expires), MaxSize: s.cfg.ArtifactMaxSize}
+	if schema != nil && schema.MinionConfig {
+		var err error
+		if req.MinionConfig, err = s.minionConfig(ctx, *schema, req); err != nil {
+			return req, revs, err
+		}
+	}
 	return req, revs, nil
 }
 

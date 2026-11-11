@@ -61,6 +61,12 @@ type ModuleEnumOption {
 # list of ids, in order) from the operation's credentials.
 type ModuleField {
   key: String!
+  # The field's number on the wire (docs: minion-connection, Field numbers):
+  # a command param's in a task's args; a build field's, a connection
+  # parameter's, or a connection kind's or its target's field's in a minion
+  # config. Null for a module's own fields (properties, action params), and
+  # for a schema stored before numbers were required.
+  num: Int
   type: String!
   label: String!
   description: String

@@ -19,6 +19,13 @@ export function fieldNotes(f: FieldDef): string[] {
 }
 
 /** Connection schema versions: "v2", "v1, v2". */
+/** A command's params by number, as a task names them: "params 1 path, 2 recursive"; null for none. */
+export function paramsNote(params: readonly Pick<FieldDef, "key" | "num">[]): string | null {
+  const numbered = params.filter((p) => p.num != null)
+  if (numbered.length === 0) return null
+  return "params " + numbered.map((p) => `${p.num} ${p.key}`).join(", ")
+}
+
 export function versionsText(versions: readonly number[]): string {
   return versions.map((v) => `v${v}`).join(", ")
 }

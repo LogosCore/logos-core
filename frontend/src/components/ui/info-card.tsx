@@ -53,17 +53,36 @@ export function InfoCard({
 /** One row of IdRows: an id, and what is said of it. */
 export interface IdRow {
   id: string
+  /** Its number on the wire (a field's num, a command's op), shown before the id. */
+  num?: number | null
   content: ReactNode
 }
 
 // The first column's cell; the column is as wide in every card (colgroup).
 const FIRST = "px-4 py-2 align-baseline whitespace-normal"
 
-/** Rows of an id, monospaced, and what is said of it; the id and the first line beside it share a baseline. */
+/**
+ * Rows of an id, monospaced, and what is said of it; the id and the first line beside it share a baseline. A row with
+ * a number (a field's num, a command's op) shows it first, muted, the ids of a card lined up after their numbers.
+ */
 export function IdRows({ rows }: { rows: readonly IdRow[] }) {
+  const numbered = rows.some((r) => r.num != null)
   return rows.map((r) => (
     <TableRow key={r.id} className="hover:bg-transparent">
       <TableCell className={cn(FIRST, "break-all")}>
+        {numbered && (
+          <span
+            title="Its number on the wire"
+            className="mr-2 inline-block min-w-[3ch] text-right font-mono text-xs text-muted-foreground tabular-nums"
+          >
+            {r.num != null && (
+              <>
+                <span className="sr-only">number </span>
+                {r.num}
+              </>
+            )}
+          </span>
+        )}
         <code className="font-mono text-xs">{r.id}</code>
       </TableCell>
       <TableCell className="px-4 py-2 align-baseline break-words whitespace-normal">{r.content}</TableCell>

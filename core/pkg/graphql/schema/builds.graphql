@@ -65,6 +65,8 @@ type BuildSchema {
 type BuildCommand {
   # Names the command in builds: a slug, unique in the schema.
   id: String!
+  # The command's number: how a task names it on the wire.
+  op: Int!
   # The factory's label, or the id when it gave none.
   label: String!
   description: String
@@ -102,6 +104,9 @@ type BuildServe {
 
 type BuildChannel {
   moduleName: String!
+  # The channel's number in the factory's minion configs; null for a schema
+  # stored before numbers were required.
+  num: Int
   # Connection schema versions the minions read.
   versions: [Int!]!
   # The connection kinds the minions support through the channel, in the

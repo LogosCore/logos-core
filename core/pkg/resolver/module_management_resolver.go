@@ -260,6 +260,7 @@ func buildManagement(mod *models.Module, eff modulemgmt.EffectiveConfig) *model.
 func toFieldModel(f protocol.FieldSpec) *model.ModuleField {
 	out := &model.ModuleField{
 		Key:         f.Key,
+		Num:         positive(f.Num),
 		Type:        string(f.Type),
 		Label:       orKey(f.Label, f.Key),
 		Description: strPtr(f.Description),
@@ -392,6 +393,14 @@ func (r *moduleResolver) InvokeModuleAction(ctx context.Context, instance string
 }
 
 // --- helpers ---
+
+// positive is n, or nil when it is not above 0 (a number not given).
+func positive(n int) *int {
+	if n <= 0 {
+		return nil
+	}
+	return &n
+}
 
 func strPtr(s string) *string {
 	if s == "" {

@@ -383,7 +383,7 @@ func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 	out := &model.BuildSchema{Version: s.Version, Crypto: strPtr(s.Crypto), Fields: toBuildFieldModels(s.Fields),
 		PersistedSessions: s.PersistedSessions, Failover: s.Failover, MaxTasks: s.MaxTasks, Compression: orEmpty(s.Compression)}
 	for _, c := range s.Channels {
-		ch := &model.BuildChannel{ModuleName: c.ModuleName, Versions: c.Versions, Kinds: []*model.BuildChannelKind{}}
+		ch := &model.BuildChannel{ModuleName: c.ModuleName, Num: positive(c.Num), Versions: c.Versions, Kinds: []*model.BuildChannelKind{}}
 		for _, k := range c.Kinds {
 			ch.Kinds = append(ch.Kinds, &model.BuildChannelKind{Kind: k.Kind, Fields: toBuildFieldModels(k.Fields)})
 		}
@@ -413,7 +413,7 @@ func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 // whose builds can have it.
 func toBuildCommandModel(s protocol.BuildSchema, c protocol.BuildCommand) *model.BuildCommand {
 	mc := &model.BuildCommand{
-		ID: c.ID, Label: orKey(c.Label, c.ID), Description: strPtr(c.Description),
+		ID: c.ID, Op: c.Op, Label: orKey(c.Label, c.ID), Description: strPtr(c.Description),
 		Targets: []string{}, Default: c.Default, Required: c.Required, Params: toBuildFieldModels(c.Params),
 		Result: strPtr(c.Result), Action: strPtr(c.Action), Kinds: append([]string{}, c.Kinds...),
 		Serves: []*model.BuildServe{},

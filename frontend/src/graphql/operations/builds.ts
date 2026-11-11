@@ -13,6 +13,7 @@ export const BuildSchemaFields = graphql(`
     }
     channels {
       moduleName
+      num
       versions
       kinds {
         kind
@@ -38,6 +39,7 @@ export const BuildSchemaFields = graphql(`
     }
     commands {
       id
+      op
       label
       description
       targets

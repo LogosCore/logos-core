@@ -147,7 +147,7 @@ func TestHandleRegister_ConnectionSchema(t *testing.T) {
 	_, err := svc.HandleRegister(context.Background(), rawEnv(OpRegister,
 		`{"module_type": "channel", "module_name": "http", "instance": "http-1", "rpc_queue": "q",
 		  "connection": {"schema_version": "2", "version": 2,
-		    "kinds": {"reverse-call": {"fields": [{"key": "base_url", "type": "url", "required": true}]}}}}`))
+		    "kinds": {"reverse-call": {"fields": [{"key": "base_url", "num": 1, "type": "url", "required": true}]}}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestHandleRegister_ConnectionSchema(t *testing.T) {
 
 func TestHandleRegister_BuildSchema(t *testing.T) {
 	const schema = `{"schema_version": "3", "version": 3,
-	  "channels": [{"module_name": "http", "versions": [2], "kinds": [{"kind": "reverse-call"}]}],
+	  "channels": [{"module_name": "http", "num": 1, "versions": [2], "kinds": [{"kind": "reverse-call"}]}],
 	  "targets": [{"id": "dummy", "format": "json", "platforms": ["any/any"]}]}`
 	svc, repo, _ := newTestService()
 	_, err := svc.HandleRegister(context.Background(), rawEnv(OpRegister,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { FieldDef } from "./field-values"
-import { channelsText, fieldNotes, versionsText } from "./schema-notes"
+import { channelsText, fieldNotes, paramsNote, versionsText } from "./schema-notes"
 
 function field(f: Partial<FieldDef> & Pick<FieldDef, "key" | "type">): FieldDef {
   return { label: f.key, order: 0, required: false, ...f } as FieldDef
@@ -40,5 +40,16 @@ describe("channelsText", () => {
     expect(channelsText([{ moduleName: "http", versions: [2] }, { moduleName: "dns", versions: [1, 2] }])).toBe("http v2 · dns v1, v2")
     expect(channelsText([])).toBe("")
     expect(versionsText([1, 2])).toBe("v1, v2")
+  })
+})
+
+describe("paramsNote", () => {
+  it("names a command's params by number, as a task does", () => {
+    expect(paramsNote([{ key: "path", num: 1 }, { key: "recursive", num: 2 }])).toBe("params 1 path, 2 recursive")
+  })
+  it("leaves out a param without a number (core's own), and says nothing for none", () => {
+    expect(paramsNote([{ key: "front", num: null }, { key: "timeout", num: 2 }])).toBe("params 2 timeout")
+    expect(paramsNote([{ key: "front", num: null }])).toBeNull()
+    expect(paramsNote([])).toBeNull()
   })
 })

@@ -87,6 +87,7 @@ const schema: BuildSchemaFieldsFragment = {
   commands: [
     {
       id: "sleep",
+      op: 1,
       label: "Sleep",
       description: null,
      
@@ -96,10 +97,10 @@ const schema: BuildSchemaFieldsFragment = {
       kinds: [],
       params: [field({ key: "jitter", type: "int", order: 2 }), field({ key: "interval", type: "duration", order: 1 })],
     },
-    { id: "hello", label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, kinds: [], params: [] },
-    { id: "ls", label: "List", description: null, targets: ["dummy", "service"], default: false, required: false, kinds: [], params: [] },
-    { id: "shell", label: "Shell", description: null, targets: ["dummy"], default: true, required: false, kinds: [], params: [] },
-    { id: "stop", label: "Stop the service", description: null, targets: ["service"], default: true, required: false, kinds: [], params: [] },
+    { id: "hello", op: 2, label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, kinds: [], params: [] },
+    { id: "ls", op: 3, label: "List", description: null, targets: ["dummy", "service"], default: false, required: false, kinds: [], params: [] },
+    { id: "shell", op: 4, label: "Shell", description: null, targets: ["dummy"], default: true, required: false, kinds: [], params: [] },
+    { id: "stop", op: 5, label: "Stop the service", description: null, targets: ["service"], default: true, required: false, kinds: [], params: [] },
   ],
 }
 

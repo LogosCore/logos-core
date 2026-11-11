@@ -214,7 +214,12 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 
 	// The request a factory gets must pass the factory's own check: the same
 	// function, run here with the URLs the dispatch will sign.
-	req, _, err := s.request(ctx, b, b.Deadline)
+	req, _, err := s.request(ctx, b, b.Deadline, schema)
+	var unconfigurable *Unconfigurable
+	if errors.As(err, &unconfigurable) {
+		return nil, &ValidationError{Message: "the build does not fit the factory's build schema",
+			Problems: map[string]string{"minion_config": unconfigurable.Why}}
+	}
 	if err != nil {
 		return nil, err
 	}
