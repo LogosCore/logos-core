@@ -4,6 +4,10 @@ RUN go install github.com/air-verse/air@latest
 
 WORKDIR /app
 
+# Our own modules come straight from GitHub, not through the public Go proxy:
+# a tag builds the moment it is pushed. go.sum still checks them.
+ENV GOPRIVATE=github.com/logoscore/*
+
 COPY go.mod go.sum ./
 RUN go mod download
 

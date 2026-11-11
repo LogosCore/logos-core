@@ -20,6 +20,9 @@ on:
   workflow_dispatch:
 
 env:
+  # Our own modules straight from GitHub, not through the public Go proxy:
+  # a tag builds the moment it is pushed. go.sum still checks them.
+  GOPRIVATE: "github.com/logoscore/*"
   REGISTRY: ghcr.io
   IMAGE_NAME: logoscore/logos-core
 

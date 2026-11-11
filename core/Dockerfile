@@ -9,6 +9,10 @@ FROM golang:${GO_VERSION}-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates tzdata
 
+# Our own modules come straight from GitHub (git), not through the public Go
+# proxy: a tag builds the moment it is pushed. go.sum still checks them.
+ENV GOPRIVATE=github.com/logoscore/*
+
 WORKDIR /src
 
 COPY go.mod go.sum ./
