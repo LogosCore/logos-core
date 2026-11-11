@@ -471,7 +471,7 @@
 /* Ghost: faded and blurred, back in focus on hover. For the dead. Cell by
  * cell, not the row: Last seen stays sharp. */
 /* A pinned cell's cover stays solid: what is in it fades. */
-.mark-fx-ghost > :not([data-column="lastSeen"], [data-pinned]),
+.mark-fx-ghost > :not([data-column="lastSeen"], [data-pinned], [data-pick]),
 .mark-fx-ghost > [data-pinned] > * {
   opacity: 0.45;
   filter: blur(0.6px) grayscale(1);

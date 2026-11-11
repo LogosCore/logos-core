@@ -162,6 +162,12 @@ const CHECK_TRACK = `${CHECK_PX}px`
 // Pinned at the scroller's edge, over the row's px-4: the cell takes the
 // padding in (margin out, padding in), so it keeps its space and covers what
 // scrolls under it; the row's py-2 too, so it is the row's height.
+// A picked row's tint: a layer over the whole row, the pinned cells (z 1)
+// and the row's mark included, so a marked row shows its mark and the pick
+// at once, and picked rows next to each other make one block. Clicks go
+// through it. An element, not the row's ::after, which two marks' scanlines
+// use.
+const PICK_TINT = "pointer-events-none absolute inset-0 z-[2] bg-primary/10"
 // The bar down the left edge of the row whose tab is in front.
 const ACTIVE_BAR = "before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary"
 const PIN_LEFT = "left-0 -ml-4 pl-4 -my-2 py-2 grid items-center self-stretch"
@@ -504,15 +510,15 @@ export function SessionsDatatable({
               itemContent={(_, s) => (
                 <ContextMenuRow
                   gridCols=""
-                  // The caller's mark tints (or styles) the row; a picked row is outlined,
-                  // so it shows marked and picked at once.
+                  // The caller's mark tints (or styles) the row; a picked row gets a tint
+                  // over it (PICK_TINT), so it shows marked and picked at once.
                   style={{ ...grid, ...markColorVars(s.mark?.color) }}
                   // While selecting, a drag or shift-click does not select text.
                   className={cn(
                     "group/row",
                     selecting && "select-none",
                     markRowClass(s.mark?.color),
-                    pickedSet.has(s.id) && "ring-2 ring-primary/60 ring-inset",
+                    pickedSet.has(s.id) && "relative",
                     // Its tab is in front: a bar down its left edge.
                     // (On the pinned # cell when there is one: the row's edge scrolls away under it.)
                     s.id === activeSessionId && !pinnedFirst && cn("relative", ACTIVE_BAR),
@@ -591,6 +597,7 @@ export function SessionsDatatable({
                       </div>
                       {/* Positioned behind the cells, it takes no place in the grid. */}
                       {s.mark?.color === "on-fire" && <SessionFire />}
+                      {pickedSet.has(s.id) && <span data-pick aria-hidden className={PICK_TINT} />}
                     </>
                   )}
                 </ContextMenuRow>
