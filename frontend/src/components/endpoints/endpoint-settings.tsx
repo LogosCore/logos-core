@@ -6,7 +6,7 @@ import { ConnectionKindPicker } from "./connection-kind-picker"
 import { connectionKind, type Kind } from "./endpoint-values"
 
 /** The first section of a connection's settings: the caller's rows, then the kind. */
-export const GENERAL_SECTION = "General"
+const GENERAL_SECTION = "General"
 
 // A connection's settings as one form, the same wherever they are set: the
 // endpoint modal, and each connection of a build. General first: the
@@ -48,7 +48,7 @@ export function EndpointSettings({
   disabled: boolean
   /** Prefixes the controls' ids, unique on the page. */
   idPrefix: string
-  /** A section's id, for a side list to jump to; none without. */
+  /** A section's id, its anchor; none without. */
   sectionIdOf?: (title: string) => string
   /** The caller's own rows in General, above the kind. */
   general?: ReactNode

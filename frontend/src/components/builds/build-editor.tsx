@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react"
+import { useEffect, useMemo, useState, type ComponentProps } from "react"
 import { HammerIcon, PlusIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -24,9 +24,8 @@ import {
   useRequestClose,
 } from "@/components/ui/record-modal"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
-import { DEFAULT_MAX_TASKS, MAX_TASKS_LIMIT } from "@/components/minion-sessions/max-tasks-values"
-import { SettingsNav, type SettingsNavSection } from "@/components/ui/settings-nav"
-import { sectionId, useActiveSection } from "@/hooks/use-active-section"
+import { MAX_TASKS_LIMIT } from "@/components/minion-sessions/max-tasks-values"
+import { sectionId } from "@/lib/section-id"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import type { JsonProblem } from "@/lib/json-edit"
@@ -43,7 +42,6 @@ import { BuildFilesContext, type BuildFilesContextValue } from "@/components/bui
 import { FieldRow } from "@/components/builds/build-field-row"
 import { ConnectionCard, type EndpointOption } from "@/components/builds/connection-card"
 import { FailoverSettings } from "@/components/builds/failover-editor"
-import { DEFAULT_FAILOVER } from "@/components/builds/failover-values"
 import { ConnectionPickerDialog } from "@/components/builds/connection-picker-dialog"
 import { SaveEndpointDialog } from "@/components/builds/save-endpoint-dialog"
 import { CommandPicker } from "@/components/builds/command-picker"
@@ -52,7 +50,6 @@ import {
   connectionDraft,
   connectionNames,
   defaultCommands,
-  defaultConnectionName,
   evaluateForm,
   factoryKindsByName,
   fillFromEndpoint,
@@ -234,12 +231,11 @@ function Editor({
   // asks before throwing it away.
   const [initial] = useState(() => snapshotOf(form))
   const saved = useCloseGuard(snapshotOf(form) !== initial || (read !== null && !read.ok))
-  const body = useRef<HTMLDivElement>(null)
   // The endpoint picker: adding a connection, or filling the one keyed fill.
   const [picker, setPicker] = useState<{ open: boolean; fill: string | null }>({ open: false, fill: null })
   // The connections shown open, by key. They start folded, the build's first
   // ones and those filled from an endpoint alike: a blank one opens, as its
-  // settings are what comes next, and so does one picked in the side list.
+  // settings are what comes next.
   const [openConnections, setOpenConnections] = useState<ReadonlySet<string>>(() => new Set())
   const showConnection = (key: string, open: boolean) =>
     setOpenConnections((prev) => {
@@ -479,81 +475,6 @@ function Editor({
           onEndpoint: (ep) => fillConnection(form.connections[filling].key, ep),
         }
 
-  // Side list: what to build, each group of fields, the connections, with a
-  // dot for errors or for values set.
-  const navSections: SettingsNavSection[] = [
-    {
-      id: sectionId(WHAT_TO_BUILD),
-      title: WHAT_TO_BUILD,
-      state: shown.description || shown.target || shown.platform ? "error" : "set",
-    },
-    // A factory without commands builds none: no section for them.
-    ...(kind.commands.length === 0
-      ? []
-      : [
-          {
-            id: sectionId(COMMANDS),
-            title: COMMANDS,
-            state:
-              commandsError || shown.maxTasks
-                ? ("error" as const)
-                : form.commands.join() !== defaults.join() || (kind.maxTasks && form.maxTasks !== String(DEFAULT_MAX_TASKS))
-                  ? ("set" as const)
-                  : null,
-          },
-        ]),
-    ...groups.map(
-      (g): SettingsNavSection => ({
-        id: sectionId(g.group),
-        title: g.group,
-        state: g.items.some((f) => shown[`values.${f.key}`])
-          ? "error"
-          : g.items.some((f) => input.values[f.key] !== undefined)
-            ? "set"
-            : null,
-      }),
-    ),
-    {
-      id: sectionId(CONNECTIONS),
-      title: CONNECTIONS,
-      state: Object.keys(shown).some((k) => k.startsWith("connections"))
-        ? "error"
-        : form.connections.length > 0
-          ? "set"
-          : null,
-    },
-    // Each connection, under them: most of the form once there are some.
-    ...form.connections.map(
-      (c, i): SettingsNavSection => ({
-        id: connectionSectionId(c.key),
-        title: `${i + 1}. ${c.moduleName} · ${c.name.trim() || defaultConnectionName(c.moduleName, i)}`,
-        state: Object.keys(shown).some((k) => k === `connections[${i}]` || k.startsWith(`connections[${i}].`)) ? "error" : null,
-        sub: true,
-      }),
-    ),
-    {
-      id: sectionId(FAILOVER),
-      title: FAILOVER,
-      // Set: the policy is not the defaults.
-      state: Object.keys(shown).some((k) => k.startsWith("failover"))
-        ? "error"
-        : JSON.stringify(form.failover) !== JSON.stringify(DEFAULT_FAILOVER)
-          ? "set"
-          : null,
-    },
-  ]
-  const [active, goTo] = useActiveSection(
-    navSections.map((s) => s.id),
-    body,
-  )
-  // A connection picked in the side list opens, then is scrolled to once open.
-  const pickSection = (id: string) => {
-    const c = form.connections.find((x) => connectionSectionId(x.key) === id)
-    if (!c) return goTo(id)
-    showConnection(c.key, true)
-    requestAnimationFrame(() => goTo(id))
-  }
-
   return (
     <BuildFilesContext.Provider value={filesCtx}>
       <form
@@ -608,10 +529,9 @@ function Editor({
         </RecordModalHeader>
 
         <TabsContent value="form" className="flex min-h-0 flex-col">
-        <RecordModalBody ref={body}>
-        <div className="flex gap-10 px-4 py-6">
-        <SettingsNav sections={navSections} active={active} onPick={pickSection} />
-        <div className="@container/settings min-w-0 flex-1">
+        <RecordModalBody>
+        <div className="px-8 py-6">
+        <div className="@container/settings min-w-0">
         <div className="flex flex-col gap-8">
           {saveError && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>}
 
@@ -937,7 +857,7 @@ function snapshotOf(form: Form): string {
 }
 
 /** The form's own sections, around the factory's groups of fields. */
-/** A connection's card, as the side list goes to it. */
+/** A connection's card: its anchor. */
 function connectionSectionId(key: string): string {
   return `section-${key}`
 }

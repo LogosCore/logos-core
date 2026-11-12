@@ -63,7 +63,7 @@ export function FailoverSettings({
   factory: string
   /** How many connections the build has: failover needs two. */
   connections: number
-  /** The section's id, for the side list. */
+  /** The section's id: its anchor. */
   id?: string
 }) {
   const set = (patch: Partial<FailoverPolicy>) => onChange({ ...value, ...patch })

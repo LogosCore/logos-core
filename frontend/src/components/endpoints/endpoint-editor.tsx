@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useLocation } from "react-router"
 import { RadioTowerIcon } from "lucide-react"
 import { toast } from "sonner"
@@ -17,8 +17,7 @@ import {
   useRequestClose,
 } from "@/components/ui/record-modal"
 import { SettingRow } from "@/components/ui/settings-rows"
-import { SettingsNav } from "@/components/ui/settings-nav"
-import { sectionId, useActiveSection } from "@/hooks/use-active-section"
+import { sectionId } from "@/lib/section-id"
 import { childPointer, type JsonProblem } from "@/lib/json-edit"
 import { whenIdle } from "@/lib/preloadable"
 import { Permissions } from "@/constants/permissions"
@@ -35,9 +34,9 @@ import {
   useUpdateChannelEndpoint,
 } from "@/graphql/hooks/channel-endpoints"
 import { ModuleIcon } from "@/components/modules/module-icon"
-import { EndpointSettings, GENERAL_SECTION } from "@/components/endpoints/endpoint-settings"
+import { EndpointSettings } from "@/components/endpoints/endpoint-settings"
 import { errorMessage, graphqlErrorCode } from "@/components/modules/management/api-errors"
-import { groupByField, type Draft, type FieldDef } from "@/components/modules/management/field-values"
+import { type Draft } from "@/components/modules/management/field-values"
 import {
   connectionKind,
   endpointDrafts,
@@ -149,15 +148,6 @@ function NotFound({ title, text }: { title: string; text: string }) {
   return <RecordModalMessage icon={<RadioTowerIcon className="size-8 opacity-50" />} title={title} text={text} />
 }
 
-const GENERAL = GENERAL_SECTION
-
-/** One section of the form, as the side list shows it. */
-interface Section {
-  id: string
-  title: string
-  fields: FieldDef[]
-}
-
 /**
  * The editor: a section list on the left, one column of label | control rows
  * on the right, each setting's first sentence of help under its control,
@@ -221,7 +211,6 @@ function EndpointEditor({
   const snapshot = JSON.stringify({ name, description, connKind, drafts })
   const [initial] = useState(snapshot)
   const saved = useCloseGuard(snapshot !== initial || (read !== null && !read.ok))
-  const body = useRef<HTMLDivElement>(null)
   const [submitted, setSubmitted] = useState(false)
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({})
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -289,18 +278,6 @@ function EndpointEditor({
     setServerErrors({})
   }
 
-  const sections: Section[] = useMemo(
-    () => [
-      { id: sectionId(GENERAL), title: GENERAL, fields: [] },
-      ...groupByField(fields, (f) => f).map((g) => ({ id: sectionId(g.group), title: g.group, fields: g.items })),
-    ],
-    [fields],
-  )
-  const [active, goTo] = useActiveSection(
-    sections.map((s) => s.id),
-    body,
-  )
-
   function setDraft(key: string, d: Draft) {
     setDrafts((prev) => ({ ...prev, [key]: d }))
     setServerErrors((prev) => {
@@ -350,14 +327,6 @@ function EndpointEditor({
             : errorMessage(err, "Failed to save the endpoint")),
       )
     }
-  }
-
-  // Side list markers: a section with an error, or with values set.
-  const sectionState = (s: Section): "error" | "set" | null => {
-    if (s.title === GENERAL) return submitted && nameErr ? "error" : name.trim() ? "set" : null
-    if (s.fields.some((f) => shownErrors[f.key])) return "error"
-    if (s.fields.some((f) => values[f.key] !== undefined)) return "set"
-    return null
   }
 
   return (
@@ -412,15 +381,9 @@ function EndpointEditor({
       </RecordModalHeader>
 
       <TabsContent value="form" className="flex min-h-0 flex-col">
-      <RecordModalBody ref={body}>
-      <div className="flex gap-10 px-4 py-6">
-        <SettingsNav
-          sections={sections.map((s) => ({ id: s.id, title: s.title, state: sectionState(s) }))}
-          active={active}
-          onPick={goTo}
-        />
-
-        <div className="@container/settings min-w-0 flex-1">
+      <RecordModalBody>
+      <div className="px-8 py-6">
+        <div className="@container/settings min-w-0">
         <div className="flex flex-col gap-8">
           {saveError && (
             <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>

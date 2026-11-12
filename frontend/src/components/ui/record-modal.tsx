@@ -48,7 +48,7 @@ export function useCloseGuard(dirty: boolean): () => void {
   return useContext(SavedContext)
 }
 
-/** RecordModal's className for a form: as wide as a section list and one column of setting rows. */
+/** RecordModal's className for a form: one column of setting rows, labels beside the fields. */
 export const RECORD_FORM_WIDTH = "sm:max-w-[min(calc(100%-4rem),64rem)]"
 
 export function RecordModal({
@@ -150,7 +150,7 @@ export function RecordModalTitle({ children }: { children: ReactNode }) {
   return <DialogTitle className="text-lg leading-normal font-semibold">{children}</DialogTitle>
 }
 
-/** The scrolling body; ref is its scroll container (for useActiveSection). */
+/** The scrolling body; ref is its scroll container. */
 export function RecordModalBody({ children, ref }: { children: ReactNode; ref?: Ref<HTMLDivElement> }) {
   return (
     <div ref={ref} className="min-h-0 flex-1 overflow-y-auto">

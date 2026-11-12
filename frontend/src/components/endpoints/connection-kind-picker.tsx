@@ -10,8 +10,9 @@ import { kindLabels, kindNames, type Kind } from "./endpoint-values"
 // from it): a segmented switch of the kinds the channel carries, those that
 // cannot be picked here disabled with the reason; under it one sentence on
 // the picked kind and "How it works", which opens its flow, played, its steps
-// lit in time with it, at a size that does not grow with the form. The
-// endpoint form and a build's connection both use it (EndpointSettings).
+// lit in time with it: beside it where the row is wide enough, under it where
+// not, the diagram at a size that does not grow past it. The endpoint form
+// and a build's connection both use it (EndpointSettings).
 
 export function ConnectionKindPicker({
   channel,
@@ -62,7 +63,7 @@ export function ConnectionKindPicker({
       error={error}
       hint={
         flow && (
-          <div className="flex flex-col gap-2">
+          <div className="@container/flow flex flex-col gap-2">
             <p className="text-xs text-muted-foreground">
               {flow.summary}{" "}
               <button
@@ -77,9 +78,18 @@ export function ConnectionKindPicker({
               </button>
             </p>
             {explained && (
-              <div id={`${id}-flow`} className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3">
-                <ConnectionKindDiagram key={value} flow={flow} kind={value} onStep={setStep} className="max-w-sm" />
-                <ol className="flex list-decimal flex-col gap-1 pl-4 text-xs text-muted-foreground">
+              <div
+                id={`${id}-flow`}
+                className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3 @2xl/flow:flex-row @2xl/flow:items-center @2xl/flow:gap-6 @2xl/flow:p-4"
+              >
+                <ConnectionKindDiagram
+                  key={value}
+                  flow={flow}
+                  kind={value}
+                  onStep={setStep}
+                  className="max-w-sm @2xl/flow:w-[26rem] @2xl/flow:max-w-none @2xl/flow:shrink-0"
+                />
+                <ol className="flex min-w-0 list-decimal flex-col gap-1 pl-4 text-xs text-muted-foreground">
                   {flow.steps.map((s, i) => (
                     <li key={s} className={cn("transition-colors", i === step && "text-foreground")}>
                       {s}

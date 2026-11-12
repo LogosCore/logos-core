@@ -22,7 +22,7 @@ export function CommandPicker({
   disabled,
   children,
 }: {
-  /** The section's id, for the side list to scroll to. */
+  /** The section's id: its anchor. */
   id: string
   title: string
   /** The target's commands, in the factory's order. */
