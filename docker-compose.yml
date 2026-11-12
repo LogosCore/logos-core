@@ -107,6 +107,10 @@ services:
       # (the source mount): vpn-client.version names the release.
       VPN_CLIENT_DIR: /opt/vpn-clients
     ports:
+      # Core's own port, on the host's loopback: a module run on the host
+      # (go run) reaches core at its default, http://localhost:8002, as it
+      # does a core run there with `make infra`. Browsers use nginx (8080).
+      - "127.0.0.1:8002:8002"
       # OPERATIONAL_PORTS, published on the host's loopback by default:
       # core's SOCKS takes no credentials, so whoever reaches a port uses
       # its minion. Set OPERATIONAL_PUBLISH to an address of the host to
