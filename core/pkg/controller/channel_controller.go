@@ -85,12 +85,14 @@ var traceParentPattern = regexp.MustCompile(`^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{
 // Sync is the data-plane endpoint a channel module calls per inbound minion
 // message: the minion's ciphertext as the raw body, its ids in headers. It
 // checks the headers, the registration gate and the size before it reads the
-// body, dedups on Logos-Message-Id, and hands the message to minions: 200
-// with core's sealed answer, 204 when it has none, 422 when the message does
-// not open (minion-messages contract).
+// body, and hands the message to minions: 200 with core's sealed answer, 204
+// when it has none, 409 for a replay, 422 when the message does not open,
+// 500 when core fails handling it (docs: contracts/channel-core-sync.md).
+// A message sent again is known by the minion's own message id, sealed
+// inside it, never by Logos-Message-Id.
 //
 //	@Summary		Channel sync (data plane)
-//	@Description	A channel relays one minion message: the ciphertext as an application/octet-stream body, its ids in Logos-* headers. Core answers 200 with ciphertext for the minion, or 204 when it has nothing for it (today, always).
+//	@Description	A channel relays one minion message: the ciphertext as an application/octet-stream body, its ids in Logos-* headers. Core answers 200 with ciphertext for the minion, or 204 when it has nothing for it. A message the minion sends again (by its own message id, sealed inside it, not Logos-Message-Id) gets the reply it got while core keeps it (10 minutes, a reply of at most 64 KiB), and is a replay (409) after that.
 //	@Tags			Channels
 //	@Accept			octet-stream
 //	@Produce		octet-stream
@@ -103,9 +105,11 @@ var traceParentPattern = regexp.MustCompile(`^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{
 //	@Success		204
 //	@Failure		400	{object}	responses.ErrorResponse
 //	@Failure		403	{object}	responses.ErrorResponse	"instance is not a registered module"
+//	@Failure		409	{object}	responses.ErrorResponse	"a replay: the message was seen before and its reply is no longer kept"
 //	@Failure		413	{object}	responses.ErrorResponse
 //	@Failure		415	{object}	responses.ErrorResponse
 //	@Failure		422	{object}	responses.ErrorResponse	"the message does not open"
+//	@Failure		500	{object}	responses.ErrorResponse	"core failed handling a message that opened"
 //	@Failure		503	{object}	responses.ErrorResponse	"module registry unavailable"
 //	@Router			/channel/sync [post]
 func (ctrl *channelController) Sync(c *gin.Context) {
@@ -132,12 +136,11 @@ func (ctrl *channelController) Sync(c *gin.Context) {
 	}
 
 	// Registration gate: reject data-plane traffic from channels that have not
-	// registered over the AMQP control plane. Checked before the body is read
-	// and before the dedup guard, so an unregistered sender never costs an
-	// upload or consumes a dedup slot. This is a registration check, not
-	// authentication — the instance id is self-asserted; cryptographic channel
-	// auth is a separate follow-up. A registry read failure fails closed (503)
-	// rather than admitting unverified senders.
+	// registered over the AMQP control plane. Checked before the body is read,
+	// so an unregistered sender never costs an upload. This is a registration
+	// check, not authentication — the instance id is self-asserted;
+	// cryptographic channel auth is a separate follow-up. A registry read
+	// failure fails closed (503) rather than admitting unverified senders.
 	module, registered, err := ctrl.gate.Registration(ctx, in.ChannelInstance)
 	if err != nil {
 		log.Warn("channel sync: registration check failed, rejecting",
