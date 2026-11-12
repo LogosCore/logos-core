@@ -1,5 +1,12 @@
 import { useCallback } from "react"
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import {
+  useQuery,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+  type QueryKey,
+} from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
 import { useSubscription } from "@/hooks/use-subscription"
 import type {
@@ -45,6 +52,7 @@ import {
   WikiDocumentPresenceChangedDocument,
   type WikiDocumentTreeFieldsFragment,
   type WikiDocumentChildrenQuery,
+  type WikiDocumentChangedSubscription,
   type WikiDocumentSort,
 } from "@/graphql/gql/graphql"
 
@@ -833,148 +841,188 @@ export function useWikiDocumentChangedSubscription(operationId: string) {
   const queryClient = useQueryClient()
 
   useSubscription(WikiDocumentChangedDocument, { operationId }, {
-    onData: (data) => {
-      const {
-        action,
-        documentId,
-        parentDocumentId,
-        previousParentDocumentId,
-      } = data.wikiDocumentChanged
-
-      // DELETED is special: drop per-document caches outright AND invalidate
-      // the trash list and badge so the row reappears (soft-delete) or
-      // vanishes (hard-delete + empty-trash). The reverse path (restore)
-      // sends action=CREATED, so trash/trashCount also flip there.
-      //
-      // Empty-trash events arrive with documentId="" (the backend can't
-      // name a single doc — the whole trash was purged). In that case the
-      // per-doc removeQueries calls would be no-ops, so we sweep every
-      // per-doc cache family that the purged docs could have populated.
-      if (action === "DELETED") {
-        if (documentId) {
-          queryClient.removeQueries({ queryKey: wikiKeys.detail(documentId) })
-          queryClient.removeQueries({ queryKey: wikiKeys.lite(documentId) })
-          queryClient.removeQueries({ queryKey: wikiKeys.preview(documentId) })
-          queryClient.removeQueries({ queryKey: wikiKeys.backups(documentId) })
-          queryClient.removeQueries({ queryKey: wikiKeys.trashedDescendants(documentId) })
-        } else {
-          // Empty-trash: blanket-clear the per-doc caches that referenced
-          // any of the purged docs. removeQueries with a prefix matches
-          // every keyed entry under the family.
-          queryClient.removeQueries({
-            queryKey: [...wikiKeys.all, "trashedDescendants"],
-          })
-        }
-        queryClient.invalidateQueries({ queryKey: wikiKeys.trash(operationId) })
-        queryClient.invalidateQueries({ queryKey: wikiKeys.trashCount(operationId) })
-      } else if (documentId) {
-        // Create/update: refresh whichever per-document views are mounted.
-        queryClient.invalidateQueries({ queryKey: wikiKeys.detail(documentId) })
-        queryClient.invalidateQueries({ queryKey: wikiKeys.lite(documentId) })
-        queryClient.invalidateQueries({ queryKey: wikiKeys.preview(documentId) })
-        // The export dialog renders the body; a body change makes its copy
-        // stale even though it is keyed separately from the document itself.
-        queryClient.invalidateQueries({ queryKey: wikiKeys.markdown(documentId) })
-      }
-
-      // Tree query — the move dialog and other full-tree consumers depend on
-      // it. Always refresh on document CRUD; invalidating an unmounted query
-      // is a no-op.
-      queryClient.invalidateQueries({ queryKey: wikiKeys.tree(operationId) })
-
-      // Templates picker feed. Flagging/unflagging a template (UPDATED),
-      // deleting a template (DELETED), or forking one (CREATED) all change the
-      // set. A rename also reorders it, so refresh on any CRUD — no-op when the
-      // create dialog isn't mounted.
-      queryClient.invalidateQueries({ queryKey: wikiKeys.templates(operationId) })
-
-      // Tag and page-type vocabulary caches. A create, update or delete can
-      // shift the set of tags/types in use. No-op when no vocabulary consumer
-      // is mounted.
-      queryClient.invalidateQueries({ queryKey: wikiKeys.tags(operationId) })
-      queryClient.invalidateQueries({ queryKey: wikiKeys.pageTypes(operationId) })
-
-      // Move dialog's exclusion set. A reparent (UPDATED) changes the
-      // descendant set of both parents' ancestor chains; create/delete shift
-      // it too. We can't cheaply map an event to the affected ancestors, so
-      // sweep the whole descendantIds family — a no-op while the move dialog
-      // (the only consumer) is closed, which is nearly always.
-      queryClient.invalidateQueries({
-        queryKey: [...wikiKeys.all, "descendantIds"],
-      })
-
-      // Recent-documents modal feed. CREATED/DELETED both shift the list;
-      // UPDATED (rename, content edit via Hocuspocus) reorders the
-      // "Recently updated" sort and changes the timestamp badge for the
-      // affected row. Invalidate the whole `recents` subtree so both
-      // sort-mode caches refresh — the closed-modal case is a no-op.
-      queryClient.invalidateQueries({ queryKey: wikiKeys.recents() })
-
-      // Lazy sidebar — surgically invalidate only the affected per-parent
-      // children buckets. Previously this refetched every expanded folder in
-      // the op (~15 queries per event in the production HAR); with the new
-      // event payload we know exactly which buckets need to refresh.
-      const targetParent: string | null = parentDocumentId ?? null
-      queryClient.invalidateQueries({
-        queryKey: wikiKeys.children(operationId, targetParent),
-      })
-      if (previousParentDocumentId !== null && previousParentDocumentId !== undefined) {
-        const previousParent: string | null = previousParentDocumentId
-        if (previousParent !== targetParent) {
-          queryClient.invalidateQueries({
-            queryKey: wikiKeys.children(operationId, previousParent),
-          })
-        }
-      }
-
-      // Cross-feature caches — only the actions that can actually change
-      // them. A sortOrder/parent change (UPDATED) doesn't touch trash,
-      // backlinks, history, or paginated lists.
-      if (action === "CREATED") {
-        // Restore-from-trash and create-document both surface as CREATED.
-        // Restore flips the trash list + badge; both shift paginated lists
-        // and history (CREATED is the only event flagged for new history
-        // rows from track-visit).
-        queryClient.invalidateQueries({ queryKey: wikiKeys.trash(operationId) })
-        queryClient.invalidateQueries({ queryKey: wikiKeys.trashCount(operationId) })
-        queryClient.invalidateQueries({ queryKey: wikiKeys.lists() })
-        queryClient.invalidateQueries({ queryKey: wikiKeys.histories() })
-        // Restoring a referenced doc can resurrect backlinks. Cap is ~5 open
-        // documents per user so the fan-out stays cheap.
-        queryClient.invalidateQueries({
-          queryKey: [...wikiKeys.all, "backlinks"],
-        })
-        // Same restore can surface a wiki doc on the credential side, so
-        // invalidate the credential-backlinks cache too. Cheap prefix sweep.
-        queryClient.invalidateQueries({
-          queryKey: ["credentials", "backlinks"],
-        })
-      } else if (action === "DELETED") {
-        // Soft/hard delete: paginated lists and backlinks can both change.
-        queryClient.invalidateQueries({ queryKey: wikiKeys.lists() })
-        queryClient.invalidateQueries({
-          queryKey: [...wikiKeys.all, "backlinks"],
-        })
-        // A doc that referenced credentials just disappeared from the
-        // credential backlinks view too.
-        queryClient.invalidateQueries({
-          queryKey: ["credentials", "backlinks"],
-        })
-      } else if (action === "UPDATED") {
-        // Wiki content edits (via Hocuspocus) can add/remove credential
-        // chips, which shifts the credential backlinks list — though not
-        // the wiki-doc backlinks. The list contents are small and writes
-        // are debounced, so the invalidation cost is negligible.
-        queryClient.invalidateQueries({
-          queryKey: ["credentials", "backlinks"],
-        })
-      }
-      // UPDATED (rename, recolor, sortOrder, reparent) does not touch
-      // trash/backlinks/history/lists. Skipping those invalidations is the
-      // bulk of the win in the drag-reorder hot path.
-    },
+    onData: (data) => applyWikiDocumentChanged(queryClient, operationId, data.wikiDocumentChanged),
     enabled: !!operationId,
   })
+}
+
+/** What a wikiDocumentChanged event refreshes in the cache (the subscription's handler). */
+export function applyWikiDocumentChanged(
+  queryClient: QueryClient,
+  operationId: string,
+  event: WikiDocumentChangedSubscription["wikiDocumentChanged"],
+) {
+  const {
+    action,
+    documentId,
+    parentDocumentId,
+    previousParentDocumentId,
+  } = event
+
+  // DELETED is special: drop per-document caches outright AND invalidate
+  // the trash list and badge so the row reappears (soft-delete) or
+  // vanishes (hard-delete + empty-trash). The reverse path (restore)
+  // sends action=CREATED, so trash/trashCount also flip there.
+  //
+  // Empty-trash events arrive with documentId="" (the backend can't
+  // name a single doc — the whole trash was purged). In that case the
+  // per-doc removeQueries calls would be no-ops, so we sweep every
+  // per-doc cache family that the purged docs could have populated.
+  if (action === "DELETED") {
+    if (documentId) {
+      queryClient.removeQueries({ queryKey: wikiKeys.detail(documentId) })
+      queryClient.removeQueries({ queryKey: wikiKeys.lite(documentId) })
+      queryClient.removeQueries({ queryKey: wikiKeys.preview(documentId) })
+      queryClient.removeQueries({ queryKey: wikiKeys.backups(documentId) })
+      queryClient.removeQueries({ queryKey: wikiKeys.trashedDescendants(documentId) })
+    } else {
+      // Empty-trash: blanket-clear the per-doc caches that referenced
+      // any of the purged docs. removeQueries with a prefix matches
+      // every keyed entry under the family.
+      queryClient.removeQueries({
+        queryKey: [...wikiKeys.all, "trashedDescendants"],
+      })
+    }
+    queryClient.invalidateQueries({ queryKey: wikiKeys.trash(operationId) })
+    queryClient.invalidateQueries({ queryKey: wikiKeys.trashCount(operationId) })
+  } else if (documentId) {
+    // Create/update: refresh whichever per-document views are mounted.
+    queryClient.invalidateQueries({ queryKey: wikiKeys.detail(documentId) })
+    queryClient.invalidateQueries({ queryKey: wikiKeys.lite(documentId) })
+    queryClient.invalidateQueries({ queryKey: wikiKeys.preview(documentId) })
+    // The export dialog renders the body; a body change makes its copy
+    // stale even though it is keyed separately from the document itself.
+    queryClient.invalidateQueries({ queryKey: wikiKeys.markdown(documentId) })
+  }
+
+  // Tree query — the move dialog and other full-tree consumers depend on
+  // it. Always refresh on document CRUD; invalidating an unmounted query
+  // is a no-op.
+  queryClient.invalidateQueries({ queryKey: wikiKeys.tree(operationId) })
+
+  // Templates picker feed. Flagging/unflagging a template (UPDATED),
+  // deleting a template (DELETED), or forking one (CREATED) all change the
+  // set. A rename also reorders it, so refresh on any CRUD — no-op when the
+  // create dialog isn't mounted.
+  queryClient.invalidateQueries({ queryKey: wikiKeys.templates(operationId) })
+
+  // Tag and page-type vocabulary caches. A create, update or delete can
+  // shift the set of tags/types in use. No-op when no vocabulary consumer
+  // is mounted.
+  queryClient.invalidateQueries({ queryKey: wikiKeys.tags(operationId) })
+  queryClient.invalidateQueries({ queryKey: wikiKeys.pageTypes(operationId) })
+
+  // Move dialog's exclusion set. A reparent (UPDATED) changes the
+  // descendant set of both parents' ancestor chains; create/delete shift
+  // it too. We can't cheaply map an event to the affected ancestors, so
+  // sweep the whole descendantIds family — a no-op while the move dialog
+  // (the only consumer) is closed, which is nearly always.
+  queryClient.invalidateQueries({
+    queryKey: [...wikiKeys.all, "descendantIds"],
+  })
+
+  // Recent-documents modal feed. CREATED/DELETED both shift the list;
+  // UPDATED (rename, content edit via Hocuspocus) reorders the
+  // "Recently updated" sort and changes the timestamp badge for the
+  // affected row. Invalidate the whole `recents` subtree so both
+  // sort-mode caches refresh — the closed-modal case is a no-op.
+  queryClient.invalidateQueries({ queryKey: wikiKeys.recents() })
+
+  // Lazy sidebar — surgically invalidate only the affected per-parent
+  // children buckets. Previously this refetched every expanded folder in
+  // the op (~15 queries per event in the production HAR); with the new
+  // event payload we know exactly which buckets need to refresh.
+  const targetParent: string | null = parentDocumentId ?? null
+  queryClient.invalidateQueries({
+    queryKey: wikiKeys.children(operationId, targetParent),
+  })
+  if (previousParentDocumentId !== null && previousParentDocumentId !== undefined) {
+    const previousParent: string | null = previousParentDocumentId
+    if (previousParent !== targetParent) {
+      queryClient.invalidateQueries({
+        queryKey: wikiKeys.children(operationId, previousParent),
+      })
+    }
+  }
+
+  // The parents' own rows: a row's childCount lives in the bucket of the
+  // parent's parent, which the lines above leave alone. A page's first
+  // child (or its last, gone) would otherwise keep its row without a caret
+  // (or with one opening onto nothing) until a reload. Where the row sits
+  // is read from the loaded buckets; one not loaded has no row to fix. The
+  // parents' previews count their sub-pages too.
+  const parents = [parentDocumentId, previousParentDocumentId].filter(
+    (id): id is string => !!id,
+  )
+  for (const key of childrenBucketsHolding(queryClient, operationId, parents)) {
+    queryClient.invalidateQueries({ queryKey: key, exact: true })
+  }
+  for (const id of parents) {
+    queryClient.invalidateQueries({ queryKey: wikiKeys.preview(id) })
+  }
+
+  // Cross-feature caches — only the actions that can actually change
+  // them. A sortOrder/parent change (UPDATED) doesn't touch trash,
+  // backlinks, history, or paginated lists.
+  if (action === "CREATED") {
+    // Restore-from-trash and create-document both surface as CREATED.
+    // Restore flips the trash list + badge; both shift paginated lists
+    // and history (CREATED is the only event flagged for new history
+    // rows from track-visit).
+    queryClient.invalidateQueries({ queryKey: wikiKeys.trash(operationId) })
+    queryClient.invalidateQueries({ queryKey: wikiKeys.trashCount(operationId) })
+    queryClient.invalidateQueries({ queryKey: wikiKeys.lists() })
+    queryClient.invalidateQueries({ queryKey: wikiKeys.histories() })
+    // Restoring a referenced doc can resurrect backlinks. Cap is ~5 open
+    // documents per user so the fan-out stays cheap.
+    queryClient.invalidateQueries({
+      queryKey: [...wikiKeys.all, "backlinks"],
+    })
+    // Same restore can surface a wiki doc on the credential side, so
+    // invalidate the credential-backlinks cache too. Cheap prefix sweep.
+    queryClient.invalidateQueries({
+      queryKey: ["credentials", "backlinks"],
+    })
+  } else if (action === "DELETED") {
+    // Soft/hard delete: paginated lists and backlinks can both change.
+    queryClient.invalidateQueries({ queryKey: wikiKeys.lists() })
+    queryClient.invalidateQueries({
+      queryKey: [...wikiKeys.all, "backlinks"],
+    })
+    // A doc that referenced credentials just disappeared from the
+    // credential backlinks view too.
+    queryClient.invalidateQueries({
+      queryKey: ["credentials", "backlinks"],
+    })
+  } else if (action === "UPDATED") {
+    // Wiki content edits (via Hocuspocus) can add/remove credential
+    // chips, which shifts the credential backlinks list — though not
+    // the wiki-doc backlinks. The list contents are small and writes
+    // are debounced, so the invalidation cost is negligible.
+    queryClient.invalidateQueries({
+      queryKey: ["credentials", "backlinks"],
+    })
+  }
+  // UPDATED (rename, recolor, sortOrder, reparent) does not touch
+  // trash/backlinks/history/lists. Skipping those invalidations is the
+  // bulk of the win in the drag-reorder hot path.
+}
+
+/**
+ * The keys of an operation's loaded children buckets that hold a row for any
+ * of ids: where those documents' own rows, and so their childCount, live.
+ */
+export function childrenBucketsHolding(
+  queryClient: QueryClient,
+  operationId: string,
+  ids: readonly string[],
+): QueryKey[] {
+  if (ids.length === 0) return []
+  const wanted = new Set(ids)
+  return queryClient
+    .getQueriesData<WikiDocumentChildrenQuery>({ queryKey: wikiKeys.childrenByOp(operationId) })
+    .filter(([, data]) => data?.wikiDocumentChildren.some((row) => wanted.has(row.id)))
+    .map(([key]) => key)
 }
 
 /**

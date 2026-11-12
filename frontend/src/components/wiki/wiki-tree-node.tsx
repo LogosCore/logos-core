@@ -85,6 +85,7 @@ function WikiTreeRowImpl({
   // and re-render every visible row.
   const isExpanded = useWikiStore((s) => s.expandedNodes.has(node.id))
   const toggleNode = useWikiStore((s) => s.toggleNode)
+  const expandNode = useWikiStore((s) => s.expandNode)
 
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(node.title)
@@ -302,6 +303,12 @@ function WikiTreeRowImpl({
                 // activator is the leading icon slot, not this <Link>, so a
                 // plain click on the title always reaches react-router.
                 draggable={false}
+                // A click opens the page expanded (useExpandSelectedRow), the
+                // page already open too: a click is how to open it again
+                // after collapsing it. Not a click for a new tab.
+                onClick={(e) => {
+                  if (isSelected && hasChildren && !(e.metaKey || e.ctrlKey || e.shiftKey)) expandNode(node.id)
+                }}
                 className="flex h-full flex-1 items-center truncate px-1 text-left text-sm"
               >
                 {node.title}

@@ -25,6 +25,7 @@ import {
 import { WikiTreeRow } from "@/components/wiki/wiki-tree-node"
 import { useFlattenedWikiTree } from "@/components/wiki/use-flattened-wiki-tree"
 import { useRevealSelectedRow } from "@/components/wiki/use-reveal-selected-row"
+import { useExpandSelectedRow } from "@/components/wiki/use-expand-selected-row"
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import { WikiTreeHeader } from "@/components/wiki/wiki-tree-header"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
@@ -215,6 +216,8 @@ export function WikiTreeSidebar({
   // Center the selected document's row, robust to the progressive load on a
   // hard reload (see hook for the settle/retry logic).
   useRevealSelectedRow(virtualizer, flatRows)
+  // The open page shows its children.
+  useExpandSelectedRow(flatRows)
 
   // DnD math (descendant exclusion, sibling reorder) reads the per-parent
   // cache directly — branches that aren't expanded simply aren't in the
