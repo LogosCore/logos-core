@@ -47,6 +47,12 @@ type BuildSchema {
   # means when it stops on an error, for an operator to look up. Empty: it
   # declares none. Core does nothing else with them.
   errorCodes: [BuildErrorCode!]!
+  # The minions exit with the codes each build gives them: core draws one
+  # for every error code that is not fixed, from 3 to 255, unless a build
+  # turns that off (BuildInput.uniqueErrorCodes), so two builds exit with
+  # different codes for the same error. Each build has its own table
+  # (Build.errorCodes).
+  errorCodesPerBuild: Boolean!
   # The minions can claim a persisted session: a build can be made from a
   # session for them (BuildInput.persistedSession).
   persistedSessions: Boolean!
@@ -67,12 +73,30 @@ type BuildSchema {
 
 # One of a factory's error codes.
 type BuildErrorCode {
-  # The number, 1 to 255: a minion's exit code.
+  # The number, 1 to 255: a minion's exit code, and with errorCodesPerBuild
+  # the default for a build that draws none.
   code: Int!
   # What it means, in a few words.
   label: String!
   # More: when it happens, what to do; null when the factory gave none.
   description: String
+  # The same in every build (a runtime's own, such as Go's 2): core draws
+  # none for it.
+  fixed: Boolean!
+}
+
+# One of a build's error codes: one its factory declares, with the code its
+# minion exits with.
+type BuildExitCode {
+  # What the build's minion exits with for it: drawn for the build, or the
+  # declared code.
+  exitCode: Int!
+  # The code as the factory declares it (BuildErrorCode.code).
+  code: Int!
+  label: String!
+  description: String
+  # The same in every build.
+  fixed: Boolean!
 }
 
 # A command a factory's minions can be built with.
@@ -263,6 +287,10 @@ input BuildInput {
   # Whether the build packs its messages (docs: wire format, Compression),
   # for a factory with compression; null: on there.
   compression: Boolean
+  # Whether core draws the build's own exit codes, for a factory with
+  # errorCodesPerBuild; null: on there. Off: the minion exits with the
+  # declared codes.
+  uniqueErrorCodes: Boolean
 }
 
 # One stage of a build's pipeline: core's queue, then the factory's steps
@@ -346,6 +374,14 @@ type Build {
   # The algorithm the build packs its messages with ("deflate"); null when
   # it packs none (turned off, or a factory without compression).
   compression: String
+  # What the minion's exit codes mean, in its factory's order: the factory's
+  # error codes as they were when the build was queued, each with this
+  # build's exit code. Empty for a factory that declares none, and for a
+  # build queued before builds kept them (its factory's codes apply).
+  errorCodes: [BuildExitCode!]!
+  # Core drew the build's exit codes (its factory has errorCodesPerBuild,
+  # and the build did not turn it off).
+  uniqueErrorCodes: Boolean!
   # The minion's payload crypto as the factory got it: {suite, material}.
   # null when its factory declares no suite (or, for a suite of the
   # factory's own, before the factory made the keys).

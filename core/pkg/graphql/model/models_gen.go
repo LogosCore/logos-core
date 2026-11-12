@@ -80,6 +80,8 @@ type Build struct {
 	Failover               any               `json:"failover"`
 	MaxTasks               *int              `json:"maxTasks,omitempty"`
 	Compression            *string           `json:"compression,omitempty"`
+	ErrorCodes             []*BuildExitCode  `json:"errorCodes"`
+	UniqueErrorCodes       bool              `json:"uniqueErrorCodes"`
 	Crypto                 any               `json:"crypto,omitempty"`
 	Envelope               string            `json:"envelope"`
 	Codec                  any               `json:"codec,omitempty"`
@@ -173,6 +175,15 @@ type BuildErrorCode struct {
 	Code        int     `json:"code"`
 	Label       string  `json:"label"`
 	Description *string `json:"description,omitempty"`
+	Fixed       bool    `json:"fixed"`
+}
+
+type BuildExitCode struct {
+	ExitCode    int     `json:"exitCode"`
+	Code        int     `json:"code"`
+	Label       string  `json:"label"`
+	Description *string `json:"description,omitempty"`
+	Fixed       bool    `json:"fixed"`
 }
 
 type BuildFile struct {
@@ -199,6 +210,7 @@ type BuildInput struct {
 	Failover            any                     `json:"failover,omitempty"`
 	MaxTasks            *int                    `json:"maxTasks,omitempty"`
 	Compression         *bool                   `json:"compression,omitempty"`
+	UniqueErrorCodes    *bool                   `json:"uniqueErrorCodes,omitempty"`
 }
 
 type BuildMatchInput struct {
@@ -213,17 +225,18 @@ type BuildProblem struct {
 }
 
 type BuildSchema struct {
-	Version           int               `json:"version"`
-	Channels          []*BuildChannel   `json:"channels"`
-	Crypto            *string           `json:"crypto,omitempty"`
-	Fields            []*ModuleField    `json:"fields"`
-	Targets           []*BuildTarget    `json:"targets"`
-	Commands          []*BuildCommand   `json:"commands"`
-	ErrorCodes        []*BuildErrorCode `json:"errorCodes"`
-	PersistedSessions bool              `json:"persistedSessions"`
-	Failover          bool              `json:"failover"`
-	MaxTasks          bool              `json:"maxTasks"`
-	Compression       []string          `json:"compression"`
+	Version            int               `json:"version"`
+	Channels           []*BuildChannel   `json:"channels"`
+	Crypto             *string           `json:"crypto,omitempty"`
+	Fields             []*ModuleField    `json:"fields"`
+	Targets            []*BuildTarget    `json:"targets"`
+	Commands           []*BuildCommand   `json:"commands"`
+	ErrorCodes         []*BuildErrorCode `json:"errorCodes"`
+	ErrorCodesPerBuild bool              `json:"errorCodesPerBuild"`
+	PersistedSessions  bool              `json:"persistedSessions"`
+	Failover           bool              `json:"failover"`
+	MaxTasks           bool              `json:"maxTasks"`
+	Compression        []string          `json:"compression"`
 }
 
 type BuildServe struct {

@@ -41,9 +41,11 @@ const schema: BuildSchemaFieldsFragment = {
   maxTasks: false,
   compression: [],
   persistedSessions: false,
+  errorCodesPerBuild: true,
   errorCodes: [
-    { code: 5, label: "No connection it can use", description: null },
-    { code: 3, label: "Its config does not read", description: "Build it again." },
+    { code: 5, label: "No connection it can use", description: null, fixed: false },
+    { code: 3, label: "Its config does not read", description: "Build it again.", fixed: false },
+    { code: 2, label: "Crashed", description: null, fixed: true },
   ],
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
@@ -180,10 +182,12 @@ describe("factoryKindsByName", () => {
     expect(kind.channelFields.get("http")?.get("reverse-persistent")?.map((f) => f.key)).toEqual(["path_prefix"])
   })
 
-  it("keeps the error codes in the factory's order", () => {
+  it("keeps the error codes in the factory's order, the fixed ones marked", () => {
+    expect(kind.errorCodesPerBuild).toBe(true)
     expect(kind.errorCodes).toEqual([
-      { code: 5, label: "No connection it can use", description: null },
-      { code: 3, label: "Its config does not read", description: "Build it again." },
+      { code: 5, label: "No connection it can use", description: null, fixed: false },
+      { code: 3, label: "Its config does not read", description: "Build it again.", fixed: false },
+      { code: 2, label: "Crashed", description: null, fixed: true },
     ])
   })
 
@@ -295,7 +299,19 @@ describe("the build form", () => {
       failover: DEFAULT_FAILOVER,
       maxTasks: null,
       compression: null,
+      uniqueErrorCodes: true,
     })
+  })
+
+  it("draws unique error codes by default where the factory's minions take them, and says off", () => {
+    const form = initialForm(kind, null, channels)
+    expect(form.uniqueErrorCodes).toBe(true)
+    expect(evaluateForm(kind, form, channels).input.uniqueErrorCodes).toBe(true)
+    expect(evaluateForm(kind, { ...form, uniqueErrorCodes: false }, channels).input.uniqueErrorCodes).toBe(false)
+    const declared = factoryKindsByName([
+      { moduleName: "bob", instances: 1, schema: { ...schema, errorCodesPerBuild: false } },
+    ]).get("bob")!
+    expect(evaluateForm(declared, { ...form, uniqueErrorCodes: false }, channels).input.uniqueErrorCodes).toBeNull()
   })
 
   it("packs by default where the factory's minions inflate, and says off", () => {

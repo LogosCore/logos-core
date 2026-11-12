@@ -418,6 +418,7 @@ function Editor({
           failover: request.failover,
           maxTasks: kind.maxTasks ? request.maxTasks : null,
           compression: kind.compression ? request.compression : null,
+          uniqueErrorCodes: kind.errorCodesPerBuild ? request.uniqueErrorCodes : null,
           ...(persistedOptions ? persistedInput(read?.ok && read.doc.persisted ? read.doc.persisted : persisted) : {}),
         },
       })
@@ -699,6 +700,20 @@ function Editor({
                   id="build-compression"
                   checked={form.compression}
                   onCheckedChange={(compression) => setForm((f) => ({ ...f, compression }))}
+                  disabled={disabled}
+                />
+              </SettingRow>
+            )}
+            {kind.errorCodesPerBuild && (
+              <SettingRow
+                id="build-unique-error-codes"
+                label="Unique error codes"
+                help="Core draws this build's own exit codes, from 3 to 255, for each of the factory's error codes but the fixed ones: two builds exit with different codes for the same error. The build's Overview lists them. Off: the factory's codes."
+              >
+                <Switch
+                  id="build-unique-error-codes"
+                  checked={form.uniqueErrorCodes}
+                  onCheckedChange={(uniqueErrorCodes) => setForm((f) => ({ ...f, uniqueErrorCodes }))}
                   disabled={disabled}
                 />
               </SettingRow>

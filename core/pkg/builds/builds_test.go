@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -536,6 +537,64 @@ func TestBuildCompression(t *testing.T) {
 	}
 	if req == nil || req.Compression != protocol.CompressionDeflate {
 		t.Fatalf("the factory got %+v", req)
+	}
+}
+
+// A factory's error codes are kept with each build, as they were when it
+// was queued. One whose minions take their codes per build gets each
+// build's own drawn (the fixed ones kept), on by default and off when the
+// operator says so, and learns them in the request; asked of a factory
+// whose minions take none per build, they are refused.
+func TestBuildErrorCodes(t *testing.T) {
+	r := newRig(t)
+	r.reg.schemas["bob"].ErrorCodes = []protocol.ErrorCode{{Code: 3, Label: "Its config does not read"}}
+	b := r.queue(t, nil)
+	if b.UniqueErrorCodes || len(b.ErrorCodes) != 1 || b.ErrorCodes[0] != (models.BuildErrorCode{Code: 3, ExitCode: 3, Label: "Its config does not read"}) {
+		t.Fatalf("the declared codes: %+v (drawn %v)", b.ErrorCodes, b.UniqueErrorCodes)
+	}
+	on, off := true, false
+	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) { in.UniqueErrorCodes = &on }))
+	var v *ValidationError
+	if !errors.As(err, &v) || v.Problems["uniqueErrorCodes"] == "" {
+		t.Fatalf("codes drawn for a factory without them: %v", err)
+	}
+
+	r.reg.schemas["bob"].ErrorCodesPerBuild = true
+	r.reg.schemas["bob"].ErrorCodes = []protocol.ErrorCode{
+		{Code: 1, Label: "Could not start", Fixed: true},
+		{Code: 3, Label: "Its config does not read", Description: "Build it again."},
+		{Code: 4, Label: "No connection"},
+	}
+	if b := r.queue(t, func(in *BuildInput) { in.UniqueErrorCodes = &off }); b.UniqueErrorCodes || len(b.ErrorCodes) != 3 ||
+		b.ErrorCodes[1].ExitCode != 3 || b.ErrorCodes[2].ExitCode != 4 {
+		t.Fatalf("turned off: %+v", b.ErrorCodes)
+	}
+	b = r.queue(t, nil)
+	if !b.UniqueErrorCodes || len(b.ErrorCodes) != 3 || b.ErrorCodes[0] != (models.BuildErrorCode{Code: 1, ExitCode: 1, Label: "Could not start", Fixed: true}) ||
+		b.ErrorCodes[1].Description != "Build it again." {
+		t.Fatalf("the default: %+v (drawn %v)", b.ErrorCodes, b.UniqueErrorCodes)
+	}
+	drawn := []protocol.BuildErrorCode{{Code: 3, ExitCode: b.ErrorCodes[1].ExitCode}, {Code: 4, ExitCode: b.ErrorCodes[2].ExitCode}}
+	for _, d := range drawn {
+		if d.ExitCode < protocol.ErrorCodePoolMin || d.ExitCode > protocol.MaxErrorCode {
+			t.Fatalf("drawn out of the pool: %+v", drawn)
+		}
+	}
+	if drawn[0].ExitCode == drawn[1].ExitCode {
+		t.Fatalf("one exit code twice: %+v", drawn)
+	}
+	r.svc.Tick(context.Background())
+	var req *protocol.BuildRequest
+	for _, c := range r.rpc.recorded() {
+		if q, ok := c.payload.(protocol.BuildRequest); ok && q.BuildID == b.BuildID.String() {
+			req = &q
+		}
+	}
+	if req == nil || !reflect.DeepEqual(req.ErrorCodes, drawn) {
+		t.Fatalf("the factory got %+v, want %+v", req, drawn)
+	}
+	if stored := r.get(t, b.BuildID.String(), models.BuildStateBuilding); !reflect.DeepEqual(stored.ErrorCodes, b.ErrorCodes) {
+		t.Fatalf("stored %+v, queued %+v", stored.ErrorCodes, b.ErrorCodes)
 	}
 }
 

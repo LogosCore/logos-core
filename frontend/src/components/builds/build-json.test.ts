@@ -28,6 +28,7 @@ const schema: BuildSchemaFieldsFragment = {
   failover: false,
   maxTasks: false,
   compression: [],
+  errorCodesPerBuild: false,
   persistedSessions: false,
   errorCodes: [],
   fields: [
@@ -334,6 +335,37 @@ describe("compression", () => {
   })
 })
 
+describe("unique error codes", () => {
+  const drawing = factoryKindsByName([{ moduleName: "bob", instances: 1, schema: { ...schema, errorCodesPerBuild: true } }]).get("bob")!
+  const readU = (doc: unknown) => readBuildJson(JSON.stringify(doc), drawing, channels)
+
+  it("is on unless turned off, in and out of the form, and to createBuild", () => {
+    expect(formFromDocument(drawing, channels, good).uniqueErrorCodes).toBe(true)
+    const off = formFromDocument(drawing, channels, { ...good, uniqueErrorCodes: false })
+    expect(off.uniqueErrorCodes).toBe(false)
+    expect(formDocument(drawing, channels, off).uniqueErrorCodes).toBe(false)
+    expect(JSON.parse(buildJson(drawing, channels, { ...good, uniqueErrorCodes: false })).unique_error_codes).toBe(false)
+    expect(documentInput({ ...good, uniqueErrorCodes: false }).uniqueErrorCodes).toBe(false)
+    expect(documentInput(good).uniqueErrorCodes).toBeNull()
+  })
+
+  it("reads back true or false, and refuses anything else", () => {
+    const at = (value: unknown) => {
+      const r = readU({ ...json(), unique_error_codes: value })
+      if (!r.ok) throw new Error(r.message)
+      return { uniqueErrorCodes: r.doc.uniqueErrorCodes, problems: r.problems.map((p) => p.path) }
+    }
+    expect(at(false)).toEqual({ uniqueErrorCodes: false, problems: [] })
+    expect(at(true)).toEqual({ uniqueErrorCodes: true, problems: [] })
+    expect(at("yes").problems).toEqual(["/unique_error_codes"])
+  })
+
+  it("is not for a factory whose minions take no codes per build", () => {
+    expect(problems({ ...json(), unique_error_codes: true })["/unique_error_codes"]).toMatch(/no exit codes per build/)
+    expect(formDocument(kind, channels, formFromDocument(kind, channels, good)).uniqueErrorCodes).toBeUndefined()
+  })
+})
+
 describe("a finished build's JSON", () => {
   it("reads back as a new build's, the defaults it holds left to the server", () => {
     const record = {
@@ -414,6 +446,7 @@ describe("documentInput", () => {
       failover: DEFAULT_FAILOVER,
       maxTasks: null,
       compression: null,
+      uniqueErrorCodes: null,
     })
   })
 })

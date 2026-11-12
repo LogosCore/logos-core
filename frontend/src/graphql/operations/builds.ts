@@ -8,6 +8,7 @@ export const BuildSchemaFields = graphql(`
     failover
     maxTasks
     compression
+    errorCodesPerBuild
     fields {
       ...ModuleFieldDefFields
     }
@@ -54,6 +55,7 @@ export const BuildSchemaFields = graphql(`
       code
       label
       description
+      fixed
     }
   }
 `)
@@ -179,6 +181,14 @@ export const BuildQuery = graphql(`
       failover
       maxTasks
       compression
+      errorCodes {
+        exitCode
+        code
+        label
+        description
+        fixed
+      }
+      uniqueErrorCodes
       crypto
       envelope
       codec

@@ -213,6 +213,7 @@ func (r *buildResolver) CreateBuild(ctx context.Context, operationID string, inp
 	}
 	in.MaxTasks = input.MaxTasks
 	in.Compression = input.Compression
+	in.UniqueErrorCodes = input.UniqueErrorCodes
 	in.NewPersistedSession = input.NewPersistedSession != nil && *input.NewPersistedSession
 	if input.PersistedSession != nil {
 		sid, err := uuid.Parse(*input.PersistedSession)
@@ -381,7 +382,8 @@ func mapBuildError(ctx context.Context, err error) error {
 
 func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 	out := &model.BuildSchema{Version: s.Version, Crypto: strPtr(s.Crypto), Fields: toBuildFieldModels(s.Fields),
-		PersistedSessions: s.PersistedSessions, Failover: s.Failover, MaxTasks: s.MaxTasks, Compression: orEmpty(s.Compression)}
+		PersistedSessions: s.PersistedSessions, Failover: s.Failover, MaxTasks: s.MaxTasks, Compression: orEmpty(s.Compression),
+		ErrorCodesPerBuild: s.ErrorCodesPerBuild}
 	for _, c := range s.Channels {
 		ch := &model.BuildChannel{ModuleName: c.ModuleName, Num: positive(c.Num), Versions: c.Versions, Kinds: []*model.BuildChannelKind{}}
 		for _, k := range c.Kinds {
@@ -408,7 +410,7 @@ func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 	}
 	out.ErrorCodes = make([]*model.BuildErrorCode, len(s.ErrorCodes))
 	for i, e := range s.ErrorCodes {
-		out.ErrorCodes[i] = &model.BuildErrorCode{Code: e.Code, Label: e.Label, Description: strPtr(e.Description)}
+		out.ErrorCodes[i] = &model.BuildErrorCode{Code: e.Code, Label: e.Label, Description: strPtr(e.Description), Fixed: e.Fixed}
 	}
 	return out
 }
@@ -479,6 +481,11 @@ func toBuildModel(b *models.Build) *model.Build {
 	out.Failover = b.FailoverPolicy()
 	out.MaxTasks = b.MaxTasks
 	out.Compression = strPtr(b.Compression)
+	out.ErrorCodes = make([]*model.BuildExitCode, len(b.ErrorCodes))
+	for i, e := range b.ErrorCodes {
+		out.ErrorCodes[i] = &model.BuildExitCode{ExitCode: e.ExitCode, Code: e.Code, Label: e.Label, Description: strPtr(e.Description), Fixed: e.Fixed}
+	}
+	out.UniqueErrorCodes = b.UniqueErrorCodes
 	out.Envelope = cmp.Or(b.Envelope, protocol.EnvelopeCBOR)
 	if b.Codec != nil {
 		out.Codec = b.Codec

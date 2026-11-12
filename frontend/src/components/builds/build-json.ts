@@ -67,6 +67,9 @@ import { DEFAULT_MAX_TASKS, MAX_TASKS_LIMIT, parseMaxTasks } from "@/components/
 // "compression", for a factory whose minions inflate packed items: whether
 // the build packs its messages (left out: true).
 //
+// "unique_error_codes", for a factory whose minions take their exit codes
+// per build: whether core draws the build's own (left out: true).
+//
 // "persisted_session", for a factory whose minions claim persisted sessions:
 // false (none), true (a new one, reserved with the build), or an existing
 // session's id, which the minion takes over.
@@ -103,6 +106,8 @@ export interface BuildDocument {
   maxTasks?: number | string
   /** Whether the build packs its messages; absent where the factory has none, or the JSON leaves it out (on). */
   compression?: boolean
+  /** Whether core draws the build's own exit codes; absent where the factory has none, or the JSON leaves it out (on). */
+  uniqueErrorCodes?: boolean
   /** The persisted session; absent where the factory has none, or the JSON leaves it out. */
   persisted?: PersistedChoice
 }
@@ -121,6 +126,7 @@ const KEYS = [
   "failover",
   "max_tasks",
   "compression",
+  "unique_error_codes",
   "persisted_session",
 ]
 const CONNECTION_KEYS = ["channel", "kind", "name", "description", "settings", "values", "failover"]
@@ -166,6 +172,7 @@ export function buildJson(kind: FactoryKind, channels: ReadonlyMap<string, Chann
     failover: doc.failover,
     ...(doc.maxTasks !== undefined ? { max_tasks: doc.maxTasks } : {}),
     ...(doc.compression !== undefined ? { compression: doc.compression } : {}),
+    ...(doc.uniqueErrorCodes !== undefined ? { unique_error_codes: doc.uniqueErrorCodes } : {}),
     ...(doc.persisted ? { persisted_session: persistedJson(doc.persisted) } : {}),
   })
 }
@@ -210,6 +217,7 @@ export function formDocument(kind: FactoryKind, channels: ReadonlyMap<string, Ch
     failover: form.failover,
     ...(kind.maxTasks ? { maxTasks: maxTasksOf(form.maxTasks) } : {}),
     ...(kind.compression ? { compression: form.compression } : {}),
+    ...(kind.errorCodesPerBuild ? { uniqueErrorCodes: form.uniqueErrorCodes } : {}),
   }
 }
 
@@ -247,6 +255,7 @@ export function formFromDocument(kind: FactoryKind, channels: ReadonlyMap<string
     failover: doc.failover,
     maxTasks: kind.maxTasks ? String(doc.maxTasks ?? DEFAULT_MAX_TASKS) : "",
     compression: doc.compression ?? true,
+    uniqueErrorCodes: doc.uniqueErrorCodes ?? true,
   }
 }
 
@@ -270,6 +279,7 @@ export function documentInput(doc: BuildDocument): FormInput {
     failover: doc.failover,
     maxTasks: typeof doc.maxTasks === "number" ? doc.maxTasks : null,
     compression: doc.compression ?? null,
+    uniqueErrorCodes: doc.uniqueErrorCodes ?? null,
   }
 }
 
@@ -379,6 +389,11 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
     if (!kind.compression) at("/compression", `${kind.name}'s minions inflate nothing`)
     else if (typeof root.compression === "boolean") doc.compression = root.compression
     else at("/compression", "true or false")
+  }
+  if (root.unique_error_codes !== undefined && root.unique_error_codes !== null) {
+    if (!kind.errorCodesPerBuild) at("/unique_error_codes", `${kind.name}'s minions take no exit codes per build`)
+    else if (typeof root.unique_error_codes === "boolean") doc.uniqueErrorCodes = root.unique_error_codes
+    else at("/unique_error_codes", "true or false")
   }
   if (root.persisted_session !== undefined) {
     if (!kind.persistedSessions) at("/persisted_session", `${kind.name}'s minions do not claim persisted sessions`)
@@ -507,6 +522,15 @@ export function buildJsonHints(
               key: "compression",
               detail: "boolean",
               info: "Whether the build packs its messages: each item that shrinks deflated, both ways. Left out: true. Off shows no compression in the traffic's sizes.",
+            },
+          ]
+        : []),
+      ...(kind.errorCodesPerBuild
+        ? [
+            {
+              key: "unique_error_codes",
+              detail: "boolean",
+              info: "Whether core draws the build's own exit codes, 3 to 255, for the factory's error codes but the fixed ones. Left out: true. Off: the factory's codes.",
             },
           ]
         : []),

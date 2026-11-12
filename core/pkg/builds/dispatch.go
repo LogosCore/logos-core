@@ -302,6 +302,7 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 		req.MaxTasks = &n
 	}
 	req.Compression = b.Compression
+	req.ErrorCodes = b.DrawnErrorCodes()
 	req.Envelope = b.Envelope
 	if b.PersistedSessionID != nil {
 		req.SessionID = b.PersistedSessionID.String()

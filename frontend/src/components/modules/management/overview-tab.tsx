@@ -176,7 +176,7 @@ export function BuildCommands({ build }: { build: Build }) {
  * minions' exit codes mean when they stop on an error.
  */
 export function BuildErrorCodes({ build }: { build: Build }) {
-  return <ErrorCodes codes={build.errorCodes} labelWidth={KEYS} />
+  return <ErrorCodes codes={build.errorCodes} labelWidth={KEYS} perBuild={build.errorCodesPerBuild} />
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {

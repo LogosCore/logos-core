@@ -104,11 +104,17 @@ export interface Target {
   channels: { moduleName: string; versions: number[]; kinds: string[] }[]
 }
 
-/** One of a factory's error codes: what a minion's exit code means. */
+/**
+ * One of a factory's error codes: what a minion's exit code means. A build's
+ * has exitCode, what its minion exits with: drawn for the build, or code.
+ */
 export interface ErrorCode {
   code: number
   label: string
   description?: string | null
+  /** The same in every build: core draws none for it. */
+  fixed?: boolean
+  exitCode?: number
 }
 
 /** A command a factory's minions can be built with. */
@@ -144,6 +150,8 @@ export interface FactoryKind {
   maxTasks?: boolean
   /** The minions inflate packed items: a build packs its messages, on unless turned off. */
   compression?: boolean
+  /** The minions exit with codes each build gets drawn, on unless turned off. */
+  errorCodesPerBuild?: boolean
   /** Fields every target shares, sorted. */
   fields: FieldDef[]
   /** The factory's connection parameters by channel kind, then connection kind, sorted. */
@@ -180,6 +188,7 @@ export function factoryKindsByName(
       failover: k.schema.failover,
       maxTasks: k.schema.maxTasks,
       compression: k.schema.compression.length > 0,
+      errorCodesPerBuild: k.schema.errorCodesPerBuild,
       fields: sorted(k.schema.fields),
       channelFields: new Map(
         k.schema.channels.map((c) => [c.moduleName, new Map(c.kinds.map((ck) => [ck.kind, sorted(ck.fields)]))]),
@@ -203,7 +212,12 @@ export function factoryKindsByName(
         kinds: c.kinds,
         params: sorted(c.params),
       })),
-      errorCodes: k.schema.errorCodes.map((e) => ({ code: e.code, label: e.label, description: e.description ?? null })),
+      errorCodes: k.schema.errorCodes.map((e) => ({
+        code: e.code,
+        label: e.label,
+        description: e.description ?? null,
+        fixed: e.fixed,
+      })),
     })
   }
   return out
@@ -340,6 +354,8 @@ export interface BuildForm {
   maxTasks: string
   /** Whether the build packs its messages; kept, unused, for a factory whose minions inflate nothing. */
   compression: boolean
+  /** Whether core draws the build's own exit codes; kept, unused, for a factory without them. */
+  uniqueErrorCodes: boolean
 }
 
 /** A connection as an earlier build's turns into ("Build again"). */
@@ -370,6 +386,8 @@ export interface FormSource {
   maxTasks?: number | null
   /** Whether it packed its messages; none: on. */
   compression?: boolean | null
+  /** Whether core drew its own exit codes; none: on. */
+  uniqueErrorCodes?: boolean | null
 }
 
 /**
@@ -543,6 +561,7 @@ export function initialForm(
     failover: source?.failover ?? { ...DEFAULT_FAILOVER },
     maxTasks: kind.maxTasks ? String(source?.maxTasks ?? DEFAULT_MAX_TASKS) : "",
     compression: source?.compression ?? true,
+    uniqueErrorCodes: source?.uniqueErrorCodes ?? true,
   }
 }
 
@@ -564,6 +583,8 @@ export interface BuildRecordLike {
   maxTasks?: number | null
   /** The algorithm it packed its messages with; none when it packed none. */
   compression?: string | null
+  /** Core drew its own exit codes. */
+  uniqueErrorCodes?: boolean | null
 }
 
 /** One of a build record's connections, as far as it reads. */
@@ -656,6 +677,7 @@ export function sourceFromBuild(
     failover: recordFailover(build.failover),
     maxTasks: build.maxTasks ?? null,
     compression: build.compression != null,
+    uniqueErrorCodes: build.uniqueErrorCodes ?? null,
   }
 }
 
@@ -695,6 +717,8 @@ export interface FormInput {
   maxTasks: number | null
   /** Whether the build packs its messages; null for a factory whose minions inflate nothing. */
   compression: boolean | null
+  /** Whether core draws the build's own exit codes; null for a factory without them. */
+  uniqueErrorCodes: boolean | null
 }
 
 function evaluateFields(
@@ -823,6 +847,7 @@ export function evaluateForm(
     failover: form.failover,
     maxTasks,
     compression: kind.compression ? form.compression : null,
+    uniqueErrorCodes: kind.errorCodesPerBuild ? form.uniqueErrorCodes : null,
   }
   return { input, errors }
 }

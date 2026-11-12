@@ -103,6 +103,19 @@ export function BuildOverview({
               )}
             </LabelRow>
           )}
+          {/* Exit codes: drawn for the build, or its factory's where it turned that off. */}
+          {(b.uniqueErrorCodes || kind?.errorCodesPerBuild) && (
+            <LabelRow label="Exit codes">
+              {b.uniqueErrorCodes ? (
+                <>
+                  drawn for this build
+                  <span className="text-muted-foreground"> · Minion error codes lists them</span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">the factory&apos;s: unique error codes off</span>
+              )}
+            </LabelRow>
+          )}
           {/* How its messages are written and sealed, where not core's CBOR alone (docs: Codecs). */}
           {(b.envelope !== "cbor" || b.codec != null) && (
             <LabelRow label="Codec">
@@ -162,7 +175,12 @@ export function BuildOverview({
           </InfoCard>
         )}
 
-        {kind && kind.errorCodes.length > 0 && <ErrorCodes codes={kind.errorCodes} />}
+        {/* The build's own codes; one queued before builds kept them shows its factory's. */}
+        {b.errorCodes.length > 0 ? (
+          <ErrorCodes codes={b.errorCodes} drawn={b.uniqueErrorCodes} />
+        ) : (
+          kind && kind.errorCodes.length > 0 && <ErrorCodes codes={kind.errorCodes} />
+        )}
       </CardColumns>
     </div>
   )

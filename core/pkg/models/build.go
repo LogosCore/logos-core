@@ -118,6 +118,17 @@ type Build struct {
 	// protocol.BuildSchema.Compression: on unless the operator turned it
 	// off; "" for off, or a factory that declares none.
 	Compression string `bson:"compression,omitempty" json:"compression,omitempty"`
+	// ErrorCodes are what the minion's exit codes mean: its factory's
+	// (protocol.ErrorCode) as they were when the build was queued, in the
+	// factory's order, each with this build's exit code. Empty for a
+	// factory that declares none, and for a build queued before builds kept
+	// them.
+	ErrorCodes []BuildErrorCode `bson:"error_codes,omitempty" json:"error_codes,omitempty"`
+	// UniqueErrorCodes says core drew the build's exit codes
+	// (protocol.DrawErrorCodes), for a factory that declares
+	// protocol.BuildSchema.ErrorCodesPerBuild, unless the operator turned
+	// that off: the request carries them (DrawnErrorCodes).
+	UniqueErrorCodes bool `bson:"unique_error_codes,omitempty" json:"unique_error_codes,omitempty"`
 	// Envelope is how the minion writes its messages (its target's,
 	// protocol.BuildSchema.TargetCodec): core's protocol.EnvelopeJSON, or a
 	// factory's own; "" for core's CBOR. Its suite is Crypto's.
@@ -277,4 +288,55 @@ type Minion struct {
 	Commands  []string    `bson:"commands,omitempty" json:"commands,omitempty"`
 	CreatedBy ModuleActor `bson:"created_by" json:"created_by"`
 	CreatedAt time.Time   `bson:"created_at" json:"created_at"`
+}
+
+// BuildErrorCode is one of a build's error codes: one its factory declares
+// (protocol.ErrorCode), with the code the build's minion exits with.
+type BuildErrorCode struct {
+	// Code is the declared code.
+	Code int `bson:"code" json:"code"`
+	// ExitCode is what the build's minion exits with for it: drawn for the
+	// build (Build.UniqueErrorCodes), or Code.
+	ExitCode    int    `bson:"exit_code" json:"exit_code"`
+	Label       string `bson:"label" json:"label"`
+	Description string `bson:"description,omitempty" json:"description,omitempty"`
+	// Fixed: the same in every build.
+	Fixed bool `bson:"fixed,omitempty" json:"fixed,omitempty"`
+}
+
+// NewBuildErrorCodes is a build's error codes: declared, its factory's,
+// each with the exit code drawn for it (protocol.DrawErrorCodes), or its
+// own where none was.
+func NewBuildErrorCodes(declared []protocol.ErrorCode, drawn []protocol.BuildErrorCode) []BuildErrorCode {
+	if len(declared) == 0 {
+		return nil
+	}
+	exits := make(map[int]int, len(drawn))
+	for _, d := range drawn {
+		exits[d.Code] = d.ExitCode
+	}
+	out := make([]BuildErrorCode, len(declared))
+	for i, e := range declared {
+		exit, ok := exits[e.Code]
+		if !ok {
+			exit = e.Code
+		}
+		out[i] = BuildErrorCode{Code: e.Code, ExitCode: exit, Label: e.Label, Description: e.Description, Fixed: e.Fixed}
+	}
+	return out
+}
+
+// DrawnErrorCodes are the exit codes core drew for b, as its factory gets
+// them (protocol.BuildRequest.ErrorCodes); nil when it drew none.
+func (b *Build) DrawnErrorCodes() []protocol.BuildErrorCode {
+	if !b.UniqueErrorCodes {
+		return nil
+	}
+	var out []protocol.BuildErrorCode
+	for _, e := range b.ErrorCodes {
+		if !e.Fixed {
+			out = append(out, protocol.BuildErrorCode{Code: e.Code, ExitCode: e.ExitCode})
+		}
+	}
+	return out
 }

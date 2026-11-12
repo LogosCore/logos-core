@@ -50,7 +50,11 @@ type BuildInput struct {
 	// Compression turns the build's compression on or off, for a factory
 	// that declares protocol.BuildSchema.Compression; nil: on there.
 	Compression *bool
-	Actor       models.ModuleActor
+	// UniqueErrorCodes turns drawing the build's own exit codes on or off,
+	// for a factory that declares protocol.BuildSchema.ErrorCodesPerBuild;
+	// nil: on there. Off: the minion exits with the declared codes.
+	UniqueErrorCodes *bool
+	Actor            models.ModuleActor
 }
 
 // artifactKey is where a build's artifact is uploaded.
@@ -126,6 +130,12 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		}
 		probs.add("compression", "this factory's minions inflate nothing")
 	}
+	if in.UniqueErrorCodes != nil && *in.UniqueErrorCodes && !schema.ErrorCodesPerBuild {
+		if probs == nil {
+			probs = problems{}
+		}
+		probs.add("uniqueErrorCodes", "this factory's minions take no error codes per build")
+	}
 	codec := schema.TargetCodec(c.target)
 	if probs == nil {
 		probs = problems{}
@@ -172,6 +182,17 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	if len(schema.Compression) > 0 && (in.Compression == nil || *in.Compression) {
 		b.Compression = schema.Compression[0]
 	}
+	// The factory's error codes as they are now, each with the build's exit
+	// code: drawn where its minions take them per build (docs: Minion error
+	// codes), on by default there.
+	var drawn []protocol.BuildErrorCode
+	if schema.ErrorCodesPerBuild && (in.UniqueErrorCodes == nil || *in.UniqueErrorCodes) {
+		if drawn, err = protocol.DrawErrorCodes(*schema); err != nil {
+			return nil, err
+		}
+		b.UniqueErrorCodes = true
+	}
+	b.ErrorCodes = models.NewBuildErrorCodes(schema.ErrorCodes, drawn)
 	// The target's codec (docs: Codecs). Core makes the keys of its own
 	// suite now; a factory makes those of its own as the build is offered
 	// (dispatch: factoryCrypto).
