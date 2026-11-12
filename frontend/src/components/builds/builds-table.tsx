@@ -16,11 +16,12 @@ import { PipelineDots } from "./build-pipeline"
 import { currentStage, platformLabel } from "./build-values"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
-const GRID_COLS = "grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_48px]"
+const GRID_COLS =
+  "grid-cols-[minmax(0,1.3fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_48px]"
 // While selecting: a checkbox column first (written out whole: Tailwind
 // reads class names as they are in the source).
 const GRID_COLS_SELECTING =
-  "grid-cols-[16px_minmax(0,1.4fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_48px]"
+  "grid-cols-[16px_minmax(0,1.3fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_48px]"
 
 /** The table's side of the page's selection for bulk actions. */
 export interface BuildsTableSelection {
@@ -96,9 +97,10 @@ export function BuildsTable({
               onCheckedChange={(on) => selection.onToggleAll(on)}
             />
           )}
-          <div>Factory · target</div>
+          <div>Factory</div>
           <div>Description</div>
           <div>Pipeline</div>
+          <div>Target</div>
           <div>Platform</div>
           <div>Date</div>
           <div />
@@ -166,7 +168,6 @@ export function BuildsTable({
                   title={
                     <>
                       <span className="truncate font-mono font-medium">{b.moduleName}</span>
-                      <span className="truncate text-muted-foreground">&nbsp;· {b.target}</span>
                       {b.persistedSession && (
                         <span
                           className="ml-1.5 shrink-0 self-center text-muted-foreground"
@@ -194,6 +195,9 @@ export function BuildsTable({
                       {[at?.label, b.error && `${b.error.code}: ${b.error.message}`].filter(Boolean).join(" · ")}
                     </span>
                   )}
+                </div>
+                <div className="truncate font-mono text-sm" title={b.target}>
+                  {b.target}
                 </div>
                 <div className="truncate text-sm">{platformLabel(b.platform)}</div>
                 <div className="truncate text-sm text-muted-foreground">
