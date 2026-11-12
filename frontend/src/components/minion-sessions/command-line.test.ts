@@ -49,6 +49,11 @@ describe("the console's command line", () => {
     expect(parseCommandLine("sleep 30s 20", commands)).toMatchObject({ ok: true, args: { interval: "30s", jitter: 20 } })
     expect(parseCommandLine("sleep --jitter=5 30s", commands)).toMatchObject({ ok: true, args: { interval: "30s", jitter: 5 } })
     expect(parseCommandLine("SLEEP 1m", commands)).toMatchObject({ ok: true, command: { id: "sleep" } })
+    // A bare number is seconds.
+    expect(parseCommandLine("sleep 5", commands)).toMatchObject({ ok: true, args: { interval: "5s" } })
+    expect(parseCommandLine("sleep 1.5 20", commands)).toMatchObject({ ok: true, args: { interval: "1.5s", jitter: 20 } })
+    expect(parseCommandLine("sleep --interval=0", commands)).toMatchObject({ ok: true, args: { interval: "0s" } })
+    expect(parseCommandLine("shell ls --timeout 90", commands)).toMatchObject({ ok: true, args: { timeout: "90s" } })
   })
 
   test("what does not read says why", () => {
@@ -81,6 +86,7 @@ describe("the console's command line", () => {
     expect(t.extra).toEqual(["extra"])
     expect(Object.fromEntries(lineTexts("shell ls -la --timeout=1m", commands).texts)).toEqual({ command: "ls -la", timeout: "1m" })
     expect(lineTexts("sleep", commands).texts.size).toBe(0)
+    expect(lineTexts("sleep 5", commands).texts.get("interval")).toBe("5s")
     expect(lineTexts("rm -rf /", commands).command).toBeUndefined()
   })
 })

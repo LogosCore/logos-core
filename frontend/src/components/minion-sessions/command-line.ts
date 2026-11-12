@@ -114,7 +114,7 @@ function fits(param: CommandParam, text: string, connections: readonly Connectio
     case "number":
       return text.trim() !== "" && Number.isFinite(Number(text))
     case "duration":
-      return parseGoDuration(text) !== null
+      return parseGoDuration(promptDuration(text)) !== null
     case "datetime":
       return !Number.isNaN(Date.parse(text))
   }
@@ -163,6 +163,15 @@ export function commandOf(line: string, commands: readonly CommandDef[]): Comman
   return first ? commands.find((c) => c.id.toLowerCase() === first) : undefined
 }
 
+/**
+ * A duration as the prompt takes it: a Go duration ("30s", "1m30s"), or a
+ * bare number, in seconds ("5" is "5s", "1.5" is "1.5s"). What goes to core
+ * is the Go duration.
+ */
+export function promptDuration(text: string): string {
+  return /^\d+(\.\d+)?$/.test(text.trim()) ? `${text.trim()}s` : text
+}
+
 /** A param's value from its text, in its type. */
 function convert(
   param: CommandParam,
@@ -189,6 +198,8 @@ function convert(
       if (["false", "no", "off", "0"].includes(t)) return { ok: true, value: false }
       return { ok: false, error: `${param.key}: true or false` }
     }
+    case "duration":
+      return { ok: true, value: promptDuration(text) }
     case "string_list":
     case "enum_list":
       return { ok: true, value: text.split(",").map((s) => s.trim()).filter((s) => s !== "") }
@@ -203,7 +214,7 @@ function convert(
       return { ok: true, value: out }
     }
   }
-  // Text, a duration ("30s"), a datetime (RFC 3339): as typed.
+  // Text, a datetime (RFC 3339): as typed.
   return { ok: true, value: text }
 }
 
@@ -223,6 +234,11 @@ export function lineTexts(line: string, commands: readonly CommandDef[], connect
   const command = commandOf(line, commands)
   if (!command) return { texts: new Map(), extra: [] }
   const { texts, extra } = readWords(command, line, words(line).slice(1), connections)
+  // A duration typed in seconds opens the form as the duration it is.
+  for (const p of command.params) {
+    const t = texts.get(p.key)
+    if (p.type === "duration" && t !== undefined) texts.set(p.key, promptDuration(t))
+  }
   return { command, texts, extra }
 }
 
