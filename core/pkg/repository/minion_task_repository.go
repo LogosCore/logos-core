@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -64,6 +65,15 @@ var ErrMinionTaskEnded = errors.New("the task ended")
 type MinionTaskCursor struct {
 	QueuedAt time.Time
 	TaskID   uuid.UUID
+}
+
+// MinionTaskFilter narrows a session's tasks (ListBySession): Search
+// matches their line as the console shows it (search_text, in the query
+// language of every list's search: searchPattern), Important keeps the
+// ones marked important. The zero value keeps them all.
+type MinionTaskFilter struct {
+	Search    string
+	Important bool
 }
 
 // IMinionTaskRepository keeps the tasks operators give sessions
@@ -147,8 +157,18 @@ type IMinionTaskRepository interface {
 	// cannot deliver (its task item does not fit the connection's
 	// messages). IsNotFound for one acknowledged or ended.
 	FailUndelivered(ctx context.Context, sessionID, taskID uuid.UUID, why string, at time.Time) (*models.MinionTask, error)
-	// ListBySession returns a page of the session's tasks, newest first.
-	ListBySession(ctx context.Context, sessionID uuid.UUID, before *MinionTaskCursor, limit int64) ([]models.MinionTask, error)
+	// ListBySession returns a page of the session's tasks f keeps, newest
+	// first.
+	ListBySession(ctx context.Context, sessionID uuid.UUID, f MinionTaskFilter, before *MinionTaskCursor, limit int64) ([]models.MinionTask, error)
+	// CountImportant counts the session's tasks marked important.
+	CountImportant(ctx context.Context, sessionID uuid.UUID) (int64, error)
+	// SetImportant marks the task important, by by at at, or no longer
+	// (important false), and returns it: false when it already was as
+	// asked, the task as it is (one marked keeps who marked it first).
+	// IsNotFound for no such task.
+	SetImportant(ctx context.Context, taskID uuid.UUID, important bool, by uuid.UUID, at time.Time) (*models.MinionTask, bool, error)
+	// BackfillSearchText gives the tasks stored without a search text one.
+	BackfillSearchText(ctx context.Context) (int64, error)
 	// Parts returns a task's output parts in seq order.
 	Parts(ctx context.Context, taskID uuid.UUID) ([]models.MinionTaskPart, error)
 	// OutParts are the parts with output, in seq order, their output only.
@@ -225,6 +245,10 @@ func NewMinionTaskRepository(db database.Database) IMinionTaskRepository {
 		{Key: []string{"task_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		// A session's page, newest first; and what waits for its minion.
 		{Key: []string{"session_id", "-queued_at", "-task_id"}},
+		// A session's page of the tasks marked important.
+		{Key: []string{"session_id", "-queued_at", "-task_id"}, IndexOptions: new(options.IndexOptions).
+			SetName("session_id_1_queued_at_-1_task_id_-1_important").
+			SetPartialFilterExpression(bson.M{"important_at": bson.M{"$exists": true}})},
 		{Key: []string{"session_id", "state", "queued_at"}},
 		{Key: []string{"operation_id"}},
 		// A transfer's task, and the tasks of a task file.
@@ -247,6 +271,7 @@ var bumpRev = bson.M{"rev": 1}
 
 func (r *minionTaskRepository) Insert(ctx context.Context, t *models.MinionTask) error {
 	t.Rev = 1
+	t.SearchText = models.MinionTaskSearchText(t)
 	_, err := r.tasks.InsertOne(ctx, t)
 	return err
 }
@@ -273,7 +298,14 @@ func (r *minionTaskRepository) SetTunnel(ctx context.Context, taskID uuid.UUID, 
 }
 
 func (r *minionTaskRepository) SetArg(ctx context.Context, taskID uuid.UUID, key string, value any) error {
-	return r.tasks.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$set": bson.M{"args." + key: value}})
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID}).Apply(qmgo.Change{
+		Update: bson.M{"$set": bson.M{"args." + key: value}}, ReturnNew: true}, &after)
+	if err != nil {
+		return err
+	}
+	// Its line shows the value: the search reads the line again.
+	return r.tasks.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$set": bson.M{"search_text": models.MinionTaskSearchText(&after)}})
 }
 
 func (r *minionTaskRepository) TunnelOf(ctx context.Context, taskID uuid.UUID) (*models.MinionTaskTunnel, error) {
@@ -678,8 +710,15 @@ func (r *minionTaskRepository) FailUndelivered(ctx context.Context, sessionID, t
 	return &after, nil
 }
 
-func (r *minionTaskRepository) ListBySession(ctx context.Context, sessionID uuid.UUID, before *MinionTaskCursor, limit int64) ([]models.MinionTask, error) {
+func (r *minionTaskRepository) ListBySession(ctx context.Context, sessionID uuid.UUID, f MinionTaskFilter, before *MinionTaskCursor, limit int64) ([]models.MinionTask, error) {
 	filter := bson.M{"session_id": sessionID}
+	if f.Important {
+		// As the partial index has it, so the page is read from it.
+		filter["important_at"] = bson.M{"$exists": true}
+	}
+	if search := strings.TrimSpace(f.Search); search != "" {
+		filter["search_text"] = bson.M{"$regex": searchPattern(search), "$options": "i"}
+	}
 	if before != nil {
 		filter["$or"] = bson.A{
 			bson.M{"queued_at": bson.M{"$lt": before.QueuedAt}},
@@ -689,6 +728,54 @@ func (r *minionTaskRepository) ListBySession(ctx context.Context, sessionID uuid
 	var out []models.MinionTask
 	err := r.tasks.Find(ctx, filter).Sort("-queued_at", "-task_id").Limit(limit).All(&out)
 	return out, err
+}
+
+func (r *minionTaskRepository) CountImportant(ctx context.Context, sessionID uuid.UUID) (int64, error) {
+	return r.tasks.Find(ctx, bson.M{"session_id": sessionID, "important_at": bson.M{"$exists": true}}).Count()
+}
+
+func (r *minionTaskRepository) SetImportant(ctx context.Context, taskID uuid.UUID, important bool, by uuid.UUID, at time.Time) (*models.MinionTask, bool, error) {
+	update := bson.M{"$inc": bumpRev}
+	if important {
+		update["$set"] = bson.M{"important_at": at, "important_by": by}
+	} else {
+		update["$unset"] = bson.M{"important_at": "", "important_by": ""}
+	}
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "important_at": bson.M{"$exists": !important}}).
+		Apply(qmgo.Change{Update: update, ReturnNew: true}, &after)
+	if err == nil {
+		return &after, true, nil
+	}
+	if !IsNotFound(err) {
+		return nil, false, err
+	}
+	// As asked already, or no such task.
+	t, err := r.FindByTaskID(ctx, taskID)
+	return t, false, err
+}
+
+// BackfillSearchText gives the tasks stored before tasks had a search text
+// one. What their line showed first is not known (LineRest): every value
+// goes as an option. Idempotent: it only reads tasks without one.
+func (r *minionTaskRepository) BackfillSearchText(ctx context.Context) (int64, error) {
+	var ts []models.MinionTask
+	if err := r.tasks.Find(ctx, bson.M{"search_text": bson.M{"$exists": false}}).
+		Select(bson.M{"task_id": 1, "command": 1, "args": 1, "line_rest": 1}).All(&ts); err != nil {
+		return 0, fmt.Errorf("find tasks without a search text: %w", err)
+	}
+	var n int64
+	for i := range ts {
+		ok, err := matched(r.tasks.UpdateOne(ctx, bson.M{"task_id": ts[i].TaskID, "search_text": bson.M{"$exists": false}},
+			bson.M{"$set": bson.M{"search_text": models.MinionTaskSearchText(&ts[i])}}))
+		if err != nil {
+			return n, fmt.Errorf("backfill task %s: %w", ts[i].TaskID, err)
+		}
+		if ok {
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (r *minionTaskRepository) Parts(ctx context.Context, taskID uuid.UUID) ([]models.MinionTaskPart, error) {

@@ -1133,6 +1133,9 @@ type MinionTask struct {
 	As                *MinionIdentity   `json:"as,omitempty"`
 	IssuedBy          string            `json:"issuedBy"`
 	IssuedByName      *string           `json:"issuedByName,omitempty"`
+	ImportantAt       *string           `json:"importantAt,omitempty"`
+	ImportantBy       *string           `json:"importantBy,omitempty"`
+	ImportantByName   *string           `json:"importantByName,omitempty"`
 	State             string            `json:"state"`
 	QueuedAt          string            `json:"queuedAt"`
 	SentAt            *string           `json:"sentAt,omitempty"`

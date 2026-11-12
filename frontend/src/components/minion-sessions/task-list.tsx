@@ -1,13 +1,16 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type KeyboardEvent } from "react"
-import { ArrowDownIcon, CopyIcon, RotateCcwIcon, SquareIcon, TerminalIcon } from "lucide-react"
+import { ArrowDownIcon, CopyIcon, RotateCcwIcon, SearchIcon, SquareIcon, StarIcon, StarOffIcon, TerminalIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
+import type { MinionTaskFilter } from "@/graphql/hooks/minion-tasks"
 import { useNow } from "@/hooks/use-now"
 import { dayGroup, formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { lineOf, type CommandDef } from "./command-line"
-import { clock, useTaskActions, type Task } from "./task-actions"
-import { StateIcon } from "./task-state"
+import { clock, markedBy, useTaskActions, useToggleImportant, type Task } from "./task-actions"
+import { emptyListText } from "./task-filter"
+import { ImportantIcon, StateIcon } from "./task-state"
 import { FeedbackLevelIcon } from "./feedback-parts"
 import { feedbackSummary } from "./feedback-values"
 import { useTaskWaiting } from "@/components/targets/use-task-waiting"
@@ -18,7 +21,11 @@ import { TaskAs } from "./task-as"
 // top and the newest at the bottom by the command line, under a heading
 // for each day. A click or ↑ and ↓
 // pick the one shown beside it; a row's context menu stops it, runs it
-// again, or copies its command or output. Older tasks load at the top.
+// again, copies its command or output, or marks it important (S does too):
+// a star then stands for its state, in its state's color. Older tasks load
+// at the top. Above them, a search of their lines and a switch to the
+// important ones alone, both core's (Ctrl+F in the list goes to the
+// search).
 
 export function TaskList({
   tasks,
@@ -35,6 +42,14 @@ export function TaskList({
   onLoadOlder,
   moved,
   onFollow,
+  searchText,
+  onSearchText,
+  important,
+  onImportant,
+  importantCount,
+  filter,
+  stale,
+  canMark,
 }: {
   /** Oldest first. */
   tasks: readonly Task[]
@@ -55,8 +70,24 @@ export function TaskList({
   /** The newest, when it moved on while another is picked. */
   moved: { task: Task; isNew: boolean } | null
   onFollow: () => void
+  /** The search as typed; filter has it once core is asked. */
+  searchText: string
+  onSearchText: (text: string) => void
+  /** The important tasks alone. */
+  important: boolean
+  onImportant: (on: boolean) => void
+  /** How many of the session's tasks are marked important. */
+  importantCount: number
+  /** What the tasks shown were read with. */
+  filter: MinionTaskFilter
+  /** The tasks shown are another filter's, until this one's come. */
+  stale: boolean
+  /** Whether the caller marks tasks important: an operator, whatever the session's state. */
+  canMark: boolean
 }) {
   const list = useRef<HTMLDivElement>(null)
+  const search = useRef<HTMLInputElement>(null)
+  const marks = useToggleImportant()
   // Today and Yesterday move on at midnight.
   const now = new Date(useNow(60_000))
 
@@ -77,6 +108,7 @@ export function TaskList({
     else if (top + row.offsetHeight > el.scrollTop + el.clientHeight) el.scrollTop = top + row.offsetHeight - el.clientHeight
   }, [following, selectedId])
 
+  const selected = selectedId ? tasks.find((t) => t.id === selectedId) : undefined
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault()
@@ -84,18 +116,83 @@ export function TaskList({
     } else if (e.key === "End") {
       e.preventDefault()
       onFollow()
+    } else if (e.key.toLowerCase() === "s" && !e.ctrlKey && !e.metaKey && !e.altKey && canMark && selected) {
+      e.preventDefault()
+      marks.toggle(selected)
+    }
+  }
+  // Ctrl+F in the list goes to its search, not the output's find.
+  const onPaneKeyDown = (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "f") {
+      e.preventDefault()
+      e.stopPropagation()
+      search.current?.focus()
+      search.current?.select()
     }
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col" onKeyDown={onPaneKeyDown}>
+      <div className="flex items-center gap-1 border-b px-2 py-1">
+        <div className="relative min-w-0 flex-1">
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            ref={search}
+            value={searchText}
+            onChange={(e) => onSearchText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && searchText !== "") {
+                // Clears it; another Escape goes on (a dialog closes).
+                e.preventDefault()
+                e.stopPropagation()
+                onSearchText("")
+              } else if (e.key === "ArrowDown") {
+                e.preventDefault()
+                list.current?.focus()
+              }
+            }}
+            placeholder="Search commands"
+            aria-label="Search the tasks' command lines"
+            title={'What a task\'s line holds, case aside; "quoted" for whole words'}
+            className="h-7 px-7 text-xs md:text-xs"
+          />
+          {searchText !== "" && (
+            <button
+              type="button"
+              aria-label="Clear the search"
+              onClick={() => {
+                onSearchText("")
+                search.current?.focus()
+              }}
+              className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          )}
+        </div>
+        <Button
+          variant={important ? "secondary" : "ghost"}
+          size="xs"
+          aria-pressed={important}
+          aria-label="The important tasks alone"
+          title={important ? "The important tasks alone: show them all" : "Show the important tasks alone"}
+          onClick={() => onImportant(!important)}
+        >
+          <StarIcon className={cn(important && "fill-current")} />
+          {importantCount > 0 && <span className="tabular-nums">{importantCount}</span>}
+        </Button>
+      </div>
       <div
         ref={list}
         role="listbox"
         aria-label="Tasks"
         tabIndex={0}
         onKeyDown={onKeyDown}
-        className="min-h-0 flex-1 overflow-y-auto pb-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        aria-busy={stale || undefined}
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto pb-1 outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+          stale && "opacity-60",
+        )}
       >
         {hasOlder && (
           <div className="flex justify-center py-1">
@@ -104,7 +201,7 @@ export function TaskList({
             </Button>
           </div>
         )}
-        {tasks.length === 0 && !loading && <p className="px-3 py-2 text-sm text-muted-foreground">No tasks yet.</p>}
+        {tasks.length === 0 && !loading && <p className="px-3 py-2 text-sm text-muted-foreground">{emptyListText(filter)}</p>}
         {tasks.map((t, i) => {
           const day = dayGroup(t.queuedAt, now)
           const newDay = i === 0 || dayGroup(tasks[i - 1].queuedAt, now).key !== day.key
@@ -118,6 +215,8 @@ export function TaskList({
                 onSelect={() => onSelect(t.id)}
                 onQueued={onQueued}
                 canWrite={canWrite}
+                canMark={canMark}
+                onUnmark={() => marks.toggle(t)}
               />
             </Fragment>
           )
@@ -155,6 +254,8 @@ function TaskRow({
   onSelect,
   onQueued,
   canWrite,
+  canMark,
+  onUnmark,
 }: {
   task: Task
   command?: CommandDef
@@ -162,6 +263,8 @@ function TaskRow({
   onSelect: () => void
   onQueued: (t: Task) => void
   canWrite: boolean
+  canMark: boolean
+  onUnmark: () => void
 }) {
   const connections = useSessionConnectionChoices(t.sessionId)
   const held = useTaskWaiting(t.sessionId)
@@ -177,7 +280,7 @@ function TaskRow({
             onClick={onSelect}
             // The menu shows the row it is for.
             onContextMenu={onSelect}
-            title={`${line}\n${t.issuedBy === "00000000-0000-0000-0000-000000000000" ? "core" : (t.issuedByName ?? "someone gone")} · queued ${formatAbsolute(t.queuedAt)}`}
+            title={`${line}\n${t.issuedBy === "00000000-0000-0000-0000-000000000000" ? "core" : (t.issuedByName ?? "someone gone")} · queued ${formatAbsolute(t.queuedAt)}${t.importantAt ? `\nMarked important by ${markedBy(t)}` : ""}`}
             className={cn(
               "relative flex cursor-pointer items-baseline gap-2 px-3 py-1 text-xs select-none",
               selected ? "bg-muted before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-foreground" : "hover:bg-muted/50",
@@ -185,7 +288,25 @@ function TaskRow({
           />
         }
       >
-        <StateIcon t={t} held={held} className="self-center" />
+        {t.importantAt && canMark ? (
+          // The star unmarks it, and leaves the row as picked as it was.
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label="Unmark the task as important"
+            onClick={(e) => {
+              e.stopPropagation()
+              onUnmark()
+            }}
+            className="self-center rounded-sm"
+          >
+            <ImportantIcon t={t} held={held} />
+          </button>
+        ) : t.importantAt ? (
+          <ImportantIcon t={t} held={held} className="self-center" />
+        ) : (
+          <StateIcon t={t} held={held} className="self-center" />
+        )}
         <span className="shrink-0 font-mono text-muted-foreground tabular-nums">{clock(t.queuedAt)}</span>
         <code className="min-w-0 flex-1 truncate font-mono">{line}</code>
         <TaskAs as={t.as} />
@@ -196,17 +317,35 @@ function TaskRow({
         )}
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <TaskMenu task={t} line={line} canWrite={canWrite} onQueued={onQueued} />
+        <TaskMenu task={t} line={line} canWrite={canWrite} canMark={canMark} onQueued={onQueued} />
       </ContextMenuContent>
     </ContextMenu>
   )
 }
 
 /** A row's menu: mounted while it is open, so a row holds no mutations of its own. */
-function TaskMenu({ task: t, line, canWrite, onQueued }: { task: Task; line: string; canWrite: boolean; onQueued: (t: Task) => void }) {
-  const actions = useTaskActions(t, line, { canWrite, onQueued })
+function TaskMenu({
+  task: t,
+  line,
+  canWrite,
+  canMark,
+  onQueued,
+}: {
+  task: Task
+  line: string
+  canWrite: boolean
+  canMark: boolean
+  onQueued: (t: Task) => void
+}) {
+  const actions = useTaskActions(t, line, { canWrite, canMark, onQueued })
   return (
     <>
+      <ContextMenuItem disabled={!actions.canMark || actions.marking} onClick={actions.toggleImportant}>
+        {t.importantAt ? <StarOffIcon /> : <StarIcon />}
+        {t.importantAt ? "Unmark important" : "Mark important"}
+        <span className="ml-auto pl-4 text-xs text-muted-foreground">S</span>
+      </ContextMenuItem>
+      <ContextMenuSeparator />
       <ContextMenuItem disabled={!actions.canStop || actions.stopping} onClick={actions.stop}>
         <SquareIcon />
         Stop

@@ -9,6 +9,7 @@ import {
   SearchIcon,
   SquareIcon,
   SquareTerminalIcon,
+  StarIcon,
   WrapTextIcon,
   XIcon,
 } from "lucide-react"
@@ -41,7 +42,7 @@ import type { UploadTarget } from "./upload-target"
 import { TabButton } from "./tab-button"
 import type { MenuCommand } from "./action-menu"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
-import { FINISHED, useTaskActions, type Task } from "./task-actions"
+import { FINISHED, markedBy, useTaskActions, type Task } from "./task-actions"
 import { StateLabel, TaskTimes } from "./task-state"
 import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { useSessionConnectionChoices } from "./use-connection-choices"
@@ -89,6 +90,7 @@ export function TaskDetail({
   task: t,
   command,
   canWrite,
+  canMark,
   onQueued,
   onOpenPath,
   listCommands,
@@ -108,6 +110,8 @@ export function TaskDetail({
   task: Task
   command?: CommandDef
   canWrite: boolean
+  /** Whether the caller marks tasks important: an operator, whatever the session's state. */
+  canMark: boolean
   onQueued: (t: Task) => void
   /** Lists another path (a folder opened in a listing): with commandId, or
    *  the task's own command again; absent where the viewer may not give
@@ -150,7 +154,7 @@ export function TaskDetail({
   const connections = useSessionConnectionChoices(t.sessionId)
   const held = useTaskWaiting(t.sessionId, { live: true })
   const line = lineOf(t.command, t.args as Record<string, unknown> | null, command, connections)
-  const actions = useTaskActions(t, line, { canWrite, onQueued })
+  const actions = useTaskActions(t, line, { canWrite, canMark, onQueued })
   // Read again when they change: more output, a part with data, its end.
   // Not on every part: a walk sends parts with listings alone, many a
   // second, and its progress (its data) every 2 seconds.
@@ -310,6 +314,19 @@ export function TaskDetail({
                 <DownloadIcon />
               </Button>
             </>
+          )}
+          {actions.canMark ? (
+            <Button variant="ghost" size="icon-xs" aria-pressed={!!t.importantAt} disabled={actions.marking} onClick={actions.toggleImportant}
+              title={t.importantAt ? `Marked important by ${markedBy(t)}: unmark it (S in the list)` : "Mark it important (S in the list)"}
+              aria-label={t.importantAt ? "Unmark the task as important" : "Mark the task important"}>
+              <StarIcon className={cn(t.importantAt && "fill-current")} />
+            </Button>
+          ) : (
+            t.importantAt && (
+              <span className="inline-flex size-6 items-center justify-center" title={`Marked important by ${markedBy(t)}`}>
+                <StarIcon className="size-3.5 fill-current" aria-label="important" />
+              </span>
+            )
           )}
           {actions.canRunAgain && (
             <Button variant="ghost" size="icon-xs" title="Run it again" aria-label="Run the task again" disabled={actions.runningAgain} onClick={actions.runAgain}>

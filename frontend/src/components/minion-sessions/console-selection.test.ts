@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { FOLLOWING, newestMoved, selectTask, selectedTask, stepTask, type ConsoleTask } from "./console-selection"
+import { carriedSelection, FOLLOWING, newestMoved, selectTask, selectedTask, stepTask, type ConsoleTask } from "./console-selection"
 
 const task = (id: string, parts = 0, state = "DONE"): ConsoleTask => ({ id, parts, state })
 const tasks = [task("a"), task("b"), task("c", 1, "RUNNING")]
@@ -34,5 +34,22 @@ describe("which task the console shows", () => {
     expect(newestMoved([task("a"), task("b"), task("c", 1, "DONE")], sel)).toMatchObject({ isNew: false })
     expect(newestMoved([...tasks, task("d")], sel)).toMatchObject({ task: { id: "d" }, isNew: true })
     expect(newestMoved([...tasks, task("d")], FOLLOWING)).toBeNull()
+  })
+})
+
+describe("a selection carried to a list narrowed otherwise", () => {
+  const t = (id: string, parts = 0, state = "DONE"): ConsoleTask => ({ id, parts, state })
+  const whole = [t("a"), t("b"), t("c")]
+  test("keeps the task picked while the list holds it, without a hint for another list's newest", () => {
+    const picked = selectTask(whole, "a")
+    const narrowed = [t("a"), t("x")]
+    const carried = carriedSelection(narrowed, picked)
+    expect(selectedTask(narrowed, carried)?.id).toBe("a")
+    expect(newestMoved(narrowed, carried)).toBeNull()
+  })
+  test("follows the newest when it does not hold it, or holds it as its newest", () => {
+    expect(carriedSelection([t("x")], selectTask(whole, "a"))).toEqual(FOLLOWING)
+    expect(carriedSelection([t("x"), t("a")], selectTask(whole, "a"))).toEqual(FOLLOWING)
+    expect(carriedSelection(whole, FOLLOWING)).toEqual(FOLLOWING)
   })
 })

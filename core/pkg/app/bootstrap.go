@@ -448,6 +448,8 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 		// What the list searches read of records' values (models/search_text.go).
 		"build search texts":    repos.Build.BackfillSearchText,
 		"endpoint search texts": repos.ChannelEndpoint.BackfillSearchText,
+		// And a session's tasks, their lines.
+		"minion task search texts": repos.MinionTask.BackfillSearchText,
 		// Endpoint names were slugs before they were free text.
 		"endpoint slugs": repos.ChannelEndpoint.BackfillSlugs,
 		// Sessions turned lost after they could turn late.

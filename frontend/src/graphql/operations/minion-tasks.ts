@@ -14,6 +14,9 @@ export const MinionTaskFields = graphql(`
     args
     issuedBy
     issuedByName
+    importantAt
+    importantBy
+    importantByName
     state
     queuedAt
     sentAt
@@ -230,14 +233,22 @@ export const MinionFileStringsQuery = graphql(`
   }
 `)
 
+// A session's tasks, a page at a time, as core searches them (each task's
+// line as the console shows it) and keeps the ones marked important.
 export const MinionTasksQuery = graphql(`
-  query MinionTasks($sessionId: ID!, $last: Int, $before: String) {
-    minionTasks(sessionId: $sessionId, last: $last, before: $before) {
+  query MinionTasks($sessionId: ID!, $last: Int, $before: String, $search: String, $important: Boolean) {
+    minionTasks(sessionId: $sessionId, last: $last, before: $before, search: $search, important: $important) {
       tasks {
         ...MinionTaskFields
       }
       before
     }
+  }
+`)
+
+export const MinionTaskImportantCountQuery = graphql(`
+  query MinionTaskImportantCount($sessionId: ID!) {
+    minionTaskImportantCount(sessionId: $sessionId)
   }
 `)
 
@@ -278,6 +289,15 @@ export const QueueMinionTaskMutation = graphql(`
 export const CancelMinionTaskMutation = graphql(`
   mutation CancelMinionTask($id: ID!) {
     cancelMinionTask(id: $id) {
+      ...MinionTaskFields
+    }
+  }
+`)
+
+// Marks a task important for the team, or no longer.
+export const SetMinionTaskImportantMutation = graphql(`
+  mutation SetMinionTaskImportant($id: ID!, $important: Boolean!) {
+    setMinionTaskImportant(id: $id, important: $important) {
       ...MinionTaskFields
     }
   }

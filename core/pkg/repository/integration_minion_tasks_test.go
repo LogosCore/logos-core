@@ -205,12 +205,12 @@ func TestIntegrationMinionTasks(t *testing.T) {
 	}
 
 	// Newest first, a page at a time.
-	page, _ := repo.ListBySession(ctx, session, nil, 3)
+	page, _ := repo.ListBySession(ctx, session, MinionTaskFilter{}, nil, 3)
 	if len(page) != 3 || page[0].TaskID != ids[3] {
 		t.Fatalf("first page %v", taskIDs(page))
 	}
 	last := page[2]
-	rest, _ := repo.ListBySession(ctx, session, &MinionTaskCursor{QueuedAt: last.QueuedAt, TaskID: last.TaskID}, 3)
+	rest, _ := repo.ListBySession(ctx, session, MinionTaskFilter{}, &MinionTaskCursor{QueuedAt: last.QueuedAt, TaskID: last.TaskID}, 3)
 	if len(rest) != 1 || rest[0].TaskID != ids[0] {
 		t.Fatalf("second page %v", taskIDs(rest))
 	}
@@ -218,7 +218,7 @@ func TestIntegrationMinionTasks(t *testing.T) {
 	if err := repo.DeleteByOperationID(ctx, op); err != nil {
 		t.Fatal(err)
 	}
-	if left, _ := repo.ListBySession(ctx, session, nil, 10); len(left) != 0 {
+	if left, _ := repo.ListBySession(ctx, session, MinionTaskFilter{}, nil, 10); len(left) != 0 {
 		t.Fatal("tasks outlived their operation")
 	}
 	if left, _ := repo.Parts(ctx, ids[1]); len(left) != 0 {

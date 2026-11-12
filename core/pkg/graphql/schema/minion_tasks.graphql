@@ -29,6 +29,12 @@ type MinionTask {
   issuedBy: ID!
   # The operator's username; null when the user is gone.
   issuedByName: String
+  # Marked important by an operator (setMinionTaskImportant): a star in
+  # every console, the team's. When and by whom; null when it is not.
+  importantAt: String
+  importantBy: ID
+  # Their username; null when the user is gone.
+  importantByName: String
   # QUEUED (waiting for the minion to ask), SENT (not acked yet), RUNNING
   # (the minion has it: acked, or its output coming),
   # DONE (the minion did it), FAILED or CANCELLED.
@@ -401,8 +407,16 @@ extend type Query {
     @hasPermission(permission: "operation:member")
 
   # A session's tasks, newest first, at most last (50 by default, 200 at
-  # most), before a page's cursor. Needs at least viewer.
-  minionTasks(sessionId: ID!, last: Int, before: String): MinionTaskPage!
+  # most), before a page's cursor. search matches a task's line as the
+  # console shows it ("shell whoami", "--timeout=30s"; quoted, whole
+  # words), important keeps the ones marked important. Needs at least
+  # viewer.
+  minionTasks(sessionId: ID!, last: Int, before: String, search: String, important: Boolean): MinionTaskPage!
+    @hasPermission(permission: "operation:member")
+
+  # How many of a session's tasks are marked important. Needs at least
+  # viewer.
+  minionTaskImportantCount(sessionId: ID!): Int!
     @hasPermission(permission: "operation:member")
 
   # A tunnel task's streams, the latest first, at most last (50 by default,
@@ -439,6 +453,13 @@ extend type Mutation {
   # to stop (it still sends its end). Nothing for one that ended. Needs
   # operator.
   cancelMinionTask(id: ID!): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # Marks a task important, or no longer: a star in every operator's
+  # console, with who marked it and when (one marked already keeps who did
+  # first). A task of any session, open or closed. Needs operator; agent
+  # API keys are rejected.
+  setMinionTaskImportant(id: ID!, important: Boolean!): MinionTask!
     @hasPermission(permission: "operation:member")
 
   # Changes a running tunnel task's bandwidth cap: bytes a second each way,

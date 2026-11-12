@@ -1,0 +1,79 @@
+[
+  {
+    "why": "a shell's command line, bare after the command",
+    "command": "shell",
+    "rest": "command",
+    "args": { "command": "ls -la", "timeout": "1m" },
+    "line": "shell ls -la --timeout=1m"
+  },
+  {
+    "why": "no param takes the rest: every value as an option, keys in order",
+    "command": "sleep",
+    "rest": "",
+    "args": { "interval": "30s", "jitter": 20 },
+    "line": "sleep --interval=30s --jitter=20"
+  },
+  {
+    "why": "a value with a space, quoted",
+    "command": "feedback",
+    "rest": "",
+    "args": { "level": "warning", "message": "disk full" },
+    "line": "feedback --level=warning --message=\"disk full\""
+  },
+  {
+    "why": "a path with a space, bare as typed",
+    "command": "ls",
+    "rest": "path",
+    "args": { "path": "/my dir", "recursive": true },
+    "line": "ls /my dir --recursive=true"
+  },
+  {
+    "why": "text that reads as an option goes as one",
+    "command": "shell",
+    "rest": "command",
+    "args": { "command": "--version" },
+    "line": "shell --command=--version"
+  },
+  {
+    "why": "empty text, quoted as an option",
+    "command": "ls",
+    "rest": "path",
+    "args": { "path": "" },
+    "line": "ls --path=\"\""
+  },
+  {
+    "why": "lists and maps comma-joined, numbers as JavaScript prints them",
+    "command": "tunnel",
+    "rest": "",
+    "args": {
+      "env": { "A": "x y", "B": "2" },
+      "front": "vpn",
+      "listen": 8080,
+      "ratio": 1.5,
+      "routes": ["10.0.0.0/8", "192.168.0.0/16"],
+      "udp": false
+    },
+    "line": "tunnel --env=\"A=x y,B=2\" --front=vpn --listen=8080 --ratio=1.5 --routes=10.0.0.0/8,192.168.0.0/16 --udp=false"
+  },
+  {
+    "why": "quotes and markup as JSON has them, unescaped",
+    "command": "shell",
+    "rest": "",
+    "args": { "command": "echo 'a<b' \"c\"" },
+    "line": "shell --command=\"echo 'a<b' \\\"c\\\"\""
+  },
+  {
+    "why": "null, and a list's null as nothing",
+    "command": "x",
+    "rest": "",
+    "args": { "a": null, "b": [1, null, "c"] },
+    "line": "x --a=null --b=1,,c"
+  },
+  {
+    "why": "no args",
+    "command": "exit",
+    "rest": "",
+    "args": {},
+    "line": "exit"
+  }
+]

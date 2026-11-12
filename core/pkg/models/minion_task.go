@@ -55,6 +55,18 @@ type MinionTask struct {
 	WireArgs []byte `bson:"wire_args,omitempty" json:"-"`
 	// IssuedBy is the operator who gave it.
 	IssuedBy uuid.UUID `bson:"issued_by" json:"issued_by"`
+	// ImportantAt and ImportantBy: an operator marked it important, when
+	// and who (a star in every console: the team's); nil when it is not.
+	ImportantAt *time.Time `bson:"important_at,omitempty" json:"important_at,omitempty"`
+	ImportantBy *uuid.UUID `bson:"important_by,omitempty" json:"important_by,omitempty"`
+	// LineRest is the param its line shows bare, after the command: its
+	// command's first param when that one takes the rest of a typed line (a
+	// shell's command line, a path). Empty: every value goes as an option.
+	// Set when it is queued, from its command's params.
+	LineRest string `bson:"line_rest,omitempty" json:"-"`
+	// SearchText is its line as the console shows it: what the session's
+	// task list search reads (MinionTaskSearchText).
+	SearchText string `bson:"search_text,omitempty" json:"-"`
 
 	State     string     `bson:"state" json:"state"`
 	QueuedAt  time.Time  `bson:"queued_at" json:"queued_at"`

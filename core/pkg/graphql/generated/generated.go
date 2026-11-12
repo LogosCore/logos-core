@@ -1069,6 +1069,9 @@ type ComplexityRoot struct {
 		FeedbackWarnings  func(childComplexity int) int
 		File              func(childComplexity int) int
 		ID                func(childComplexity int) int
+		ImportantAt       func(childComplexity int) int
+		ImportantBy       func(childComplexity int) int
+		ImportantByName   func(childComplexity int) int
 		IssuedBy          func(childComplexity int) int
 		IssuedByName      func(childComplexity int) int
 		MissingParts      func(childComplexity int) int
@@ -1483,6 +1486,7 @@ type ComplexityRoot struct {
 		SetMinionSessionsFolder       func(childComplexity int, operationID string, ids []string, matching *model.MinionSessionMatchInput, folderID *string) int
 		SetMinionSessionsLayout       func(childComplexity int, layout *model.MinionSessionsLayoutInput) int
 		SetMinionSessionsMark         func(childComplexity int, operationID string, ids []string, matching *model.MinionSessionMatchInput, mark *model.MinionSessionMarkInput) int
+		SetMinionTaskImportant        func(childComplexity int, id string, important bool) int
 		SetMinionTunnelCap            func(childComplexity int, taskID string, cap int) int
 		SetMinionTunnelRoutes         func(childComplexity int, taskID string, routes []string) int
 		SetMyAPIKeyEnabled            func(childComplexity int, enabled bool) int
@@ -1658,7 +1662,8 @@ type ComplexityRoot struct {
 		MinionTarget                       func(childComplexity int, id string) int
 		MinionTargets                      func(childComplexity int, operationID string, search *string, buildID *string, states []string, first *int, after *string, last *int, before *string) int
 		MinionTask                         func(childComplexity int, id string) int
-		MinionTasks                        func(childComplexity int, sessionID string, last *int, before *string) int
+		MinionTaskImportantCount           func(childComplexity int, sessionID string) int
+		MinionTasks                        func(childComplexity int, sessionID string, last *int, before *string, search *string, important *bool) int
 		MinionTunnelStreams                func(childComplexity int, taskID string, last *int, before *string, search *string, state *string) int
 		Minions                            func(childComplexity int, operationID string) int
 		Module                             func(childComplexity int, instance string) int
@@ -2349,6 +2354,7 @@ type MutationResolver interface {
 	RemoveMinionTarget(ctx context.Context, id string) (bool, error)
 	QueueMinionTask(ctx context.Context, sessionID string, command string, args any) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
+	SetMinionTaskImportant(ctx context.Context, id string, important bool) (*model.MinionTask, error)
 	SetMinionTunnelCap(ctx context.Context, taskID string, cap int) (*model.MinionTask, error)
 	SetMinionTunnelRoutes(ctx context.Context, taskID string, routes []string) (*model.MinionTask, error)
 	CreateMinionVPNKey(ctx context.Context, taskID string) (*model.MinionVPNKey, error)
@@ -2458,7 +2464,8 @@ type QueryResolver interface {
 	MinionTargets(ctx context.Context, operationID string, search *string, buildID *string, states []string, first *int, after *string, last *int, before *string) (*model.MinionTargetConnection, error)
 	MinionTarget(ctx context.Context, id string) (*model.MinionTarget, error)
 	MinionTask(ctx context.Context, id string) (*model.MinionTask, error)
-	MinionTasks(ctx context.Context, sessionID string, last *int, before *string) (*model.MinionTaskPage, error)
+	MinionTasks(ctx context.Context, sessionID string, last *int, before *string, search *string, important *bool) (*model.MinionTaskPage, error)
+	MinionTaskImportantCount(ctx context.Context, sessionID string) (int, error)
 	MinionTunnelStreams(ctx context.Context, taskID string, last *int, before *string, search *string, state *string) (*model.MinionTunnelStreamPage, error)
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
 	MinionFileStrings(ctx context.Context, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) (*model.MinionFileStringPage, error)
@@ -6946,6 +6953,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.ID(childComplexity), true
+	case "MinionTask.importantAt":
+		if e.ComplexityRoot.MinionTask.ImportantAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.ImportantAt(childComplexity), true
+	case "MinionTask.importantBy":
+		if e.ComplexityRoot.MinionTask.ImportantBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.ImportantBy(childComplexity), true
+	case "MinionTask.importantByName":
+		if e.ComplexityRoot.MinionTask.ImportantByName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.ImportantByName(childComplexity), true
 	case "MinionTask.issuedBy":
 		if e.ComplexityRoot.MinionTask.IssuedBy == nil {
 			break
@@ -9364,6 +9389,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetMinionSessionsMark(childComplexity, args["operationId"].(string), args["ids"].([]string), args["matching"].(*model.MinionSessionMatchInput), args["mark"].(*model.MinionSessionMarkInput)), true
+	case "Mutation.setMinionTaskImportant":
+		if e.ComplexityRoot.Mutation.SetMinionTaskImportant == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setMinionTaskImportant_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetMinionTaskImportant(childComplexity, args["id"].(string), args["important"].(bool)), true
 	case "Mutation.setMinionTunnelCap":
 		if e.ComplexityRoot.Mutation.SetMinionTunnelCap == nil {
 			break
@@ -10482,6 +10518,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MinionTask(childComplexity, args["id"].(string)), true
+	case "Query.minionTaskImportantCount":
+		if e.ComplexityRoot.Query.MinionTaskImportantCount == nil {
+			break
+		}
+
+		args, err := ec.field_Query_minionTaskImportantCount_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MinionTaskImportantCount(childComplexity, args["sessionId"].(string)), true
 	case "Query.minionTasks":
 		if e.ComplexityRoot.Query.MinionTasks == nil {
 			break
@@ -10492,7 +10539,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MinionTasks(childComplexity, args["sessionId"].(string), args["last"].(*int), args["before"].(*string)), true
+		return e.ComplexityRoot.Query.MinionTasks(childComplexity, args["sessionId"].(string), args["last"].(*int), args["before"].(*string), args["search"].(*string), args["important"].(*bool)), true
 	case "Query.minionTunnelStreams":
 		if e.ComplexityRoot.Query.MinionTunnelStreams == nil {
 			break
@@ -16335,6 +16382,12 @@ type MinionTask {
   issuedBy: ID!
   # The operator's username; null when the user is gone.
   issuedByName: String
+  # Marked important by an operator (setMinionTaskImportant): a star in
+  # every console, the team's. When and by whom; null when it is not.
+  importantAt: String
+  importantBy: ID
+  # Their username; null when the user is gone.
+  importantByName: String
   # QUEUED (waiting for the minion to ask), SENT (not acked yet), RUNNING
   # (the minion has it: acked, or its output coming),
   # DONE (the minion did it), FAILED or CANCELLED.
@@ -16707,8 +16760,16 @@ extend type Query {
     @hasPermission(permission: "operation:member")
 
   # A session's tasks, newest first, at most last (50 by default, 200 at
-  # most), before a page's cursor. Needs at least viewer.
-  minionTasks(sessionId: ID!, last: Int, before: String): MinionTaskPage!
+  # most), before a page's cursor. search matches a task's line as the
+  # console shows it ("shell whoami", "--timeout=30s"; quoted, whole
+  # words), important keeps the ones marked important. Needs at least
+  # viewer.
+  minionTasks(sessionId: ID!, last: Int, before: String, search: String, important: Boolean): MinionTaskPage!
+    @hasPermission(permission: "operation:member")
+
+  # How many of a session's tasks are marked important. Needs at least
+  # viewer.
+  minionTaskImportantCount(sessionId: ID!): Int!
     @hasPermission(permission: "operation:member")
 
   # A tunnel task's streams, the latest first, at most last (50 by default,
@@ -16745,6 +16806,13 @@ extend type Mutation {
   # to stop (it still sends its end). Nothing for one that ended. Needs
   # operator.
   cancelMinionTask(id: ID!): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # Marks a task important, or no longer: a star in every operator's
+  # console, with who marked it and when (one marked already keeps who did
+  # first). A task of any session, open or closed. Needs operator; agent
+  # API keys are rejected.
+  setMinionTaskImportant(id: ID!, important: Boolean!): MinionTask!
     @hasPermission(permission: "operation:member")
 
   # Changes a running tunnel task's bandwidth cap: bytes a second each way,
@@ -20446,6 +20514,22 @@ func (ec *executionContext) field_Mutation_setMinionSessionsMark_args(ctx contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_setMinionTaskImportant_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "important", ec.unmarshalNBoolean2bool)
+	if err != nil {
+		return nil, err
+	}
+	args["important"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setMinionTunnelCap_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -21702,6 +21786,17 @@ func (ec *executionContext) field_Query_minionTargets_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_minionTaskImportantCount_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "sessionId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["sessionId"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_minionTask_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -21731,6 +21826,16 @@ func (ec *executionContext) field_Query_minionTasks_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["before"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "important", ec.unmarshalOBoolean2ᚖbool)
+	if err != nil {
+		return nil, err
+	}
+	args["important"] = arg4
 	return args, nil
 }
 
@@ -46437,6 +46542,93 @@ func (ec *executionContext) fieldContext_MinionTask_issuedByName(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_importantAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_importantAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ImportantAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_importantAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTask_importantBy(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_importantBy,
+		func(ctx context.Context) (any, error) {
+			return obj.ImportantBy, nil
+		},
+		nil,
+		ec.marshalOID2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_importantBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTask_importantByName(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_importantByName,
+		func(ctx context.Context) (any, error) {
+			return obj.ImportantByName, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_importantByName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_state(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -47536,6 +47728,12 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
 			case "issuedByName":
 				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "importantAt":
+				return ec.fieldContext_MinionTask_importantAt(ctx, field)
+			case "importantBy":
+				return ec.fieldContext_MinionTask_importantBy(ctx, field)
+			case "importantByName":
+				return ec.fieldContext_MinionTask_importantByName(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
@@ -60974,6 +61172,12 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
 			case "issuedByName":
 				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "importantAt":
+				return ec.fieldContext_MinionTask_importantAt(ctx, field)
+			case "importantBy":
+				return ec.fieldContext_MinionTask_importantBy(ctx, field)
+			case "importantByName":
+				return ec.fieldContext_MinionTask_importantByName(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
@@ -61121,6 +61325,12 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
 			case "issuedByName":
 				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "importantAt":
+				return ec.fieldContext_MinionTask_importantAt(ctx, field)
+			case "importantBy":
+				return ec.fieldContext_MinionTask_importantBy(ctx, field)
+			case "importantByName":
+				return ec.fieldContext_MinionTask_importantByName(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
@@ -61201,6 +61411,159 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_setMinionTaskImportant(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_setMinionTaskImportant,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetMinionTaskImportant(ctx, fc.Args["id"].(string), fc.Args["important"].(bool))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionTask
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionTask
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionTask2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTask,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_setMinionTaskImportant(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionTask_id(ctx, field)
+			case "feedback":
+				return ec.fieldContext_MinionTask_feedback(ctx, field)
+			case "feedbackErrors":
+				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
+			case "feedbackWarnings":
+				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionTask_rev(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_MinionTask_sessionId(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionTask_operationId(ctx, field)
+			case "command":
+				return ec.fieldContext_MinionTask_command(ctx, field)
+			case "args":
+				return ec.fieldContext_MinionTask_args(ctx, field)
+			case "as":
+				return ec.fieldContext_MinionTask_as(ctx, field)
+			case "issuedBy":
+				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
+			case "issuedByName":
+				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "importantAt":
+				return ec.fieldContext_MinionTask_importantAt(ctx, field)
+			case "importantBy":
+				return ec.fieldContext_MinionTask_importantBy(ctx, field)
+			case "importantByName":
+				return ec.fieldContext_MinionTask_importantByName(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionTask_state(ctx, field)
+			case "queuedAt":
+				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "sentAt":
+				return ec.fieldContext_MinionTask_sentAt(ctx, field)
+			case "sendCount":
+				return ec.fieldContext_MinionTask_sendCount(ctx, field)
+			case "ackedAt":
+				return ec.fieldContext_MinionTask_ackedAt(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_MinionTask_startedAt(ctx, field)
+			case "doneAt":
+				return ec.fieldContext_MinionTask_doneAt(ctx, field)
+			case "cancelReason":
+				return ec.fieldContext_MinionTask_cancelReason(ctx, field)
+			case "cancelRequestedAt":
+				return ec.fieldContext_MinionTask_cancelRequestedAt(ctx, field)
+			case "ok":
+				return ec.fieldContext_MinionTask_ok(ctx, field)
+			case "exit":
+				return ec.fieldContext_MinionTask_exit(ctx, field)
+			case "err":
+				return ec.fieldContext_MinionTask_err(ctx, field)
+			case "output":
+				return ec.fieldContext_MinionTask_output(ctx, field)
+			case "outputSize":
+				return ec.fieldContext_MinionTask_outputSize(ctx, field)
+			case "outputUtf8":
+				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputTruncated":
+				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
+			case "parts":
+				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "dataParts":
+				return ec.fieldContext_MinionTask_dataParts(ctx, field)
+			case "result":
+				return ec.fieldContext_MinionTask_result(ctx, field)
+			case "action":
+				return ec.fieldContext_MinionTask_action(ctx, field)
+			case "tunnel":
+				return ec.fieldContext_MinionTask_tunnel(ctx, field)
+			case "data":
+				return ec.fieldContext_MinionTask_data(ctx, field)
+			case "dataSize":
+				return ec.fieldContext_MinionTask_dataSize(ctx, field)
+			case "dataTruncated":
+				return ec.fieldContext_MinionTask_dataTruncated(ctx, field)
+			case "dataProblem":
+				return ec.fieldContext_MinionTask_dataProblem(ctx, field)
+			case "missingParts":
+				return ec.fieldContext_MinionTask_missingParts(ctx, field)
+			case "file":
+				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "upload":
+				return ec.fieldContext_MinionTask_upload(ctx, field)
+			case "stream":
+				return ec.fieldContext_MinionTask_stream(ctx, field)
+			case "document":
+				return ec.fieldContext_MinionTask_document(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTask_delegate(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setMinionTaskImportant_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_setMinionTunnelCap(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -61268,6 +61631,12 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelCap(ctx context
 				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
 			case "issuedByName":
 				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "importantAt":
+				return ec.fieldContext_MinionTask_importantAt(ctx, field)
+			case "importantBy":
+				return ec.fieldContext_MinionTask_importantBy(ctx, field)
+			case "importantByName":
+				return ec.fieldContext_MinionTask_importantByName(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
@@ -61415,6 +61784,12 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelRoutes(ctx cont
 				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
 			case "issuedByName":
 				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "importantAt":
+				return ec.fieldContext_MinionTask_importantAt(ctx, field)
+			case "importantBy":
+				return ec.fieldContext_MinionTask_importantBy(ctx, field)
+			case "importantByName":
+				return ec.fieldContext_MinionTask_importantByName(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
@@ -61627,6 +62002,12 @@ func (ec *executionContext) fieldContext_Mutation_disconnectMinionVPNClient(ctx 
 				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
 			case "issuedByName":
 				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "importantAt":
+				return ec.fieldContext_MinionTask_importantAt(ctx, field)
+			case "importantBy":
+				return ec.fieldContext_MinionTask_importantBy(ctx, field)
+			case "importantByName":
+				return ec.fieldContext_MinionTask_importantByName(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
@@ -71299,6 +71680,12 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
 			case "issuedByName":
 				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "importantAt":
+				return ec.fieldContext_MinionTask_importantAt(ctx, field)
+			case "importantBy":
+				return ec.fieldContext_MinionTask_importantBy(ctx, field)
+			case "importantByName":
+				return ec.fieldContext_MinionTask_importantByName(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
@@ -71387,7 +71774,7 @@ func (ec *executionContext) _Query_minionTasks(ctx context.Context, field graphq
 		ec.fieldContext_Query_minionTasks,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MinionTasks(ctx, fc.Args["sessionId"].(string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+			return ec.Resolvers.Query().MinionTasks(ctx, fc.Args["sessionId"].(string), fc.Args["last"].(*int), fc.Args["before"].(*string), fc.Args["search"].(*string), fc.Args["important"].(*bool))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -71438,6 +71825,65 @@ func (ec *executionContext) fieldContext_Query_minionTasks(ctx context.Context, 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_minionTasks_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_minionTaskImportantCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_minionTaskImportantCount,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MinionTaskImportantCount(ctx, fc.Args["sessionId"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal int
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal int
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_minionTaskImportantCount(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_minionTaskImportantCount_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -77845,6 +78291,12 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
 			case "issuedByName":
 				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "importantAt":
+				return ec.fieldContext_MinionTask_importantAt(ctx, field)
+			case "importantBy":
+				return ec.fieldContext_MinionTask_importantBy(ctx, field)
+			case "importantByName":
+				return ec.fieldContext_MinionTask_importantByName(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
@@ -98484,6 +98936,12 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			}
 		case "issuedByName":
 			out.Values[i] = ec._MinionTask_issuedByName(ctx, field, obj)
+		case "importantAt":
+			out.Values[i] = ec._MinionTask_importantAt(ctx, field, obj)
+		case "importantBy":
+			out.Values[i] = ec._MinionTask_importantBy(ctx, field, obj)
+		case "importantByName":
+			out.Values[i] = ec._MinionTask_importantByName(ctx, field, obj)
 		case "state":
 			out.Values[i] = ec._MinionTask_state(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -101391,6 +101849,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "setMinionTaskImportant":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setMinionTaskImportant(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "setMinionTunnelCap":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setMinionTunnelCap(ctx, field)
@@ -103732,6 +104197,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_minionTasks(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "minionTaskImportantCount":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_minionTaskImportantCount(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

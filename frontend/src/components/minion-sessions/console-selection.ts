@@ -33,6 +33,17 @@ export function selectTask(tasks: readonly ConsoleTask[], id: string): ConsoleSe
   return { pinned: id, seen: mark(newest) }
 }
 
+/**
+ * A selection made in another list of the session's tasks (narrowed
+ * otherwise): the task picked, while this list holds it, as if picked in it
+ * now (no hint that the newest moved on, as that newest was another list's);
+ * else following the newest.
+ */
+export function carriedSelection(tasks: readonly ConsoleTask[], sel: ConsoleSelection): ConsoleSelection {
+  if (sel.pinned === null || !tasks.some((t) => t.id === sel.pinned)) return FOLLOWING
+  return selectTask(tasks, sel.pinned)
+}
+
 /** Picks the task before or after the one shown (↑, ↓). */
 export function stepTask(tasks: readonly ConsoleTask[], sel: ConsoleSelection, by: -1 | 1): ConsoleSelection {
   const at = tasks.findIndex((t) => t.id === selectedTask(tasks, sel)?.id)

@@ -22,22 +22,44 @@ import {
   MinionTaskChangedDocument,
   MinionTaskDocumentDocument,
   MinionTaskFeedbackDocument,
+  MinionTaskImportantCountDocument,
   MinionTaskOutputDocument,
   MinionTasksDocument,
   MinionTunnelStreamsDocument,
   QueueMinionTaskDocument,
+  SetMinionTaskImportantDocument,
   SetMinionTunnelCapDocument,
   type MinionTaskFieldsFragment,
   type MinionTasksQuery,
 } from "@/graphql/gql/graphql"
 
-// A session's tasks: one list per session, newest first a page at a time,
-// kept current in place by what a mutation returns and by the session's
-// live updates.
+// A session's tasks: a list per session and filter, newest first a page at
+// a time, kept current in place by what a mutation returns and by the
+// session's live updates.
+
+/**
+ * What a session's task list is narrowed to: core's search of each task's
+ * line as the console shows it, and the tasks marked important alone.
+ */
+export interface MinionTaskFilter {
+  search: string
+  important: boolean
+}
+
+export const NO_TASK_FILTER: MinionTaskFilter = { search: "", important: false }
+
+/** Whether a filter narrows the list at all (a blank search does not). */
+export function narrows(f: MinionTaskFilter): boolean {
+  return f.important || f.search.trim() !== ""
+}
 
 export const minionTaskKeys = {
   all: ["minionTasks"] as const,
+  /** Every list of a session's tasks, whatever narrows it. */
   session: (sessionId: string) => [...minionTaskKeys.all, "session", sessionId] as const,
+  list: (sessionId: string, f: MinionTaskFilter) =>
+    [...minionTaskKeys.session(sessionId), { search: f.search.trim(), important: f.important }] as const,
+  importantCount: (sessionId: string) => [...minionTaskKeys.all, "importantCount", sessionId] as const,
   commands: (sessionId: string) => [...minionTaskKeys.all, "commands", sessionId] as const,
   output: (id: string) => [...minionTaskKeys.all, "output", id] as const,
   document: (id: string) => [...minionTaskKeys.all, "document", id] as const,
@@ -66,13 +88,36 @@ const PAGE = 50
 
 type Pages = InfiniteData<MinionTasksQuery, string | null>
 
-/** A session's tasks, newest first; older pages on fetchNextPage. */
-export function useMinionTasks(sessionId: string) {
+/**
+ * A session's tasks, newest first, those filter keeps; older pages on
+ * fetchNextPage. Another filter shows the session's rows before it until
+ * its own come.
+ */
+export function useMinionTasks(sessionId: string, filter: MinionTaskFilter = NO_TASK_FILTER) {
+  const search = filter.search.trim()
   return useInfiniteQuery({
-    queryKey: minionTaskKeys.session(sessionId),
-    queryFn: ({ pageParam }) => graphqlClient(MinionTasksDocument, { sessionId, last: PAGE, before: pageParam }),
+    queryKey: minionTaskKeys.list(sessionId, filter),
+    queryFn: ({ pageParam }) =>
+      graphqlClient(MinionTasksDocument, {
+        sessionId,
+        last: PAGE,
+        before: pageParam,
+        search: search || null,
+        important: filter.important || null,
+      }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.minionTasks.before ?? undefined,
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === sessionId ? prev : undefined),
+    enabled: sessionId !== "",
+  })
+}
+
+/** How many of a session's tasks are marked important. */
+export function useMinionTaskImportantCount(sessionId: string) {
+  return useQuery({
+    queryKey: minionTaskKeys.importantCount(sessionId),
+    queryFn: () => graphqlClient(MinionTaskImportantCountDocument, { sessionId }),
+    select: (data) => data.minionTaskImportantCount,
     enabled: sessionId !== "",
   })
 }
@@ -203,10 +248,29 @@ export function useMinionSessionCommands(sessionId: string) {
   })
 }
 
-/** Puts a task in its session's list: in its place, or newest at the top. */
+/**
+ * Whether a task a narrowed list does not hold may belong in it now, so the
+ * list is read again: one marked important, for a list of those; a new one
+ * (rev 1), for a search, which reads its line. A task's line does not
+ * change, so a search that did not find it never will.
+ */
+export function mayJoin(filter: MinionTaskFilter, task: MinionTaskFieldsFragment): boolean {
+  if (filter.important) return !!task.importantAt
+  return task.rev === 1
+}
+
+/**
+ * Puts a task in its session's lists: in its place in each that holds it
+ * (an unmarked one stays in a list of the important ones until it is read
+ * again); a new one at the top of the whole list. A narrowed list that may
+ * now hold it is read again (mayJoin), and so is the count of important
+ * tasks when the task's mark may have changed.
+ */
 export function upsertMinionTask(queryClient: QueryClient, task: MinionTaskFieldsFragment) {
-  queryClient.setQueryData<Pages>(minionTaskKeys.session(task.sessionId), (data) => {
-    if (!data) return data
+  let held = false
+  let flipped = false
+  for (const [key, data] of queryClient.getQueriesData<Pages>({ queryKey: minionTaskKeys.session(task.sessionId) })) {
+    if (!data) continue
     let found = false
     const pages = data.pages.map((p) => {
       const tasks = p.minionTasks.tasks.map((t) => {
@@ -214,16 +278,27 @@ export function upsertMinionTask(queryClient: QueryClient, task: MinionTaskField
         found = true
         // An older copy (a mutation's answer after the live updates it
         // raced) does not take the task back.
-        return isOlder(t, task) ? t : task
+        if (isOlder(t, task)) return t
+        if (!!t.importantAt !== !!task.importantAt) flipped = true
+        return task
       })
       return { ...p, minionTasks: { ...p.minionTasks, tasks } }
     })
+    held ||= found
+    const filter = key[3] as MinionTaskFilter | undefined
+    if (!found && filter && narrows(filter)) {
+      if (mayJoin(filter, task)) void queryClient.invalidateQueries({ queryKey: key, exact: true })
+      continue
+    }
     if (!found && pages.length > 0) {
       const first = pages[0]
       pages[0] = { ...first, minionTasks: { ...first.minionTasks, tasks: [task, ...first.minionTasks.tasks] } }
     }
-    return { ...data, pages }
-  })
+    queryClient.setQueryData<Pages>(key, { ...data, pages })
+  }
+  if (flipped || (!held && task.importantAt)) {
+    void queryClient.invalidateQueries({ queryKey: minionTaskKeys.importantCount(task.sessionId) })
+  }
 }
 
 export function useQueueMinionTask() {
@@ -232,6 +307,15 @@ export function useQueueMinionTask() {
     mutationFn: (vars: { sessionId: string; command: string; args: Record<string, unknown> | null }) =>
       graphqlClient(QueueMinionTaskDocument, vars),
     onSuccess: (data) => upsertMinionTask(queryClient, data.queueMinionTask),
+  })
+}
+
+/** Marks a task important for the team, or no longer. */
+export function useSetMinionTaskImportant() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string; important: boolean }) => graphqlClient(SetMinionTaskImportantDocument, vars),
+    onSuccess: (data) => upsertMinionTask(queryClient, data.setMinionTaskImportant),
   })
 }
 

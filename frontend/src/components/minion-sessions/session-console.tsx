@@ -5,14 +5,22 @@ import { useCanBuild } from "@/components/builds/build-access"
 import { useMinionSession, useMinionSessionsLayout } from "@/graphql/hooks/minion-sessions"
 import { toast } from "sonner"
 import { errorMessage } from "@/components/modules/management/api-errors"
-import { useMinionTaskSubscription, useMinionTasks, useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
+import {
+  narrows,
+  useMinionTaskImportantCount,
+  useMinionTaskSubscription,
+  useMinionTasks,
+  useQueueMinionTask,
+} from "@/graphql/hooks/minion-tasks"
+import { useDebounced } from "@/hooks/use-debounced"
 import { CommandBar } from "./command-bar"
 import { useConsoleCommands } from "./console-commands"
 import { commandHistory, lineOf } from "./command-line"
-import { FOLLOWING, newestMoved, selectTask, selectedTask, stepTask, type ConsoleSelection } from "./console-selection"
+import { carriedSelection, FOLLOWING, newestMoved, selectTask, selectedTask, stepTask, type ConsoleSelection } from "./console-selection"
 import { DEFAULT_CONSOLE_SPLIT, MAX_SPLIT, MIN_SPLIT } from "./sessions-layout"
 import { TaskDetail } from "./task-detail"
 import { TaskList } from "./task-list"
+import { emptyListText } from "./task-filter"
 import { UploadDialog } from "./upload-dialog"
 import { DeleteDialog, type DeleteTarget } from "./delete-dialog"
 import { startStreamUpload } from "@/lib/stream-upload"
@@ -30,7 +38,10 @@ import { PromptFxLayer } from "./prompt-fx-layer"
 // (console-selection.ts); what is picked stays per tab, as the tab's panel
 // stays mounted. Where the session stands (live, late, lost) is its row's,
 // which the table scrolls to with the tab. The operator's prompt effect
-// (/fx) plays over the whole console (PromptFxLayer).
+// (/fx) plays over the whole console (PromptFxLayer). The list can be
+// narrowed, by core, to a search of the tasks' lines and to the important
+// ones; running a command clears both, so the new task shows and is
+// followed. The command line's ↑ and ↓ go through every task all the same.
 
 export function SessionConsole({ sessionId }: { sessionId: string }) {
   const sessionQ = useMinionSession(sessionId)
@@ -38,7 +49,16 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const access = useCanBuild(session?.operationId ?? "")
   const canWrite = access.canWrite
   useMinionTaskSubscription(sessionId)
-  const tasksQ = useMinionTasks(sessionId)
+  // What the list is narrowed to: the search as typed goes to core a
+  // moment after the typing stops (a cleared one at once).
+  const [searchText, setSearchText] = useState("")
+  const [important, setImportant] = useState(false)
+  const search = useDebounced(searchText, searchText.trim() === "" ? 0 : 250)
+  const filter = useMemo(() => ({ search, important }), [search, important])
+  const filterKey = `${important}:${search.trim()}`
+  const allQ = useMinionTasks(sessionId)
+  const tasksQ = useMinionTasks(sessionId, filter)
+  const importantCount = useMinionTaskImportantCount(sessionId).data ?? 0
   const commandsQ = useConsoleCommands(sessionId)
   // The divider is the operator's, kept with their sessions layout.
   const { layout, setLayout } = useMinionSessionsLayout()
@@ -49,18 +69,34 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   // Oldest first: the newest at the bottom, by the command line.
   const tasks = useMemo(() => (tasksQ.data?.pages ?? []).flatMap((p) => p.minionTasks.tasks).toReversed(), [tasksQ.data])
 
-  // What ↑ and ↓ go through on the command line: the tasks as typed.
+  // What ↑ and ↓ go through on the command line: every task as typed,
+  // whatever the list is narrowed to.
   const history = useMemo(
     () =>
-      commandHistory(tasks.map((t) => lineOf(t.command, t.args as Record<string, unknown> | null, byId.get(t.command), connections))),
-    [tasks, byId, connections],
+      commandHistory(
+        (allQ.data?.pages ?? [])
+          .flatMap((p) => p.minionTasks.tasks)
+          .toReversed()
+          .map((t) => lineOf(t.command, t.args as Record<string, unknown> | null, byId.get(t.command), connections)),
+      ),
+    [allQ.data, byId, connections],
   )
 
-  const [selection, setSelection] = useState<ConsoleSelection>(FOLLOWING)
+  // The selection is the list's it was made in: another filter's carries
+  // the task picked over while the list holds it (carriedSelection).
+  const [picked, setPicked] = useState<{ key: string; sel: ConsoleSelection }>(() => ({ key: filterKey, sel: FOLLOWING }))
+  const selection = picked.key === filterKey ? picked.sel : carriedSelection(tasks, picked.sel)
+  const setSelection = (sel: ConsoleSelection) => setPicked({ key: filterKey, sel })
   const selected = selectedTask(tasks, selection)
   const moved = newestMoved(tasks, selection)
-  // A task the operator runs is the newest: shown, and followed.
+  // A task the operator runs is the newest: shown, and followed, in the
+  // whole list.
   const follow = () => setSelection(FOLLOWING)
+  const ran = () => {
+    setSearchText("")
+    setImportant(false)
+    follow()
+  }
   // A folder opened in a listing, with a list_dir command: the one picked
   // (an item's menu), else the listing's own when it is one (Up, a crumb),
   // else the session's first. The listing's own keeps its other args;
@@ -71,7 +107,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const runAction = (commandId: string, args: Record<string, unknown>) =>
     queue.mutate(
       { sessionId, command: commandId, args },
-      { onSuccess: follow, onError: (err) => toast.error(errorMessage(err, "Could not run it")) },
+      { onSuccess: ran, onError: (err) => toast.error(errorMessage(err, "Could not run it")) },
     )
   // A listing's Upload here: the folder, and the upload_file command picked,
   // in the upload dialog until it runs.
@@ -92,7 +128,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
         command: commandId,
         args: commandId === t.command ? { ...((t.args as Record<string, unknown> | null) ?? {}), path } : { path },
       },
-      { onSuccess: follow, onError: (err) => toast.error(errorMessage(err, "Could not list the folder")) },
+      { onSuccess: ran, onError: (err) => toast.error(errorMessage(err, "Could not list the folder")) },
     )
   }
   const workspace = useWorkspaceActions()
@@ -143,7 +179,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
               following={selection.pinned === null}
               onSelect={(id) => setSelection(selectTask(tasks, id))}
               onStep={(by) => setSelection(stepTask(tasks, selection, by))}
-              onQueued={follow}
+              onQueued={ran}
               commands={byId}
               canWrite={writable}
               hasOlder={!!tasksQ.hasNextPage}
@@ -151,6 +187,14 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
               onLoadOlder={() => void tasksQ.fetchNextPage()}
               moved={moved}
               onFollow={() => follow()}
+              searchText={searchText}
+              onSearchText={setSearchText}
+              important={important}
+              onImportant={setImportant}
+              importantCount={importantCount}
+              filter={filter}
+              stale={tasksQ.isPlaceholderData || searchText.trim() !== search.trim()}
+              canMark={canWrite}
             />
           }
           second={
@@ -161,7 +205,8 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                   task={selected}
                   command={byId.get(selected.command)}
                   canWrite={writable}
-                  onQueued={follow}
+                  canMark={canWrite}
+                  onQueued={ran}
                   // No list_dir command: a listing is read, not browsed.
                   onOpenPath={
                     writable && commandsFor(commands, "list_dir").length > 0
@@ -186,7 +231,11 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
                   <SquareTerminalIcon className="size-6 opacity-50" />
                   <p className="text-sm">
-                    {tasksQ.isLoading ? "" : "No tasks yet. Type a command below; it goes out when the minion next checks in."}
+                    {tasksQ.isLoading
+                      ? ""
+                      : narrows(filter)
+                        ? emptyListText(filter)
+                        : "No tasks yet. Type a command below; it goes out when the minion next checks in."}
                   </p>
                 </div>
               )}
@@ -200,7 +249,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
           onDelete={async (args) => {
             if (!deleteCommandId) return
             await queue.mutateAsync({ sessionId, command: deleteCommandId, args })
-            follow()
+            ran()
           }}
         />
         <UploadDialog
@@ -212,7 +261,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
             if (!uploadCommand) return
             const data = await queue.mutateAsync({ sessionId, command: uploadCommand.id, args })
             if (stream) startStreamUpload(data.queueMinionTask.id, stream)
-            follow()
+            ran()
           }}
         />
         <CommandBar
@@ -223,7 +272,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
           disabled={disabledReason !== undefined}
           disabledReason={disabledReason}
           history={history}
-          onQueued={follow}
+          onQueued={ran}
           effect={layout.promptFx}
           onEffect={(promptFx) => setLayout({ ...layout, promptFx })}
         />

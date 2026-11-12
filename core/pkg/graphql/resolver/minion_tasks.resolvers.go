@@ -78,6 +78,11 @@ func (r *mutationResolver) CancelMinionTask(ctx context.Context, id string) (*mo
 	return r.MinionTaskResolver.CancelMinionTask(ctx, id)
 }
 
+// SetMinionTaskImportant is the resolver for the setMinionTaskImportant field.
+func (r *mutationResolver) SetMinionTaskImportant(ctx context.Context, id string, important bool) (*model.MinionTask, error) {
+	return r.MinionTaskResolver.SetMinionTaskImportant(ctx, id, important)
+}
+
 // SetMinionTunnelCap is the resolver for the setMinionTunnelCap field.
 func (r *mutationResolver) SetMinionTunnelCap(ctx context.Context, taskID string, cap int) (*model.MinionTask, error) {
 	return r.MinionTaskResolver.SetMinionTunnelCap(ctx, taskID, cap)
@@ -109,8 +114,13 @@ func (r *queryResolver) MinionTask(ctx context.Context, id string) (*model.Minio
 }
 
 // MinionTasks is the resolver for the minionTasks field.
-func (r *queryResolver) MinionTasks(ctx context.Context, sessionID string, last *int, before *string) (*model.MinionTaskPage, error) {
-	return r.MinionTaskResolver.MinionTasks(ctx, sessionID, last, before)
+func (r *queryResolver) MinionTasks(ctx context.Context, sessionID string, last *int, before *string, search *string, important *bool) (*model.MinionTaskPage, error) {
+	return r.MinionTaskResolver.MinionTasks(ctx, sessionID, last, before, search, important)
+}
+
+// MinionTaskImportantCount is the resolver for the minionTaskImportantCount field.
+func (r *queryResolver) MinionTaskImportantCount(ctx context.Context, sessionID string) (int, error) {
+	return r.MinionTaskResolver.MinionTaskImportantCount(ctx, sessionID)
 }
 
 // MinionTunnelStreams is the resolver for the minionTunnelStreams field.

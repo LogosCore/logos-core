@@ -1,4 +1,4 @@
-import { BanIcon, CheckIcon, CircleDashedIcon, LoaderIcon, SendIcon, XIcon } from "lucide-react"
+import { BanIcon, CheckIcon, CircleDashedIcon, LoaderIcon, SendIcon, StarIcon, XIcon } from "lucide-react"
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { clock, FINISHED, took, type Task } from "./task-actions"
@@ -23,13 +23,18 @@ function waits(state: string): boolean {
   return state === "QUEUED" || state === "SENT"
 }
 
+/** How a task's state is drawn: a command that exited non-zero as failed. */
+function stateStyle(t: Task) {
+  return t.state === "DONE" && t.exit != null && t.exit !== 0 ? STATE.FAILED : (STATE[t.state] ?? STATE.QUEUED)
+}
+
 /**
  * A task's state as an icon: a list row's. A command that exited non-zero
  * is marked as failed; a waiting task that cannot reach its minion (held,
  * the reason) in amber, the reason on hover.
  */
 export function StateIcon({ t, className, held }: { t: Task; className?: string; held?: string | null }) {
-  const s = t.state === "DONE" && t.exit != null && t.exit !== 0 ? STATE.FAILED : (STATE[t.state] ?? STATE.QUEUED)
+  const s = stateStyle(t)
   const Icon = s.icon
   const blocked = held && waits(t.state)
   return (
@@ -39,6 +44,25 @@ export function StateIcon({ t, className, held }: { t: Task; className?: string;
     >
       {blocked && <title>{`Waiting: ${held}`}</title>}
     </Icon>
+  )
+}
+
+/**
+ * A task marked important, as a list row shows it in place of its state: a
+ * star in its state's color (green done, red failed, blue running and
+ * pulsing, amber held, grey waiting or stopped), the reason on hover for a
+ * held one.
+ */
+export function ImportantIcon({ t, className, held }: { t: Task; className?: string; held?: string | null }) {
+  const s = stateStyle(t)
+  const blocked = held && waits(t.state)
+  return (
+    <StarIcon
+      aria-label={`important, ${t.state.toLowerCase()}`}
+      className={cn("size-3.5 shrink-0 fill-current", blocked ? HELD : s.className, s.spin && "animate-pulse", className)}
+    >
+      {blocked && <title>{`Waiting: ${held}`}</title>}
+    </StarIcon>
   )
 }
 

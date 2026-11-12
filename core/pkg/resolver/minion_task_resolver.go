@@ -31,7 +31,8 @@ import (
 // IMinionTaskResolver gives sessions' minions commands and reads what they
 // answered (models.MinionTask; pkg/minionsync delivers them).
 type IMinionTaskResolver interface {
-	MinionTasks(ctx context.Context, sessionID string, last *int, before *string) (*model.MinionTaskPage, error)
+	MinionTasks(ctx context.Context, sessionID string, last *int, before, search *string, important *bool) (*model.MinionTaskPage, error)
+	MinionTaskImportantCount(ctx context.Context, sessionID string) (int, error)
 	// Feedback is MinionTask.feedback: what its minion said of it.
 	Feedback(ctx context.Context, t *model.MinionTask) ([]*model.MinionFeedback, error)
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
@@ -40,6 +41,7 @@ type IMinionTaskResolver interface {
 	DelegateServes(ctx context.Context, t *model.MinionTask) ([]protocol.ChannelVersions, error)
 	QueueMinionTask(ctx context.Context, sessionID, command string, args any) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
+	SetMinionTaskImportant(ctx context.Context, id string, important bool) (*model.MinionTask, error)
 	SetMinionTunnelCap(ctx context.Context, taskID string, limit int) (*model.MinionTask, error)
 	SetMinionTunnelRoutes(ctx context.Context, taskID string, routes []string) (*model.MinionTask, error)
 	CreateMinionVPNKey(ctx context.Context, taskID string) (*model.MinionVPNKey, error)
@@ -243,7 +245,7 @@ func (r *minionTaskResolver) SessionOf(ctx context.Context, sessionID string) (*
 	return r.session(ctx, sessionID, models.OperationRoleViewer)
 }
 
-func (r *minionTaskResolver) MinionTasks(ctx context.Context, sessionID string, last *int, before *string) (*model.MinionTaskPage, error) {
+func (r *minionTaskResolver) MinionTasks(ctx context.Context, sessionID string, last *int, before, search *string, important *bool) (*model.MinionTaskPage, error) {
 	s, err := r.session(ctx, sessionID, models.OperationRoleViewer)
 	if err != nil {
 		return nil, err
@@ -258,7 +260,11 @@ func (r *minionTaskResolver) MinionTasks(ctx context.Context, sessionID string, 
 			return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid cursor")
 		}
 	}
-	rows, err := r.tasks.ListBySession(ctx, s.SessionID, cursor, int64(limit+1))
+	filter := repository.MinionTaskFilter{Important: important != nil && *important}
+	if search != nil {
+		filter.Search = *search
+	}
+	rows, err := r.tasks.ListBySession(ctx, s.SessionID, filter, cursor, int64(limit+1))
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
 	}
@@ -465,7 +471,7 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	}
 	t := &models.MinionTask{TaskID: taskID, OperationID: s.OperationID, SessionID: s.SessionID, Command: command,
 		Op: commands[i].Op, Args: values, CredentialIDs: credentialIDs, WireArgs: wireBytes, Result: commands[i].Result, Action: commands[i].Action,
-		IssuedBy: uid, State: models.MinionTaskQueued, QueuedAt: time.Now().UTC(), Upload: upload}
+		IssuedBy: uid, State: models.MinionTaskQueued, QueuedAt: time.Now().UTC(), Upload: upload, LineRest: lineRest(commands[i].Params)}
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		if tunnel {
 			r.tunnels.Close(ctx, taskID)
@@ -916,6 +922,49 @@ func (r *minionTaskResolver) CancelMinionTask(ctx context.Context, id string) (*
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
 }
 
+func (r *minionTaskResolver) MinionTaskImportantCount(ctx context.Context, sessionID string) (int, error) {
+	s, err := r.session(ctx, sessionID, models.OperationRoleViewer)
+	if err != nil {
+		return 0, err
+	}
+	n, err := r.tasks.CountImportant(ctx, s.SessionID)
+	if err != nil {
+		return 0, fmt.Errorf("count the important tasks: %w", err)
+	}
+	return int(n), nil
+}
+
+// SetMinionTaskImportant marks a task important or no longer. An
+// annotation, not a task given: a closed session's tasks take it too.
+func (r *minionTaskResolver) SetMinionTaskImportant(ctx context.Context, id string, important bool) (*model.MinionTask, error) {
+	tid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid task ID")
+	}
+	t, err := r.tasks.FindByTaskID(ctx, tid)
+	if err != nil {
+		if repository.IsNotFound(err) {
+			return nil, moduleGQLError(ctx, errCodeNotFound, "task not found")
+		}
+		return nil, err
+	}
+	if _, err := r.session(ctx, t.SessionID.String(), models.OperationRoleOperator); err != nil {
+		return nil, err
+	}
+	uid, err := callerUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	t, changed, err := r.tasks.SetImportant(ctx, tid, important, uid, time.Now().UTC())
+	if err != nil {
+		return nil, fmt.Errorf("mark the task: %w", err)
+	}
+	if changed {
+		r.publish(t)
+	}
+	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+}
+
 func (r *minionTaskResolver) MinionTask(ctx context.Context, id string) (*model.MinionTask, error) {
 	tid, err := uuid.Parse(id)
 	if err != nil {
@@ -1130,14 +1179,17 @@ func (r *minionTaskResolver) publish(t *models.MinionTask) {
 	}))
 }
 
-// names are the usernames of those who gave the tasks, in one read; a gone
-// user has none.
+// names are the usernames of those who gave the tasks and marked them
+// important, in one read; a gone user has none.
 func (r *minionTaskResolver) names(ctx context.Context, tasks []models.MinionTask) map[uuid.UUID]string {
 	out := map[uuid.UUID]string{}
 	ids := make([]uuid.UUID, 0, len(tasks))
 	for _, t := range tasks {
 		if !slices.Contains(ids, t.IssuedBy) {
 			ids = append(ids, t.IssuedBy)
+		}
+		if t.ImportantBy != nil && !slices.Contains(ids, *t.ImportantBy) {
+			ids = append(ids, *t.ImportantBy)
 		}
 	}
 	if len(ids) == 0 || r.users == nil {
@@ -1168,6 +1220,16 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 	}
 	if name, ok := names[t.IssuedBy]; ok {
 		m.IssuedByName = &name
+	}
+	if t.ImportantAt != nil {
+		m.ImportantAt = taskTime(t.ImportantAt)
+		if t.ImportantBy != nil {
+			by := t.ImportantBy.String()
+			m.ImportantBy = &by
+			if name, ok := names[*t.ImportantBy]; ok {
+				m.ImportantByName = &name
+			}
+		}
 	}
 	if len(t.Args) > 0 {
 		m.Args = map[string]any(t.Args)
