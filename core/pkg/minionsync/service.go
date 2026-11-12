@@ -898,9 +898,10 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				}
 			}
 		case protocol.ItemTunnel, protocol.ItemTunnelReply, protocol.ItemTunnelData, protocol.ItemTunnelAck, protocol.ItemTunnelClose,
-			protocol.ItemTunnelDatagram, protocol.ItemTunnelListen:
+			protocol.ItemTunnelDatagram, protocol.ItemTunnelListen, protocol.ItemTunnelCtl:
 			// A tunnel from the minion opens a reverse port forward's
-			// stream; miniontunnels closes one for any other task.
+			// stream; miniontunnels closes one for any other task. A
+			// tunnel_ctl carries a process's exit or an accept's caller.
 			out, err = s.takeTunnel(ctx, session, raw, i)
 		case protocol.ItemDelegate:
 			// What a delegate carries for the minions it serves

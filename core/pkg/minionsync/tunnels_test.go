@@ -61,12 +61,13 @@ func tunnelRig(t *testing.T) (*rig, uuid.UUID, *fakeTunnels) {
 }
 
 // The minion's tunnel items go to the tunnels, in order (its tunnel, a
-// reverse port forward's stream, and its tunnel_listen too), and what they
-// answer goes back in the reply; one the tunnels find bad is a bad message.
+// reverse port forward's stream, its tunnel_listen, and its tunnel_ctl: a
+// process's exit), and what they answer goes back in the reply; one the
+// tunnels find bad is a bad message.
 func TestTunnelItemsGoToTheTunnels(t *testing.T) {
 	r, sid, tunnels := tunnelRig(t)
 	task := bytes.Repeat([]byte{4}, 16)
-	room := uint64(4096)
+	room, exit := uint64(4096), int64(3)
 	tunnels.answers = []any{protocol.TunnelCloseItem{T: protocol.ItemTunnelClose, Task: task, Stream: 7, Reason: protocol.TunnelCloseUnknown}}
 	reply, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(),
 		protocol.TunnelReplyItem{T: protocol.ItemTunnelReply, Task: task, Stream: 1, Result: protocol.TunnelOpen, Bound: "10.0.0.7:5000"},
@@ -75,12 +76,13 @@ func TestTunnelItemsGoToTheTunnels(t *testing.T) {
 		protocol.TunnelCloseItem{T: protocol.ItemTunnelClose, Task: task, Stream: 2, Reason: protocol.TunnelCloseReset},
 		protocol.TunnelDatagramItem{T: protocol.ItemTunnelDatagram, Task: task, Stream: 3, Host: "10.0.0.53", Port: 53, Data: []byte{1}},
 		protocol.TunnelItem{T: protocol.ItemTunnel, Task: task, Stream: 4, Host: "h", Port: 1},
-		protocol.TunnelListenItem{T: protocol.ItemTunnelListen, Task: task, Bound: "0.0.0.0:8080"})
+		protocol.TunnelListenItem{T: protocol.ItemTunnelListen, Task: task, Bound: "0.0.0.0:8080"},
+		protocol.TunnelCtlItem{T: protocol.ItemTunnelCtl, Task: task, Stream: 5, Exit: &exit})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []int{protocol.ItemTunnelReply, protocol.ItemTunnelData, protocol.ItemTunnelAck, protocol.ItemTunnelClose, protocol.ItemTunnelDatagram,
-		protocol.ItemTunnel, protocol.ItemTunnelListen}
+		protocol.ItemTunnel, protocol.ItemTunnelListen, protocol.ItemTunnelCtl}
 	if len(tunnels.took) != len(want) {
 		t.Fatalf("took %v, want %v", tunnels.took, want)
 	}
