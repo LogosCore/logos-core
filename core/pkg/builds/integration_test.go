@@ -2,7 +2,7 @@ package builds
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -19,6 +19,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
 )
 
@@ -131,25 +132,38 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%s describe: %v", b.Artifact.Filename, err)
 	}
-	var minion struct {
-		BuildID     string                  `json:"build_id"`
-		Punches     []string                `json:"punches"`
-		Badge       struct{ SHA256 string } `json:"badge"`
-		Connections []struct {
-			Values map[string]any `json:"values"`
-		} `json:"connections"`
+	// It prints core's minion config, baked in as it came (numbered CBOR:
+	// BOB's punches are field 3, its http path_prefix parameter 2; a file's
+	// bytes never go in a config).
+	c, err := protocol.ReadMinionConfig(described)
+	if err != nil {
+		t.Fatalf("its minion config: %v", err)
 	}
-	if err := json.Unmarshal(described, &minion); err != nil {
-		t.Fatalf("description %s: %v", described, err)
+	punches, _ := protocol.ArgStrings(c.Values, uint64(3))
+	prefix := ""
+	if len(c.Connections) == 1 {
+		prefix, _ = protocol.ArgString(c.Connections[0].Values, uint64(2))
 	}
-	if minion.BuildID != b.BuildID.String() || minion.Badge.SHA256 != badge.SHA256 || len(minion.Punches) != 2 ||
-		minion.Connections[0].Values["path_prefix"] != "/cdn/assets/" {
-		t.Fatalf("description %s", described)
+	if string(c.Build) != string(b.BuildID[:]) || len(punches) != 2 || prefix != "/cdn/assets/" {
+		t.Fatalf("its minion config: %+v", c)
+	}
+	// Its exit codes are its own: drawn by core for the three BOB does not
+	// fix, built in by BOB, which names them in the build's log.
+	drawn := b.DrawnErrorCodes()
+	if !b.UniqueErrorCodes || len(drawn) != 3 {
+		t.Fatalf("drawn %+v", b.ErrorCodes)
+	}
+	parts := make([]string, len(drawn))
+	for i, d := range drawn {
+		parts[i] = fmt.Sprintf("%d→%d", d.Code, d.ExitCode)
+	}
+	if want := "exit codes of its own: " + strings.Join(parts, ", "); !strings.Contains(b.Log, want) {
+		t.Fatalf("BOB's log lacks %q:\n%s", want, b.Log)
 	}
 	// The descriptions stayed in core.
 	if strings.Contains(string(raw), "integration note") || b.ConnectionDescriptions[0] != "integration note, core's own" ||
 		strings.Contains(string(raw), "integration test build") || b.Description != "integration test build, core's own" {
-		t.Fatalf("descriptions %q %q, minion %s", b.Description, b.ConnectionDescriptions, described)
+		t.Fatalf("descriptions %q %q", b.Description, b.ConnectionDescriptions)
 	}
-	t.Logf("artifact %s (%d bytes), describing itself:\n%s", b.Artifact.Filename, b.Artifact.Size, described)
+	t.Logf("artifact %s (%d bytes), a %d-byte minion config, %s", b.Artifact.Filename, b.Artifact.Size, len(described), strings.Join(parts, ", "))
 }
