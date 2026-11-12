@@ -223,9 +223,37 @@ export function factoryKindsByName(
   return out
 }
 
-/** The fields a build of target takes: the shared ones, then its own. */
-export function targetFields(kind: FactoryKind, target: Target | undefined): FieldDef[] {
-  return target ? [...kind.fields, ...target.fields] : kind.fields
+/**
+ * The fields a build of target takes: the shared ones, then its own; with a
+ * platform, only those that apply to a build for it (onPlatform). Drafts
+ * keep every one, so a platform picked again finds its values.
+ */
+export function targetFields(kind: FactoryKind, target: Target | undefined, platform?: string): FieldDef[] {
+  const all = target ? [...kind.fields, ...target.fields] : kind.fields
+  return platform === undefined ? all : all.filter((f) => onPlatform(f, platform))
+}
+
+/**
+ * Whether a build field applies to a build for platform: always when it
+ * names no platforms, else when one matches it half by half, "any"
+ * matching either (the protocol's FieldSpec.OnPlatform). A field for some
+ * platforms waits for one to be picked.
+ */
+export function onPlatform(field: Pick<FieldDef, "platforms">, platform: string): boolean {
+  const platforms = field.platforms ?? []
+  if (platforms.length === 0) return true
+  const [os, arch] = platform.split("/")
+  if (!os || !arch) return false
+  return platforms.some((p) => {
+    const [pos, parch] = p.split("/")
+    return (pos === "any" || pos === os) && (parch === "any" || parch === arch)
+  })
+}
+
+/** "only for linux/arm": why a field of target takes no value on another platform; null when it does, or is no field of target. */
+export function offPlatform(kind: FactoryKind, target: Target | undefined, key: string, platform: string): string | null {
+  const f = targetFields(kind, target).find((f) => f.key === key)
+  return f && !onPlatform(f, platform) ? `Only for ${(f.platforms ?? []).join(", ")}` : null
 }
 
 // ---------------------------------------------------------------------------
@@ -671,7 +699,7 @@ export function sourceFromBuild(
     description: build.description,
     target: build.target,
     platform: build.platform,
-    values: withoutDefaults(targetFields(kind, target), isRecord(build.values) ? build.values : {}),
+    values: withoutDefaults(targetFields(kind, target, build.platform), isRecord(build.values) ? build.values : {}),
     commands: build.commands ?? null,
     connections,
     failover: recordFailover(build.failover),
@@ -814,7 +842,7 @@ export function evaluateForm(
   const errors: Record<string, string> = {}
   checkBuild(kind, form, channels, errors)
   const target = kind.targets.find((t) => t.id === form.target)
-  const values = evaluateFields("values.", targetFields(kind, target), form.drafts, errors)
+  const values = evaluateFields("values.", targetFields(kind, target, form.platform), form.drafts, errors)
   const connections = form.connections.map((c, i): ConnectionInput => {
     const at = `connections[${i}]`
     const ch = channels.get(c.moduleName)

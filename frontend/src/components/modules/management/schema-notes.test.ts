@@ -15,6 +15,12 @@ describe("fieldNotes", () => {
     expect(fieldNotes(field({ key: "kill_date", type: "datetime" }))).toEqual([])
   })
 
+  it("says the platforms a build field is for", () => {
+    expect(
+      fieldNotes(field({ key: "goarm", type: "enum", default: "7", options: [{ value: "7" }, { value: "6" }], platforms: ["linux/arm"] })),
+    ).toEqual(["default 7", "7, 6", "only for linux/arm"])
+  })
+
   it("shows a secret's declared default, not a mask", () => {
     expect(fieldNotes(field({ key: "token", type: "secret", default: "changeme" }))).toEqual(["default changeme"])
   })

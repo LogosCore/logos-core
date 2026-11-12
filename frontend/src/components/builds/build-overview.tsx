@@ -50,7 +50,7 @@ export function BuildOverview({
     [files.data],
   )
   const target = kind?.targets.find((t) => t.id === b.target)
-  const values = valueRows(kind ? targetFields(kind, target) : [], b.values)
+  const values = valueRows(kind ? targetFields(kind, target, b.platform) : [], b.values)
   const a = b.artifact
 
   return (

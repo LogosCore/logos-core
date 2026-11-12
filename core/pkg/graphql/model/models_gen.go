@@ -1380,6 +1380,7 @@ type ModuleField struct {
 	MaxSize     any                   `json:"maxSize,omitempty"`
 	When        *ModuleFieldCondition `json:"when,omitempty"`
 	Advanced    bool                  `json:"advanced"`
+	Platforms   []string              `json:"platforms"`
 }
 
 type ModuleFieldCondition struct {

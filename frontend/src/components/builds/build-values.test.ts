@@ -26,6 +26,7 @@ import {
   withKind,
   withTarget,
   type BuildForm,
+  onPlatform,
 } from "./build-values"
 
 function field(f: Partial<FieldDef> & Pick<FieldDef, "key" | "type">): FieldDef {
@@ -699,5 +700,18 @@ describe("helpers", () => {
     expect(platformLabel("any/any")).toBe("Any platform")
     expect(platformLabel("windows/amd64")).toBe("Windows amd64")
     expect(platformLabel("darwin/any")).toBe("macOS (any arch)")
+  })
+})
+
+describe("onPlatform", () => {
+  it("matches a field's platforms half by half, any for either", () => {
+    expect(onPlatform({ platforms: [] }, "linux/amd64")).toBe(true)
+    expect(onPlatform({ platforms: ["linux/arm"] }, "linux/arm")).toBe(true)
+    expect(onPlatform({ platforms: ["linux/arm"] }, "linux/arm64")).toBe(false)
+    expect(onPlatform({ platforms: ["any/arm"] }, "windows/arm")).toBe(true)
+    expect(onPlatform({ platforms: ["windows/any"] }, "windows/386")).toBe(true)
+    // None picked yet: a field for some platforms waits.
+    expect(onPlatform({ platforms: ["linux/arm"] }, "")).toBe(false)
+    expect(onPlatform({ platforms: [] }, "")).toBe(true)
   })
 })

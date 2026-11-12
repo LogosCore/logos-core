@@ -84,7 +84,7 @@ type settings struct {
 // checked is what check learned about valid settings.
 type checked struct {
 	target protocol.BuildTarget
-	fields []protocol.FieldSpec // the target's, shared ones first
+	fields []protocol.FieldSpec // the target's on its platform, shared ones first
 	// commands are the build's: the ones picked and the target's required
 	// ones, in the schema's order.
 	commands []string
@@ -120,7 +120,9 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 		out.add("target", "not a target of this factory")
 		return c, out, nil
 	}
-	c.target, c.fields = t, schema.TargetFields(t)
+	// The fields of its platform: one that does not apply there takes no
+	// value, and its default is not filled in.
+	c.target, c.fields = t, schema.PlatformFields(t, st.Platform)
 	switch {
 	case st.Platform == "":
 		out.add("platform", "a platform is required")
@@ -132,6 +134,9 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 	creds := map[uuid.UUID]bool{}
 	if err := s.checkValues(ctx, op, "values.", c.fields, st.Values, out, files, creds); err != nil {
 		return c, out, err
+	}
+	for k, reason := range schema.OffPlatformValues(t, st.Platform, st.Values) {
+		out.add("values."+k, "%s", reason)
 	}
 	c.commands = commandsFor(schema, t, st.Commands, out)
 

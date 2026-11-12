@@ -1473,3 +1473,35 @@ func TestBuildCodec(t *testing.T) {
 		t.Fatalf("JSON through an agentless kind: %v", err)
 	}
 }
+
+// A field for some platforms (FieldSpec.Platforms) takes a value, and its
+// default, only in a build for one of them.
+func TestBuildPlatformFields(t *testing.T) {
+	r := newRig(t)
+	sc := &r.reg.schemas["bob"].BuildSchema
+	sc.Targets = append(sc.Targets, protocol.BuildTarget{
+		ID: "linux-elf", Format: "elf", Platforms: []string{"linux/amd64", "linux/arm"},
+		Fields: []protocol.FieldSpec{{
+			Key: "goarm", Type: protocol.FieldEnum, Default: "7", Platforms: []string{"linux/arm"},
+			Options: []protocol.EnumOption{{Value: "7"}, {Value: "6"}, {Value: "5"}},
+		}},
+	})
+	elf := func(platform string, values map[string]any) func(in *BuildInput) {
+		return func(in *BuildInput) { in.Target, in.Platform, in.Values = "linux-elf", platform, values }
+	}
+
+	if b := r.queue(t, elf("linux/arm", nil)); b.Values["goarm"] != "7" {
+		t.Fatalf("linux/arm without goarm: %v", b.Values)
+	}
+	if b := r.queue(t, elf("linux/arm", map[string]any{"goarm": "5"})); b.Values["goarm"] != "5" {
+		t.Fatalf("linux/arm with goarm 5: %v", b.Values)
+	}
+	if b := r.queue(t, elf("linux/amd64", nil)); b.Values["goarm"] != nil {
+		t.Fatalf("linux/amd64 has goarm: %v", b.Values)
+	}
+	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(elf("linux/amd64", map[string]any{"goarm": "6"})))
+	var v *ValidationError
+	if !errors.As(err, &v) || v.Problems["values.goarm"] != "only for linux/arm" {
+		t.Fatalf("goarm on linux/amd64: %v %v", err, problemsOf(err))
+	}
+}

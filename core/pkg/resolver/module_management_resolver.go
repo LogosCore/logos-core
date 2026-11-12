@@ -302,6 +302,7 @@ func toFieldModel(f protocol.FieldSpec) *model.ModuleField {
 		out.When = &model.ModuleFieldCondition{Key: f.When.Key, Values: append([]string{}, f.When.Values...)}
 	}
 	out.Advanced = f.Advanced
+	out.Platforms = append([]string{}, f.Platforms...)
 	return out
 }
 

@@ -260,7 +260,8 @@ function Editor({
   const disabled = pending || readOnly
 
   const target = kind.targets.find((t) => t.id === form.target)
-  const fields = targetFields(kind, target)
+  // The picked platform's: a field for others shows once one of them is.
+  const fields = targetFields(kind, target, form.platform)
   const { input, errors } = evaluateForm(kind, form, channels)
   const shown: Record<string, string> = { ...(submitted ? errors : {}), ...serverErrors }
   const hasErrors = read

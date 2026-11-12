@@ -62,7 +62,8 @@ export function readFieldValues(
   fields: readonly FieldDef[],
   raw: unknown,
   pointer: string,
-  messages: { unknown: string; notObject: string },
+  // unknown may say why by the key (a build field of another platform).
+  messages: { unknown: string | ((key: string) => string); notObject: string },
   problems: JsonProblem[],
   opts: FieldReadOptions = {},
 ): Record<string, unknown> {
@@ -75,7 +76,10 @@ export function readFieldValues(
   const byKey = new Map(fields.map((f) => [f.key, f]))
   for (const [key, value] of Object.entries(object)) {
     const f = byKey.get(key)
-    if (!f) problems.push({ path: childPointer(pointer, key), message: messages.unknown })
+    if (!f) {
+      const message = typeof messages.unknown === "string" ? messages.unknown : messages.unknown(key)
+      problems.push({ path: childPointer(pointer, key), message })
+    }
     else if (!leavesUnset(f, value, opts) && !sameJSON(value, f.default)) values[key] = value
   }
   for (const f of fields) {
@@ -91,7 +95,12 @@ export function fieldHints(fields: readonly FieldDef[]): JsonKeyHint[] {
   return fields.map((f) => ({
     key: f.key,
     detail: f.required ? `${f.type}, required` : f.type,
-    info: [f.label, f.description, hasDefault(f) ? `Default: ${JSON.stringify(f.default)}` : "No default"]
+    info: [
+      f.label,
+      f.description,
+      hasDefault(f) ? `Default: ${JSON.stringify(f.default)}` : "No default",
+      f.platforms?.length ? `Only for ${f.platforms.join(", ")}` : "",
+    ]
       .filter(Boolean)
       .join("\n"),
     values:

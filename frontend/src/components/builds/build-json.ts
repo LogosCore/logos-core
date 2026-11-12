@@ -25,6 +25,7 @@ import {
   settingFields,
   pickedCommands,
   targetCommands,
+  offPlatform,
   targetFields,
   type BuildForm,
   type ChannelKind,
@@ -156,7 +157,7 @@ export function buildJson(kind: FactoryKind, channels: ReadonlyMap<string, Chann
     target: doc.target,
     platform: doc.platform,
     commands: doc.commands,
-    values: jsonFieldValues(targetFields(kind, target), doc.values),
+    values: jsonFieldValues(targetFields(kind, target, doc.platform), doc.values),
     connections: doc.connections.map((c) => {
       const fields = connectionFields(kind, channels, target, c)
       return {
@@ -201,7 +202,7 @@ export function formDocument(kind: FactoryKind, channels: ReadonlyMap<string, Ch
     target: form.target,
     platform: form.platform,
     commands: form.commands,
-    values: formValues(targetFields(kind, target), form.drafts),
+    values: formValues(targetFields(kind, target, form.platform), form.drafts),
     connections: form.connections.map((c) => {
       const fields = connectionFields(kind, channels, target, c)
       return {
@@ -309,11 +310,13 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
   const target = kind.targets.find((t) => t.id === targetId)
   const commands = readCommands(root.commands, kind, target, at)
   const values = readFieldValues(
-    targetFields(kind, target),
+    targetFields(kind, target, platform),
     root.values,
     "/values",
     {
-      unknown: target ? `Not a value of ${kind.name}'s ${target.id} target` : `Not a value of ${kind.name}`,
+      unknown: (key) =>
+        offPlatform(kind, target, key, platform) ??
+        (target ? `Not a value of ${kind.name}'s ${target.id} target` : `Not a value of ${kind.name}`),
       notObject: "Must be an object of values",
     },
     problems,

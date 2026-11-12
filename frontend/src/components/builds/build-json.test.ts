@@ -56,7 +56,11 @@ const schema: BuildSchemaFieldsFragment = {
       description: null,
       format: "exe",
       platforms: ["windows/amd64", "windows/arm64"],
-      fields: [field({ key: "service_name", type: "string", required: true })],
+      fields: [
+        field({ key: "service_name", type: "string", required: true }),
+        // For one of the target's platforms alone.
+        field({ key: "tuning", type: "enum", default: "v8", options: [{ value: "v8" }, { value: "v9" }], platforms: ["windows/arm64"] }),
+      ],
       channels: [{ moduleName: "http", versions: [2], kinds: ["reverse-call"] }],
     },
   ],
@@ -212,6 +216,22 @@ describe("readBuildJson", () => {
     expect(problems({ ...json(), target: "service", platform: "windows/amd64" })).toEqual({
       "/values/service_name": "Required",
     })
+  })
+
+  it("takes a value for a field of the build's platform alone", () => {
+    const service = { ...json(), target: "service", platform: "windows/arm64", values: { service_name: "svc", tuning: "v9" } }
+    const r = read(service)
+    expect(r.ok && r.problems).toEqual([])
+    expect(r.ok && r.doc.values).toEqual({ service_name: "svc", tuning: "v9" })
+    expect(problems({ ...service, platform: "windows/amd64" })).toEqual({ "/values/tuning": "Only for windows/arm64" })
+  })
+
+  it("leaves a field of another platform out of the form's JSON", () => {
+    const form = { ...initialForm(kind, null, channels), target: "service", platform: "windows/amd64" }
+    const withDrafts = formFromDocument(kind, channels, { ...formDocument(kind, channels, form), values: { service_name: "svc", tuning: "v9" } })
+    expect(formDocument(kind, channels, withDrafts).values).not.toHaveProperty("tuning")
+    // The draft is kept: picked again, the platform finds it.
+    expect(formDocument(kind, channels, { ...withDrafts, platform: "windows/arm64" }).values).toMatchObject({ service_name: "svc", tuning: "v9" })
   })
 
   it("takes the commands the target has, each once, and wants its required ones", () => {

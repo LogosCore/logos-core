@@ -15,6 +15,8 @@ export function fieldNotes(f: FieldDef): string[] {
     notes.push(f.options.map((o) => o.value).join(", "))
   }
   if (f.type === "file") notes.push(acceptText(f))
+  // A build field for some platforms alone.
+  if (f.platforms && f.platforms.length > 0) notes.push(`only for ${f.platforms.join(", ")}`)
   return notes
 }
 

@@ -116,6 +116,7 @@ export const ModuleFieldDefFields = graphql(`
       values
     }
     advanced
+    platforms
   }
 `)
 

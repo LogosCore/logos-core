@@ -174,7 +174,7 @@ describe("parseEndpointImport", () => {
           { key: "headers", type: "string_map", label: "Headers", order: 4, required: false },
         ] as FieldDef[],
       },
-      { kind: "reverse-persistent", fields: [{ key: "base_url", type: "url", label: "Base URL", order: 1, required: true, advanced: false }] },
+      { kind: "reverse-persistent", fields: [{ key: "base_url", type: "url", label: "Base URL", order: 1, required: true, advanced: false, platforms: [] }] },
     ],
   }
   const kinds = new Map([["http", http]])

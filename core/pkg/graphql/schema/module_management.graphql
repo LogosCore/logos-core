@@ -104,6 +104,10 @@ type ModuleField {
   # An action's or a command's param seldom changed: the form shows it
   # under More options, folded.
   advanced: Boolean!
+  # A build field's platforms ("os/arch", either half "any"): it applies
+  # only to builds for one of them (the form shows it, and takes it). Empty:
+  # every platform.
+  platforms: [String!]!
 }
 
 # When a param applies (ModuleField.when): while the param key of its form

@@ -1320,6 +1320,7 @@ type ComplexityRoot struct {
 		Order       func(childComplexity int) int
 		Pattern     func(childComplexity int) int
 		Placeholder func(childComplexity int) int
+		Platforms   func(childComplexity int) int
 		Required    func(childComplexity int) int
 		Type        func(childComplexity int) int
 		Unit        func(childComplexity int) int
@@ -8111,6 +8112,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleField.Placeholder(childComplexity), true
+	case "ModuleField.platforms":
+		if e.ComplexityRoot.ModuleField.Platforms == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Platforms(childComplexity), true
 	case "ModuleField.required":
 		if e.ComplexityRoot.ModuleField.Required == nil {
 			break
@@ -16812,6 +16819,10 @@ type ModuleField {
   # An action's or a command's param seldom changed: the form shows it
   # under More options, folded.
   advanced: Boolean!
+  # A build field's platforms ("os/arch", either half "any"): it applies
+  # only to builds for one of them (the form shows it, and takes it). Empty:
+  # every platform.
+  platforms: [String!]!
 }
 
 # When a param applies (ModuleField.when): while the param key of its form
@@ -24856,6 +24867,8 @@ func (ec *executionContext) fieldContext_BindConnection_fields(_ context.Context
 				return ec.fieldContext_ModuleField_when(ctx, field)
 			case "advanced":
 				return ec.fieldContext_ModuleField_advanced(ctx, field)
+			case "platforms":
+				return ec.fieldContext_ModuleField_platforms(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -26471,6 +26484,8 @@ func (ec *executionContext) fieldContext_BuildChannelKind_fields(_ context.Conte
 				return ec.fieldContext_ModuleField_when(ctx, field)
 			case "advanced":
 				return ec.fieldContext_ModuleField_advanced(ctx, field)
+			case "platforms":
+				return ec.fieldContext_ModuleField_platforms(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -26962,6 +26977,8 @@ func (ec *executionContext) fieldContext_BuildCommand_params(_ context.Context, 
 				return ec.fieldContext_ModuleField_when(ctx, field)
 			case "advanced":
 				return ec.fieldContext_ModuleField_advanced(ctx, field)
+			case "platforms":
+				return ec.fieldContext_ModuleField_platforms(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -27988,6 +28005,8 @@ func (ec *executionContext) fieldContext_BuildSchema_fields(_ context.Context, f
 				return ec.fieldContext_ModuleField_when(ctx, field)
 			case "advanced":
 				return ec.fieldContext_ModuleField_advanced(ctx, field)
+			case "platforms":
+				return ec.fieldContext_ModuleField_platforms(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -28788,6 +28807,8 @@ func (ec *executionContext) fieldContext_BuildTarget_fields(_ context.Context, f
 				return ec.fieldContext_ModuleField_when(ctx, field)
 			case "advanced":
 				return ec.fieldContext_ModuleField_advanced(ctx, field)
+			case "platforms":
+				return ec.fieldContext_ModuleField_platforms(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -50802,6 +50823,8 @@ func (ec *executionContext) fieldContext_ModuleAction_params(_ context.Context, 
 				return ec.fieldContext_ModuleField_when(ctx, field)
 			case "advanced":
 				return ec.fieldContext_ModuleField_advanced(ctx, field)
+			case "platforms":
+				return ec.fieldContext_ModuleField_platforms(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -51760,6 +51783,8 @@ func (ec *executionContext) fieldContext_ModuleConnectionKind_fields(_ context.C
 				return ec.fieldContext_ModuleField_when(ctx, field)
 			case "advanced":
 				return ec.fieldContext_ModuleField_advanced(ctx, field)
+			case "platforms":
+				return ec.fieldContext_ModuleField_platforms(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -51837,6 +51862,8 @@ func (ec *executionContext) fieldContext_ModuleConnectionKind_target(_ context.C
 				return ec.fieldContext_ModuleField_when(ctx, field)
 			case "advanced":
 				return ec.fieldContext_ModuleField_advanced(ctx, field)
+			case "platforms":
+				return ec.fieldContext_ModuleField_platforms(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -52967,6 +52994,35 @@ func (ec *executionContext) fieldContext_ModuleField_advanced(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _ModuleField_platforms(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_platforms,
+		func(ctx context.Context) (any, error) {
+			return obj.Platforms, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_platforms(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleFieldCondition_key(ctx context.Context, field graphql.CollectedField, obj *model.ModuleFieldCondition) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -53710,6 +53766,8 @@ func (ec *executionContext) fieldContext_ModuleProperty_field(_ context.Context,
 				return ec.fieldContext_ModuleField_when(ctx, field)
 			case "advanced":
 				return ec.fieldContext_ModuleField_advanced(ctx, field)
+			case "platforms":
+				return ec.fieldContext_ModuleField_platforms(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
 		},
@@ -99864,6 +99922,11 @@ func (ec *executionContext) _ModuleField(ctx context.Context, sel ast.SelectionS
 			out.Values[i] = ec._ModuleField_when(ctx, field, obj)
 		case "advanced":
 			out.Values[i] = ec._ModuleField_advanced(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "platforms":
+			out.Values[i] = ec._ModuleField_platforms(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
