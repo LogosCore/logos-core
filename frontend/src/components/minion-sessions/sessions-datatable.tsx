@@ -171,6 +171,10 @@ const PICK_TINT = "pointer-events-none absolute inset-0 z-[2] bg-primary/10"
 // The bar down the left edge of the row whose tab is in front.
 const ACTIVE_BAR = "before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary"
 const PIN_LEFT = "left-0 -ml-4 pl-4 -my-2 py-2 grid items-center self-stretch"
+// While selecting, the checkbox is pinned first (PIN_LEFT: the row's 16px
+// padding and its 20px track), and the pinned # after it, at 36px, taking in
+// the 12px gap before it (margin out, padding in) so nothing shows through.
+const PIN_AFTER_CHECK = "left-[36px] -ml-3 pl-3"
 const PIN_RIGHT = "right-0 -mr-4 pr-4 -my-2 py-2 flex items-center self-stretch"
 const PINNED_HEADER = "sticky z-[2] bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-card))]"
 
@@ -379,19 +383,22 @@ export function SessionsDatatable({
               }}
             >
               {selecting && (
-                <Checkbox
-                  aria-label="Select every loaded session"
-                  className="self-center"
-                  checked={selection.all || (order.length > 0 && picked.length === order.length)}
-                  indeterminate={!selection.all && picked.length > 0 && picked.length < order.length}
-                  onCheckedChange={(on) => setSelection(selectLoaded(selection, order, on))}
-                />
+                // Pinned, as the rows' checkboxes: the # pinned after it would cover it.
+                <div className={cn(PINNED_HEADER, "left-0 -ml-4 pl-4 -my-1.5 py-1.5 grid items-center self-stretch")}>
+                  <Checkbox
+                    aria-label="Select every loaded session"
+                    checked={selection.all || (order.length > 0 && picked.length === order.length)}
+                    indeterminate={!selection.all && picked.length > 0 && picked.length < order.length}
+                    onCheckedChange={(on) => setSelection(selectLoaded(selection, order, on))}
+                  />
+                </div>
               )}
               {columns.map((col, i) => (
                 <HeaderCell
                   key={col.id}
                   column={col}
                   pinned={pinned(col, i)}
+                  afterCheck={selecting}
                   onSize={(px) => setSizing({ id: col.id, px, dragging: true })}
                   onSized={(px) => {
                     const next = sizeColumn(layout, col.id, px)
@@ -519,9 +526,10 @@ export function SessionsDatatable({
                     selecting && "select-none",
                     markRowClass(s.mark?.color),
                     pickedSet.has(s.id) && "relative",
-                    // Its tab is in front: a bar down its left edge.
-                    // (On the pinned # cell when there is one: the row's edge scrolls away under it.)
-                    s.id === activeSessionId && !pinnedFirst && cn("relative", ACTIVE_BAR),
+                    // Its tab is in front: a bar down its left edge. On the first
+                    // pinned cell when there is one (the checkbox while selecting,
+                    // else the #): the row's edge scrolls away under it.
+                    s.id === activeSessionId && !selecting && !pinnedFirst && cn("relative", ACTIVE_BAR),
                   )}
                   // While selecting, a click picks the row (shift: a range).
                   onOpen={selecting ? (e) => setSelection(toggleSelected(selection, order, s.id, e.shiftKey)) : undefined}
@@ -555,13 +563,17 @@ export function SessionsDatatable({
                   {(menuButton) => (
                     <>
                       {selecting && (
-                        <Checkbox
-                          aria-label={`Select session ${s.number}`}
-                          // Opaque: on a tinted or styled row its light border alone vanished.
-                          className="pointer-events-none self-center bg-background"
-                          checked={pickedSet.has(s.id)}
-                          tabIndex={-1}
-                        />
+                        // Pinned first: it stays in view as the row scrolls sideways.
+                        <div data-pinned className={cn(PIN_LEFT, s.id === activeSessionId && ACTIVE_BAR)}>
+                          {s.mark?.color === "on-fire" && <SessionFire />}
+                          <Checkbox
+                            aria-label={`Select session ${s.number}`}
+                            // Opaque: on a tinted or styled row its light border alone vanished.
+                            className="pointer-events-none bg-background"
+                            checked={pickedSet.has(s.id)}
+                            tabIndex={-1}
+                          />
+                        </div>
                       )}
                       {columns.map((col, i) => {
                         const cell = (
@@ -579,7 +591,11 @@ export function SessionsDatatable({
                         )
                         // Pinned: in a wrapper that covers what scrolls under it.
                         return pinned(col, i) ? (
-                          <div key={col.id} data-pinned className={cn(PIN_LEFT, s.id === activeSessionId && ACTIVE_BAR)}>
+                          <div
+                            key={col.id}
+                            data-pinned
+                            className={cn(PIN_LEFT, selecting ? PIN_AFTER_CHECK : s.id === activeSessionId && ACTIVE_BAR)}
+                          >
                             {s.mark?.color === "on-fire" && <SessionFire />}
                             {cell}
                           </div>
@@ -642,6 +658,7 @@ export function SessionsDatatable({
 function HeaderCell({
   column,
   pinned,
+  afterCheck,
   onSize,
   onSized,
   layout,
@@ -653,6 +670,8 @@ function HeaderCell({
   column: SessionColumnDef
   /** Stays in view as the table scrolls sideways. */
   pinned: boolean
+  /** Pinned after the selection's pinned checkbox. */
+  afterCheck: boolean
   /** Its width as dragged; onSized on release (null: back to its own). */
   onSize: (px: number) => void
   onSized: (px: number | null) => void
@@ -674,8 +693,9 @@ function HeaderCell({
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
         "group/header relative -mx-1 flex min-w-0 cursor-grab items-center gap-0.5 rounded px-1 py-0.5 select-none hover:bg-muted active:cursor-grabbing",
-        // Its -mx-1 and the row's padding, as the cells' PIN_LEFT.
-        pinned && cn(PINNED_HEADER, "left-0 -ml-5 pl-5"),
+        // Its -mx-1 and the row's padding, as the cells' PIN_LEFT; after the
+        // pinned checkbox while selecting, its -mx-1 and the gap (PIN_AFTER_CHECK).
+        pinned && cn(PINNED_HEADER, afterCheck ? "left-[36px] -ml-4 pl-4" : "left-0 -ml-5 pl-5"),
         isDragging && "z-10 bg-muted shadow-sm",
         (sorted || filtered) && "text-foreground",
       )}
