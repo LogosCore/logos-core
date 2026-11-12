@@ -411,7 +411,8 @@ type Build {
   stages: [BuildStage!]!
   artifact: BuildArtifact
   warnings: [String!]!
-  # The build output, its last 64 KiB.
+  # The output the factory sent with its result, its last 64 KiB: only for a
+  # factory that sends no live log (buildLog has the log either way).
   log: String
   error: BuildError
   createdBy: ModuleActor!
@@ -421,6 +422,32 @@ type Build {
   finishedAt: String
   # When core stops waiting: for a factory to take it, then for its result.
   deadline: String!
+}
+
+# A page of a build's log.
+type BuildLog {
+  # The factory sent the log as it built, by step. False: the lines are
+  # the log of its result, without steps (or none yet), and cursor stays.
+  live: Boolean!
+  lines: [BuildLogLine!]!
+  # Where the next page starts: buildLog's after.
+  cursor: Int!
+  # The log goes on past this page: ask for the next at once.
+  more: Boolean!
+  # Lines core dropped from the log's start: it keeps a build's last 8 MiB.
+  trimmed: Int!
+}
+
+# A line of a build's log, or a mark where lines are missing.
+type BuildLogLine {
+  # The id of the plan's step it was written in; null for none.
+  step: String
+  # When the factory wrote it; null in a result's log.
+  at: String
+  text: String!
+  # Set on a mark instead of a line: that many lines are missing here, 0
+  # when how many is not known (a part of the log never arrived).
+  missing: Int
 }
 
 # What a successful build created. Its id is its build's.
@@ -468,6 +495,14 @@ extend type Query {
 
   # One build; null when it does not exist. Needs at least viewer.
   build(id: ID!): Build
+    @hasPermission(permission: "operation:member")
+
+  # A page of a build's log, after the chunk after (0 or none: from its
+  # start): its lines as the factory sent them while it built, each with
+  # its step, or the log of its result for a factory that sends no live
+  # log. Ask again with the page's cursor for the lines that came since.
+  # Null when the build does not exist. Needs at least viewer.
+  buildLog(id: ID!, after: Int): BuildLog
     @hasPermission(permission: "operation:member")
 
   # An operation's minions, newest first. Needs at least viewer.

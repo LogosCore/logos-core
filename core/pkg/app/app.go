@@ -83,6 +83,7 @@ type Repositories struct {
 	ChannelEndpoint    repository.IChannelEndpointRepository
 	BuildFile          repository.IBuildFileRepository
 	Build              repository.IBuildRepository
+	BuildLog           repository.IBuildLogRepository
 	Minion             repository.IMinionRepository
 	MinionStaging      repository.IMinionStagingRepository
 	MinionSession      repository.IMinionSessionRepository
@@ -299,6 +300,7 @@ func NewApp() (*App, error) {
 	minionSync.WithChannelSchemas(endpoints)
 	minionSync.WithFactoryLinks(factoryLinks)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
+	rpcServer.RegisterHandler(protocol.TypeFactoryBuildLog, buildSvc.HandleLog)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
 
 	// --- Future integration patterns ---

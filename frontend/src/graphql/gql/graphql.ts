@@ -260,6 +260,21 @@ export type BuildInput = {
   values: Scalars['JSON']['input'];
 };
 
+export type BuildLog = {
+  cursor: Scalars['Int']['output'];
+  lines: Array<BuildLogLine>;
+  live: Scalars['Boolean']['output'];
+  more: Scalars['Boolean']['output'];
+  trimmed: Scalars['Int']['output'];
+};
+
+export type BuildLogLine = {
+  at?: Maybe<Scalars['String']['output']>;
+  missing?: Maybe<Scalars['Int']['output']>;
+  step?: Maybe<Scalars['String']['output']>;
+  text: Scalars['String']['output'];
+};
+
 export type BuildMatchInput = {
   moduleNames?: InputMaybe<Array<Scalars['String']['input']>>;
   search?: InputMaybe<Scalars['String']['input']>;
@@ -2623,6 +2638,7 @@ export type PresenceAction =
 export type Query = {
   build?: Maybe<Build>;
   buildFiles: Array<BuildFile>;
+  buildLog?: Maybe<BuildLog>;
   builds: BuildConnection;
   channelEndpoint?: Maybe<ChannelEndpoint>;
   channelEndpointExport: Scalars['JSON']['output'];
@@ -2727,6 +2743,12 @@ export type QueryBuildArgs = {
 
 export type QueryBuildFilesArgs = {
   operationId: Scalars['ID']['input'];
+};
+
+
+export type QueryBuildLogArgs = {
+  after?: InputMaybe<Scalars['Int']['input']>;
+  id: Scalars['ID']['input'];
 };
 
 
@@ -4184,7 +4206,15 @@ export type BuildQueryVariables = Exact<{
 }>;
 
 
-export type BuildQuery = { build?: { values: unknown, commands: Array<string>, connections: unknown, connectionDescriptions: Array<string>, failover: unknown, maxTasks?: number | null, compression?: string | null, uniqueErrorCodes: boolean, crypto?: unknown | null, envelope: string, codec?: unknown | null, warnings: Array<string>, log?: string | null, id: string, operationId: string, persistedSession?: string | null, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, errorCodes: Array<{ exitCode: number, code: number, label: string, description?: string | null, fixed: boolean }>, cancelledBy?: { type: string, id: string, name?: string | null } | null, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
+export type BuildQuery = { build?: { values: unknown, commands: Array<string>, connections: unknown, connectionDescriptions: Array<string>, failover: unknown, maxTasks?: number | null, compression?: string | null, uniqueErrorCodes: boolean, crypto?: unknown | null, envelope: string, codec?: unknown | null, warnings: Array<string>, id: string, operationId: string, persistedSession?: string | null, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, errorCodes: Array<{ exitCode: number, code: number, label: string, description?: string | null, fixed: boolean }>, cancelledBy?: { type: string, id: string, name?: string | null } | null, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
+
+export type BuildLogQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+  after?: InputMaybe<Scalars['Int']['input']>;
+}>;
+
+
+export type BuildLogQuery = { buildLog?: { live: boolean, cursor: number, more: boolean, trimmed: number, lines: Array<{ step?: string | null, at?: string | null, text: string, missing?: number | null }> } | null };
 
 export type BuildRequestQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -8021,7 +8051,6 @@ export const BuildDocument = new TypedDocumentString(`
     envelope
     codec
     warnings
-    log
     cancelledBy {
       type
       id
@@ -8070,6 +8099,22 @@ export const BuildDocument = new TypedDocumentString(`
   finishedAt
   deadline
 }`) as unknown as TypedDocumentString<BuildQuery, BuildQueryVariables>;
+export const BuildLogDocument = new TypedDocumentString(`
+    query BuildLog($id: ID!, $after: Int) {
+  buildLog(id: $id, after: $after) {
+    live
+    cursor
+    more
+    trimmed
+    lines {
+      step
+      at
+      text
+      missing
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<BuildLogQuery, BuildLogQueryVariables>;
 export const BuildRequestDocument = new TypedDocumentString(`
     query BuildRequest($id: ID!) {
   build(id: $id) {

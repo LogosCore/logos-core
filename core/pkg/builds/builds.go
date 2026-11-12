@@ -413,6 +413,9 @@ func (s *Service) DeleteBuild(ctx context.Context, id string, actor models.Modul
 			return fmt.Errorf("delete the reserved session: %w", err)
 		}
 	}
+	if err := s.repos.Logs.DeleteByBuildID(ctx, b.BuildID); err != nil {
+		return fmt.Errorf("delete the build log: %w", err)
+	}
 	if _, err := s.repos.Builds.Delete(ctx, b.BuildID); err != nil {
 		return fmt.Errorf("delete build: %w", err)
 	}
@@ -502,6 +505,7 @@ func (s *Service) DeleteOperationData(ctx context.Context, op uuid.UUID) error {
 	}
 	for name, del := range map[string]func(context.Context, uuid.UUID) error{
 		"builds":  s.repos.Builds.DeleteByOperationID,
+		"logs":    s.repos.Logs.DeleteByOperationID,
 		"files":   s.repos.Files.DeleteByOperationID,
 		"minions": s.repos.Minions.DeleteByOperationID,
 	} {

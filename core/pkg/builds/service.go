@@ -53,8 +53,10 @@ type Store interface {
 
 // Repos are the stores the service writes.
 type Repos struct {
-	Files   repository.IBuildFileRepository
-	Builds  repository.IBuildRepository
+	Files  repository.IBuildFileRepository
+	Builds repository.IBuildRepository
+	// Logs are the builds' live logs.
+	Logs    repository.IBuildLogRepository
 	Minions repository.IMinionRepository
 	// Sessions are the minion sessions a build may persist, and
 	// Reservations the ones reserved with builds (a new persisted session).

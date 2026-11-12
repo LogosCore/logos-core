@@ -179,8 +179,18 @@ type Build struct {
 
 	Artifact *BuildArtifact `bson:"artifact,omitempty" json:"artifact,omitempty"`
 	Warnings []string       `bson:"warnings,omitempty" json:"warnings,omitempty"`
-	Log      string         `bson:"log,omitempty" json:"log,omitempty"`
-	Error    *BuildError    `bson:"error,omitempty" json:"error,omitempty"`
+	// Log is the output the factory sent with its result: kept only when
+	// it sent no live log (LogStreamed), which is in the build log chunks
+	// instead.
+	Log string `bson:"log,omitempty" json:"log,omitempty"`
+	// LogStreamed is set by the factory's first live log chunk
+	// (factory.build.log); LogBytes is the text core keeps of it, and
+	// LogTrimmed the lines it dropped from its start to keep within
+	// builds.MaxBuildLogBytes.
+	LogStreamed bool        `bson:"log_streamed,omitempty" json:"-"`
+	LogBytes    int64       `bson:"log_bytes,omitempty" json:"-"`
+	LogTrimmed  int64       `bson:"log_trimmed,omitempty" json:"-"`
+	Error       *BuildError `bson:"error,omitempty" json:"error,omitempty"`
 
 	CreatedBy   ModuleActor  `bson:"created_by" json:"created_by"`
 	CancelledBy *ModuleActor `bson:"cancelled_by,omitempty" json:"cancelled_by,omitempty"`
@@ -252,6 +262,27 @@ type BuildStepReport struct {
 	// StartedAt is when the factory first said it was on the step.
 	StartedAt time.Time `bson:"started_at" json:"started_at"`
 	Message   string    `bson:"message,omitempty" json:"message,omitempty"`
+}
+
+// BuildLogChunk is a chunk of a build's live log as its factory sent it
+// (factory.build.log): its lines, each with its plan step, numbered by Seq.
+type BuildLogChunk struct {
+	BuildID     uuid.UUID      `bson:"build_id"`
+	OperationID uuid.UUID      `bson:"operation_id"`
+	Seq         int64          `bson:"seq"`
+	Lines       []BuildLogLine `bson:"lines"`
+	// Dropped is how many lines the factory dropped before these.
+	Dropped int64 `bson:"dropped,omitempty"`
+	// Bytes is the lines' text, all together.
+	Bytes      int64     `bson:"bytes"`
+	ReceivedAt time.Time `bson:"received_at"`
+}
+
+// BuildLogLine is one line of a build's live log.
+type BuildLogLine struct {
+	Step string    `bson:"step,omitempty"`
+	At   time.Time `bson:"at"`
+	Text string    `bson:"text"`
 }
 
 // BuildArtifact is a build's artifact: what the factory reported, checked

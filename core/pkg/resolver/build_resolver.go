@@ -39,6 +39,7 @@ type BuildManager interface {
 	Builds(ctx context.Context, op uuid.UUID, filter repository.BuildFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]models.Build, error)
 	CountBuilds(ctx context.Context, op uuid.UUID, filter repository.BuildFilter) (int64, error)
 	Build(ctx context.Context, id string) (*models.Build, error)
+	Log(ctx context.Context, b *models.Build, after int64) (builds.LogPage, error)
 	CreateBuild(ctx context.Context, op uuid.UUID, in builds.BuildInput) (*models.Build, error)
 	CancelBuild(ctx context.Context, id string, actor models.ModuleActor) (*models.Build, error)
 	DeleteArtifact(ctx context.Context, id string) (*models.Build, error)
@@ -55,6 +56,7 @@ type IBuildResolver interface {
 	DeleteBuildFile(ctx context.Context, id string) (bool, error)
 	Builds(ctx context.Context, operationID string, search *string, states []string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.BuildConnection, error)
 	Build(ctx context.Context, id string) (*model.Build, error)
+	BuildLog(ctx context.Context, id string, after *int) (*model.BuildLog, error)
 	CreateBuild(ctx context.Context, operationID string, input model.BuildInput) (*model.Build, error)
 	CancelBuild(ctx context.Context, id string) (*model.Build, error)
 	DeleteBuild(ctx context.Context, id string) (bool, error)
@@ -184,6 +186,38 @@ func (r *buildResolver) Build(ctx context.Context, id string) (*model.Build, err
 		return nil, err
 	}
 	return toBuildModel(b), nil
+}
+
+func (r *buildResolver) BuildLog(ctx context.Context, id string, after *int) (*model.BuildLog, error) {
+	b, err := r.builds.Build(ctx, id)
+	if errors.Is(err, builds.ErrBuildNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := r.authorize(ctx, b.OperationID, models.OperationRoleViewer, false); err != nil {
+		return nil, err
+	}
+	from := int64(0)
+	if after != nil {
+		from = int64(*after)
+	}
+	page, err := r.builds.Log(ctx, b, from)
+	if err != nil {
+		return nil, err
+	}
+	out := &model.BuildLog{Live: page.Live, Cursor: int(page.Cursor), More: page.More, Trimmed: int(page.Trimmed),
+		Lines: make([]*model.BuildLogLine, len(page.Lines))}
+	for i, l := range page.Lines {
+		line := &model.BuildLogLine{Step: strPtr(l.Step), At: stageTime(l.At), Text: l.Text}
+		if l.Missing != nil {
+			n := int(*l.Missing)
+			line.Missing = &n
+		}
+		out.Lines[i] = line
+	}
+	return out, nil
 }
 
 func (r *buildResolver) CreateBuild(ctx context.Context, operationID string, input model.BuildInput) (*model.Build, error) {

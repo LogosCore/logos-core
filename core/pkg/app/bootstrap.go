@@ -84,6 +84,7 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		ChannelEndpoint:    repository.NewChannelEndpointRepository(db),
 		BuildFile:          repository.NewBuildFileRepository(db),
 		Build:              repository.NewBuildRepository(db),
+		BuildLog:           repository.NewBuildLogRepository(db),
 		Minion:             repository.NewMinionRepository(db),
 		MinionStaging:      repository.NewMinionStagingRepository(db),
 		MinionSession:      repository.NewMinionSessionRepository(db),
@@ -492,7 +493,7 @@ func newBuildService(ctx context.Context, e *environment.EnvironmentSettings, l 
 		return nil, fmt.Errorf("failed to initialize the build links: %w", err)
 	}
 	return builds.NewService(
-		builds.Repos{Files: repos.BuildFile, Builds: repos.Build, Minions: repos.Minion, Sessions: repos.MinionSession, Reservations: repos.MinionReservation},
+		builds.Repos{Files: repos.BuildFile, Builds: repos.Build, Logs: repos.BuildLog, Minions: repos.Minion, Sessions: repos.MinionSession, Reservations: repos.MinionReservation},
 		repos.ModuleRegistry, endpoints, rpc, store, links,
 		builds.Config{Timeout: e.BuildTimeout, FileMaxSize: e.BuildFileMaxSize, ArtifactMaxSize: e.BuildArtifactMaxSize},
 		l.Named("builds"),

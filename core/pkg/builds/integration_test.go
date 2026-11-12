@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +64,7 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	// Not started: the running core's scheduler is the one that offers it.
 	svc := NewService(Repos{
 		Files: repository.NewBuildFileRepository(db), Builds: repository.NewBuildRepository(db),
+		Logs:    repository.NewBuildLogRepository(db),
 		Minions: repository.NewMinionRepository(db),
 	}, registry, channels, rpc, store, links, Config{}, zap.NewNop())
 
@@ -99,8 +101,34 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// BOB sends its log live: every line with the step it was written in.
+	var log []LogLine
+	for after := int64(0); ; {
+		page, err := svc.Log(ctx, b, after)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !page.Live {
+			t.Fatalf("BOB sent no live log (the result's: %q)", b.Log)
+		}
+		log, after = append(log, page.Lines...), page.Cursor
+		if !page.More {
+			break
+		}
+	}
+	logged := func(step, text string) bool {
+		return slices.ContainsFunc(log, func(l LogLine) bool { return l.Step == step && strings.Contains(l.Text, text) })
+	}
+	logText := ""
+	for _, l := range log {
+		logText += l.Step + ": " + l.Text + "\n"
+	}
 	if b.State != models.BuildStateSucceeded {
-		t.Fatalf("build %s: %+v\nlog: %s", b.State, b.Error, b.Log)
+		t.Fatalf("build %s: %+v\nlog:\n%s", b.State, b.Error, logText)
+	}
+	if b.Log != "" || !logged("badge", "badge checked") || !logged("compile", "$ GOOS=linux GOARCH=amd64") ||
+		!logged("compile", "compiled a ") || !logged("upload", "uploaded bob-") {
+		t.Fatalf("the log by step:\n%s(the result's: %q)", logText, b.Log)
 	}
 	t.Logf("built by %s (%s): plan %+v, commands %v", b.Instance, b.FactoryVersion, b.Plan, b.Commands)
 	// BOB's plan: the badge was given, so it was checked; the last step is the
@@ -157,8 +185,8 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	for i, d := range drawn {
 		parts[i] = fmt.Sprintf("%d→%d", d.Code, d.ExitCode)
 	}
-	if want := "exit codes of its own: " + strings.Join(parts, ", "); !strings.Contains(b.Log, want) {
-		t.Fatalf("BOB's log lacks %q:\n%s", want, b.Log)
+	if want := "exit codes of its own: " + strings.Join(parts, ", "); !logged("compile", want) {
+		t.Fatalf("BOB's log lacks %q:\n%s", want, logText)
 	}
 	// The descriptions stayed in core.
 	if strings.Contains(string(raw), "integration note") || b.ConnectionDescriptions[0] != "integration note, core's own" ||

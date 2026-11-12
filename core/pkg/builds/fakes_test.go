@@ -595,3 +595,94 @@ func (f *fakeBuilds) setBuild(id uuid.UUID, change func(b *models.Build)) {
 	defer f.mu.Unlock()
 	change(f.rows[id])
 }
+
+func (f *fakeBuilds) AddLog(_ context.Context, id uuid.UUID, instance string, bytes int64) (int64, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	b, ok := f.rows[id]
+	if !ok || b.State != models.BuildStateBuilding || b.Instance != instance {
+		return 0, false, nil
+	}
+	b.LogStreamed, b.LogBytes = true, b.LogBytes+bytes
+	return b.LogBytes, true, nil
+}
+
+func (f *fakeBuilds) TrimmedLog(_ context.Context, id uuid.UUID, bytes, lines int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if b, ok := f.rows[id]; ok {
+		b.LogBytes, b.LogTrimmed = b.LogBytes-bytes, b.LogTrimmed+lines
+	}
+	return nil
+}
+
+// fakeLogs keeps builds' live log chunks in order of arrival.
+type fakeLogs struct {
+	mu     sync.Mutex
+	chunks []models.BuildLogChunk
+}
+
+func (f *fakeLogs) Append(_ context.Context, c *models.BuildLogChunk) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, o := range f.chunks {
+		if o.BuildID == c.BuildID && o.Seq == c.Seq {
+			return false, nil
+		}
+	}
+	f.chunks = append(f.chunks, *c)
+	return true, nil
+}
+
+func (f *fakeLogs) of(id uuid.UUID) []models.BuildLogChunk {
+	var out []models.BuildLogChunk
+	for _, c := range f.chunks {
+		if c.BuildID == id {
+			out = append(out, c)
+		}
+	}
+	slices.SortFunc(out, func(a, b models.BuildLogChunk) int { return int(a.Seq - b.Seq) })
+	return out
+}
+
+func (f *fakeLogs) Page(_ context.Context, id uuid.UUID, after, limit int64) ([]models.BuildLogChunk, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []models.BuildLogChunk
+	for _, c := range f.of(id) {
+		if c.Seq > after && int64(len(out)) < limit {
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeLogs) TrimStart(_ context.Context, id uuid.UUID, bytes int64) (int64, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var b, l int64
+	drop := map[int64]bool{}
+	for _, c := range f.of(id) {
+		if b >= bytes {
+			break
+		}
+		b, l = b+c.Bytes, l+int64(len(c.Lines))
+		drop[c.Seq] = true
+	}
+	f.chunks = slices.DeleteFunc(f.chunks, func(c models.BuildLogChunk) bool { return c.BuildID == id && drop[c.Seq] })
+	return b, l, nil
+}
+
+func (f *fakeLogs) DeleteByBuildID(_ context.Context, id uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.chunks = slices.DeleteFunc(f.chunks, func(c models.BuildLogChunk) bool { return c.BuildID == id })
+	return nil
+}
+
+func (f *fakeLogs) DeleteByOperationID(_ context.Context, op uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.chunks = slices.DeleteFunc(f.chunks, func(c models.BuildLogChunk) bool { return c.OperationID == op })
+	return nil
+}

@@ -213,6 +213,21 @@ type BuildInput struct {
 	UniqueErrorCodes    *bool                   `json:"uniqueErrorCodes,omitempty"`
 }
 
+type BuildLog struct {
+	Live    bool            `json:"live"`
+	Lines   []*BuildLogLine `json:"lines"`
+	Cursor  int             `json:"cursor"`
+	More    bool            `json:"more"`
+	Trimmed int             `json:"trimmed"`
+}
+
+type BuildLogLine struct {
+	Step    *string `json:"step,omitempty"`
+	At      *string `json:"at,omitempty"`
+	Text    string  `json:"text"`
+	Missing *int    `json:"missing,omitempty"`
+}
+
 type BuildMatchInput struct {
 	Search      *string  `json:"search,omitempty"`
 	States      []string `json:"states,omitempty"`

@@ -193,11 +193,29 @@ export const BuildQuery = graphql(`
       envelope
       codec
       warnings
-      log
       cancelledBy {
         type
         id
         name
+      }
+    }
+  }
+`)
+
+// A page of a build's log, from a cursor: the Pipeline tab polls it while
+// the build runs, asking only for what came since.
+export const BuildLogQuery = graphql(`
+  query BuildLog($id: ID!, $after: Int) {
+    buildLog(id: $id, after: $after) {
+      live
+      cursor
+      more
+      trimmed
+      lines {
+        step
+        at
+        text
+        missing
       }
     }
   }

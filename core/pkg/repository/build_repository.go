@@ -166,6 +166,14 @@ type IBuildRepository interface {
 	// without dots) at at: the step's first report time is kept, its message
 	// replaced. False when the build is not building there.
 	ReportStep(ctx context.Context, buildID uuid.UUID, instance, step, message string, at time.Time) (bool, error)
+	// AddLog records a live log chunk of bytes of text that instance sent
+	// while it builds the build: the build's log is live from then on.
+	// It returns the bytes kept of the log, these with them; false when
+	// the build is not building there.
+	AddLog(ctx context.Context, buildID uuid.UUID, instance string, bytes int64) (int64, bool, error)
+	// TrimmedLog records that the start of the build's live log went:
+	// bytes of text, lines lines.
+	TrimmedLog(ctx context.Context, buildID uuid.UUID, bytes, lines int64) error
 	// RecordResult stores a succeeded result, received at at, whose artifact
 	// is still to be checked. False when the build is not building on
 	// instance, or a result was already recorded.
@@ -421,6 +429,25 @@ func reportStepUpdate(step, message string, at time.Time) bson.M {
 		u["$unset"] = bson.M{key + ".message": ""}
 	}
 	return u
+}
+
+func (r *buildRepository) AddLog(ctx context.Context, buildID uuid.UUID, instance string, bytes int64) (int64, bool, error) {
+	var b models.Build
+	err := r.coll.Find(ctx, buildingOn(buildID, instance)).Select(bson.M{"log_bytes": 1}).Apply(qmgo.Change{
+		Update:    bson.M{"$set": bson.M{"log_streamed": true}, "$inc": bson.M{"log_bytes": bytes}},
+		ReturnNew: true,
+	}, &b)
+	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return b.LogBytes, true, nil
+}
+
+func (r *buildRepository) TrimmedLog(ctx context.Context, buildID uuid.UUID, bytes, lines int64) error {
+	return r.coll.UpdateOne(ctx, bson.M{"build_id": buildID}, bson.M{"$inc": bson.M{"log_bytes": -bytes, "log_trimmed": lines}})
 }
 
 func (r *buildRepository) RecordResult(ctx context.Context, buildID uuid.UUID, instance string, artifact models.BuildArtifact, warnings []string, log string, at time.Time) (bool, error) {

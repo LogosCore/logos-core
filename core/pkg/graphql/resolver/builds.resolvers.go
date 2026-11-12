@@ -68,6 +68,11 @@ func (r *queryResolver) Build(ctx context.Context, id string) (*model.Build, err
 	return r.BuildResolver.Build(ctx, id)
 }
 
+// BuildLog is the resolver for the buildLog field.
+func (r *queryResolver) BuildLog(ctx context.Context, id string, after *int) (*model.BuildLog, error) {
+	return r.BuildResolver.BuildLog(ctx, id, after)
+}
+
 // Minions is the resolver for the minions field.
 func (r *queryResolver) Minions(ctx context.Context, operationID string) ([]*model.Minion, error) {
 	return r.BuildResolver.Minions(ctx, operationID)

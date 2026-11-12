@@ -93,6 +93,7 @@ type rig struct {
 	minions  *fakeMinions
 	sessions *fakeSessions
 	reserved *fakeReservations
+	logs     *fakeLogs
 	clock    time.Time
 }
 
@@ -110,13 +111,14 @@ func newRig(t *testing.T) *rig {
 		store:   &fakeStore{objects: map[string][]byte{}},
 		files:   &fakeFiles{rows: map[uuid.UUID]models.BuildFile{}},
 		builds:  &fakeBuilds{rows: map[uuid.UUID]*models.Build{}},
+		logs:    &fakeLogs{},
 		minions: &fakeMinions{rows: map[uuid.UUID]models.Minion{}},
 		clock:   time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC),
 	}
 	r.reg.setActive(bobInstance("bob-1", 1))
 	r.sessions = &fakeSessions{rows: map[uuid.UUID]*models.MinionSession{}}
 	r.reserved = &fakeReservations{rows: map[uuid.UUID]models.MinionSessionReservation{}}
-	r.svc = NewService(Repos{Files: r.files, Builds: r.builds, Minions: r.minions, Sessions: r.sessions, Reservations: r.reserved},
+	r.svc = NewService(Repos{Files: r.files, Builds: r.builds, Logs: r.logs, Minions: r.minions, Sessions: r.sessions, Reservations: r.reserved},
 		r.reg, r.chs, r.rpc, r.store, testLinks, Config{}, zap.NewNop())
 	r.svc.now = func() time.Time { return r.clock }
 	t.Cleanup(r.svc.Stop)

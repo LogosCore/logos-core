@@ -74,7 +74,7 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 	if r.Status == protocol.BuildFailed {
 		ok, err := s.repos.Builds.Finish(ctx, b.BuildID, []string{models.BuildStateBuilding}, repository.BuildOutcome{
 			State: models.BuildStateFailed, Error: &models.BuildError{Code: r.Error.Code, Message: r.Error.Message},
-			Warnings: r.Warnings, Log: r.Log, At: s.now(),
+			Warnings: r.Warnings, Log: resultLog(b, r), At: s.now(),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("record a failed build: %w", err)
@@ -100,7 +100,7 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 		ok, err := s.repos.Builds.Finish(ctx, b.BuildID, []string{models.BuildStateBuilding}, repository.BuildOutcome{
 			State: models.BuildStateFailed, Error: &models.BuildError{Code: models.BuildErrorArtifactTooLarge, Message: fmt.Sprintf(
 				"the factory reported a %d-byte artifact; it was given a limit of %d bytes", r.Artifact.Size, limit)},
-			Warnings: r.Warnings, Log: r.Log, At: s.now(),
+			Warnings: r.Warnings, Log: resultLog(b, r), At: s.now(),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("record a build over its artifact limit: %w", err)
@@ -116,7 +116,7 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 		Filename: r.Artifact.Filename, Size: r.Artifact.Size, SHA256: r.Artifact.SHA256,
 		MediaType: r.Artifact.MediaType, ObjectKey: artifactKey(b.OperationID, b.BuildID),
 	}
-	ok, err := s.repos.Builds.RecordResult(ctx, b.BuildID, instance, art, r.Warnings, r.Log, s.now())
+	ok, err := s.repos.Builds.RecordResult(ctx, b.BuildID, instance, art, r.Warnings, resultLog(b, r), s.now())
 	if err != nil {
 		return nil, fmt.Errorf("record a build result: %w", err)
 	}
@@ -125,6 +125,17 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 	}
 	s.verifyAsync(b.BuildID)
 	return recorded, nil
+}
+
+// resultLog is the log of a result to keep: none when the factory sent its
+// log live, which core has whole (the factory sends its last lines before
+// the result); the result's otherwise, as a factory that does not send a
+// live log has its output nowhere else.
+func resultLog(b *models.Build, r protocol.BuildResult) string {
+	if b.LogStreamed {
+		return ""
+	}
+	return r.Log
 }
 
 // resultRecorded reports whether a finished build ended with its factory's

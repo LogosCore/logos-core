@@ -274,6 +274,21 @@ type ComplexityRoot struct {
 		UploadedBy  func(childComplexity int) int
 	}
 
+	BuildLog struct {
+		Cursor  func(childComplexity int) int
+		Lines   func(childComplexity int) int
+		Live    func(childComplexity int) int
+		More    func(childComplexity int) int
+		Trimmed func(childComplexity int) int
+	}
+
+	BuildLogLine struct {
+		At      func(childComplexity int) int
+		Missing func(childComplexity int) int
+		Step    func(childComplexity int) int
+		Text    func(childComplexity int) int
+	}
+
 	BuildProblem struct {
 		Key     func(childComplexity int) int
 		Message func(childComplexity int) int
@@ -1608,6 +1623,7 @@ type ComplexityRoot struct {
 	Query struct {
 		Build                              func(childComplexity int, id string) int
 		BuildFiles                         func(childComplexity int, operationID string) int
+		BuildLog                           func(childComplexity int, id string, after *int) int
 		Builds                             func(childComplexity int, operationID string, search *string, states []string, moduleNames []string, first *int, after *string, last *int, before *string) int
 		ChannelEndpoint                    func(childComplexity int, id string) int
 		ChannelEndpointExport              func(childComplexity int, id string) int
@@ -2405,6 +2421,7 @@ type QueryResolver interface {
 	BuildFiles(ctx context.Context, operationID string) ([]*model.BuildFile, error)
 	Builds(ctx context.Context, operationID string, search *string, states []string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.BuildConnection, error)
 	Build(ctx context.Context, id string) (*model.Build, error)
+	BuildLog(ctx context.Context, id string, after *int) (*model.BuildLog, error)
 	Minions(ctx context.Context, operationID string) ([]*model.Minion, error)
 	ChannelKinds(ctx context.Context) ([]*model.ChannelKind, error)
 	ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, kinds []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error)
@@ -3524,6 +3541,62 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildFile.UploadedBy(childComplexity), true
+
+	case "BuildLog.cursor":
+		if e.ComplexityRoot.BuildLog.Cursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildLog.Cursor(childComplexity), true
+	case "BuildLog.lines":
+		if e.ComplexityRoot.BuildLog.Lines == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildLog.Lines(childComplexity), true
+	case "BuildLog.live":
+		if e.ComplexityRoot.BuildLog.Live == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildLog.Live(childComplexity), true
+	case "BuildLog.more":
+		if e.ComplexityRoot.BuildLog.More == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildLog.More(childComplexity), true
+	case "BuildLog.trimmed":
+		if e.ComplexityRoot.BuildLog.Trimmed == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildLog.Trimmed(childComplexity), true
+
+	case "BuildLogLine.at":
+		if e.ComplexityRoot.BuildLogLine.At == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildLogLine.At(childComplexity), true
+	case "BuildLogLine.missing":
+		if e.ComplexityRoot.BuildLogLine.Missing == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildLogLine.Missing(childComplexity), true
+	case "BuildLogLine.step":
+		if e.ComplexityRoot.BuildLogLine.Step == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildLogLine.Step(childComplexity), true
+	case "BuildLogLine.text":
+		if e.ComplexityRoot.BuildLogLine.Text == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildLogLine.Text(childComplexity), true
 
 	case "BuildProblem.key":
 		if e.ComplexityRoot.BuildProblem.Key == nil {
@@ -10048,6 +10121,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.BuildFiles(childComplexity, args["operationId"].(string)), true
+	case "Query.buildLog":
+		if e.ComplexityRoot.Query.BuildLog == nil {
+			break
+		}
+
+		args, err := ec.field_Query_buildLog_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.BuildLog(childComplexity, args["id"].(string), args["after"].(*int)), true
 	case "Query.builds":
 		if e.ComplexityRoot.Query.Builds == nil {
 			break
@@ -13759,7 +13843,8 @@ type Build {
   stages: [BuildStage!]!
   artifact: BuildArtifact
   warnings: [String!]!
-  # The build output, its last 64 KiB.
+  # The output the factory sent with its result, its last 64 KiB: only for a
+  # factory that sends no live log (buildLog has the log either way).
   log: String
   error: BuildError
   createdBy: ModuleActor!
@@ -13769,6 +13854,32 @@ type Build {
   finishedAt: String
   # When core stops waiting: for a factory to take it, then for its result.
   deadline: String!
+}
+
+# A page of a build's log.
+type BuildLog {
+  # The factory sent the log as it built, by step. False: the lines are
+  # the log of its result, without steps (or none yet), and cursor stays.
+  live: Boolean!
+  lines: [BuildLogLine!]!
+  # Where the next page starts: buildLog's after.
+  cursor: Int!
+  # The log goes on past this page: ask for the next at once.
+  more: Boolean!
+  # Lines core dropped from the log's start: it keeps a build's last 8 MiB.
+  trimmed: Int!
+}
+
+# A line of a build's log, or a mark where lines are missing.
+type BuildLogLine {
+  # The id of the plan's step it was written in; null for none.
+  step: String
+  # When the factory wrote it; null in a result's log.
+  at: String
+  text: String!
+  # Set on a mark instead of a line: that many lines are missing here, 0
+  # when how many is not known (a part of the log never arrived).
+  missing: Int
 }
 
 # What a successful build created. Its id is its build's.
@@ -13816,6 +13927,14 @@ extend type Query {
 
   # One build; null when it does not exist. Needs at least viewer.
   build(id: ID!): Build
+    @hasPermission(permission: "operation:member")
+
+  # A page of a build's log, after the chunk after (0 or none: from its
+  # start): its lines as the factory sent them while it built, each with
+  # its step, or the log of its result for a factory that sends no live
+  # log. Ask again with the page's cursor for the lines that came since.
+  # Null when the build does not exist. Needs at least viewer.
+  buildLog(id: ID!, after: Int): BuildLog
     @hasPermission(permission: "operation:member")
 
   # An operation's minions, newest first. Needs at least viewer.
@@ -20803,6 +20922,22 @@ func (ec *executionContext) field_Query_buildFiles_args(ctx context.Context, raw
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_buildLog_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_build_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -27775,6 +27910,277 @@ func (ec *executionContext) fieldContext_BuildFile_createdAt(_ context.Context, 
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildLog_live(ctx context.Context, field graphql.CollectedField, obj *model.BuildLog) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildLog_live,
+		func(ctx context.Context) (any, error) {
+			return obj.Live, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildLog_live(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildLog_lines(ctx context.Context, field graphql.CollectedField, obj *model.BuildLog) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildLog_lines,
+		func(ctx context.Context) (any, error) {
+			return obj.Lines, nil
+		},
+		nil,
+		ec.marshalNBuildLogLine2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildLogLineᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildLog_lines(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "step":
+				return ec.fieldContext_BuildLogLine_step(ctx, field)
+			case "at":
+				return ec.fieldContext_BuildLogLine_at(ctx, field)
+			case "text":
+				return ec.fieldContext_BuildLogLine_text(ctx, field)
+			case "missing":
+				return ec.fieldContext_BuildLogLine_missing(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type BuildLogLine", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildLog_cursor(ctx context.Context, field graphql.CollectedField, obj *model.BuildLog) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildLog_cursor,
+		func(ctx context.Context) (any, error) {
+			return obj.Cursor, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildLog_cursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildLog_more(ctx context.Context, field graphql.CollectedField, obj *model.BuildLog) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildLog_more,
+		func(ctx context.Context) (any, error) {
+			return obj.More, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildLog_more(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildLog_trimmed(ctx context.Context, field graphql.CollectedField, obj *model.BuildLog) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildLog_trimmed,
+		func(ctx context.Context) (any, error) {
+			return obj.Trimmed, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildLog_trimmed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildLogLine_step(ctx context.Context, field graphql.CollectedField, obj *model.BuildLogLine) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildLogLine_step,
+		func(ctx context.Context) (any, error) {
+			return obj.Step, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildLogLine_step(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildLogLine",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildLogLine_at(ctx context.Context, field graphql.CollectedField, obj *model.BuildLogLine) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildLogLine_at,
+		func(ctx context.Context) (any, error) {
+			return obj.At, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildLogLine_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildLogLine",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildLogLine_text(ctx context.Context, field graphql.CollectedField, obj *model.BuildLogLine) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildLogLine_text,
+		func(ctx context.Context) (any, error) {
+			return obj.Text, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildLogLine_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildLogLine",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildLogLine_missing(ctx context.Context, field graphql.CollectedField, obj *model.BuildLogLine) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildLogLine_missing,
+		func(ctx context.Context) (any, error) {
+			return obj.Missing, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildLogLine_missing(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildLogLine",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -68204,6 +68610,77 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_buildLog(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_buildLog,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().BuildLog(ctx, fc.Args["id"].(string), fc.Args["after"].(*int))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.BuildLog
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.BuildLog
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalOBuildLog2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildLog,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_buildLog(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "live":
+				return ec.fieldContext_BuildLog_live(ctx, field)
+			case "lines":
+				return ec.fieldContext_BuildLog_lines(ctx, field)
+			case "cursor":
+				return ec.fieldContext_BuildLog_cursor(ctx, field)
+			case "more":
+				return ec.fieldContext_BuildLog_more(ctx, field)
+			case "trimmed":
+				return ec.fieldContext_BuildLog_trimmed(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type BuildLog", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_buildLog_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_minions(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -91657,6 +92134,110 @@ func (ec *executionContext) _BuildFile(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
+var buildLogImplementors = []string{"BuildLog"}
+
+func (ec *executionContext) _BuildLog(ctx context.Context, sel ast.SelectionSet, obj *model.BuildLog) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, buildLogImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BuildLog")
+		case "live":
+			out.Values[i] = ec._BuildLog_live(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lines":
+			out.Values[i] = ec._BuildLog_lines(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cursor":
+			out.Values[i] = ec._BuildLog_cursor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "more":
+			out.Values[i] = ec._BuildLog_more(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "trimmed":
+			out.Values[i] = ec._BuildLog_trimmed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var buildLogLineImplementors = []string{"BuildLogLine"}
+
+func (ec *executionContext) _BuildLogLine(ctx context.Context, sel ast.SelectionSet, obj *model.BuildLogLine) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, buildLogLineImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BuildLogLine")
+		case "step":
+			out.Values[i] = ec._BuildLogLine_step(ctx, field, obj)
+		case "at":
+			out.Values[i] = ec._BuildLogLine_at(ctx, field, obj)
+		case "text":
+			out.Values[i] = ec._BuildLogLine_text(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "missing":
+			out.Values[i] = ec._BuildLogLine_missing(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var buildProblemImplementors = []string{"BuildProblem"}
 
 func (ec *executionContext) _BuildProblem(ctx context.Context, sel ast.SelectionSet, obj *model.BuildProblem) graphql.Marshaler {
@@ -102348,6 +102929,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "buildLog":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_buildLog(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "minions":
 			field := field
 
@@ -109964,6 +110564,32 @@ func (ec *executionContext) unmarshalNBuildInput2githubᚗcomᚋlogoscoreᚋlogo
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNBuildLogLine2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildLogLineᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildLogLine) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNBuildLogLine2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildLogLine(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNBuildLogLine2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildLogLine(ctx context.Context, sel ast.SelectionSet, v *model.BuildLogLine) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BuildLogLine(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNBuildSchema2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildSchema(ctx context.Context, sel ast.SelectionSet, v *model.BuildSchema) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -113982,6 +114608,13 @@ func (ec *executionContext) marshalOBuildError2ᚖgithubᚗcomᚋlogoscoreᚋlog
 		return graphql.Null
 	}
 	return ec._BuildError(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOBuildLog2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildLog(ctx context.Context, sel ast.SelectionSet, v *model.BuildLog) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._BuildLog(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOBuildMatchInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildMatchInput(ctx context.Context, v any) (*model.BuildMatchInput, error) {

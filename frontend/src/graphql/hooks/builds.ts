@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
 import {
@@ -7,6 +7,7 @@ import {
   BuildsDocument,
   BuildDocument,
   BuildRequestDocument,
+  BuildLogDocument,
   CreateBuildDocument,
   CancelBuildDocument,
   DeleteBuildArtifactDocument,
@@ -16,6 +17,7 @@ import {
   type DeleteBuildsMutationVariables,
 } from "@/graphql/gql/graphql"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
+import { EMPTY_LOG, mergeLogPage, type BuildLogState } from "@/components/builds/build-log"
 
 export const buildKeys = {
   all: ["builds"] as const,
@@ -31,6 +33,7 @@ export const buildKeys = {
 /** How often a list or a build with unfinished builds is refreshed. */
 const LIVE_LIST_MS = 2000
 const LIVE_BUILD_MS = 1500
+const LIVE_LOG_MS = 1500
 
 const UNFINISHED = new Set(["QUEUED", "BUILDING"])
 
@@ -106,6 +109,45 @@ export function useBuild(id: string) {
       return b && isUnfinished(b.state) ? LIVE_BUILD_MS : false
     },
   })
+}
+
+/**
+ * A build's log, read a page at a time from where the last read ended: while
+ * the build runs, the lines that came since every LIVE_LOG_MS; once it has
+ * ended, once more (its last lines, or the log of its result) and no
+ * further. A failed read is tried again at the next tick.
+ */
+export function useBuildLog(id: string, running: boolean): BuildLogState {
+  const [log, setLog] = useState<{ id: string; log: BuildLogState }>({ id, log: EMPTY_LOG })
+  const cursor = useRef({ id, after: 0 })
+
+  useEffect(() => {
+    if (id === "") return
+    if (cursor.current.id !== id) cursor.current = { id, after: 0 }
+    let stopped = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const read = async () => {
+      try {
+        for (;;) {
+          const page = (await graphqlClient(BuildLogDocument, { id, after: cursor.current.after })).buildLog
+          if (stopped || !page) return
+          cursor.current = { id, after: page.cursor }
+          setLog((prev) => ({ id, log: mergeLogPage(prev.id === id ? prev.log : EMPTY_LOG, page) }))
+          if (!page.more) break
+        }
+      } catch {
+        // The next tick reads from the same place.
+      }
+      if (!stopped && running) timer = setTimeout(() => void read(), LIVE_LOG_MS)
+    }
+    void read()
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+    }
+  }, [id, running])
+
+  return log.id === id ? log.log : EMPTY_LOG
 }
 
 /**
