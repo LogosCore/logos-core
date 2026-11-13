@@ -47,9 +47,13 @@ export function StateIcon({ t, className, held }: { t: Task; className?: string;
   )
 }
 
+/** A marked task's star where it went well: the classic yellow. */
+export const STAR = "text-yellow-500 dark:text-yellow-400"
+
 /**
  * A task marked important, as a list row shows it in place of its state: a
- * star in its state's color (green done, red failed, blue running and
+ * star, outlined as the state icons it stands in for are, yellow when it
+ * went well, else in its state's color (red failed, blue running and
  * pulsing, amber held, grey waiting or stopped), the reason on hover for a
  * held one.
  */
@@ -59,7 +63,12 @@ export function ImportantIcon({ t, className, held }: { t: Task; className?: str
   return (
     <StarIcon
       aria-label={`important, ${t.state.toLowerCase()}`}
-      className={cn("size-3.5 shrink-0 fill-current", blocked ? HELD : s.className, s.spin && "animate-pulse", className)}
+      className={cn(
+        "size-3.5 shrink-0",
+        blocked ? HELD : s === STATE.DONE ? STAR : s.className,
+        s.spin && "animate-pulse",
+        className,
+      )}
     >
       {blocked && <title>{`Waiting: ${held}`}</title>}
     </StarIcon>

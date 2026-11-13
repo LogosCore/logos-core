@@ -43,7 +43,7 @@ import { TabButton } from "./tab-button"
 import type { MenuCommand } from "./action-menu"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
 import { FINISHED, markedBy, useTaskActions, type Task } from "./task-actions"
-import { StateLabel, TaskTimes } from "./task-state"
+import { STAR, StateLabel, TaskTimes } from "./task-state"
 import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { useSessionConnectionChoices } from "./use-connection-choices"
 import { TaskAs } from "./task-as"
@@ -319,12 +319,12 @@ export function TaskDetail({
             <Button variant="ghost" size="icon-xs" aria-pressed={!!t.importantAt} disabled={actions.marking} onClick={actions.toggleImportant}
               title={t.importantAt ? `Marked important by ${markedBy(t)}: unmark it (S in the list)` : "Mark it important (S in the list)"}
               aria-label={t.importantAt ? "Unmark the task as important" : "Mark the task important"}>
-              <StarIcon className={cn(t.importantAt && "fill-current")} />
+              <StarIcon className={cn(t.importantAt && STAR)} />
             </Button>
           ) : (
             t.importantAt && (
               <span className="inline-flex size-6 items-center justify-center" title={`Marked important by ${markedBy(t)}`}>
-                <StarIcon className="size-3.5 fill-current" aria-label="important" />
+                <StarIcon className={cn("size-3.5", STAR)} aria-label="important" />
               </span>
             )
           )}

@@ -22,7 +22,8 @@ import { TaskAs } from "./task-as"
 // for each day. A click or ↑ and ↓
 // pick the one shown beside it; a row's context menu stops it, runs it
 // again, copies its command or output, or marks it important (S does too):
-// a star then stands for its state, in its state's color. Older tasks load
+// a star then stands for its state: yellow when it went well, else in its
+// state's color. Older tasks load
 // at the top. Above them, a search of their lines and a switch to the
 // important ones alone, both core's (Ctrl+F in the list goes to the
 // search).
@@ -178,7 +179,7 @@ export function TaskList({
           title={important ? "The important tasks alone: show them all" : "Show the important tasks alone"}
           onClick={() => onImportant(!important)}
         >
-          <StarIcon className={cn(important && "fill-current")} />
+          <StarIcon />
           {importantCount > 0 && <span className="tabular-nums">{importantCount}</span>}
         </Button>
       </div>
