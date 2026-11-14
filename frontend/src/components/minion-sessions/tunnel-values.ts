@@ -123,7 +123,7 @@ export function proxyState(t: Tunnel, taskState: string): { label: string; tone:
   return { label: "Listening", tone: "good", detail: null }
 }
 
-/** What core puts in front of a tunnel (its task's front): a SOCKS proxy, an HTTP proxy, a port forward or a terminal; a reverse tunnel's minion listens on its host, and core forwards each connection (its one front). */
+/** What core puts in front of a tunnel (its task's front): a SOCKS proxy, an HTTP proxy, a port forward, a terminal, a VPN, or a desktop (desktop-values.ts); a reverse tunnel's minion listens on its host, and core forwards each connection (its one front). */
 export const FRONT_SOCKS = "socks"
 export const FRONT_HTTP = "http"
 export const FRONT_FORWARD = "forward"
@@ -146,6 +146,14 @@ export function frontLabel(front: string, reverse = false): string {
       return "Terminal"
     case FRONT_VPN:
       return "VPN"
+    case "rdp":
+      return "Remote desktop (RDP)"
+    case "vnc":
+      return "VNC"
+    case "ssh":
+      return "SSH login"
+    case "telnet":
+      return "Telnet"
   }
   return front.replaceAll("_", " ")
 }

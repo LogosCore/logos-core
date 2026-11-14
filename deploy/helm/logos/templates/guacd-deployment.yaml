@@ -1,0 +1,42 @@
+{{- /*
+guacd: Apache Guacamole's proxy daemon, which draws the desktop fronts. Core
+dials it (GUACD_ADDRESS); it reaches core's operational ports through their
+Service (GUACD_CORE_HOST). Stateless: a session lives for as long as its
+web app's socket.
+*/ -}}
+{{- if .Values.guacd.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "logos.guacd.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "logos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: guacd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "logos.guacd.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "logos.labels" . | nindent 8 }}
+        app.kubernetes.io/component: guacd
+    spec:
+      {{- include "logos.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: guacd
+          image: {{ include "logos.image" (dict "image" .Values.guacd.image "root" $) | quote }}
+          imagePullPolicy: {{ .Values.guacd.image.pullPolicy }}
+          ports:
+            - name: guacd
+              containerPort: {{ .Values.guacd.port }}
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: guacd
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.guacd.resources | nindent 12 }}
+{{- end }}

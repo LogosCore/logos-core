@@ -33,7 +33,7 @@ func TestTerminalCommand(t *testing.T) {
 		}
 		return strings.Join(out, ","), fronts
 	}
-	params, fronts := keys(tunnelCommand(sc, shellTunnelCmd, ""))
+	params, fronts := keys(tunnelCommand(sc, shellTunnelCmd, "", false))
 	for _, k := range []string{protocol.ParamProgram, protocol.ParamArgs, protocol.ParamRows, protocol.ParamCols} {
 		if !strings.Contains(","+params+",", ","+k+",") {
 			t.Errorf("a shell's command lacks %s: %s", k, params)
@@ -42,7 +42,7 @@ func TestTerminalCommand(t *testing.T) {
 	if !slices.Contains(fronts, protocol.FrontTerminal) {
 		t.Errorf("a shell's fronts %v", fronts)
 	}
-	params, fronts = keys(tunnelCommand(sc, tunnelCmd, ""))
+	params, fronts = keys(tunnelCommand(sc, tunnelCmd, "", false))
 	if strings.Contains(params, protocol.ParamProgram) || strings.Contains(params, protocol.ParamRows) || slices.Contains(fronts, protocol.FrontTerminal) {
 		t.Errorf("a command with no processes: %s %v", params, fronts)
 	}
@@ -107,7 +107,7 @@ func TestOpenTerminal(t *testing.T) {
 	// A terminal's params with another front, and a source with a terminal,
 	// are refused as the task's args are read, before anything opens: each
 	// applies by the front (FieldSpec.When).
-	params := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{all}}, all, "").Params
+	params := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{all}}, all, "", false).Params
 	for name, c := range map[string]struct {
 		values    map[string]any
 		key, want string

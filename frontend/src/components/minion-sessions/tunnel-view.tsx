@@ -3,6 +3,7 @@ import {
   CopyIcon,
   EthernetPortIcon,
   LinkIcon,
+  MonitorIcon,
   PencilIcon,
   SearchXIcon,
   SquareTerminalIcon,
@@ -44,6 +45,9 @@ import { formatBytes } from "@/lib/format-bytes";
 import { cn } from "@/lib/utils";
 import { LazyWebTerminal } from "./lazy-web-terminal";
 import { preloadWebTerminal } from "./web-terminal-code";
+import { LazyDesktop } from "./lazy-desktop";
+import { preloadDesktop } from "./desktop-code";
+import { FRONT_RDP, FRONT_VNC, clientCommand, desktopName, isDesktopFront } from "./desktop-values";
 import { FINISHED } from "./task-actions";
 import { laggyKind } from "./terminal-socket";
 import {
@@ -114,6 +118,8 @@ export function TunnelView({
   const front = tunnel.front;
   const http = !reverse && front === FRONT_HTTP;
   const terminal = !reverse && front === FRONT_TERMINAL;
+  // A desktop: a forward to its server, which core's guacd draws here.
+  const desktop = !reverse && isDesktopFront(front);
   // A VPN: no port; its machines connect over this web app's address, and
   // route its networks.
   const vpn = !reverse && front === FRONT_VPN;
@@ -163,7 +169,7 @@ export function TunnelView({
   // The web terminal: open or not, and which (New opens another stream).
   // Over a connection that waits for the minion's calls, every key does.
   const [webTerminal, setWebTerminal] = useState<number | null>(null);
-  const connKind = useMinionSession(terminal ? t.sessionId : "").data?.minionSession?.connKind;
+  const connKind = useMinionSession(terminal || desktop ? t.sessionId : "").data?.minionSession?.connKind;
   const laggy = laggyKind(connKind)
     ? "slow: this session's connection waits for the minion's calls"
     : null;
@@ -171,6 +177,13 @@ export function TunnelView({
   useEffect(() => {
     if (terminal) preloadWebTerminal();
   }, [terminal]);
+  // A desktop: open or not, and which (Reconnect opens another session).
+  const [openDesktop, setOpenDesktop] = useState<number | null>(null);
+  const canDesktop = desktop && tunnel.desktop && tunnel.listening && keeps;
+  const client = clientCommand(front, host, tunnel.port);
+  useEffect(() => {
+    if (desktop) preloadDesktop();
+  }, [desktop]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -187,7 +200,7 @@ export function TunnelView({
             <span className="shrink-0 text-xs text-muted-foreground">UDP</span>
           )}
           <span className="truncate font-mono text-xs">{address}</span>
-          {forward && destination && (
+          {(forward || desktop) && destination && (
             <span className="truncate font-mono text-xs text-muted-foreground">
               → {destination}
             </span>
@@ -239,7 +252,31 @@ export function TunnelView({
                 )}
               </>
             )}
-            {!forward && !reverse && !terminal && (
+            {desktop && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  title={`Copy "${client}": your own client on its port`}
+                  onClick={() => void copyToClipboard(client, "client command")}
+                >
+                  <TerminalIcon />
+                  {client.split(" ")[0]}
+                </Button>
+                {canDesktop && openDesktop === null && (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    title={`Open the ${desktopName(front)} desktop here: a session with its server, through core's guacd`}
+                    onClick={() => setOpenDesktop(1)}
+                  >
+                    <MonitorIcon />
+                    Open desktop
+                  </Button>
+                )}
+              </>
+            )}
+            {!forward && !reverse && !terminal && !desktop && (
               <>
                 <Button
                   variant="ghost"
@@ -270,6 +307,18 @@ export function TunnelView({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3 @container">
+        {canDesktop && openDesktop !== null && (
+          <div className="flex h-[36rem] max-h-[80vh] shrink-0 flex-col">
+            <LazyDesktop
+              key={openDesktop}
+              taskId={t.id}
+              front={front}
+              warning={laggy}
+              onClose={() => setOpenDesktop(null)}
+              onRestart={() => setOpenDesktop((n) => (n ?? 0) + 1)}
+            />
+          </div>
+        )}
         {canTerminal && webTerminal !== null && (
           <div className="flex h-[28rem] shrink-0 flex-col">
             <LazyWebTerminal
@@ -339,6 +388,24 @@ export function TunnelView({
                 <LabelRow label="Speaks">
                   raw bytes, in a terminal of {tunnel.rows ?? 24}×{tunnel.cols ?? 80} on the port (socat, nc); the web
                   terminal here says its own size
+                  {laggy && <span className="text-amber-600 dark:text-amber-400"> · {laggy}</span>}
+                </LabelRow>
+              </>
+            ) : desktop ? (
+              <>
+                <LabelRow label="Connects to">
+                  <span className="font-mono text-xs break-all">{destination ?? "?"}</span>
+                  <span className="text-muted-foreground"> · from the minion&apos;s host, through the port</span>
+                </LabelRow>
+                <LabelRow label="Login">
+                  {tunnel.login ?? <span className="text-muted-foreground">none: the server&apos;s login asks</span>}
+                </LabelRow>
+                <LabelRow label="Speaks">
+                  {desktopName(front)}, drawn here by core&apos;s guacd
+                  {front === FRONT_RDP || front === FRONT_VNC ? "" : " in a terminal"}; your own client on the port
+                  {!tunnel.desktop && (
+                    <span className="text-amber-600 dark:text-amber-400"> · core draws no desktops now: it has no guacd</span>
+                  )}
                   {laggy && <span className="text-amber-600 dark:text-amber-400"> · {laggy}</span>}
                 </LabelRow>
               </>

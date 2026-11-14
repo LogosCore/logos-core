@@ -71,6 +71,9 @@ type Config struct {
 	// VPNGrace is how long a VPN client whose link dropped is kept for
 	// another (protocol.VPNLinkGrace).
 	VPNGrace time.Duration
+	// Desktops: core draws desktops (a guacd is configured), so tunnels
+	// take the desktop fronts (protocol.DesktopFronts).
+	Desktops bool
 }
 
 // DefaultConfig is the service's usual pace; the ports are the
@@ -153,6 +156,10 @@ func (s *Service) WithWaker(w Waker) *Service {
 
 // Address is the host operators reach the ports at ("" for the web app's).
 func (s *Service) Address() string { return s.cfg.Address }
+
+// Desktops reports whether core draws desktops: the desktop fronts' tunnels
+// open.
+func (s *Service) Desktops() bool { return s.cfg.Desktops }
 
 // Opening is a tunnel task about to be queued.
 type Opening struct {

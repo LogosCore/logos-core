@@ -117,6 +117,8 @@ export const MinionTaskFields = graphql(`
       port
       address
       front
+      desktop
+      login
       reverse
       to
       path

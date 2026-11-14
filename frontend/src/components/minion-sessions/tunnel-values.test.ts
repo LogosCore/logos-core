@@ -53,6 +53,7 @@ const tunnel = (t: Partial<Tunnel>): Tunnel => ({
   port: 41000,
   address: null,
   front: "socks",
+  desktop: false,
   reverse: false,
   to: null,
   path: null,

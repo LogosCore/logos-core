@@ -1138,11 +1138,13 @@ type ComplexityRoot struct {
 		Bound      func(childComplexity int) int
 		Cap        func(childComplexity int) int
 		Cols       func(childComplexity int) int
+		Desktop    func(childComplexity int) int
 		Down       func(childComplexity int) int
 		Front      func(childComplexity int) int
 		Kept       func(childComplexity int) int
 		Listen     func(childComplexity int) int
 		Listening  func(childComplexity int) int
+		Login      func(childComplexity int) int
 		MaxStreams func(childComplexity int) int
 		Open       func(childComplexity int) int
 		Path       func(childComplexity int) int
@@ -7299,6 +7301,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Cols(childComplexity), true
+	case "MinionTunnel.desktop":
+		if e.ComplexityRoot.MinionTunnel.Desktop == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Desktop(childComplexity), true
 	case "MinionTunnel.down":
 		if e.ComplexityRoot.MinionTunnel.Down == nil {
 			break
@@ -7329,6 +7337,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Listening(childComplexity), true
+	case "MinionTunnel.login":
+		if e.ComplexityRoot.MinionTunnel.Login == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Login(childComplexity), true
 	case "MinionTunnel.maxStreams":
 		if e.ComplexityRoot.MinionTunnel.MaxStreams == nil {
 			break
@@ -16563,10 +16577,17 @@ type MinionTunnel {
   address: String
   # What core puts in front, the task's front: socks (core's SOCKS proxy
   # on the port), http (its HTTP proxy), forward (every connection a
-  # stream to to, host:port) or terminal (a process for each connection).
-  # A reverse tunnel's (reverse: the minion listens): forward (core
-  # connects each of its streams to to).
+  # stream to to, host:port), terminal (a process for each connection),
+  # vpn, or a desktop's: rdp, vnc, ssh or telnet (a forward to its server,
+  # to, which guacd draws in the web app). A reverse tunnel's (reverse:
+  # the minion listens): forward (core connects each of its streams to to).
   front: String!
+  # A desktop's (front rdp, vnc, ssh or telnet): core draws it in the web
+  # app now (it has a guacd: GET /api/v1/minion-tasks/{id}/desktop).
+  desktop: Boolean!
+  # A desktop's login: the name of the credential it logs in with; null
+  # for none (the desktop asks), a credential gone, or another front.
+  login: String
   reverse: Boolean!
   to: String
   # A forward's to a unix socket's path or a named pipe (\\.\pipe\name,
@@ -47239,6 +47260,10 @@ func (ec *executionContext) fieldContext_MinionTask_tunnel(_ context.Context, fi
 				return ec.fieldContext_MinionTunnel_address(ctx, field)
 			case "front":
 				return ec.fieldContext_MinionTunnel_front(ctx, field)
+			case "desktop":
+				return ec.fieldContext_MinionTunnel_desktop(ctx, field)
+			case "login":
+				return ec.fieldContext_MinionTunnel_login(ctx, field)
 			case "reverse":
 				return ec.fieldContext_MinionTunnel_reverse(ctx, field)
 			case "to":
@@ -48632,6 +48657,64 @@ func (ec *executionContext) _MinionTunnel_front(ctx context.Context, field graph
 }
 
 func (ec *executionContext) fieldContext_MinionTunnel_front(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_desktop(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_desktop,
+		func(ctx context.Context) (any, error) {
+			return obj.Desktop, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_desktop(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_login(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_login,
+		func(ctx context.Context) (any, error) {
+			return obj.Login, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_login(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MinionTunnel",
 		Field:      field,
@@ -99516,6 +99599,13 @@ func (ec *executionContext) _MinionTunnel(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "desktop":
+			out.Values[i] = ec._MinionTunnel_desktop(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "login":
+			out.Values[i] = ec._MinionTunnel_login(ctx, field, obj)
 		case "reverse":
 			out.Values[i] = ec._MinionTunnel_reverse(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

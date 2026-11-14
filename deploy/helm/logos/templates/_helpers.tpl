@@ -37,6 +37,10 @@ group is independently addressable.
 {{- printf "%s-hocuspocus" (include "logos.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{- define "logos.guacd.fullname" -}}
+{{- printf "%s-guacd" (include "logos.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{/*
 Common chart labels — applied to every resource the chart owns.
 */}}
@@ -69,6 +73,12 @@ app.kubernetes.io/component: frontend
 app.kubernetes.io/name: {{ include "logos.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/component: hocuspocus
+{{- end -}}
+
+{{- define "logos.guacd.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "logos.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: guacd
 {{- end -}}
 
 {{/*

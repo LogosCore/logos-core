@@ -118,6 +118,14 @@ type EnvironmentSettings struct {
 	// (logos-vpn-{os}-{arch}, .exe on Windows), which the VPN tab offers
 	// (docs: contracts/vpn-front).
 	VPNClientDir string
+	// Guacd is guacd's address (host:port): Apache Guacamole's proxy
+	// daemon, which draws the desktop fronts (docs:
+	// contracts/minion-messages/tunnels.md, Desktops). Empty, the default:
+	// core offers no desktop front.
+	Guacd string
+	// GuacdCoreHost is the host guacd reaches core's operational ports at:
+	// core's name on their network. Required with Guacd.
+	GuacdCoreHost string
 
 	// Wiki transfer (export/import jobs)
 	WikiImportZipMaxSize    int64         // bytes; cap on an uploaded import archive
@@ -217,6 +225,8 @@ func init() {
 	viper.SetDefault("OPERATIONAL_BIND", "0.0.0.0")
 	viper.SetDefault("OPERATIONAL_ADDRESS", "")
 	viper.SetDefault("VPN_CLIENT_DIR", "/app/vpn-clients")
+	viper.SetDefault("GUACD_ADDRESS", "")
+	viper.SetDefault("GUACD_CORE_HOST", "")
 	viper.SetDefault("WIKI_FILE_BUCKET", "wiki-files")
 	viper.SetDefault("WIKI_FILE_MAX_SIZE", int64(50*1024*1024))
 	viper.SetDefault("WIKI_FILE_DENIED_CONTENT_TYPES", "")
@@ -329,6 +339,8 @@ func init() {
 		OperationalBind:    bindOrFatal("OPERATIONAL_BIND", viper.GetString("OPERATIONAL_BIND")),
 		OperationalAddress: strings.TrimSpace(viper.GetString("OPERATIONAL_ADDRESS")),
 		VPNClientDir:       strings.TrimSpace(viper.GetString("VPN_CLIENT_DIR")),
+		Guacd:              guacdOrFatal("GUACD_ADDRESS", viper.GetString("GUACD_ADDRESS"), viper.GetString("GUACD_CORE_HOST")),
+		GuacdCoreHost:      strings.TrimSpace(viper.GetString("GUACD_CORE_HOST")),
 
 		// Wiki transfer
 		WikiImportZipMaxSize:    viper.GetInt64("WIKI_IMPORT_ZIP_MAX_SIZE"),
@@ -526,6 +538,22 @@ func bindOrFatal(key, raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw != "" && net.ParseIP(raw) == nil {
 		log.Fatalf("%s must be an IP address, got %q", key, raw)
+	}
+	return raw
+}
+
+// guacdOrFatal is guacd's address, host:port, or empty; one needs the host
+// guacd reaches core at too.
+func guacdOrFatal(key, raw, coreHost string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if host, port, err := net.SplitHostPort(raw); err != nil || host == "" || port == "" {
+		log.Fatalf("%s must be host:port (guacd:4822), got %q", key, raw)
+	}
+	if strings.TrimSpace(coreHost) == "" {
+		log.Fatalf("GUACD_CORE_HOST must name the host guacd reaches core's operational ports at, with %s", key)
 	}
 	return raw
 }

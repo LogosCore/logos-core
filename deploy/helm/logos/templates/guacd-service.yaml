@@ -1,0 +1,19 @@
+{{- if .Values.guacd.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "logos.guacd.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "logos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: guacd
+spec:
+  type: ClusterIP
+  ports:
+    - name: guacd
+      port: {{ .Values.guacd.port }}
+      targetPort: guacd
+      protocol: TCP
+  selector:
+    {{- include "logos.guacd.selectorLabels" . | nindent 4 }}
+{{- end -}}

@@ -344,7 +344,9 @@ func (s *Service) accept(t *tunnel) {
 func (s *Service) serve(t *tunnel, c net.Conn) {
 	defer s.done.Done()
 	switch t.purpose {
-	case models.OperationalPurposeForward:
+	case models.OperationalPurposeForward, protocol.FrontRDP, protocol.FrontVNC, protocol.FrontSSH, protocol.FrontTelnet:
+		// A desktop's port is a forward to its server: guacd's connection,
+		// or an operator's own client.
 		s.serveForward(t, c)
 		return
 	case models.OperationalPurposeHTTP:

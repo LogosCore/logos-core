@@ -111,6 +111,19 @@ reaches a port uses its minion, so keep the Service to the operators'
 networks (`service.loadBalancerSourceRanges`, or the network in front).
 Set `address` to the host they reach it at, which the web app shows.
 
+### guacd draws the desktops
+
+The tunnels' desktop fronts (RDP, VNC, SSH and Telnet, drawn in the web
+app) need Apache Guacamole's proxy daemon: `guacd` runs as a Deployment of
+its own, behind a ClusterIP Service only core reaches (`GUACD_ADDRESS`).
+guacd reaches each desktop's server through core's operational ports, by
+their Service (`GUACD_CORE_HOST`), so desktops need operational ports too;
+without them, or with `guacd.enabled: false`, core offers no desktop front.
+Its image is ours, `ghcr.io/logoscore/logos-guacd` (`deploy/guacd`):
+guacamole-server 1.6.0 built against FreeRDP 3, where the official image's
+FreeRDP 2 aborts a desktop resized during a paint. Its guacamole-server
+version is the web app's Guacamole client's: change them together.
+
 ### Hocuspocus runs as a single replica
 Hocuspocus holds Y.Doc state in process memory. Two replicas without
 sticky sessions cause split-brain editing. The chart pins
@@ -232,6 +245,7 @@ Credentials still come from `secrets.values` or `secrets.existingSecret`.
 | `core.config.minionFile.maxSize` | Largest file a minion sends core, or core sends a minion (2 GiB; at most 64 GiB); the minion-files Ingress follows it |
 | `core.operationalPorts.count` / `.first` / `.address` | [Operational ports](#operational-ports-get-a-service-of-their-own) for tunnel tasks' SOCKS proxies: `count` ports from `first` (none by default), and the host operators reach them at |
 | `core.operationalPorts.service.*` | Their Service: `type` (LoadBalancer), `annotations`, `loadBalancerSourceRanges` |
+| `guacd.enabled` / `guacd.image.*` / `guacd.resources` | [guacd](#guacd-draws-the-desktops), which draws the desktop fronts (on by default; they need operational ports) |
 | `ingress.minionTransfers.enabled` / `.annotations` | The transfer Ingresses (minion files and streams, build transfers; above), and annotations for them only |
 | `secrets.values.*` | Inline secret values (development only) |
 | `global.storageClass` | StorageClass applied to all PVCs |

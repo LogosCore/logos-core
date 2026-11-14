@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,8 @@ type fakeTaskTunnels struct {
 	ended   miniontunnels.Summary
 	caps    []int64
 	vpns    []miniontunnels.Opening
+	// desktops: core draws desktops (a guacd).
+	desktops bool
 }
 
 func (f *fakeTaskTunnels) OpenVPN(_ context.Context, o miniontunnels.Opening) error {
@@ -80,6 +83,8 @@ func (f *fakeTaskTunnels) Open(_ context.Context, o miniontunnels.Opening) (int,
 func (f *fakeTaskTunnels) Close(_ context.Context, task uuid.UUID) { f.closed = append(f.closed, task) }
 
 func (f *fakeTaskTunnels) Address() string { return f.address }
+
+func (f *fakeTaskTunnels) Desktops() bool { return f.desktops }
 
 func (f *fakeTaskTunnels) View(_ context.Context, task uuid.UUID) (miniontunnels.Summary, bool, error) {
 	if sum, ok := f.live[task]; ok {
@@ -438,7 +443,7 @@ func TestOpenReverse(t *testing.T) {
 	}
 	// A reverse tunnel's one front no param names: one given is refused as
 	// its args are read, and its destination is required.
-	params := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{reverseCmd}}, reverseCmd, "").Params
+	params := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{reverseCmd}}, reverseCmd, "", false).Params
 	_, problems := protocol.TaskArgs(params, map[string]any{"front": "socks", "listen": int64(1080)})
 	if problems["front"] != "not a declared field" || problems["host"] != "value is required" || problems["to"] != "value is required" {
 		t.Errorf("a reverse SOCKS proxy: %v", problems)
@@ -528,14 +533,14 @@ func TestCommandsByTarget(t *testing.T) {
 		}
 		return strings.Join(out, ",")
 	}
-	linux := tunnelCommand(sc, full, "linux-elf")
+	linux := tunnelCommand(sc, full, "linux-elf", false)
 	if strings.Join(linux.Opens, ",") != "tcp,udp,unix,source,tls" || keys(linux) != "front,port,routes,host,to,path,source,tls,stop_idle,cap" {
 		t.Errorf("linux: opens %v, params %s", linux.Opens, keys(linux))
 	}
-	if win := tunnelCommand(sc, full, "windows-exe"); !win.CanOpen(protocol.OpenPipe) {
+	if win := tunnelCommand(sc, full, "windows-exe", false); !win.CanOpen(protocol.OpenPipe) {
 		t.Errorf("windows: opens %v", win.Opens)
 	}
-	if plain := tunnelCommand(sc, tunnelCmd, "linux-elf"); keys(plain) != "front,port,routes,host,to,stop_idle,cap" {
+	if plain := tunnelCommand(sc, tunnelCmd, "linux-elf", false); keys(plain) != "front,port,routes,host,to,stop_idle,cap" {
 		t.Errorf("a command that opens tcp and udp: %s", keys(plain))
 	}
 }
@@ -597,7 +602,7 @@ func TestOpenPathsAndOptions(t *testing.T) {
 	}
 	// A path and TLS are a forward's: with another front they are refused
 	// as the task's args are read (FieldSpec.When).
-	params := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{all}}, all, "").Params
+	params := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{all}}, all, "", false).Params
 	for name, values := range map[string]map[string]any{
 		"a SOCKS path":      {"path": "/run/x.sock"},
 		"TLS through SOCKS": {"tls": true},
@@ -621,5 +626,86 @@ func TestOpenPathsAndOptions(t *testing.T) {
 		"to": float64(443), "tls": true}})
 	if got.To == nil || *got.To != "h:443" || !got.TLS || got.Path != nil {
 		t.Errorf("a TLS forward's tunnel: %+v", got)
+	}
+}
+
+// Desktops: offered where core draws them (a guacd) and the minion opens
+// TCP; each a forward to its server, at the protocol's port when the task
+// names none, its port's purpose its front.
+func TestDesktopFronts(t *testing.T) {
+	sc := protocol.BuildSchema{Commands: []protocol.BuildCommand{tunnelCmd}}
+	fronts := func(c protocol.BuildCommand) (string, string) {
+		var opts, keys []string
+		for _, p := range c.Params {
+			keys = append(keys, p.Key)
+			if p.Key == protocol.ParamFront {
+				for _, o := range p.Options {
+					opts = append(opts, o.Value)
+				}
+			}
+		}
+		return strings.Join(opts, ","), strings.Join(keys, ",")
+	}
+	if opts, keys := fronts(tunnelCommand(sc, tunnelCmd, "", true)); !strings.HasSuffix(opts, ",rdp,vnc,ssh,telnet") ||
+		!strings.Contains(keys, "credential,security,ignore_cert") {
+		t.Errorf("with guacd: %s / %s", opts, keys)
+	}
+	if opts, keys := fronts(tunnelCommand(sc, tunnelCmd, "", false)); strings.Contains(opts, "rdp") || strings.Contains(keys, "credential") {
+		t.Errorf("without guacd: %s / %s", opts, keys)
+	}
+	udpOnly := tunnelCmd
+	udpOnly.Opens = []string{protocol.OpenUDP}
+	if opts, _ := fronts(tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{udpOnly}}, udpOnly, "", true)); strings.Contains(opts, "rdp") {
+		t.Errorf("a minion that opens no TCP: %s", opts)
+	}
+	// Without guacd, a desktop's params name no desktop front either.
+	for _, p := range tunnelCommand(sc, tunnelCmd, "", false).Params {
+		if p.When != nil && slices.ContainsFunc(p.When.Values, protocol.IsDesktopFront) {
+			t.Errorf("%s applies by %v", p.Key, p.When.Values)
+		}
+	}
+
+	ctx := context.Background()
+	s := &models.MinionSession{SessionID: uuid.New(), OperationID: uuid.New(), Number: 3}
+	f := &fakeTaskTunnels{desktops: true}
+	r := &minionTaskResolver{tunnels: f}
+	for front, port := range map[string]int{"rdp": 3389, "vnc": 5900, "ssh": 22, "telnet": 23} {
+		wire := map[string]any{"front": front, "host": " dc01 "}
+		if _, got, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tunnelCmd, wire); err != nil || got != front {
+			t.Fatalf("%s: %s %v", front, got, err)
+		}
+		o := f.opened[len(f.opened)-1]
+		if o.Purpose != front || o.Host != "dc01" || o.HostPort != port || wire["to"] != int64(port) {
+			t.Errorf("%s opened %+v (args %v)", front, o, wire)
+		}
+	}
+	if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tunnelCmd, map[string]any{"front": "rdp", "host": "dc01", "to": int64(3390)}); err != nil ||
+		f.opened[len(f.opened)-1].HostPort != 3390 {
+		t.Errorf("a port of its own: %v", err)
+	}
+	opened := len(f.opened)
+	for name, w := range map[string]map[string]any{
+		"no host": {"front": "vnc"},
+		"a path":  {"front": "ssh", "path": "/run/sshd.sock"},
+	} {
+		if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tunnelCmd, w); err == nil {
+			t.Errorf("%s opened", name)
+		}
+	}
+	f.desktops = false
+	if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tunnelCmd, map[string]any{"front": "rdp", "host": "dc01"}); err == nil ||
+		!strings.Contains(err.Error(), "guacd") {
+		t.Errorf("without guacd: %v", err)
+	}
+	if len(f.opened) != opened {
+		t.Errorf("a refused desktop opened a port")
+	}
+	// Its view: where it goes, that core draws it.
+	f.desktops = true
+	tunnel := protocol.ActionTunnel
+	got, err := r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), OperationID: uuid.NewString(), Action: &tunnel,
+		Args: map[string]any{"front": "rdp", "host": "dc01", "to": float64(3389)}})
+	if err != nil || got.Front != "rdp" || got.To == nil || *got.To != "dc01:3389" || !got.Desktop || got.Login != nil {
+		t.Errorf("view %+v %v", got, err)
 	}
 }

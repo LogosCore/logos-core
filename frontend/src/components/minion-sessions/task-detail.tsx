@@ -43,6 +43,7 @@ import { TabButton } from "./tab-button"
 import type { MenuCommand } from "./action-menu"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
 import { FINISHED, markedBy, useTaskActions, type Task } from "./task-actions"
+import { desktopName, isDesktopFront } from "./desktop-values"
 import { STAR, StateLabel, TaskTimes } from "./task-state"
 import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { useSessionConnectionChoices } from "./use-connection-choices"
@@ -246,7 +247,7 @@ export function TaskDetail({
           </TabButton>
           {hasData && (
             <TabButton active={shown === "data"} onClick={() => setTab("data")}>
-              {isDelegate ? "Delegate" : isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? (t.tunnel?.front === FRONT_FORWARD ? "Forward" : t.tunnel?.front === FRONT_TERMINAL ? "Terminal" : t.tunnel?.front === FRONT_VPN ? "VPN" : "Proxy") : "Data"}
+              {isDelegate ? "Delegate" : isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? (t.tunnel?.front === FRONT_FORWARD ? "Forward" : t.tunnel?.front === FRONT_TERMINAL ? "Terminal" : t.tunnel?.front === FRONT_VPN ? "VPN" : t.tunnel && isDesktopFront(t.tunnel.front) ? desktopName(t.tunnel.front) : "Proxy") : "Data"}
             </TabButton>
           )}
           {hasFeedback && (

@@ -277,6 +277,7 @@ func NewApp() (*App, error) {
 		minionstreams.DefaultConfig(), l).WithKeeper(minionFiles)
 	tunnelsCfg := miniontunnels.DefaultConfig()
 	tunnelsCfg.Ports, tunnelsCfg.Bind, tunnelsCfg.Address = e.OperationalPorts, e.OperationalBind, e.OperationalAddress
+	tunnelsCfg.Desktops = e.Guacd != ""
 	minionTunnels := miniontunnels.New(tunnelsCfg, repos.OperationalPort, repos.MinionTask, bus, l).
 		WithListeners(repos.MinionListener).
 		WithVPN(repos.VPNTunnel, repos.VPNKey, vpnRoles{users: repos.User, ops: repos.Operation})

@@ -319,6 +319,29 @@ frontend:
 # -----------------------------------------------------------------------------
 # Hocuspocus (Yjs collab WebSocket sidecar)
 # -----------------------------------------------------------------------------
+# Apache Guacamole's proxy daemon: it draws the tunnels' desktop fronts
+# (RDP, VNC, SSH, Telnet) for core's web app, reaching each desktop's server
+# through core's operational ports. In the cluster alone (ClusterIP): core
+# opens its sessions and relays them. Its guacamole-server version matches
+# the web app's Guacamole client (1.6.0): change them together
+# (deploy/guacd/README.md).
+guacd:
+  enabled: true
+  # Ours (deploy/guacd): guacd 1.6.0 against FreeRDP 3, where the
+  # official image's FreeRDP 2 aborts a desktop resized during a paint.
+  image:
+    repository: ghcr.io/logoscore/logos-guacd
+    tag: "1.6.0-freerdp3.30.0"
+    pullPolicy: IfNotPresent
+  port: 4822
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 2000m
+      memory: 1Gi
+
 hocuspocus:
   enabled: true
 

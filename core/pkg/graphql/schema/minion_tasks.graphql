@@ -210,10 +210,17 @@ type MinionTunnel {
   address: String
   # What core puts in front, the task's front: socks (core's SOCKS proxy
   # on the port), http (its HTTP proxy), forward (every connection a
-  # stream to to, host:port) or terminal (a process for each connection).
-  # A reverse tunnel's (reverse: the minion listens): forward (core
-  # connects each of its streams to to).
+  # stream to to, host:port), terminal (a process for each connection),
+  # vpn, or a desktop's: rdp, vnc, ssh or telnet (a forward to its server,
+  # to, which guacd draws in the web app). A reverse tunnel's (reverse:
+  # the minion listens): forward (core connects each of its streams to to).
   front: String!
+  # A desktop's (front rdp, vnc, ssh or telnet): core draws it in the web
+  # app now (it has a guacd: GET /api/v1/minion-tasks/{id}/desktop).
+  desktop: Boolean!
+  # A desktop's login: the name of the credential it logs in with; null
+  # for none (the desktop asks), a credential gone, or another front.
+  login: String
   reverse: Boolean!
   to: String
   # A forward's to a unix socket's path or a named pipe (\\.\pipe\name,

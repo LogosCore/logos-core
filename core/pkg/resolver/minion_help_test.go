@@ -96,7 +96,7 @@ func TestCommandKinds(t *testing.T) {
 // A param that applies by another's value says so: a tunnel's destination
 // is a forward's.
 func TestMinionHelpConditions(t *testing.T) {
-	tunnel := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{tunnelCmd}}, tunnelCmd, "")
+	tunnel := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{tunnelCmd}}, tunnelCmd, "", false)
 	one := helpText([]protocol.BuildCommand{tunnel}, "tunnel")
 	for _, want := range []string{
 		"  front      enum, default socks, one of socks, http, forward, vpn\n",
@@ -118,7 +118,7 @@ func TestMinionHelpFormOrder(t *testing.T) {
 		{Key: "timeout", Num: 2, Type: protocol.FieldDuration, Label: "Connect timeout", Default: "10s", Order: 10, Advanced: true},
 		{Key: "max_streams", Num: 3, Type: protocol.FieldInt, Label: "Connections at once", Default: 256, Order: 11, Advanced: true},
 	}
-	tunnel := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{cmd}}, cmd, "")
+	tunnel := tunnelCommand(protocol.BuildSchema{Commands: []protocol.BuildCommand{cmd}}, cmd, "", false)
 	if got, want := commandUsage(tunnel), "tunnel [front=socks] [port=0] [routes] [host] [to] [timeout=10s] [max_streams=256] [stop_idle=1h] [cap=0]"; got != want {
 		t.Errorf("usage %q, want %q", got, want)
 	}

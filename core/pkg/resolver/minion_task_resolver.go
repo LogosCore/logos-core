@@ -151,6 +151,8 @@ type TaskTunnels interface {
 	// Address is the host operators reach the ports at; "" for the web
 	// app's.
 	Address() string
+	// Desktops: core draws desktops (a guacd is configured).
+	Desktops() bool
 	View(ctx context.Context, task uuid.UUID) (miniontunnels.Summary, bool, error)
 	Summary(task uuid.UUID) (miniontunnels.Summary, bool)
 	Streams(ctx context.Context, task uuid.UUID, filter miniontunnels.StreamFilter, before uint64, limit int64) ([]models.MinionTunnelStream, error)
@@ -309,7 +311,7 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 		if slices.Contains(b.Commands, c.ID) && !protocol.IsCoreCommand(c.ID) {
 			switch {
 			case protocol.IsTunnelAction(c.Action):
-				c = tunnelCommand(sc.BuildSchema, c, b.Target)
+				c = tunnelCommand(sc.BuildSchema, c, b.Target, r.tunnels != nil && r.tunnels.Desktops())
 			case protocol.IsDelegateAction(c.Action):
 				// Core's own params (stop_idle) beside the command's.
 				c.Params = append(slices.Clone(c.Params), protocol.TunnelCoreParams(c.Action)...)
@@ -439,8 +441,19 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 		}
 		for _, key := range []string{protocol.ParamHost, protocol.ParamPath, protocol.ParamSource} {
 			// As core read them: trimmed, a source as an address.
-			if v, ok := wire[key]; ok && v != "" && (front == protocol.FrontForward || key == protocol.ParamSource) {
+			if v, ok := wire[key]; ok && v != "" && (front == protocol.FrontForward || protocol.IsDesktopFront(front) || key == protocol.ParamSource) {
 				values[key] = v
+			}
+		}
+		if protocol.IsDesktopFront(front) {
+			// Its server's port, the protocol's when none was given, and
+			// RDP's settings as the session takes them (their defaults).
+			values[protocol.ParamTo] = wire[protocol.ParamTo]
+			withDefault(values, commands[i].Params, protocol.ParamSecurity)
+			withDefault(values, commands[i].Params, protocol.ParamIgnoreCert)
+			if front != protocol.FrontRDP {
+				delete(values, protocol.ParamSecurity)
+				delete(values, protocol.ParamIgnoreCert)
 			}
 		}
 		if front == protocol.FrontTerminal {
@@ -482,6 +495,12 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
 }
 
+// desktopParam: one of the desktop fronts' own params, offered where core
+// draws desktops.
+func desktopParam(key string) bool {
+	return key == protocol.ParamCredential || key == protocol.ParamSecurity || key == protocol.ParamIgnoreCert
+}
+
 // terminalParam: one of a terminal's params, offered where the minion runs
 // processes.
 func terminalParam(key string) bool {
@@ -491,27 +510,60 @@ func terminalParam(key string) bool {
 // tunnelCommand is a tunnel command as a build of target has it: what it
 // opens narrowed by the target, and core's own params beside the command's
 // (no num): its front, port, destination and cap, a path, a source address
-// and TLS where its minion opens them, and the terminal front with its
-// program, args and size where it runs processes.
-func tunnelCommand(sc protocol.BuildSchema, c protocol.BuildCommand, target string) protocol.BuildCommand {
+// and TLS where its minion opens them, the terminal front with its
+// program, args and size where it runs processes, and the desktop fronts
+// with their login and RDP's settings where core draws desktops (desktops:
+// a guacd) and the minion opens TCP connections.
+func tunnelCommand(sc protocol.BuildSchema, c protocol.BuildCommand, target string, desktops bool) protocol.BuildCommand {
 	c.Opens = sc.CommandOpens(c, target)
+	desktops = desktops && c.CanOpen(protocol.OpenTCP)
 	params := slices.Clone(c.Params)
 	for _, p := range protocol.TunnelCoreParams(c.Action) {
 		switch {
 		case p.Key == protocol.ParamPath && !c.CanOpen(protocol.OpenUnix) && !c.CanOpen(protocol.OpenPipe),
 			p.Key == protocol.ParamSource && !c.CanOpen(protocol.OpenSource),
 			p.Key == protocol.ParamTLS && !c.CanOpen(protocol.OpenTLS),
-			terminalParam(p.Key) && !c.CanOpen(protocol.OpenProcess):
+			terminalParam(p.Key) && !c.CanOpen(protocol.OpenProcess),
+			desktopParam(p.Key) && !desktops:
 			continue
 		}
-		if p.Key == protocol.ParamFront && !c.CanOpen(protocol.OpenProcess) {
-			// No terminal where the minion runs no processes.
-			p.Options = slices.DeleteFunc(slices.Clone(p.Options), func(o protocol.EnumOption) bool { return o.Value == protocol.FrontTerminal })
+		if p.Key == protocol.ParamFront {
+			// No terminal where the minion runs no processes; no desktop
+			// where core draws none.
+			p.Options = slices.DeleteFunc(slices.Clone(p.Options), func(o protocol.EnumOption) bool {
+				return o.Value == protocol.FrontTerminal && !c.CanOpen(protocol.OpenProcess) || protocol.IsDesktopFront(o.Value) && !desktops
+			})
 		}
 		params = append(params, p)
 	}
-	c.Params = params
+	c.Params = offeredFronts(params)
 	return c
+}
+
+// offeredFronts narrows params that apply by the front (When) to the fronts
+// the front param offers, as help and refusals then say them; one that
+// applies by none of them goes.
+func offeredFronts(params []protocol.FieldSpec) []protocol.FieldSpec {
+	i := slices.IndexFunc(params, func(p protocol.FieldSpec) bool { return p.Key == protocol.ParamFront })
+	if i < 0 {
+		return params
+	}
+	offered := map[string]bool{}
+	for _, o := range params[i].Options {
+		offered[o.Value] = true
+	}
+	out := params[:0:0]
+	for _, p := range params {
+		if p.When != nil && p.When.Key == protocol.ParamFront {
+			values := slices.DeleteFunc(slices.Clone(p.When.Values), func(v string) bool { return !offered[v] })
+			if len(values) == 0 {
+				continue
+			}
+			p.When = &protocol.FieldCondition{Key: p.When.Key, Values: values}
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // withDefault puts a param's default in a task's args where the operator
@@ -669,6 +721,22 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 			return 0, "", err
 		}
 		o.Purpose = models.OperationalPurposeForward
+	case protocol.FrontRDP, protocol.FrontVNC, protocol.FrontSSH, protocol.FrontTelnet:
+		// A forward to the protocol's server, at its port when the task
+		// names none; guacd draws it (MinionDesktopController).
+		if !r.tunnels.Desktops() {
+			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "core draws no desktops: it has no guacd (GUACD_ADDRESS)")
+		}
+		if path != "" {
+			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "path: a forward's, not a desktop's")
+		}
+		if to, _ := protocol.ArgInt(wire, protocol.ParamTo); to == 0 {
+			wire[protocol.ParamTo] = int64(protocol.DesktopPort(front))
+		}
+		if err := destination(); err != nil {
+			return 0, "", err
+		}
+		o.Purpose = front
 	}
 	port, err := r.tunnels.Open(ctx, o)
 	if errors.Is(err, miniontunnels.ErrNoPort) {

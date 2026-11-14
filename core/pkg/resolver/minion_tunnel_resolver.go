@@ -76,7 +76,7 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 	if d, ok := protocol.ArgDuration(args, "timeout"); ok && d > 0 {
 		m.TimeoutMs = int(d.Milliseconds())
 	}
-	if front == protocol.FrontForward {
+	if front == protocol.FrontForward || protocol.IsDesktopFront(front) {
 		// Its destination, as its args say (core checked them when it
 		// queued the task): a host and a port, or a path.
 		host, _ := protocol.ArgString(args, protocol.ParamHost)
@@ -94,6 +94,10 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 		m.Source = strPtr(source)
 	}
 	m.SocksBind = listening && front == protocol.FrontSOCKS && sum.Accept
+	if protocol.IsDesktopFront(front) {
+		m.Desktop = r.tunnels.Desktops()
+		m.Login = r.desktopLogin(ctx, t.OperationID, args)
+	}
 	if front == protocol.FrontTerminal {
 		// Its program and size, as its args say (core put the defaults
 		// there when it queued the task).
@@ -603,4 +607,28 @@ func (r *minionTaskResolver) LoadVPNTunnel(ctx context.Context, taskID string) *
 		return nil
 	}
 	return r.vpnTunnelModel(v)
+}
+
+// desktopLogin is the name of the credential a desktop's args name (its
+// login); nil for none, or one core cannot resolve (gone, converted).
+func (r *minionTaskResolver) desktopLogin(ctx context.Context, operationID string, args map[string]any) *string {
+	id, _ := protocol.ArgString(args, protocol.ParamCredential)
+	op, err := uuid.Parse(operationID)
+	if id == "" || err != nil || r.creds == nil {
+		return nil
+	}
+	field := []protocol.FieldSpec{{Key: protocol.ParamCredential, Type: protocol.FieldCredential}}
+	given, err := r.creds.ResolveFields(ctx, op, field, map[string]any{protocol.ParamCredential: id})
+	if err != nil {
+		return nil
+	}
+	c, ok := given[id]
+	if !ok {
+		return nil
+	}
+	name := c.Name
+	if name == "" {
+		name = c.Username
+	}
+	return &name
 }

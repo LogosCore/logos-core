@@ -79,6 +79,17 @@ data:
   OPERATIONAL_ADDRESS: {{ .address | quote }}
   {{- end }}
 
+  # ----- Desktops (tunnels' rdp, vnc, ssh and telnet fronts) -----
+  # guacd draws them, reaching core's operational ports through their
+  # Service; without operational ports, or with guacd off, no desktop.
+  {{- if and .Values.guacd.enabled (gt (int .Values.core.operationalPorts.count) 0) }}
+  GUACD_ADDRESS: {{ printf "%s:%d" (include "logos.guacd.fullname" .) (int .Values.guacd.port) | quote }}
+  GUACD_CORE_HOST: {{ printf "%s-operational" (include "logos.core.fullname" .) | quote }}
+  {{- else }}
+  GUACD_ADDRESS: ""
+  GUACD_CORE_HOST: ""
+  {{- end }}
+
   # ----- Auth -----
   AUTH_ACCESS_TTL: {{ .Values.core.config.auth.accessTtl | quote }}
   AUTH_REFRESH_TTL: {{ .Values.core.config.auth.refreshTtl | quote }}

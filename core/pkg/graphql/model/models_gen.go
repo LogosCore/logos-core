@@ -1209,6 +1209,8 @@ type MinionTunnel struct {
 	Port       int                `json:"port"`
 	Address    *string            `json:"address,omitempty"`
 	Front      string             `json:"front"`
+	Desktop    bool               `json:"desktop"`
+	Login      *string            `json:"login,omitempty"`
 	Reverse    bool               `json:"reverse"`
 	To         *string            `json:"to,omitempty"`
 	Path       *string            `json:"path,omitempty"`

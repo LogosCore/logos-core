@@ -88,6 +88,9 @@ const (
 	// OperationalPurposeTerminal: a process for each connection, in a
 	// terminal (protocol.FrontTerminal): raw on the port, or the web app's.
 	OperationalPurposeTerminal = "terminal"
+	// A desktop's (protocol.DesktopFronts): its front, rdp, vnc, ssh or
+	// telnet, a forward to its server (Host, HostPort) that guacd draws.
+	//
 	// OperationalPurposeReverse: a reverse tunnel, which listens on the
 	// minion's host (protocol.ActionReverseTunnel): no operational port, a
 	// MinionListener, whose Front says what core does with its streams.

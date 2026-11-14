@@ -1196,6 +1196,25 @@ func TestForwardCarriesAStream(t *testing.T) {
 	}
 }
 
+// A desktop's port (its purpose its front, rdp) is a forward to its
+// server: guacd's connection, or an operator's client, a stream there.
+func TestDesktopPortForwards(t *testing.T) {
+	host, port := splitAddr(t, echo(t))
+	r := newRig(t, 0, nil, func(o *Opening) { o.Purpose, o.Host, o.HostPort = protocol.FrontRDP, host, port })
+	r.tasks.ack(r.task)
+	startMinion(t, r)
+	c, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(r.port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	roundTrip(t, c, 64<<10)
+	eventually(t, "the stream ends done", func() bool { return r.stream(1).End == models.TunnelEndDone })
+	if rec := r.stream(1); rec.Host != host || rec.Port != port {
+		t.Errorf("record %+v", rec)
+	}
+}
+
 // A forward whose destination refuses resets the client's connection, as
 // the destination would.
 func TestForwardRefused(t *testing.T) {
