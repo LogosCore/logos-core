@@ -2,6 +2,7 @@ import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
 import { cn } from "@/lib/utils"
+import { keepSubmitIn } from "@/lib/portal-events"
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
@@ -18,6 +19,7 @@ function PopoverContent({
   side = "bottom",
   sideOffset = 4,
   anchor,
+  onSubmit,
   ...props
 }: PopoverPrimitive.Popup.Props &
   Pick<
@@ -44,6 +46,8 @@ function PopoverContent({
             className
           )}
           {...props}
+          // A form in it submits itself alone (lib/portal-events.ts).
+          onSubmit={keepSubmitIn(onSubmit)}
         />
       </PopoverPrimitive.Positioner>
     </PopoverPrimitive.Portal>

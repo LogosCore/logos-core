@@ -2,6 +2,7 @@ import * as React from "react";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 
 import { cn } from "@/lib/utils";
+import { keepSubmitIn } from "@/lib/portal-events";
 import { Button } from "@/components/ui/button";
 import { XIcon } from "lucide-react";
 
@@ -39,6 +40,7 @@ function SheetContent({
   children,
   side = "right",
   showCloseButton = true,
+  onSubmit,
   ...props
 }: SheetPrimitive.Popup.Props & {
   side?: "top" | "right" | "bottom" | "left";
@@ -55,6 +57,8 @@ function SheetContent({
           className,
         )}
         {...props}
+        // A form in it submits itself alone (lib/portal-events.ts).
+        onSubmit={keepSubmitIn(onSubmit)}
       >
         {children}
         {showCloseButton && (

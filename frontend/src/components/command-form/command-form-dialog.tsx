@@ -6,6 +6,7 @@ import { errorMessage } from "@/components/modules/management/api-errors"
 import { ParamFields } from "@/components/modules/management/param-fields"
 import { evaluateParams, initialParamDrafts, type Draft, type FieldDef } from "@/components/modules/management/field-values"
 import { cn } from "@/lib/utils"
+import { fromWithin } from "@/lib/portal-events"
 
 // The app's one form for running something with typed params: a session's
 // command (the console's Shift+Enter, or its form button), a module's
@@ -96,9 +97,10 @@ function CommandForm({
   }
 
   // Ctrl+Enter runs from anywhere in the form, a text area too (where
-  // Enter is a new line); Enter in an input runs by submitting the form.
+  // Enter is a new line); Enter in an input runs by submitting the form. Not
+  // from a popup opened from it (a credential picker): its keys are its own.
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && fromWithin(e)) {
       e.preventDefault()
       void submit()
     }

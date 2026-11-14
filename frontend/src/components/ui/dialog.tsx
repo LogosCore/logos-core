@@ -4,6 +4,7 @@ import * as React from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
+import { keepSubmitIn } from "@/lib/portal-events"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
@@ -44,6 +45,7 @@ function DialogContent({
   overlayClassName,
   children,
   showCloseButton = true,
+  onSubmit,
   ...props
 }: DialogPrimitive.Popup.Props & {
   /** Classes for the backdrop behind the dialog. */
@@ -60,6 +62,9 @@ function DialogContent({
           className
         )}
         {...props}
+        // A form in it submits itself alone, not the form it was opened
+        // from (lib/portal-events.ts).
+        onSubmit={keepSubmitIn(onSubmit)}
       >
         {children}
         {showCloseButton && (

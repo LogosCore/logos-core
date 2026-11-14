@@ -13,6 +13,7 @@ import {
   useQueueMinionTask,
 } from "@/graphql/hooks/minion-tasks"
 import { useDebounced } from "@/hooks/use-debounced"
+import { fromWithin } from "@/lib/portal-events"
 import { CommandBar } from "./command-bar"
 import { useConsoleCommands } from "./console-commands"
 import { commandHistory, lineOf } from "./command-line"
@@ -152,8 +153,10 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
           ? (commandsQ.error as Error).message
           : undefined
 
+  // Not from a dialog opened from the console (an upload's, a command's
+  // form): Ctrl+F there is the browser's.
   const onKeyDown = (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "f" && selected) {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "f" && selected && fromWithin(e)) {
       e.preventDefault()
       setFindSignal((n) => n + 1)
     }

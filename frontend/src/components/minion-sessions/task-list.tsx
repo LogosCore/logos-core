@@ -7,6 +7,7 @@ import type { MinionTaskFilter } from "@/graphql/hooks/minion-tasks"
 import { useNow } from "@/hooks/use-now"
 import { dayGroup, formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
+import { fromWithin } from "@/lib/portal-events"
 import { lineOf, type CommandDef } from "./command-line"
 import { clock, markedBy, useTaskActions, useToggleImportant, type Task } from "./task-actions"
 import { emptyListText } from "./task-filter"
@@ -110,7 +111,10 @@ export function TaskList({
   }, [following, selectedId])
 
   const selected = selectedId ? tasks.find((t) => t.id === selectedId) : undefined
+  // The list's keys: not those of a row's menu, a popup opened from it
+  // (its arrows move in the menu, S is no star there).
   const onKeyDown = (e: KeyboardEvent) => {
+    if (!fromWithin(e)) return
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault()
       onStep(e.key === "ArrowUp" ? -1 : 1)
@@ -124,7 +128,7 @@ export function TaskList({
   }
   // Ctrl+F in the list goes to its search, not the output's find.
   const onPaneKeyDown = (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "f") {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "f" && fromWithin(e)) {
       e.preventDefault()
       e.stopPropagation()
       search.current?.focus()
