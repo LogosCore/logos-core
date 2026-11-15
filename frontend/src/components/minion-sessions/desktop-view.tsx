@@ -27,7 +27,8 @@ import {
 // keys typed while the frame has focus going to the server, its clipboard
 // through a panel (the ways its settings let it go), and the login the
 // server asks for when the task gave none. Each one opened is its own
-// session with the server, drawn by the settings it opened with.
+// session with the server, drawn by the settings it opened with, and
+// recorded by core (the task's Recordings tab).
 
 export interface DesktopViewProps {
   taskId: string
@@ -183,6 +184,11 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
             {error ?? (phase === "connecting" ? "connecting…" : phase === "connected" ? "connected" : "ended")}
           </span>
           {watched && !error && <span className="shrink-0 text-muted-foreground">· view only</span>}
+          {phase !== "ended" && (
+            <span className="shrink-0 text-muted-foreground" title="Core records this session: the task's Recordings tab plays it once it ends">
+              · recorded
+            </span>
+          )}
           {warning && <span className="truncate text-amber-600 dark:text-amber-400">· {warning}</span>}
         </span>
         {graphical && !watched && phase === "connected" && (

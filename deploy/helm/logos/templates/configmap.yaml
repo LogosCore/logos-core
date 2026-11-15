@@ -72,6 +72,9 @@ data:
   MINION_FILE_BUCKET: {{ .Values.core.config.minionFile.bucket | quote }}
   MINION_FILE_MAX_SIZE: {{ .Values.core.config.minionFile.maxSize | int64 | quote }}
 
+  # ----- Desktop recordings (each desktop the web app opens) -----
+  DESKTOP_RECORDING_BUCKET: {{ .Values.core.config.desktopRecording.bucket | quote }}
+
   # ----- Operational ports (tunnels' SOCKS proxies) -----
   {{- with .Values.core.operationalPorts }}
   OPERATIONAL_PORTS: {{ if gt (int .count) 0 }}{{ printf "%d-%d" (int .first) (add (int .first) (int .count) -1) | quote }}{{ else }}""{{ end }}

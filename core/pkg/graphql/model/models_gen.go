@@ -524,6 +524,33 @@ type CredentialUsage struct {
 	Tasks     int                      `json:"tasks"`
 }
 
+type DesktopRecording struct {
+	ID         string  `json:"id"`
+	TaskID     string  `json:"taskId"`
+	Number     int     `json:"number"`
+	Front      string  `json:"front"`
+	UserID     string  `json:"userId"`
+	Username   string  `json:"username"`
+	Settings   any     `json:"settings,omitempty"`
+	Width      int     `json:"width"`
+	Height     int     `json:"height"`
+	Keys       bool    `json:"keys"`
+	State      string  `json:"state"`
+	StartedAt  string  `json:"startedAt"`
+	EndedAt    *string `json:"endedAt,omitempty"`
+	DurationMs int     `json:"durationMs"`
+	Size       int     `json:"size"`
+	Lost       int     `json:"lost"`
+	End        *string `json:"end,omitempty"`
+	Msg        *string `json:"msg,omitempty"`
+	Path       string  `json:"path"`
+}
+
+type DesktopRecordingPage struct {
+	Recordings []*DesktopRecording `json:"recordings"`
+	Before     *string             `json:"before,omitempty"`
+}
+
 type FactoryKind struct {
 	ModuleName string       `json:"moduleName"`
 	Schema     *BuildSchema `json:"schema"`
@@ -1125,6 +1152,7 @@ type MinionTask struct {
 	Feedback          []*MinionFeedback `json:"feedback"`
 	FeedbackErrors    int               `json:"feedbackErrors"`
 	FeedbackWarnings  int               `json:"feedbackWarnings"`
+	Recordings        int               `json:"recordings"`
 	Rev               int               `json:"rev"`
 	SessionID         string            `json:"sessionId"`
 	OperationID       string            `json:"operationId"`

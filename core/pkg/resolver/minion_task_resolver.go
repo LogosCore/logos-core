@@ -75,6 +75,10 @@ type IMinionTaskResolver interface {
 	// streams, an operation's operational ports.
 	Tunnel(ctx context.Context, t *model.MinionTask) (*model.MinionTunnel, error)
 	MinionTunnelStreams(ctx context.Context, taskID string, last *int, before, search, state *string) (*model.MinionTunnelStreamPage, error)
+	// Desktops' recordings (desktop_recording_resolver.go): a task's, a
+	// page at a time; one deleted.
+	DesktopRecordings(ctx context.Context, taskID string, last *int, before *string) (*model.DesktopRecordingPage, error)
+	DeleteDesktopRecording(ctx context.Context, id string) (bool, error)
 	OperationalPorts(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error)
 	// LoadPort is a task's port, for a subscriber: nil when it has none.
 	LoadPort(ctx context.Context, taskID string) *model.OperationalPort
@@ -145,6 +149,8 @@ type minionTaskResolver struct {
 	// tunnels opens tunnel tasks' ports; nil, a tunnel command takes no
 	// task.
 	tunnels TaskTunnels
+	// recordings are the desktops'; nil, a task has none.
+	recordings TaskRecordings
 }
 
 // TaskTunnels opens a tunnel task's operational port and closes it, and
@@ -209,10 +215,11 @@ type TaskFiles interface {
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
 	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus,
 	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser, targets TaskTargets, connector TaskConnector,
-	limits MaxTasksSetter, feedback repository.IMinionFeedbackRepository, creds TaskCredentials, tunnels TaskTunnels) IMinionTaskResolver {
+	limits MaxTasksSetter, feedback repository.IMinionFeedbackRepository, creds TaskCredentials, tunnels TaskTunnels,
+	recordings TaskRecordings) IMinionTaskResolver {
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
 		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser, targets: targets, connector: connector,
-		limits: limits, feedback: feedback, creds: creds, tunnels: tunnels}
+		limits: limits, feedback: feedback, creds: creds, tunnels: tunnels, recordings: recordings}
 }
 
 const (
@@ -1291,7 +1298,7 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 		OutputSize: int(t.OutSize), OutputTruncated: t.OutTruncated, Parts: t.Parts, DataParts: t.DataParts,
 		Result: strPtr(t.Result), Action: strPtr(t.Action), DataSize: int(t.DataSize), DataTruncated: t.DataTruncated,
 		DataProblem: strPtr(t.DataProblem), MissingParts: t.MissingParts(),
-		FeedbackErrors: t.FeedbackErrors, FeedbackWarnings: t.FeedbackWarnings, As: toIdentityModel(t.As),
+		FeedbackErrors: t.FeedbackErrors, FeedbackWarnings: t.FeedbackWarnings, As: toIdentityModel(t.As), Recordings: t.Recordings,
 	}
 	if name, ok := names[t.IssuedBy]; ok {
 		m.IssuedByName = &name

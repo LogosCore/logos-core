@@ -35,6 +35,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/modulegate"
 	"github.com/logoscore/logos-core/core/pkg/modulelogs"
 	"github.com/logoscore/logos-core/core/pkg/modulemgmt"
+	"github.com/logoscore/logos-core/core/pkg/recordings"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/skills"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
@@ -93,6 +94,7 @@ type Repositories struct {
 	MinionFolder       repository.IMinionSessionFolderRepository
 	MinionTask         repository.IMinionTaskRepository
 	MinionFile         repository.IMinionFileRepository
+	DesktopRecording   repository.IDesktopRecordingRepository
 	FsEntry            repository.IFsEntryRepository
 	MinionFeedback     repository.IMinionFeedbackRepository
 	MinionIdentity     repository.IMinionIdentityRepository
@@ -168,6 +170,8 @@ type App struct {
 	minionFiles *minionfiles.Service
 	// minionStreams relays the files minions stream (stream_file tasks).
 	minionStreams *minionstreams.Service
+	// recordings keeps the desktops' recordings.
+	recordings *recordings.Service
 	// minionTunnels holds tunnel tasks' SOCKS ports and their streams.
 	minionTunnels *miniontunnels.Service
 	// fileBrowser keeps the snapshots of machines' file systems.
@@ -270,6 +274,10 @@ func NewApp() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	recordingSvc, err := newRecordingService(ctx, e, l, repos, bus)
+	if err != nil {
+		return nil, err
+	}
 	fileBrowser := filebrowser.NewService(repos.FsEntry, repos.FsListing, repos.MinionTask, repos.MinionSession, minionFiles, bus, l)
 	// A stream's file within core's file cap is kept as it passes, as a
 	// download's is.
@@ -357,6 +365,7 @@ func NewApp() (*App, error) {
 		builds:          buildSvc,
 		minionFiles:     minionFiles,
 		minionStreams:   minionStreams,
+		recordings:      recordingSvc,
 		minionTunnels:   minionTunnels,
 		fileBrowser:     fileBrowser,
 		minionSync:      minionSync,
@@ -463,6 +472,7 @@ func (a *App) startLifecycle() {
 	a.builds.Start()
 	a.minionFiles.Start()
 	a.minionStreams.Start()
+	a.recordings.Start()
 	a.minionTunnels.Start(context.Background())
 	stopTasks, stopDelegates := a.minionSync.WatchTasks(), a.minionSync.WatchDelegates()
 	a.stopTaskWatch = func() { stopTasks(); stopDelegates() }
@@ -490,6 +500,10 @@ func (a *App) stopLifecycle() {
 	}
 	if a.minionStreams != nil {
 		a.minionStreams.Stop()
+	}
+	// What the desktops recorded is kept, before their tunnels close.
+	if a.recordings != nil {
+		a.recordings.Stop()
 	}
 	if a.minionTunnels != nil {
 		a.minionTunnels.Stop()

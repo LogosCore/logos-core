@@ -35,6 +35,7 @@ import { FileView } from "./file-view"
 import { UploadView } from "./upload-view"
 import { StreamView } from "./stream-view"
 import { TunnelView } from "./tunnel-view"
+import { RecordingsView } from "./recordings-view"
 import { DelegateView } from "./delegate-view"
 import { FRONT_FORWARD, FRONT_TERMINAL, FRONT_VPN } from "./tunnel-values"
 import type { DeleteTarget } from "./delete-dialog"
@@ -186,6 +187,8 @@ export function TaskDetail({
   const keptStream = t.result === "file_stream" && t.file?.state === "COMPLETE"
   // A tunnel task's proxy shows from its queueing: core took its port then.
   const isTunnel = t.tunnel != null
+  // A desktop task's: each desktop opened here, recorded.
+  const isDesktop = t.tunnel != null && !t.tunnel.reverse && isDesktopFront(t.tunnel.front)
   // A delegate task's: what it serves and carries.
   const isDelegate = t.delegate != null
   const hasData =
@@ -212,12 +215,15 @@ export function TaskDetail({
     t.dataTruncated ? "Cut at 4 MiB with the output: the rest was dropped." : null,
   ].filter((n): n is string => n !== null)
 
-  const [tab, setTab] = useState<"output" | "data" | "feedback" | "json" | null>(null)
+  const [tab, setTab] = useState<"output" | "data" | "feedback" | "recordings" | "json" | null>(null)
   // Data alone shows as data; with output, the output first. An upload
-  // shows its progress first, whatever it prints. Feedback only when asked.
+  // shows its progress first, whatever it prints. Feedback and a desktop's
+  // recordings only when asked.
   const shown =
     tab === "json"
       ? "json"
+      : tab === "recordings" && isDesktop
+        ? "recordings"
       : tab === "feedback" && hasFeedback
         ? "feedback"
         : tab === "data" && hasData
@@ -248,6 +254,14 @@ export function TaskDetail({
           {hasData && (
             <TabButton active={shown === "data"} onClick={() => setTab("data")}>
               {isDelegate ? "Delegate" : isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? (t.tunnel?.front === FRONT_FORWARD ? "Forward" : t.tunnel?.front === FRONT_TERMINAL ? "Terminal" : t.tunnel?.front === FRONT_VPN ? "VPN" : t.tunnel && isDesktopFront(t.tunnel.front) ? desktopName(t.tunnel.front) : "Proxy") : "Data"}
+            </TabButton>
+          )}
+          {isDesktop && (
+            <TabButton active={shown === "recordings"} onClick={() => setTab("recordings")} title="Each desktop opened here, recorded: they play here">
+              <span className="inline-flex items-center gap-1.5">
+                Recordings
+                {t.recordings > 0 && <span className="text-muted-foreground tabular-nums">{t.recordings}</span>}
+              </span>
             </TabButton>
           )}
           {hasFeedback && (
@@ -290,7 +304,7 @@ export function TaskDetail({
               <BracesIcon />
             </Button>
           )}
-          {shown === "data" && (isTunnel || isDelegate) ? null : shown === "data" ? (
+          {shown === "recordings" || (shown === "data" && (isTunnel || isDelegate)) ? null : shown === "data" ? (
             <>
               <Button variant="ghost" size="icon-xs" title="Copy the data as JSON" aria-label="Copy the data" disabled={!data}
                 onClick={() => void copyToClipboard(JSON.stringify(data, null, 2), "data")}>
@@ -344,7 +358,9 @@ export function TaskDetail({
       {t.err && <div className="border-b px-3 py-1 font-mono text-xs whitespace-pre-wrap text-red-600 dark:text-red-400">{t.err}</div>}
       {t.cancelReason && <div className="border-b px-3 py-1 text-xs text-muted-foreground">{t.cancelReason}</div>}
 
-      {shown === "feedback" ? (
+      {shown === "recordings" ? (
+        <RecordingsView key={t.id} task={t} canDelete={canMark} />
+      ) : shown === "feedback" ? (
         <TaskFeedbackView
           key={t.id}
           entries={feedback}

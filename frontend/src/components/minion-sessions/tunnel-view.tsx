@@ -435,6 +435,10 @@ export function TunnelView({
                   )}
                   {laggy && <span className="text-amber-600 dark:text-amber-400"> · {laggy}</span>}
                 </LabelRow>
+                <LabelRow label="Recorded">
+                  each desktop opened here: what it showed, the mouse and the keys typed in it (the Recordings tab plays
+                  them); your own client on the port is not
+                </LabelRow>
               </>
             ) : reverse || vpn ? null : (
               <LabelRow label="Speaks">

@@ -114,6 +114,11 @@ type MinionTask struct {
 	// sent about it (models.MinionFeedback): a task list marks it by them.
 	FeedbackErrors   int `bson:"feedback_errors,omitempty" json:"feedback_errors,omitempty"`
 	FeedbackWarnings int `bson:"feedback_warnings,omitempty" json:"feedback_warnings,omitempty"`
+	// Recordings counts a desktop task's recordings kept
+	// (models.DesktopRecording); RecordingsMade how many it had, deleted
+	// ones too: the next one's number is one more.
+	Recordings     int   `bson:"recordings,omitempty" json:"recordings,omitempty"`
+	RecordingsMade int64 `bson:"recordings_made,omitempty" json:"recordings_made,omitempty"`
 	// DataParts counts the parts with data: a client showing the data
 	// reads it again when it grows (Parts grows with listing pieces too).
 	DataParts int `bson:"data_parts,omitempty" json:"data_parts,omitempty"`

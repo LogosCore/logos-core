@@ -103,6 +103,11 @@ func (r *mutationResolver) DisconnectMinionVPNClient(ctx context.Context, taskID
 	return r.MinionTaskResolver.DisconnectMinionVPNClient(ctx, taskID, client)
 }
 
+// DeleteDesktopRecording is the resolver for the deleteDesktopRecording field.
+func (r *mutationResolver) DeleteDesktopRecording(ctx context.Context, id string) (bool, error) {
+	return r.MinionTaskResolver.DeleteDesktopRecording(ctx, id)
+}
+
 // MinionStreamLink is the resolver for the minionStreamLink field.
 func (r *mutationResolver) MinionStreamLink(ctx context.Context, taskID string) (*model.MinionStreamLink, error) {
 	return r.MinionTaskResolver.MinionStreamLink(ctx, taskID)
@@ -136,6 +141,11 @@ func (r *queryResolver) MinionSessionCommands(ctx context.Context, sessionID str
 // MinionDesktopSettings is the resolver for the minionDesktopSettings field.
 func (r *queryResolver) MinionDesktopSettings(ctx context.Context, front string) ([]*model.ModuleField, error) {
 	return r.MinionTaskResolver.MinionDesktopSettings(ctx, front)
+}
+
+// DesktopRecordings is the resolver for the desktopRecordings field.
+func (r *queryResolver) DesktopRecordings(ctx context.Context, taskID string, last *int, before *string) (*model.DesktopRecordingPage, error) {
+	return r.MinionTaskResolver.DesktopRecordings(ctx, taskID, last, before)
 }
 
 // MinionFileStrings is the resolver for the minionFileStrings field.

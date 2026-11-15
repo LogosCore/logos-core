@@ -14,6 +14,8 @@ import { useSubscription } from "@/hooks/use-subscription"
 import {
   CancelMinionTaskDocument,
   CreateMinionVpnKeyDocument,
+  DeleteDesktopRecordingDocument,
+  DesktopRecordingsDocument,
   DisconnectMinionVpnClientDocument,
   SetMinionTunnelRoutesDocument,
   MinionDesktopSettingsDocument,
@@ -30,6 +32,7 @@ import {
   QueueMinionTaskDocument,
   SetMinionTaskImportantDocument,
   SetMinionTunnelCapDocument,
+  type DesktopRecordingsQuery,
   type MinionTaskFieldsFragment,
   type MinionTasksQuery,
 } from "@/graphql/gql/graphql"
@@ -69,6 +72,7 @@ export const minionTaskKeys = {
   fileStrings: (fileId: string, filter: MinionFileStringsFilter) =>
     [...minionTaskKeys.all, "fileStrings", fileId, filter] as const,
   tunnelStreams: (taskId: string, filter: TunnelStreamsFilter) => [...minionTaskKeys.all, "tunnelStreams", taskId, filter] as const,
+  recordings: (taskId: string) => [...minionTaskKeys.all, "recordings", taskId] as const,
 }
 
 /** What a tunnel task's streams are narrowed by: the server's search, and OPEN or ENDED ("" for all). */
@@ -225,6 +229,55 @@ export function useMinionTunnelStreams(taskId: string, filter: TunnelStreamsFilt
     if (enabled) void refetch()
   }, [version, refetch, enabled])
   return query
+}
+
+/**
+ * A desktop task's recordings, the latest first a page at a time. The pages
+ * read are read again, in place, when version changes (the task's rev:
+ * core bumps it as one starts, ends or is deleted, and its live update
+ * says so).
+ */
+export function useDesktopRecordings(taskId: string, version: string, enabled = true) {
+  const query = useInfiniteQuery({
+    queryKey: minionTaskKeys.recordings(taskId),
+    queryFn: ({ pageParam }) => graphqlClient(DesktopRecordingsDocument, { taskId, last: 50, before: pageParam }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.desktopRecordings.before ?? undefined,
+    enabled,
+  })
+  const { refetch } = query
+  const seen = useRef(version)
+  useEffect(() => {
+    if (seen.current === version) return
+    seen.current = version
+    if (enabled) void refetch()
+  }, [version, refetch, enabled])
+  return query
+}
+
+type RecordingPages = InfiniteData<DesktopRecordingsQuery, string | null>
+
+/** Deletes a recording that ended: gone from its task's list at once. */
+export function useDeleteDesktopRecording(taskId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => graphqlClient(DeleteDesktopRecordingDocument, { id }),
+    onSuccess: (_data, id) =>
+      queryClient.setQueryData<RecordingPages>(minionTaskKeys.recordings(taskId), (data) =>
+        data
+          ? {
+              ...data,
+              pages: data.pages.map((p) => ({
+                ...p,
+                desktopRecordings: {
+                  ...p.desktopRecordings,
+                  recordings: p.desktopRecordings.recordings.filter((r) => r.id !== id),
+                },
+              })),
+            }
+          : data,
+      ),
+  })
 }
 
 /** A signed link to download a stream without a session (for curl): a

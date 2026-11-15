@@ -74,6 +74,7 @@ type operationResolver struct {
 	feedbackRepo   repository.IMinionFeedbackRepository      // needed for cascade delete
 	identityRepo   repository.IMinionIdentityRepository      // needed for cascade delete
 	minionFiles    MinionFileCleanup                         // needed for cascade delete
+	recordings     RecordingCleanup                          // needed for cascade delete
 	eventBus       eventbus.IEventBus                        // async event publishing
 }
 
@@ -184,6 +185,19 @@ type MinionFileCleanup interface {
 func WithMinionFiles(files MinionFileCleanup) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.minionFiles = files
+	}
+}
+
+// RecordingCleanup drops an operation's desktop recordings, files and all
+// (recordings.Service).
+type RecordingCleanup interface {
+	DeleteByOperation(ctx context.Context, operationID uuid.UUID) error
+}
+
+// WithDesktopRecordings adds the desktops' recordings for cascade delete.
+func WithDesktopRecordings(recs RecordingCleanup) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.recordings = recs
 	}
 }
 
@@ -410,6 +424,11 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.minionFiles != nil {
 		if err := r.minionFiles.DeleteByOperation(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's minion files: %w", err)
+		}
+	}
+	if r.recordings != nil {
+		if err := r.recordings.DeleteByOperation(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's desktop recordings: %w", err)
 		}
 	}
 	if r.fsEntryRepo != nil {

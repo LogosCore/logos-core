@@ -41,6 +41,7 @@ export const MinionTaskFields = graphql(`
     missingParts
     feedbackErrors
     feedbackWarnings
+    recordings
     as {
       user
       domain
@@ -193,6 +194,44 @@ export const MinionTunnelStreamsQuery = graphql(`
       }
       before
     }
+  }
+`)
+
+// A desktop task's recordings, the latest first a page at a time: each
+// desktop opened in the web app, recorded (core: minion_tasks.graphql).
+export const DesktopRecordingsQuery = graphql(`
+  query DesktopRecordings($taskId: ID!, $last: Int, $before: String) {
+    desktopRecordings(taskId: $taskId, last: $last, before: $before) {
+      recordings {
+        id
+        taskId
+        number
+        front
+        userId
+        username
+        settings
+        width
+        height
+        keys
+        state
+        startedAt
+        endedAt
+        durationMs
+        size
+        lost
+        end
+        msg
+        path
+      }
+      before
+    }
+  }
+`)
+
+// Deletes a recording that ended, its file with it.
+export const DeleteDesktopRecordingMutation = graphql(`
+  mutation DeleteDesktopRecording($id: ID!) {
+    deleteDesktopRecording(id: $id)
   }
 `)
 

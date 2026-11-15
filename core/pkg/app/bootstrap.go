@@ -18,6 +18,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/events"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/minionfiles"
+	"github.com/logoscore/logos-core/core/pkg/recordings"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/skills"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
@@ -94,6 +95,7 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		MinionFolder:       repository.NewMinionSessionFolderRepository(db),
 		MinionTask:         repository.NewMinionTaskRepository(db),
 		MinionFile:         repository.NewMinionFileRepository(db),
+		DesktopRecording:   repository.NewDesktopRecordingRepository(db),
 		FsEntry:            repository.NewFsEntryRepository(db),
 		MinionFeedback:     repository.NewMinionFeedbackRepository(db),
 		MinionIdentity:     repository.NewMinionIdentityRepository(db),
@@ -500,6 +502,23 @@ func newBuildService(ctx context.Context, e *environment.EnvironmentSettings, l 
 		builds.Config{Timeout: e.BuildTimeout, FileMaxSize: e.BuildFileMaxSize, ArtifactMaxSize: e.BuildArtifactMaxSize},
 		l.Named("builds"),
 	), nil
+}
+
+// newRecordingService stands up the desktops' recordings: their bucket and
+// the service that keeps them. A store that cannot be reached is fatal, as
+// for the minion files'.
+func newRecordingService(ctx context.Context, e *environment.EnvironmentSettings, l *zap.Logger, repos *Repositories,
+	bus eventbus.IEventBus) (*recordings.Service, error) {
+	store, err := blob.NewS3Store(ctx, blob.S3Config{
+		Endpoint:  e.SeaweedFSS3Endpoint,
+		AccessKey: e.SeaweedFSS3AccessKey,
+		SecretKey: e.SeaweedFSS3SecretKey,
+		Bucket:    e.DesktopRecordingBucket,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize the desktop recording store: %w", err)
+	}
+	return recordings.NewService(repos.DesktopRecording, repos.MinionTask, store, bus, recordings.DefaultConfig(), l), nil
 }
 
 // newMinionFileService stands up the files minions send: their bucket and

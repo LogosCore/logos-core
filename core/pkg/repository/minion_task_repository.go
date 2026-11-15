@@ -191,6 +191,11 @@ type IMinionTaskRepository interface {
 	// AddFeedback counts new feedback about one of the session's tasks: the
 	// task after; IsNotFound when it is not the session's.
 	AddFeedback(ctx context.Context, sessionID, taskID uuid.UUID, errors, warnings int) (*models.MinionTask, error)
+	// AddRecording counts a desktop task's recordings (pkg/recordings): kept
+	// by kept (1 for a new one, -1 for one deleted), made by made, its rev
+	// bumped (a recording's own change: 0 and 0). It returns the task
+	// after.
+	AddRecording(ctx context.Context, taskID uuid.UUID, kept, made int) (*models.MinionTask, error)
 
 	// Streams (minionstreams). StreamAnnounce records a stream_file
 	// task's announcement, once: IsNotFound for a task that is not the
@@ -871,6 +876,18 @@ func (r *minionTaskRepository) AddFeedback(ctx context.Context, sessionID, taskI
 	var after models.MinionTask
 	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID}).Apply(qmgo.Change{
 		Update:    bson.M{"$inc": bson.M{"feedback_errors": errors, "feedback_warnings": warnings, "rev": 1}},
+		ReturnNew: true,
+	}, &after)
+	if err != nil {
+		return nil, err
+	}
+	return &after, nil
+}
+
+func (r *minionTaskRepository) AddRecording(ctx context.Context, taskID uuid.UUID, kept, made int) (*models.MinionTask, error) {
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID}).Apply(qmgo.Change{
+		Update:    bson.M{"$inc": bson.M{"recordings": kept, "recordings_made": made, "rev": 1}},
 		ReturnNew: true,
 	}, &after)
 	if err != nil {

@@ -544,6 +544,22 @@ paths:
       summary: Channel sync (data plane)
       tags:
       - Channels
+  /desktop-recordings/{id}:
+    get:
+      parameters:
+      - description: Recording ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Download a desktop's recording
+      tags:
+      - Minion tasks
   /enroll:
     post:
       consumes:

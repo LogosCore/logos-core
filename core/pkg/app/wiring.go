@@ -21,22 +21,23 @@ import (
 
 // controllers holds every REST handler the router mounts.
 type controllers struct {
-	auth     controller.IAuthController
-	enroll   controller.IEnrollController
-	status   controller.IStatusController
-	channel  controller.IChannelController
-	link     controller.IChannelLinkController
-	factory  controller.IFactoryLinkController
-	skill    *controller.SkillController
-	build    *controller.BuildController
-	task     *controller.MinionTaskController
-	stream   *controller.MinionStreamController
-	terminal *controller.MinionTerminalController
-	desktop  *controller.MinionDesktopController
-	vpn      *controller.VPNController
-	wiki     *controller.WikiController
-	transfer *controller.WikiTransferController
-	webhook  *wiki.WebhookHandler
+	auth      controller.IAuthController
+	enroll    controller.IEnrollController
+	status    controller.IStatusController
+	channel   controller.IChannelController
+	link      controller.IChannelLinkController
+	factory   controller.IFactoryLinkController
+	skill     *controller.SkillController
+	build     *controller.BuildController
+	task      *controller.MinionTaskController
+	stream    *controller.MinionStreamController
+	terminal  *controller.MinionTerminalController
+	desktop   *controller.MinionDesktopController
+	recording *controller.DesktopRecordingController
+	vpn       *controller.VPNController
+	wiki      *controller.WikiController
+	transfer  *controller.WikiTransferController
+	webhook   *wiki.WebhookHandler
 
 	// oidc is nil when OIDC_ENABLED=false; its routes are then not mounted.
 	oidc controller.IOIDCController
@@ -109,10 +110,11 @@ func (a *App) buildControllers() *controllers {
 		stream:  controller.NewMinionStreamController(a.minionStreams, a.repos.Operation, a.logger),
 		terminal: controller.NewMinionTerminalController(a.minionTunnels, a.repos.MinionTask, a.repos.Operation,
 			gql.WSOriginCheck(a.env.CORSAllowedOrigins), a.logger),
-		desktop: controller.NewMinionDesktopController(a.minionTunnels, a.repos.MinionTask, a.credentialRefs, a.repos.Operation,
+		desktop: controller.NewMinionDesktopController(a.minionTunnels, a.repos.MinionTask, a.credentialRefs, a.repos.Operation, a.recordings,
 			controller.DesktopConfig{Guacd: a.env.Guacd, CoreHost: a.env.GuacdCoreHost}, gql.WSOriginCheck(a.env.CORSAllowedOrigins), a.logger),
-		vpn:  controller.NewVPNController(a.minionTunnels, a.env.VPNClientDir, a.logger),
-		wiki: controller.NewWikiController(a.repos.WikiDocument, a.repos.Operation, a.env.HocuspocusTicketSecret, a.logger),
+		recording: controller.NewDesktopRecordingController(a.recordings, a.repos.Operation, a.logger),
+		vpn:       controller.NewVPNController(a.minionTunnels, a.env.VPNClientDir, a.logger),
+		wiki:      controller.NewWikiController(a.repos.WikiDocument, a.repos.Operation, a.env.HocuspocusTicketSecret, a.logger),
 
 		// The runner and its pipeline are built in NewApp; this controller only
 		// stages uploads, queues jobs and serves status and downloads.
@@ -204,6 +206,7 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithMinionSessionFolderRepo(a.repos.MinionFolder),
 			resolver.WithMinionTaskRepo(a.repos.MinionTask),
 			resolver.WithMinionFiles(a.minionFiles),
+			resolver.WithDesktopRecordings(a.recordings),
 			resolver.WithFsEntryRepo(a.repos.FsEntry),
 			resolver.WithMinionFeedbackRepo(a.repos.MinionFeedback),
 			resolver.WithMinionIdentityRepo(a.repos.MinionIdentity),
@@ -238,7 +241,7 @@ func (a *App) buildResolvers() *resolvers {
 			a.repos.MinionTask, a.minionSync, a.repos.MinionFeedback, a.repos.MinionIdentity, a.repos.MinionFolder, a.repos.ModuleRegistry),
 		minionTasks: resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
 			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync, a.minionSync, a.repos.MinionFeedback,
-			a.credentialRefs, a.minionTunnels),
+			a.credentialRefs, a.minionTunnels, a.recordings),
 		minionTargets: resolver.NewMinionTargetResolver(a.minionTargets, a.repos.Build, a.repos.Operation),
 	}
 }

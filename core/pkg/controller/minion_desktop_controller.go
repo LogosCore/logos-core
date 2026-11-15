@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +21,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/guacd"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/recordings"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/responses"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -37,6 +39,12 @@ type DesktopCredentials interface {
 	Resolve(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID) (map[string]protocol.Credential, map[string]int64, error)
 }
 
+// DesktopRecordings records the desktops core relays (recordings.Service):
+// nil when the recording cannot be kept, and the desktop opens unrecorded.
+type DesktopRecordings interface {
+	Begin(ctx context.Context, b recordings.Beginning) *recordings.Recorder
+}
+
 // DesktopConfig is where core's guacd is (GUACD_ADDRESS) and the host it
 // reaches core's operational ports at (GUACD_CORE_HOST).
 type DesktopConfig struct {
@@ -52,16 +60,18 @@ type MinionDesktopController struct {
 	tasks    TerminalTasks
 	creds    DesktopCredentials
 	opRepo   gqlctx.OperationFinder
+	recs     DesktopRecordings
 	cfg      DesktopConfig
 	upgrader gws.Upgrader
 	logger   *zap.Logger
 }
 
 // NewMinionDesktopController takes checkOrigin from the GraphQL socket's,
-// as the terminal's does: a cookie authenticates the upgrade.
+// as the terminal's does: a cookie authenticates the upgrade. recs records
+// each desktop (nil: none is).
 func NewMinionDesktopController(ports DesktopPorts, tasks TerminalTasks, creds DesktopCredentials, opRepo gqlctx.OperationFinder,
-	cfg DesktopConfig, checkOrigin func(*http.Request) bool, logger *zap.Logger) *MinionDesktopController {
-	return &MinionDesktopController{ports: ports, tasks: tasks, creds: creds, opRepo: opRepo, cfg: cfg, logger: logger,
+	recs DesktopRecordings, cfg DesktopConfig, checkOrigin func(*http.Request) bool, logger *zap.Logger) *MinionDesktopController {
+	return &MinionDesktopController{ports: ports, tasks: tasks, creds: creds, opRepo: opRepo, recs: recs, cfg: cfg, logger: logger,
 		upgrader: gws.Upgrader{ReadBufferSize: 8 << 10, WriteBufferSize: 64 << 10, CheckOrigin: checkOrigin,
 			// The web app's Guacamole client asks for it.
 			Subprotocols: []string{"guacamole"}}}
@@ -91,9 +101,10 @@ var timezonePattern = regexp.MustCompile(`^[A-Za-z0-9_+\-/]{1,64}$`)
 // task's operational port, logging in with the task's credential and
 // drawing it by the settings the operator picked as it opened (a JSON
 // object: desktops.Fields, GraphQL minionDesktopSettings), then relays
-// it; the client's tunnel pings are answered. A desktop that does not
-// open sends an error instruction (its message and status code) and
-// closes with the code as the reason.
+// it; the client's tunnel pings are answered. Each is recorded as it goes
+// (pkg/recordings: GraphQL desktopRecordings), one that did not open
+// too. A desktop that does not open sends an error instruction (its
+// message and status code) and closes with the code as the reason.
 //
 //	@Summary		Open a desktop on a desktop task
 //	@Tags			Minion tasks
@@ -180,7 +191,7 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 		fail(guacd.StatusServerError, "core could not read the task's port")
 		return
 	}
-	settings, err := desktopSettings(front, c.Query("settings"), dc.cfg.CoreHost, port.Port)
+	values, settings, err := desktopSettings(front, c.Query("settings"), dc.cfg.CoreHost, port.Port)
 	if err != nil {
 		fail(guacd.StatusClientBadRequest, err.Error())
 		return
@@ -191,6 +202,12 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 		return
 	}
 	username := c.GetString("username")
+	var rec *recordings.Recorder
+	if dc.recs != nil {
+		userID, _ := uuid.Parse(c.GetString("userID"))
+		rec = dc.recs.Begin(ctx, recordings.Beginning{TaskID: id, Front: front, UserID: userID, Username: username, Settings: values,
+			Width: width, Height: height, Keys: settings["read-only"] != "true"})
+	}
 	cfg := guacd.Config{Protocol: front, Params: desktopParams(front, dc.cfg.CoreHost, port.Port, settings, login),
 		Width: width, Height: height, DPI: dpi, Images: []string{"image/png", "image/jpeg", "image/webp"}, Timezone: tz, Name: username}
 	sess, err := guacd.Open(ctx, dc.cfg.Guacd, cfg)
@@ -200,14 +217,15 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 			ge = &guacd.Error{Message: err.Error(), Status: guacd.StatusServerError}
 		}
 		dc.logger.Warn("A desktop did not open", zap.String("task_id", id.String()), zap.String("front", front), zap.Error(err))
+		rec.Fail(ge.Message)
 		fail(ge.Status, ge.Message)
 		return
 	}
-	defer func() { _ = sess.Close() }()
 	dc.logger.Info("A desktop opened", zap.String("task_id", id.String()), zap.String("front", front),
-		zap.String("user", username), zap.String("guacd_connection", sess.ID))
-	relayDesktop(conn, sess, write, &wmu)
-	dc.logger.Info("A desktop closed", zap.String("task_id", id.String()), zap.String("guacd_connection", sess.ID))
+		zap.String("user", username), zap.String("guacd_connection", sess.ID), zap.String("recording_id", rec.ID().String()))
+	end := relayDesktop(conn, sess, write, &wmu, rec)
+	rec.End(end)
+	dc.logger.Info("A desktop closed", zap.String("task_id", id.String()), zap.String("guacd_connection", sess.ID), zap.String("end", end))
 }
 
 // login is the credential a desktop task's args name, as guacd gets it;
@@ -239,16 +257,17 @@ func (dc *MinionDesktopController) login(ctx context.Context, t *models.MinionTa
 	return &cred, nil
 }
 
-// desktopSettings are the guacd params of the settings a desktop opens
-// with (raw: the JSON object the web app sent; none, the defaults), for its
-// server at host:port; an error says which are wrong.
-func desktopSettings(front, raw, host string, port int) (map[string]string, error) {
+// desktopSettings are the settings a desktop opens with (raw: the JSON
+// object the web app sent; none, the defaults), as it sent them, numbers
+// as JSON's, and their guacd params, for its server at host:port; an error
+// says which are wrong.
+func desktopSettings(front, raw, host string, port int) (map[string]any, map[string]string, error) {
 	var values map[string]any
 	if raw != "" {
 		d := json.NewDecoder(strings.NewReader(raw))
 		d.UseNumber()
 		if err := d.Decode(&values); err != nil {
-			return nil, errors.New("the desktop's settings are no JSON object")
+			return nil, nil, errors.New("the desktop's settings are no JSON object")
 		}
 	}
 	params, problems := desktops.Params(front, values, host, port)
@@ -258,9 +277,9 @@ func desktopSettings(front, raw, host string, port int) (map[string]string, erro
 		for i, k := range keys {
 			said[i] = k + ": " + problems[k]
 		}
-		return nil, errors.New("the desktop's settings: " + strings.Join(said, "; "))
+		return nil, nil, errors.New("the desktop's settings: " + strings.Join(said, "; "))
 	}
-	return params, nil
+	return values, params, nil
 }
 
 // desktopParams are a desktop session's connection params, by guacd's
@@ -296,12 +315,15 @@ func desktopParams(front, host string, port int, settings map[string]string, log
 	return p
 }
 
-// relayDesktop carries the session over the socket until either ends:
-// guacd's bytes to the web app as they come, whole characters to a
-// message; the web app's instructions to guacd, but for the tunnel's own,
-// a ping answered.
-func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error, wmu *sync.Mutex) {
+// relayDesktop carries the session over the socket until either ends,
+// recording it (rec: nil, it is not): guacd's bytes to the web app as they
+// come, whole characters to a message; the web app's instructions to
+// guacd, but for the tunnel's own, a ping answered. It says which ended
+// it: the web app (models.DesktopRecordingEndClosed) or guacd (...Desktop),
+// and returns once the session is closed.
+func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error, wmu *sync.Mutex, rec *recordings.Recorder) string {
 	out := make(chan struct{})
+	var guacdEnded atomic.Bool
 	go func() {
 		defer close(out)
 		buf := make([]byte, 64<<10)
@@ -309,6 +331,7 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 		for {
 			n, err := sess.Read(buf[pending:])
 			if n > 0 {
+				rec.FromGuacd(buf[pending : pending+n])
 				whole, rest := guacd.CutUTF8(buf[:pending+n])
 				if len(whole) > 0 && write(whole) != nil {
 					return
@@ -320,15 +343,26 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 			}
 		}
 		// guacd ended the session: so does the socket.
+		guacdEnded.Store(true)
 		wmu.Lock()
 		_ = conn.WriteControl(gws.CloseMessage, gws.FormatCloseMessage(gws.CloseNormalClosure, ""), time.Now().Add(desktopWriteWait))
 		wmu.Unlock()
 	}()
+	defer func() {
+		_ = sess.Close()
+		<-out
+	}()
+	ended := func() string {
+		if guacdEnded.Load() {
+			return models.DesktopRecordingEndDesktop
+		}
+		return models.DesktopRecordingEndClosed
+	}
 	conn.SetReadLimit(desktopReadLimit)
 	for {
 		kind, b, err := conn.ReadMessage()
 		if err != nil {
-			return
+			return ended()
 		}
 		if kind != gws.TextMessage {
 			continue
@@ -336,7 +370,7 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 		ins, err := guacd.Parse(string(b))
 		if err != nil {
 			// Not Guacamole's: the session ends.
-			return
+			return models.DesktopRecordingEndClosed
 		}
 		var toGuacd []byte
 		for _, i := range ins {
@@ -346,12 +380,13 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 				}
 				continue
 			}
+			rec.FromWeb(i)
 			toGuacd = append(toGuacd, i.Encode()...)
 		}
 		if len(toGuacd) > 0 {
 			if _, err := sess.Write(toGuacd); err != nil {
 				<-out
-				return
+				return models.DesktopRecordingEndDesktop
 			}
 		}
 	}

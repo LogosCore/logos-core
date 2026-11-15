@@ -1,10 +1,12 @@
 // Types for the parts of Apache Guacamole's JavaScript client the web app
 // uses (guacamole-common.js beside this file, 1.6.0): a client over a
 // WebSocket tunnel, its display, mouse and keyboard, and the streams of its
-// clipboard and of the values a server asks for.
+// clipboard and of the values a server asks for; a session recording's
+// player, over a tunnel of the web app's own, and its key events.
 
 declare namespace Guacamole {
   class Status {
+    constructor(code: number, message?: string)
     code: number
     message?: string
     isError(): boolean
@@ -19,9 +21,32 @@ declare namespace Guacamole {
     index: number
   }
 
+  // A tunnel: the base's state and handlers; one of the web app's own sets
+  // connect, disconnect and sendMessage.
   class Tunnel {
+    state: number
     onerror: ((status: Status) => void) | null
     onstatechange: ((state: number) => void) | null
+    oninstruction: ((opcode: string, args: string[]) => void) | null
+    connect: (data?: string) => void
+    disconnect: () => void
+    sendMessage: (...elements: unknown[]) => void
+    setState(state: number): void
+  }
+
+  namespace Tunnel {
+    const State: {
+      CONNECTING: 0
+      OPEN: 1
+      CLOSED: 2
+      UNSTABLE: 3
+    }
+  }
+
+  // The protocol's parser: text in, as it comes, whole instructions out.
+  class Parser {
+    receive(text: string): void
+    oninstruction: ((opcode: string, args: string[]) => void) | null
   }
 
   class WebSocketTunnel extends Tunnel {
@@ -109,6 +134,49 @@ declare namespace Guacamole {
     constructor(stream: OutputStream)
     sendText(text: string): void
     sendEnd(): void
+  }
+
+  // A session recording's player (guacd's format): fed by a tunnel, its
+  // frames playable as they come; times are milliseconds from its first.
+  class SessionRecording {
+    // refreshInterval: how often onseek says the position while it plays.
+    constructor(source: Tunnel | Blob, refreshInterval?: number)
+    connect(data?: string): void
+    disconnect(): void
+    abort(): void
+    getDisplay(): Display
+    isPlaying(): boolean
+    getPosition(): number
+    getDuration(): number
+    play(): void
+    pause(): void
+    seek(position: number, callback?: () => void): void
+    cancel(): void
+    onload: (() => void) | null
+    onerror: ((message: string) => void) | null
+    onabort: (() => void) | null
+    // duration: what is read so far; parsedSize: its characters.
+    onprogress: ((duration: number, parsedSize: number) => void) | null
+    onplay: (() => void) | null
+    onpause: (() => void) | null
+    onseek: ((position: number) => void) | null
+    // Once its tunnel closed: every key event in it.
+    onkeyevents: ((events: KeyEventInterpreter.KeyEvent[]) => void) | null
+  }
+
+  namespace KeyEventInterpreter {
+    class KeyDefinition {
+      keysym: number
+      name: string
+      // What it types, for a key that types something.
+      value?: string
+    }
+    class KeyEvent {
+      definition: KeyDefinition
+      pressed: boolean
+      // Milliseconds from the recording's first frame.
+      timestamp: number
+    }
   }
 
   const API_VERSION: string

@@ -165,6 +165,10 @@ core:
       bucket: minion-files
       maxSize: 2147483648      # 2 GiB (at most 64 GiB)
 
+    # The desktops' recordings: kept until their operation is deleted.
+    desktopRecording:
+      bucket: desktop-recordings
+
     auth:
       accessTtl: "15m"
       refreshTtl: "168h"

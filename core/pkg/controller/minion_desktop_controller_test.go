@@ -3,6 +3,7 @@ package controller
 import (
 	"bufio"
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,8 @@ import (
 	gws "github.com/gorilla/websocket"
 	"github.com/logoscore/logos-core/core/pkg/guacd"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/recordings"
+	"github.com/logoscore/logos-core/core/pkg/recordings/recordingstest"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
@@ -44,6 +47,32 @@ func (f credsByID) Resolve(_ context.Context, _ uuid.UUID, ids []uuid.UUID) (map
 		}
 	}
 	return out, nil, nil
+}
+
+// testRecordings records one task's desktops in memory.
+func testRecordings(task, opID uuid.UUID) *recordings.Service {
+	return recordings.NewService(recordingstest.NewRepo(), recordingstest.NewTasks(models.MinionTask{TaskID: task, OperationID: opID}),
+		recordingstest.NewStore(), nil, recordings.DefaultConfig(), zap.NewNop())
+}
+
+// ended waits for the task's recordings to be n, each ended.
+func ended(t *testing.T, recs *recordings.Service, task uuid.UUID, n int) []models.DesktopRecording {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		page, err := recs.List(context.Background(), task, 0, 10)
+		done := err == nil && len(page) == n
+		for _, r := range page {
+			done = done && r.State != models.DesktopRecordingRecording
+		}
+		if done {
+			return page
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("recordings %+v %v", page, err)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 // oneGuacd is guacd for one session: it asks for an RDP's args (some of
@@ -97,6 +126,8 @@ func oneGuacd(t *testing.T) (string, <-chan []string) {
 // server through its port, logging in with its credential, drawn by the
 // settings it opened with (the others their defaults); then the session's
 // instructions go both ways, and the tunnel's pings are answered by core.
+// It is recorded: guacd's instructions, and the operator's mouse between
+// them, timed from guacd's last sync, until the web app closes it.
 func TestDesktopSocket(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	operator, viewer := uuid.New(), uuid.New()
@@ -110,7 +141,8 @@ func TestDesktopSocket(t *testing.T) {
 	}
 	addr, connect := oneGuacd(t)
 	creds := credsByID{cred.String(): {ID: cred.String(), Type: protocol.CredentialTypePlaintext, Username: "admin", Realm: "CORP", Password: "S3cret;,"}}
-	dc := NewMinionDesktopController(portsByTask{task: 24005}, tasks, creds, ops, DesktopConfig{Guacd: addr, CoreHost: "logos-core"},
+	recs := testRecordings(task, opID)
+	dc := NewMinionDesktopController(portsByTask{task: 24005}, tasks, creds, ops, recs, DesktopConfig{Guacd: addr, CoreHost: "logos-core"},
 		func(*http.Request) bool { return true }, zap.NewNop())
 	var who uuid.UUID
 	r := gin.New()
@@ -192,6 +224,25 @@ func TestDesktopSocket(t *testing.T) {
 	if got := read(); got != "5.mouse,2.10,2.20,1.1;" {
 		t.Fatalf("relayed %q", got)
 	}
+
+	_ = conn.Close()
+	rec := ended(t, recs, task, 1)[0]
+	if rec.End != models.DesktopRecordingEndClosed || rec.State != models.DesktopRecordingSaved || rec.Username != "alice" ||
+		rec.UserID != operator || !rec.Keys || rec.Settings["quality"] != "speed" || rec.Width != 1280 || rec.Height != 720 ||
+		rec.Front != "rdp" || rec.Number != 1 {
+		t.Errorf("recording %+v", rec)
+	}
+	body, _, err := recs.Open(context.Background(), rec.RecordingID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(body)
+	_ = body.Close()
+	got, err := guacd.Parse(string(b))
+	if err != nil || len(got) != 3 || got[0].String() != "sync(100)" || got[1].Opcode != "mouse" || len(got[1].Args) != 4 ||
+		!slices.Equal(got[1].Args[:3], []string{"10", "20", "1"}) || got[2].String() != "mouse(10, 20, 1)" {
+		t.Errorf("recorded %q %v", b, err)
+	}
 }
 
 // A desktop that does not open says why: an error instruction, and a close
@@ -213,7 +264,8 @@ func TestDesktopRefused(t *testing.T) {
 	l, _ := net.Listen("tcp", "127.0.0.1:0")
 	addr := l.Addr().String()
 	_ = l.Close()
-	dc := NewMinionDesktopController(portsByTask{task: 24001, gone: 24002}, tasks, credsByID{}, ops, DesktopConfig{Guacd: addr, CoreHost: "core"},
+	recs := testRecordings(task, opID)
+	dc := NewMinionDesktopController(portsByTask{task: 24001, gone: 24002}, tasks, credsByID{}, ops, recs, DesktopConfig{Guacd: addr, CoreHost: "core"},
 		func(*http.Request) bool { return true }, zap.NewNop())
 	r := gin.New()
 	r.GET("/minion-tasks/:id/desktop", func(c *gin.Context) {
@@ -259,5 +311,11 @@ func TestDesktopRefused(t *testing.T) {
 		if i < 0 || !strings.Contains(said[i].Args[0], want.text) || said[i].Args[1] != want.status || closed == nil || closed.Text != want.status {
 			t.Errorf("%v%s: said %v, closed %v", id, want.query, said, closed)
 		}
+	}
+	// One got as far as guacd: its recording says why it did not open. The
+	// others did not: no recording.
+	if rec := ended(t, recs, task, 1)[0]; rec.State != models.DesktopRecordingFailed || rec.End != models.DesktopRecordingEndNotOpened ||
+		!strings.Contains(rec.Msg, "core cannot reach guacd") || rec.Parts != 0 {
+		t.Errorf("recording %+v", rec)
 	}
 }
