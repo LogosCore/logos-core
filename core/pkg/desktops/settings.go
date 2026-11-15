@@ -7,6 +7,7 @@
 package desktops
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
@@ -25,13 +27,14 @@ const (
 	// RDP's and VNC's: what the picture costs.
 	Quality = "quality"
 	// RDP's.
-	Keyboard   = "keyboard"
-	Resize     = "resize"
-	Console    = "console"
-	Program    = "program"
-	RemoteApp  = "remote_app"
-	Security   = "security"
-	IgnoreCert = "ignore_cert"
+	Keyboard    = "keyboard"
+	Resize      = "resize"
+	Console     = "console"
+	Program     = "program"
+	RemoteApp   = "remote_app"
+	Security    = "security"
+	IgnoreCert  = "ignore_cert"
+	Workstation = "workstation_name"
 	// VNC's.
 	ClipboardEncoding = "clipboard_encoding"
 	Cursor            = "cursor"
@@ -65,6 +68,8 @@ const (
 	maxCommand = 2048
 	maxHostKey = 2048
 	maxPrompt  = 256
+	// A NetBIOS name's (Workstation).
+	maxWorkstation = 15
 )
 
 // Fields are a desktop front's settings, the form's order, each with its
@@ -75,6 +80,9 @@ func Fields(front string) []protocol.FieldSpec {
 	switch front {
 	case protocol.FrontRDP:
 		fields = []protocol.FieldSpec{quality(front), keyboard(), clipboard(), viewOnly(),
+			{Key: Workstation, Type: protocol.FieldString, Label: "Workstation name", MaxLength: maxWorkstation,
+				Placeholder: "DESKTOP-4F7Q2KD",
+				Description: "The computer name the server's logon events show. None: a DESKTOP-XXXXXXX of this tunnel's own."},
 			{Key: Resize, Type: protocol.FieldEnum, Label: "Resize", Default: "follow", Advanced: true,
 				Description: "What the session does as the desktop's pane changes size.",
 				Options: []protocol.EnumOption{
@@ -313,6 +321,12 @@ func Params(front string, values map[string]any, host string, port int) (map[str
 		}
 		set("initial-program", str(Program))
 		set("remote-app", str(RemoteApp))
+		if name := str(Workstation); name != "" {
+			if !workstationName.MatchString(name) || strings.Trim(name, "0123456789") == "" {
+				return nil, map[string]string{Workstation: "a computer name: letters, digits and hyphens, not digits alone"}
+			}
+			p["workstation-name"] = strings.ToUpper(name)
+		}
 		p["security"] = str(Security)
 		p["ignore-cert"] = strconv.FormatBool(on(IgnoreCert))
 	case protocol.FrontVNC:
@@ -365,6 +379,24 @@ func Params(front string, values map[string]any, host string, port int) (map[str
 	}
 	return p, nil
 }
+
+// DefaultWorkstation is the workstation name of a task's RDP desktops when
+// none is set (Workstation): as Windows names a new computer, DESKTOP- and
+// seven capitals and digits, drawn from the task's id, so that every
+// desktop of a tunnel is the same computer to its server.
+func DefaultWorkstation(task uuid.UUID) string {
+	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	sum := sha256.Sum256(append([]byte("logos-workstation:"), task[:]...))
+	name := []byte("DESKTOP-0000000")
+	for i := range 7 {
+		name[8+i] = chars[int(sum[i])%len(chars)]
+	}
+	return string(name)
+}
+
+// workstationName is a computer name as Windows takes one (Workstation),
+// its length the field's.
+var workstationName = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
 
 // knownHost is an SSH server's host key as guacd checks it: a known_hosts
 // line for the address guacd connects to (host:port, core's), which

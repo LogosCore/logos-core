@@ -3,10 +3,12 @@ package desktops
 import (
 	"encoding/json"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
@@ -15,7 +17,7 @@ import (
 // front.
 func TestFields(t *testing.T) {
 	want := map[string]string{
-		protocol.FrontRDP:      "quality,keyboard,clipboard,view_only,resize,console,program,remote_app,security,ignore_cert",
+		protocol.FrontRDP:      "quality,keyboard,clipboard,view_only,workstation_name,resize,console,program,remote_app,security,ignore_cert",
 		protocol.FrontVNC:      "quality,clipboard,view_only,clipboard_encoding,cursor",
 		protocol.FrontSSH:      "command,color_scheme,font_size,clipboard,view_only,scrollback,keepalive,host_key",
 		protocol.FrontTelnet:   "color_scheme,font_size,clipboard,view_only,scrollback,username_prompt,password_prompt,login_success,login_failure",
@@ -89,10 +91,10 @@ func TestParamsChosen(t *testing.T) {
 	}{
 		{"rdp, every setting", protocol.FrontRDP, map[string]any{"quality": "speed", "keyboard": "de-de-qwertz", "clipboard": "out",
 			"view_only": true, "resize": "fixed", "console": true, "program": ` C:\tools\run.exe `, "remote_app": "||notepad",
-			"security": "nla", "ignore_cert": false},
+			"security": "nla", "ignore_cert": false, "workstation_name": "desktop-4f7q2kd"},
 			map[string]string{"disable-gfx": "true", "color-depth": "16", "server-layout": "de-de-qwertz", "disable-paste": "true",
 				"read-only": "true", "console": "true", "initial-program": `C:\tools\run.exe`, "remote-app": "||notepad",
-				"security": "nla", "ignore-cert": "false"}},
+				"security": "nla", "ignore-cert": "false", "workstation-name": "DESKTOP-4F7Q2KD"}},
 		{"rdp at its best, reconnecting", protocol.FrontRDP, map[string]any{"quality": "best", "resize": "reconnect", "clipboard": "in"},
 			map[string]string{"enable-font-smoothing": "true", "enable-wallpaper": "true", "enable-theming": "true",
 				"enable-desktop-composition": "true", "enable-full-window-drag": "true", "enable-menu-animations": "true",
@@ -128,6 +130,30 @@ func TestParamsChosen(t *testing.T) {
 	}
 }
 
+// A task's own workstation name: Windows' kind, DESKTOP- and seven
+// capitals and digits, a setting's own taken; the same for the task each
+// time, another for another task.
+func TestDefaultWorkstation(t *testing.T) {
+	task := uuid.New()
+	name := DefaultWorkstation(task)
+	if !regexp.MustCompile(`^DESKTOP-[A-Z0-9]{7}$`).MatchString(name) {
+		t.Fatalf("%q", name)
+	}
+	if !workstationName.MatchString(name) || len(name) > maxWorkstation {
+		t.Errorf("%q is no setting's", name)
+	}
+	if DefaultWorkstation(task) != name {
+		t.Error("not the same for the task")
+	}
+	seen := map[string]bool{name: true}
+	for range 100 {
+		seen[DefaultWorkstation(uuid.New())] = true
+	}
+	if len(seen) < 100 {
+		t.Errorf("%d names for 101 tasks", len(seen))
+	}
+}
+
 // A setting that is none, or not one of its values, says why by its key;
 // a front that is no desktop's takes none.
 func TestParamsProblems(t *testing.T) {
@@ -146,6 +172,10 @@ func TestParamsProblems(t *testing.T) {
 		{protocol.FrontSSH, map[string]any{"host_key": "not a key"}, "host_key", "a public key"},
 		{protocol.FrontSSH, map[string]any{"host_key": "ssh-ed25519 !!!"}, "host_key", "no base64"},
 		{protocol.FrontSSH, map[string]any{"command": strings.Repeat("x", maxCommand+1)}, "command", "longer than 2048"},
+		{protocol.FrontRDP, map[string]any{"workstation_name": "WS 01"}, "workstation_name", "letters, digits and hyphens"},
+		{protocol.FrontRDP, map[string]any{"workstation_name": `CORP\WS01`}, "workstation_name", "letters, digits and hyphens"},
+		{protocol.FrontRDP, map[string]any{"workstation_name": "123456"}, "workstation_name", "not digits alone"},
+		{protocol.FrontRDP, map[string]any{"workstation_name": "DESKTOP-4F7Q2KDX"}, "workstation_name", "longer than 15"},
 		{protocol.FrontTelnet, map[string]any{"login_failure": "(["}, "login_failure", "not a regular expression"},
 		{protocol.FrontForward, map[string]any{"quality": "best"}, "quality", "not a declared field"},
 	} {

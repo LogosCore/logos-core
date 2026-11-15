@@ -370,22 +370,24 @@ services:
   # (frontend/src/vendor/guacamole).
   #
   # Ours, logos-guacd (deploy/guacd/README.md): guacamole-server 1.6.0, its
-  # release commit built with Apache's own Dockerfile, against FreeRDP 3,
-  # not the official image's FreeRDP 2: there guacd 1.6.0 aborts an RDP
-  # connection whose desktop is resized during a paint (GUACAMOLE-2078 is
-  # fixed for FreeRDP 3.8 and later alone). Every library pinned; the CI
-  # workflow publish-guacd.yml builds the same.
+  # release commit patched (an RDP workstation name) and built with Apache's
+  # own Dockerfile, against FreeRDP 3, not the official image's FreeRDP 2:
+  # there guacd 1.6.0 aborts an RDP connection whose desktop is resized
+  # during a paint (GUACAMOLE-2078 is fixed for FreeRDP 3.8 and later
+  # alone). Every library pinned; the CI workflow publish-guacd.yml builds
+  # the same.
   guacd:
     build:
-      context: https://github.com/apache/guacamole-server.git#1f664e08feae6e7d15d8146b78acab2e6fb470ae
+      context: ./deploy/guacd
       args:
+        GUACAMOLE_SERVER_COMMIT: "1f664e08feae6e7d15d8146b78acab2e6fb470ae"
         FREERDP_VERSION: "3"
         WITH_FREERDP: "3.30.0"
         WITH_LIBSSH2: "libssh2-1.11.1"
         WITH_LIBTELNET: "0.23"
         WITH_LIBVNCCLIENT: "LibVNCServer-0.9.15"
         WITH_LIBWEBSOCKETS: "v4.3.5"
-    image: logos-guacd:1.6.0-freerdp3.30.0
+    image: logos-guacd:1.6.0-freerdp3.30.0-logos1
     container_name: logos-guacd
     restart: unless-stopped
     profiles:

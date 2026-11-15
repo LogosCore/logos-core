@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	gws "github.com/gorilla/websocket"
+	"github.com/logoscore/logos-core/core/pkg/desktops"
 	"github.com/logoscore/logos-core/core/pkg/guacd"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/recordings"
@@ -94,7 +95,7 @@ func oneGuacd(t *testing.T) (string, <-chan []string) {
 		defer func() { _ = c.Close() }()
 		r := bufio.NewReader(c)
 		args := []string{"VERSION_1_5_0", "hostname", "port", "domain", "username", "password", "security", "ignore-cert", "resize-method",
-			"color-depth", "disable-gfx", "server-layout", "enable-font-smoothing", "read-only"}
+			"color-depth", "disable-gfx", "server-layout", "enable-font-smoothing", "read-only", "client-name", "workstation-name"}
 		ready := false
 		for {
 			ins, err := guacd.Read(r)
@@ -207,9 +208,16 @@ func TestDesktopSocket(t *testing.T) {
 	if first, _ := guacd.Parse(read()); len(first) != 1 || first[0].Opcode != "" || len(first[0].Args) != 1 {
 		t.Fatalf("first %v", first)
 	}
-	values := <-connect
+	// A param with a value guacd does not ask for would refuse the
+	// session before its connect: not a wait without end.
+	var values []string
+	select {
+	case values = <-connect:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("no connect: %q", read())
+	}
 	if want := []string{"VERSION_1_5_0", "logos-core", "24005", "CORP", "admin", "S3cret;,", "nla", "false", "display-update",
-		"16", "true", "en-us-qwerty", "", ""}; !slices.Equal(values, want) {
+		"16", "true", "en-us-qwerty", "", "", "logos", desktops.DefaultWorkstation(task)}; !slices.Equal(values, want) {
 		t.Fatalf("connect %v, want %v", values, want)
 	}
 	if got := read(); got != "4.sync,3.100;" {

@@ -208,7 +208,7 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 		rec = dc.recs.Begin(ctx, recordings.Beginning{TaskID: id, Front: front, UserID: userID, Username: username, Settings: values,
 			Width: width, Height: height, Keys: settings["read-only"] != "true"})
 	}
-	cfg := guacd.Config{Protocol: front, Params: desktopParams(front, dc.cfg.CoreHost, port.Port, settings, login),
+	cfg := guacd.Config{Protocol: front, Params: desktopParams(id, front, dc.cfg.CoreHost, port.Port, settings, login),
 		Width: width, Height: height, DPI: dpi, Images: []string{"image/png", "image/jpeg", "image/webp"}, Timezone: tz, Name: username}
 	sess, err := guacd.Open(ctx, dc.cfg.Guacd, cfg)
 	if err != nil {
@@ -285,8 +285,10 @@ func desktopSettings(front, raw, host string, port int) (map[string]any, map[str
 // desktopParams are a desktop session's connection params, by guacd's
 // names: its settings' (desktopSettings), then what no setting changes:
 // its server, core's port for the task (host, port), and its login, the
-// credential's (login: none, the desktop asks).
-func desktopParams(front, host string, port int, settings map[string]string, login *protocol.Credential) map[string]string {
+// credential's (login: none, the desktop asks). An RDP desktop's
+// workstation name, when none is set, is the task's own
+// (desktops.DefaultWorkstation).
+func desktopParams(task uuid.UUID, front, host string, port int, settings map[string]string, login *protocol.Credential) map[string]string {
 	p := maps.Clone(settings)
 	if p == nil {
 		p = map[string]string{}
@@ -311,6 +313,9 @@ func desktopParams(front, host string, port int, settings map[string]string, log
 	}
 	if front == protocol.FrontRDP {
 		p["client-name"] = "logos"
+		if p["workstation-name"] == "" {
+			p["workstation-name"] = desktops.DefaultWorkstation(task)
+		}
 	}
 	return p
 }

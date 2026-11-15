@@ -1,0 +1,95 @@
+diff --git a/src/protocols/rdp/settings.c b/src/protocols/rdp/settings.c
+index 4c10c15..b859d60 100644
+--- a/src/protocols/rdp/settings.c
++++ b/src/protocols/rdp/settings.c
+@@ -28,6 +28,7 @@
+ #include <freerdp/constants.h>
+ #include <freerdp/settings.h>
+ #include <freerdp/freerdp.h>
++#include <freerdp/version.h>
+ #include <guacamole/client.h>
+ #include <guacamole/mem.h>
+ #include <guacamole/fips.h>
+@@ -87,6 +88,7 @@ const char* GUAC_RDP_CLIENT_ARGS[] = {
+     "remote-app-args",
+     "static-channels",
+     "client-name",
++    "workstation-name",
+     "enable-wallpaper",
+     "enable-theming",
+     "enable-font-smoothing",
+@@ -352,6 +354,13 @@ enum RDP_ARGS_IDX {
+      */
+     IDX_CLIENT_NAME,
+ 
++    /**
++     * The workstation name NTLM authentication gives the RDP server (the
++     * name the server's logon events show), or blank for FreeRDP's own: the
++     * host's name.
++     */
++    IDX_WORKSTATION_NAME,
++
+     /**
+      * "true" if the desktop wallpaper should be visible, "false" or blank if
+      * the desktop wallpaper should be hidden.
+@@ -923,6 +932,11 @@ guac_rdp_settings* guac_rdp_parse_args(guac_user* user,
+         guac_user_parse_args_string(user, GUAC_RDP_CLIENT_ARGS, argv,
+                 IDX_CLIENT_NAME, "Guacamole RDP");
+ 
++    /* Workstation name (NTLM) */
++    settings->workstation_name =
++        guac_user_parse_args_string(user, GUAC_RDP_CLIENT_ARGS, argv,
++                IDX_WORKSTATION_NAME, NULL);
++
+     /* Initial program */
+     settings->initial_program =
+         guac_user_parse_args_string(user, GUAC_RDP_CLIENT_ARGS, argv,
+@@ -1367,6 +1381,7 @@ void guac_rdp_settings_free(guac_rdp_settings* settings) {
+ 
+     /* Free settings strings */
+     guac_mem_free(settings->client_name);
++    guac_mem_free(settings->workstation_name);
+     guac_mem_free(settings->domain);
+     guac_mem_free(settings->drive_name);
+     guac_mem_free(settings->drive_path);
+@@ -1570,6 +1585,23 @@ void guac_rdp_push_settings(guac_client* client,
+                 guac_strndup(guac_settings->client_name, RDP_CLIENT_HOSTNAME_SIZE));
+     }
+ 
++    /* Workstation name: NTLM's, which FreeRDP 3 sets from this setting
++     * (credssp_auth.c) where it would take the host's name. Without
++     * <freerdp/version.h> the version would read as 0, and this go unbuilt
++     * unsaid. */
++#ifndef FREERDP_VERSION_MAJOR
++#error "FREERDP_VERSION_MAJOR is not defined: <freerdp/version.h>"
++#endif
++#if FREERDP_VERSION_MAJOR >= 3
++    if (guac_settings->workstation_name != NULL)
++        freerdp_settings_set_string(rdp_settings, FreeRDP_SspiClientHostname,
++                guac_settings->workstation_name);
++#else
++    if (guac_settings->workstation_name != NULL)
++        guac_client_log(client, GUAC_LOG_WARNING, "A workstation name "
++                "needs FreeRDP 3: FreeRDP gives the host's name.");
++#endif
++
+     /* Console */
+     freerdp_settings_set_bool(rdp_settings, FreeRDP_ConsoleSession, guac_settings->console);
+     freerdp_settings_set_bool(rdp_settings, FreeRDP_RemoteConsoleAudio, guac_settings->console_audio);
+diff --git a/src/protocols/rdp/settings.h b/src/protocols/rdp/settings.h
+index 253b762..fd2fc25 100644
+--- a/src/protocols/rdp/settings.h
++++ b/src/protocols/rdp/settings.h
+@@ -291,6 +291,12 @@ typedef struct guac_rdp_settings {
+      */
+     char* client_name;
+ 
++    /**
++     * The workstation name NTLM authentication gives the RDP server, or NULL
++     * for FreeRDP's own (the host's name).
++     */
++    char* workstation_name;
++
+     /**
+      * The type of security to use for the connection.
+      */

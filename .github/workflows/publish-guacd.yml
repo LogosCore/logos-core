@@ -1,8 +1,9 @@
 name: Publish guacd Image
 
 # logos-guacd (deploy/guacd): guacamole-server built by Apache's own
-# Dockerfile from its release commit, against FreeRDP 3, every library
-# pinned (deploy/guacd/versions.env).
+# Dockerfile (deploy/guacd/Dockerfile) from its release commit, patched
+# (deploy/guacd/patches), against FreeRDP 3, every library pinned
+# (deploy/guacd/versions.env).
 on:
   push:
     branches:
@@ -48,15 +49,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The release's own source and Dockerfile, at its commit.
+      # The release's source at its commit, patched, by its own Dockerfile.
       - name: Build the image
         uses: docker/build-push-action@v6
         with:
-          context: https://github.com/apache/guacamole-server.git#${{ env.GUACAMOLE_SERVER_COMMIT }}
+          context: deploy/guacd
           platforms: linux/amd64
           load: true
           tags: logos-guacd:check
           build-args: |
+            GUACAMOLE_SERVER_COMMIT=${{ env.GUACAMOLE_SERVER_COMMIT }}
             FREERDP_VERSION=${{ env.FREERDP_VERSION }}
             WITH_FREERDP=${{ env.WITH_FREERDP }}
             WITH_LIBSSH2=${{ env.WITH_LIBSSH2 }}
@@ -68,17 +70,21 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}:buildcache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
 
-      # guacd starts, says its version, and its RDP support is FreeRDP 3's.
+      # guacd starts, says its version, its RDP support is FreeRDP 3's, and
+      # it has the patches (patches/): what each adds is in its plugin.
       - name: Check the image
         run: |
           docker run --rm --entrypoint /opt/guacamole/sbin/guacd logos-guacd:check -v | tee /tmp/version
           grep -q "${GUACAMOLE_SERVER_VERSION}" /tmp/version
           docker run --rm --entrypoint sh logos-guacd:check -c 'ls /opt/guacamole/lib/freerdp3/libguac-common-svc-client.so && ls /opt/guacamole/lib/libfreerdp3.so.3'
+          # workstation-name is an arg, and its FreeRDP 3 code is what was built
+          # (the FreeRDP 2 branch's warning is not there).
+          docker run --rm --entrypoint sh logos-guacd:check -c 'so=/opt/guacamole/lib/libguac-client-rdp.so; grep -q workstation-name $so && ! grep -q "needs FreeRDP 3" $so'
 
       - name: Push the image
         if: github.event_name != 'pull_request'
         run: |
-          for tag in "${GUACAMOLE_SERVER_VERSION}-freerdp${WITH_FREERDP}" latest; do
+          for tag in "${GUACAMOLE_SERVER_VERSION}-freerdp${WITH_FREERDP}-logos${LOGOS_REVISION}" latest; do
             docker tag logos-guacd:check "${REGISTRY}/${IMAGE_NAME}:${tag}"
             docker push "${REGISTRY}/${IMAGE_NAME}:${tag}"
           done

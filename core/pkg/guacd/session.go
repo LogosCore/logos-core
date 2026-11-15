@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 // Status codes of the Guacamole protocol's, as its error instruction and
 // the web app's tunnel say them (Guacamole.Status.Code).
 const (
+	StatusUnsupported         = 0x0100
 	StatusServerError         = 0x0200
 	StatusUpstreamTimeout     = 0x0202
 	StatusUpstreamError       = 0x0203
@@ -38,7 +40,9 @@ type Config struct {
 	Protocol string
 	// Params are its connection's, by the names guacd asks for (hostname,
 	// port, username, password, ...); one guacd asks for that is not here
-	// goes empty.
+	// goes empty, and one with a value that guacd does not ask for refuses
+	// the session (StatusUnsupported): a guacd older than the params, or
+	// not built as core's (deploy/guacd), would leave it out unsaid.
 	Params map[string]string
 	// Width, Height and DPI are the web app's display.
 	Width, Height, DPI int
@@ -97,6 +101,21 @@ func (s *Session) handshake(c Config) error {
 	names := args.Args
 	if len(names) > 0 && strings.HasPrefix(names[0], "VERSION_") {
 		s.Version, names = names[0], names[1:]
+	}
+	asked := make(map[string]bool, len(names))
+	for _, n := range names {
+		asked[n] = true
+	}
+	var unknown []string
+	for n, v := range c.Params {
+		if v != "" && !asked[n] {
+			unknown = append(unknown, n)
+		}
+	}
+	if len(unknown) > 0 {
+		slices.Sort(unknown)
+		return &Error{Message: fmt.Sprintf("guacd takes no %s for %s: it is not core's guacd (logos-guacd), or an older one",
+			strings.Join(unknown, ", "), c.Protocol), Status: StatusUnsupported}
 	}
 	images := c.Images
 	if len(images) == 0 {

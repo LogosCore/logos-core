@@ -1,0 +1,3 @@
+# The build takes patches/ alone (Dockerfile).
+*
+!patches/

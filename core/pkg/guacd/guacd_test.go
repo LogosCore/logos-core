@@ -147,7 +147,7 @@ func fakeGuacd(t *testing.T, args []string, errorAt string) (string, <-chan []In
 func TestOpen(t *testing.T) {
 	addr, got := fakeGuacd(t, []string{"VERSION_1_5_0", "hostname", "port", "username", "password", "color-depth"}, "")
 	s, err := Open(context.Background(), addr, Config{Protocol: "rdp", Width: 1280, Height: 720, DPI: 96, Timezone: "Europe/Kyiv", Name: "alice",
-		Params: map[string]string{"hostname": "core", "port": "24005", "username": "admin", "password": "p,a;s.s", "ignored": "x"}})
+		Params: map[string]string{"hostname": "core", "port": "24005", "username": "admin", "password": "p,a;s.s", "unasked": ""}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,11 +195,23 @@ func TestOpenRefused(t *testing.T) {
 			t.Errorf("%s: %v", at, err)
 		}
 	}
+	// A param with a value that guacd does not ask for (a patched guacd's,
+	// say): refused before connect, never left out unsaid.
+	addr, got := fakeGuacd(t, []string{"VERSION_1_5_0", "hostname", "client-name"}, "")
+	_, err := Open(context.Background(), addr, Config{Protocol: "rdp", Width: 800, Height: 600, DPI: 96,
+		Params: map[string]string{"hostname": "core", "client-name": "", "workstation-name": "WS01", "zz-other": "1"}})
+	var e *Error
+	if !errors.As(err, &e) || e.Status != StatusUnsupported ||
+		!strings.Contains(e.Message, "guacd takes no workstation-name, zz-other for rdp") {
+		t.Errorf("unasked: %v", err)
+	}
+	if seen := <-got; len(seen) != 1 || seen[0].Opcode != "select" {
+		t.Errorf("unasked, sent %v", seen)
+	}
 	// No guacd there.
 	l, _ := net.Listen("tcp", "127.0.0.1:0")
-	addr := l.Addr().String()
+	addr = l.Addr().String()
 	_ = l.Close()
-	var e *Error
 	if _, err := Open(context.Background(), addr, Config{Protocol: "vnc"}); !errors.As(err, &e) || e.Status != StatusUpstreamNotFound {
 		t.Errorf("no guacd: %v", err)
 	}
