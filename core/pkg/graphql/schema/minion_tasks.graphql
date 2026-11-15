@@ -439,6 +439,12 @@ extend type Query {
   minionSessionCommands(sessionId: ID!): [BuildCommand!]!
     @hasPermission(permission: "operation:member")
 
+  # The settings a desktop of front (rdp, vnc, ssh or telnet) opens with in
+  # the web app, picked each time one opens (the desktop socket's
+  # settings): fields, each with its default; none for another front.
+  minionDesktopSettings(front: String!): [ModuleField!]!
+    @hasPermission(permission: "operation:member")
+
   # A page of the printable strings in a kept file, read from after (0, or
   # a page's next): at most first (200 by default, 1000 at most), of at
   # least minLength characters (4 by default, 2 to 256), in encoding (ascii

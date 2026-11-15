@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/authorization"
 	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
+	"github.com/logoscore/logos-core/core/pkg/desktops"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
@@ -36,6 +37,9 @@ type IMinionTaskResolver interface {
 	// Feedback is MinionTask.feedback: what its minion said of it.
 	Feedback(ctx context.Context, t *model.MinionTask) ([]*model.MinionFeedback, error)
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
+	// MinionDesktopSettings are the settings a desktop of front opens
+	// with (pkg/desktops).
+	MinionDesktopSettings(ctx context.Context, front string) ([]*model.ModuleField, error)
 	// DelegateServes are what a delegate task's command serves, as its
 	// factory's latest schema says.
 	DelegateServes(ctx context.Context, t *model.MinionTask) ([]protocol.ChannelVersions, error)
@@ -361,6 +365,15 @@ func (r *minionTaskResolver) MinionSessionCommands(ctx context.Context, sessionI
 	return out, nil
 }
 
+func (r *minionTaskResolver) MinionDesktopSettings(_ context.Context, front string) ([]*model.ModuleField, error) {
+	fields := desktops.Fields(front)
+	out := make([]*model.ModuleField, len(fields))
+	for i, f := range fields {
+		out[i] = toFieldModel(f)
+	}
+	return out, nil
+}
+
 func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, command string, args any) (*model.MinionTask, error) {
 	s, err := r.session(ctx, sessionID, models.OperationRoleOperator)
 	if err != nil {
@@ -446,15 +459,9 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 			}
 		}
 		if protocol.IsDesktopFront(front) {
-			// Its server's port, the protocol's when none was given, and
-			// RDP's settings as the session takes them (their defaults).
+			// Its server's port, the protocol's when none was given (how a
+			// session draws it, each says as it opens: pkg/desktops).
 			values[protocol.ParamTo] = wire[protocol.ParamTo]
-			withDefault(values, commands[i].Params, protocol.ParamSecurity)
-			withDefault(values, commands[i].Params, protocol.ParamIgnoreCert)
-			if front != protocol.FrontRDP {
-				delete(values, protocol.ParamSecurity)
-				delete(values, protocol.ParamIgnoreCert)
-			}
 		}
 		if front == protocol.FrontTerminal {
 			for _, key := range []string{protocol.ParamProgram, protocol.ParamArgs, protocol.ParamRows, protocol.ParamCols} {
@@ -495,10 +502,10 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
 }
 
-// desktopParam: one of the desktop fronts' own params, offered where core
-// draws desktops.
+// desktopParam: one of the desktop fronts' own params (their login),
+// offered where core draws desktops.
 func desktopParam(key string) bool {
-	return key == protocol.ParamCredential || key == protocol.ParamSecurity || key == protocol.ParamIgnoreCert
+	return key == protocol.ParamCredential
 }
 
 // terminalParam: one of a terminal's params, offered where the minion runs
@@ -512,8 +519,8 @@ func terminalParam(key string) bool {
 // (no num): its front, port, destination and cap, a path, a source address
 // and TLS where its minion opens them, the terminal front with its
 // program, args and size where it runs processes, and the desktop fronts
-// with their login and RDP's settings where core draws desktops (desktops:
-// a guacd) and the minion opens TCP connections.
+// with their login where core draws desktops (desktops: a guacd) and the
+// minion opens TCP connections.
 func tunnelCommand(sc protocol.BuildSchema, c protocol.BuildCommand, target string, desktops bool) protocol.BuildCommand {
 	c.Opens = sc.CommandOpens(c, target)
 	desktops = desktops && c.CanOpen(protocol.OpenTCP)

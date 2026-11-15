@@ -16,6 +16,7 @@ import {
   CreateMinionVpnKeyDocument,
   DisconnectMinionVpnClientDocument,
   SetMinionTunnelRoutesDocument,
+  MinionDesktopSettingsDocument,
   MinionFileStringsDocument,
   MinionSessionCommandsDocument,
   MinionStreamLinkDocument,
@@ -61,6 +62,7 @@ export const minionTaskKeys = {
     [...minionTaskKeys.session(sessionId), { search: f.search.trim(), important: f.important }] as const,
   importantCount: (sessionId: string) => [...minionTaskKeys.all, "importantCount", sessionId] as const,
   commands: (sessionId: string) => [...minionTaskKeys.all, "commands", sessionId] as const,
+  desktopSettings: (front: string) => [...minionTaskKeys.all, "desktopSettings", front] as const,
   output: (id: string) => [...minionTaskKeys.all, "output", id] as const,
   document: (id: string) => [...minionTaskKeys.all, "document", id] as const,
   feedback: (id: string) => [...minionTaskKeys.all, "feedback", id] as const,
@@ -245,6 +247,16 @@ export function useMinionSessionCommands(sessionId: string) {
     queryFn: () => graphqlClient(MinionSessionCommandsDocument, { sessionId }),
     enabled: sessionId !== "",
     staleTime: 5 * 60_000,
+  })
+}
+
+/** The settings a desktop of front opens with: core's, the same until it is built again. */
+export function useMinionDesktopSettings(front: string, enabled = true) {
+  return useQuery({
+    queryKey: minionTaskKeys.desktopSettings(front),
+    queryFn: () => graphqlClient(MinionDesktopSettingsDocument, { front }),
+    enabled: enabled && front !== "",
+    staleTime: 30 * 60_000,
   })
 }
 

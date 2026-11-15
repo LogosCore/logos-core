@@ -280,6 +280,15 @@ export const MinionSessionCommandsQuery = graphql(`
   }
 `)
 
+// The settings a desktop of a front opens with, picked each time one opens.
+export const MinionDesktopSettingsQuery = graphql(`
+  query MinionDesktopSettings($front: String!) {
+    minionDesktopSettings(front: $front) {
+      ...ModuleFieldDefFields
+    }
+  }
+`)
+
 export const QueueMinionTaskMutation = graphql(`
   mutation QueueMinionTask($sessionId: ID!, $command: String!, $args: JSON) {
     queueMinionTask(sessionId: $sessionId, command: $command, args: $args) {

@@ -2671,6 +2671,7 @@ export type Query = {
   host: Host;
   hosts: HostConnection;
   me: User;
+  minionDesktopSettings: Array<ModuleField>;
   minionFeedback: MinionFeedbackPage;
   minionFileStrings: MinionFileStringPage;
   minionIdentities: MinionIdentityPage;
@@ -2897,6 +2898,11 @@ export type QueryHostsArgs = {
   search?: InputMaybe<Scalars['String']['input']>;
   sortBy?: InputMaybe<HostSortField>;
   sortDirection?: InputMaybe<SortDirection>;
+};
+
+
+export type QueryMinionDesktopSettingsArgs = {
+  front: Scalars['String']['input'];
 };
 
 
@@ -5126,6 +5132,13 @@ export type MinionSessionCommandsQueryVariables = Exact<{
 
 
 export type MinionSessionCommandsQuery = { minionSessionCommands: Array<{ id: string, label: string, description?: string | null, result?: string | null, action?: string | null, kinds: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> };
+
+export type MinionDesktopSettingsQueryVariables = Exact<{
+  front: Scalars['String']['input'];
+}>;
+
+
+export type MinionDesktopSettingsQuery = { minionDesktopSettings: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> };
 
 export type QueueMinionTaskMutationVariables = Exact<{
   sessionId: Scalars['ID']['input'];
@@ -12283,6 +12296,45 @@ export const MinionSessionCommandsDocument = new TypedDocumentString(`
   advanced
   platforms
 }`) as unknown as TypedDocumentString<MinionSessionCommandsQuery, MinionSessionCommandsQueryVariables>;
+export const MinionDesktopSettingsDocument = new TypedDocumentString(`
+    query MinionDesktopSettings($front: String!) {
+  minionDesktopSettings(front: $front) {
+    ...ModuleFieldDefFields
+  }
+}
+    fragment ModuleFieldDefFields on ModuleField {
+  key
+  num
+  type
+  label
+  description
+  group
+  order
+  unit
+  placeholder
+  format
+  required
+  default
+  min
+  max
+  pattern
+  maxLength
+  keyPattern
+  maxItems
+  options {
+    value
+    label
+    description
+  }
+  accept
+  maxSize
+  when {
+    key
+    values
+  }
+  advanced
+  platforms
+}`) as unknown as TypedDocumentString<MinionDesktopSettingsQuery, MinionDesktopSettingsQueryVariables>;
 export const QueueMinionTaskDocument = new TypedDocumentString(`
     mutation QueueMinionTask($sessionId: ID!, $command: String!, $args: JSON) {
   queueMinionTask(sessionId: $sessionId, command: $command, args: $args) {

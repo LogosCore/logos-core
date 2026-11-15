@@ -976,6 +976,59 @@
                 "responses": {}
             }
         },
+        "/minion-tasks/{id}/desktop": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Minion tasks"
+                ],
+                "summary": "Open a desktop on a desktop task",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Width in pixels (1024)",
+                        "name": "width",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Height in pixels (768)",
+                        "name": "height",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "DPI (96)",
+                        "name": "dpi",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "IANA time zone",
+                        "name": "timezone",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "The desktop's settings: a JSON object of its front's (minionDesktopSettings), each left out its default",
+                        "name": "settings",
+                        "in": "query"
+                    }
+                ],
+                "responses": {}
+            }
+        },
         "/minion-tasks/{id}/output": {
             "get": {
                 "security": [

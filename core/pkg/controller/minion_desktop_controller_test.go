@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -45,9 +46,9 @@ func (f credsByID) Resolve(_ context.Context, _ uuid.UUID, ids []uuid.UUID) (map
 	return out, nil, nil
 }
 
-// oneGuacd is guacd for one session: it asks for an RDP's args, keeps the
-// connect's values, says ready and a first instruction, then echoes what
-// comes.
+// oneGuacd is guacd for one session: it asks for an RDP's args (some of
+// them), keeps the connect's values, says ready and a first instruction,
+// then echoes what comes.
 func oneGuacd(t *testing.T) (string, <-chan []string) {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -63,7 +64,8 @@ func oneGuacd(t *testing.T) (string, <-chan []string) {
 		}
 		defer func() { _ = c.Close() }()
 		r := bufio.NewReader(c)
-		args := []string{"VERSION_1_5_0", "hostname", "port", "domain", "username", "password", "security", "ignore-cert", "resize-method"}
+		args := []string{"VERSION_1_5_0", "hostname", "port", "domain", "username", "password", "security", "ignore-cert", "resize-method",
+			"color-depth", "disable-gfx", "server-layout", "enable-font-smoothing", "read-only"}
 		ready := false
 		for {
 			ins, err := guacd.Read(r)
@@ -92,9 +94,9 @@ func oneGuacd(t *testing.T) (string, <-chan []string) {
 }
 
 // A desktop is an operator's; its session in guacd reaches the task's
-// server through its port, logging in with its credential; then the
-// session's instructions go both ways, and the tunnel's pings are
-// answered by core.
+// server through its port, logging in with its credential, drawn by the
+// settings it opened with (the others their defaults); then the session's
+// instructions go both ways, and the tunnel's pings are answered by core.
 func TestDesktopSocket(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	operator, viewer := uuid.New(), uuid.New()
@@ -103,7 +105,7 @@ func TestDesktopSocket(t *testing.T) {
 		{UserID: operator, Role: models.OperationRoleOperator}, {UserID: viewer, Role: models.OperationRoleViewer}}}}
 	tasks := tasksByID{
 		task: {TaskID: task, OperationID: opID, Action: protocol.ActionTunnel, Args: models.JSONMap{"front": "rdp", "host": "10.0.0.5", "to": 3389,
-			"credential": cred.String(), "security": "nla", "ignore_cert": true}},
+			"credential": cred.String()}},
 		plain: {TaskID: plain, OperationID: opID, Action: protocol.ActionTunnel, Args: models.JSONMap{"front": "forward"}},
 	}
 	addr, connect := oneGuacd(t)
@@ -120,7 +122,8 @@ func TestDesktopSocket(t *testing.T) {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 	url := func(id uuid.UUID) string {
-		return "ws" + strings.TrimPrefix(srv.URL, "http") + "/minion-tasks/" + id.String() + "/desktop?width=1280&height=720&dpi=96&timezone=Europe/Kyiv"
+		return "ws" + strings.TrimPrefix(srv.URL, "http") + "/minion-tasks/" + id.String() + "/desktop?width=1280&height=720&dpi=96&timezone=Europe/Kyiv" +
+			"&settings=" + neturl.QueryEscape(`{"quality":"speed","security":"nla","ignore_cert":false}`)
 	}
 	dialer := gws.Dialer{Subprotocols: []string{"guacamole"}}
 	for _, c := range []struct {
@@ -173,7 +176,8 @@ func TestDesktopSocket(t *testing.T) {
 		t.Fatalf("first %v", first)
 	}
 	values := <-connect
-	if want := []string{"VERSION_1_5_0", "logos-core", "24005", "CORP", "admin", "S3cret;,", "nla", "true", "display-update"}; !slices.Equal(values, want) {
+	if want := []string{"VERSION_1_5_0", "logos-core", "24005", "CORP", "admin", "S3cret;,", "nla", "false", "display-update",
+		"16", "true", "en-us-qwerty", "", ""}; !slices.Equal(values, want) {
 		t.Fatalf("connect %v, want %v", values, want)
 	}
 	if got := read(); got != "4.sync,3.100;" {
@@ -202,6 +206,9 @@ func TestDesktopRefused(t *testing.T) {
 		gone: {TaskID: gone, OperationID: opID, Action: protocol.ActionTunnel, Args: models.JSONMap{"front": "ssh", "host": "h", "to": 22,
 			"credential": uuid.NewString()}},
 	}
+	// A setting another front's, or a value it does not take: nothing
+	// opens (the login is not read).
+	settings := neturl.QueryEscape(`{"quality":"speed","font_size":100}`)
 	// No guacd answers there.
 	l, _ := net.Listen("tcp", "127.0.0.1:0")
 	addr := l.Addr().String()
@@ -215,14 +222,20 @@ func TestDesktopRefused(t *testing.T) {
 	}, dc.Desktop)
 	srv := httptest.NewServer(r)
 	defer srv.Close()
-	for id, want := range map[uuid.UUID]struct {
+	for _, want := range []struct {
+		id     uuid.UUID
+		query  string
 		status string
 		text   string
 	}{
-		task: {"519", "core cannot reach guacd"},
-		gone: {"771", "the desktop's login is gone"},
+		{task, "", "519", "core cannot reach guacd"},
+		{gone, "", "771", "the desktop's login is gone"},
+		{task, "?settings=" + settings, "768", "the desktop's settings: font_size: not a declared field"},
+		{gone, "?settings=" + settings, "768", "font_size: must be <= 48; quality: not a declared field"},
+		{task, "?settings=%7B", "768", "the desktop's settings are no JSON object"},
 	} {
-		conn, resp, err := gws.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/minion-tasks/"+id.String()+"/desktop", nil)
+		id := want.id
+		conn, resp, err := gws.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/minion-tasks/"+id.String()+"/desktop"+want.query, nil)
 		if resp != nil {
 			_ = resp.Body.Close()
 		}
@@ -244,7 +257,7 @@ func TestDesktopRefused(t *testing.T) {
 		_ = conn.Close()
 		i := slices.IndexFunc(said, func(i guacd.Instruction) bool { return i.Opcode == "error" })
 		if i < 0 || !strings.Contains(said[i].Args[0], want.text) || said[i].Args[1] != want.status || closed == nil || closed.Text != want.status {
-			t.Errorf("%v: said %v, closed %v", id, said, closed)
+			t.Errorf("%v%s: said %v, closed %v", id, want.query, said, closed)
 		}
 	}
 }

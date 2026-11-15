@@ -1650,6 +1650,7 @@ type ComplexityRoot struct {
 		Host                               func(childComplexity int, id string) int
 		Hosts                              func(childComplexity int, operationID string, search *string, sortBy *model.HostSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
 		Me                                 func(childComplexity int) int
+		MinionDesktopSettings              func(childComplexity int, front string) int
 		MinionFeedback                     func(childComplexity int, sessionID string, level *string, search *string, after *string, first *int) int
 		MinionFileStrings                  func(childComplexity int, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) int
 		MinionIdentities                   func(childComplexity int, sessionID string, after *string, first *int) int
@@ -2470,6 +2471,7 @@ type QueryResolver interface {
 	MinionTaskImportantCount(ctx context.Context, sessionID string) (int, error)
 	MinionTunnelStreams(ctx context.Context, taskID string, last *int, before *string, search *string, state *string) (*model.MinionTunnelStreamPage, error)
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
+	MinionDesktopSettings(ctx context.Context, front string) ([]*model.ModuleField, error)
 	MinionFileStrings(ctx context.Context, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) (*model.MinionFileStringPage, error)
 	Module(ctx context.Context, instance string) (*models.Module, error)
 	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
@@ -10383,6 +10385,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Me(childComplexity), true
+	case "Query.minionDesktopSettings":
+		if e.ComplexityRoot.Query.MinionDesktopSettings == nil {
+			break
+		}
+
+		args, err := ec.field_Query_minionDesktopSettings_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MinionDesktopSettings(childComplexity, args["front"].(string)), true
 	case "Query.minionFeedback":
 		if e.ComplexityRoot.Query.MinionFeedback == nil {
 			break
@@ -16806,6 +16819,12 @@ extend type Query {
   minionSessionCommands(sessionId: ID!): [BuildCommand!]!
     @hasPermission(permission: "operation:member")
 
+  # The settings a desktop of front (rdp, vnc, ssh or telnet) opens with in
+  # the web app, picked each time one opens (the desktop socket's
+  # settings): fields, each with its default; none for another front.
+  minionDesktopSettings(front: String!): [ModuleField!]!
+    @hasPermission(permission: "operation:member")
+
   # A page of the printable strings in a kept file, read from after (0, or
   # a page's next): at most first (200 by default, 1000 at most), of at
   # least minLength characters (4 by default, 2 to 256), in encoding (ascii
@@ -21502,6 +21521,17 @@ func (ec *executionContext) field_Query_hosts_args(ctx context.Context, rawArgs 
 		return nil, err
 	}
 	args["before"] = arg7
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_minionDesktopSettings_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "front", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["front"] = arg0
 	return args, nil
 }
 
@@ -72123,6 +72153,115 @@ func (ec *executionContext) fieldContext_Query_minionSessionCommands(ctx context
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_minionDesktopSettings(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_minionDesktopSettings,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MinionDesktopSettings(ctx, fc.Args["front"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal []*model.ModuleField
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal []*model.ModuleField
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNModuleField2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleFieldᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_minionDesktopSettings(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "num":
+				return ec.fieldContext_ModuleField_num(ctx, field)
+			case "type":
+				return ec.fieldContext_ModuleField_type(ctx, field)
+			case "label":
+				return ec.fieldContext_ModuleField_label(ctx, field)
+			case "description":
+				return ec.fieldContext_ModuleField_description(ctx, field)
+			case "group":
+				return ec.fieldContext_ModuleField_group(ctx, field)
+			case "order":
+				return ec.fieldContext_ModuleField_order(ctx, field)
+			case "unit":
+				return ec.fieldContext_ModuleField_unit(ctx, field)
+			case "placeholder":
+				return ec.fieldContext_ModuleField_placeholder(ctx, field)
+			case "format":
+				return ec.fieldContext_ModuleField_format(ctx, field)
+			case "required":
+				return ec.fieldContext_ModuleField_required(ctx, field)
+			case "default":
+				return ec.fieldContext_ModuleField_default(ctx, field)
+			case "min":
+				return ec.fieldContext_ModuleField_min(ctx, field)
+			case "max":
+				return ec.fieldContext_ModuleField_max(ctx, field)
+			case "pattern":
+				return ec.fieldContext_ModuleField_pattern(ctx, field)
+			case "maxLength":
+				return ec.fieldContext_ModuleField_maxLength(ctx, field)
+			case "keyPattern":
+				return ec.fieldContext_ModuleField_keyPattern(ctx, field)
+			case "maxItems":
+				return ec.fieldContext_ModuleField_maxItems(ctx, field)
+			case "options":
+				return ec.fieldContext_ModuleField_options(ctx, field)
+			case "accept":
+				return ec.fieldContext_ModuleField_accept(ctx, field)
+			case "maxSize":
+				return ec.fieldContext_ModuleField_maxSize(ctx, field)
+			case "when":
+				return ec.fieldContext_ModuleField_when(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ModuleField_advanced(ctx, field)
+			case "platforms":
+				return ec.fieldContext_ModuleField_platforms(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_minionDesktopSettings_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_minionFileStrings(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -104353,6 +104492,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_minionSessionCommands(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "minionDesktopSettings":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_minionDesktopSettings(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

@@ -133,6 +133,11 @@ func (r *queryResolver) MinionSessionCommands(ctx context.Context, sessionID str
 	return r.MinionTaskResolver.MinionSessionCommands(ctx, sessionID)
 }
 
+// MinionDesktopSettings is the resolver for the minionDesktopSettings field.
+func (r *queryResolver) MinionDesktopSettings(ctx context.Context, front string) ([]*model.ModuleField, error) {
+	return r.MinionTaskResolver.MinionDesktopSettings(ctx, front)
+}
+
 // MinionFileStrings is the resolver for the minionFileStrings field.
 func (r *queryResolver) MinionFileStrings(ctx context.Context, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) (*model.MinionFileStringPage, error) {
 	return r.MinionTaskResolver.MinionFileStrings(ctx, fileID, after, first, minLength, encoding, search)

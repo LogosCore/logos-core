@@ -647,7 +647,7 @@ func TestDesktopFronts(t *testing.T) {
 		return strings.Join(opts, ","), strings.Join(keys, ",")
 	}
 	if opts, keys := fronts(tunnelCommand(sc, tunnelCmd, "", true)); !strings.HasSuffix(opts, ",rdp,vnc,ssh,telnet") ||
-		!strings.Contains(keys, "credential,security,ignore_cert") {
+		!strings.HasSuffix(keys, ",credential,stop_idle,cap") {
 		t.Errorf("with guacd: %s / %s", opts, keys)
 	}
 	if opts, keys := fronts(tunnelCommand(sc, tunnelCmd, "", false)); strings.Contains(opts, "rdp") || strings.Contains(keys, "credential") {
@@ -707,5 +707,14 @@ func TestDesktopFronts(t *testing.T) {
 		Args: map[string]any{"front": "rdp", "host": "dc01", "to": float64(3389)}})
 	if err != nil || got.Front != "rdp" || got.To == nil || *got.To != "dc01:3389" || !got.Desktop || got.Login != nil {
 		t.Errorf("view %+v %v", got, err)
+	}
+	// The settings one opens with, as the web app's form draws them; none
+	// for another front.
+	fields, err := r.MinionDesktopSettings(ctx, "rdp")
+	if err != nil || len(fields) == 0 || fields[0].Key != "quality" || fields[0].Default != "balanced" || len(fields[0].Options) != 3 {
+		t.Errorf("rdp's settings: %v %v", fields, err)
+	}
+	if fields, err := r.MinionDesktopSettings(ctx, "forward"); err != nil || len(fields) != 0 {
+		t.Errorf("a forward's settings: %v %v", fields, err)
 	}
 }

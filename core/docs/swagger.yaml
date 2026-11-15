@@ -949,6 +949,41 @@ paths:
       summary: Download a minion task's data as CBOR
       tags:
       - Minion tasks
+  /minion-tasks/{id}/desktop:
+    get:
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Width in pixels (1024)
+        in: query
+        name: width
+        type: integer
+      - description: Height in pixels (768)
+        in: query
+        name: height
+        type: integer
+      - description: DPI (96)
+        in: query
+        name: dpi
+        type: integer
+      - description: IANA time zone
+        in: query
+        name: timezone
+        type: string
+      - description: 'The desktop''s settings: a JSON object of its front''s (minionDesktopSettings),
+          each left out its default'
+        in: query
+        name: settings
+        type: string
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Open a desktop on a desktop task
+      tags:
+      - Minion tasks
   /minion-tasks/{id}/output:
     get:
       parameters:

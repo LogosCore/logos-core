@@ -47,7 +47,15 @@ import { LazyWebTerminal } from "./lazy-web-terminal";
 import { preloadWebTerminal } from "./web-terminal-code";
 import { LazyDesktop } from "./lazy-desktop";
 import { preloadDesktop } from "./desktop-code";
-import { FRONT_RDP, FRONT_VNC, clientCommand, desktopName, isDesktopFront } from "./desktop-values";
+import { DesktopSettingsDialog } from "./desktop-settings-dialog";
+import {
+  FRONT_RDP,
+  FRONT_VNC,
+  clientCommand,
+  desktopName,
+  isDesktopFront,
+  type DesktopSettings,
+} from "./desktop-values";
 import { FINISHED } from "./task-actions";
 import { laggyKind } from "./terminal-socket";
 import {
@@ -177,8 +185,13 @@ export function TunnelView({
   useEffect(() => {
     if (terminal) preloadWebTerminal();
   }, [terminal]);
-  // A desktop: open or not, and which (Reconnect opens another session).
-  const [openDesktop, setOpenDesktop] = useState<number | null>(null);
+  // A desktop: open or not, which (Reconnect opens another session), and
+  // the settings it opened with, picked in a form as it opens.
+  const [openDesktop, setOpenDesktop] = useState<{
+    n: number;
+    settings: DesktopSettings;
+  } | null>(null);
+  const [desktopForm, setDesktopForm] = useState(false);
   const canDesktop = desktop && tunnel.desktop && tunnel.listening && keeps;
   const client = clientCommand(front, host, tunnel.port);
   useEffect(() => {
@@ -267,12 +280,23 @@ export function TunnelView({
                   <Button
                     variant="ghost"
                     size="xs"
-                    title={`Open the ${desktopName(front)} desktop here: a session with its server, through core's guacd`}
-                    onClick={() => setOpenDesktop(1)}
+                    title={`Open the ${desktopName(front)} desktop here: a session with its server, through core's guacd, by settings you pick`}
+                    onClick={() => setDesktopForm(true)}
                   >
                     <MonitorIcon />
                     Open desktop
                   </Button>
+                )}
+                {canDesktop && (
+                  <DesktopSettingsDialog
+                    open={desktopForm}
+                    onOpenChange={setDesktopForm}
+                    taskId={t.id}
+                    front={front}
+                    onOpen={(settings) =>
+                      setOpenDesktop((d) => ({ n: (d?.n ?? 0) + 1, settings }))
+                    }
+                  />
                 )}
               </>
             )}
@@ -310,12 +334,15 @@ export function TunnelView({
         {canDesktop && openDesktop !== null && (
           <div className="flex h-[36rem] max-h-[80vh] shrink-0 flex-col">
             <LazyDesktop
-              key={openDesktop}
+              key={openDesktop.n}
               taskId={t.id}
               front={front}
+              settings={openDesktop.settings}
               warning={laggy}
               onClose={() => setOpenDesktop(null)}
-              onRestart={() => setOpenDesktop((n) => (n ?? 0) + 1)}
+              onRestart={() =>
+                setOpenDesktop((d) => d && { ...d, n: d.n + 1 })
+              }
             />
           </div>
         )}

@@ -35,14 +35,52 @@ export function desktopURL(taskId: string, loc: Pick<Location, "protocol" | "hos
   return `${proto}//${loc.host}/api/v1/minion-tasks/${encodeURIComponent(taskId)}/desktop`
 }
 
-/** What a desktop opens with: the display's size and density, and the browser's time zone (the session's). */
-export function connectData(size: { width: number; height: number; dpi: number }, timezone?: string): string {
+/**
+ * A desktop's settings, as its form gave them, by key: what core's
+ * minionDesktopSettings says its front takes (core checks them, and gives
+ * each left out its default).
+ */
+export type DesktopSettings = Readonly<Record<string, unknown>>
+
+/** The settings the view reads itself: whether it takes input, and which way its clipboard goes. */
+export const SETTING_VIEW_ONLY = "view_only"
+export const SETTING_CLIPBOARD = "clipboard"
+
+/** Whether a desktop is only watched: no key or click reaches its server. */
+export function viewOnly(settings: DesktopSettings): boolean {
+  return settings[SETTING_VIEW_ONLY] === true
+}
+
+/** Which way a desktop's clipboard goes: both by default. */
+export function clipboardWays(settings: DesktopSettings): { fromDesktop: boolean; toDesktop: boolean } {
+  switch (settings[SETTING_CLIPBOARD]) {
+    case "out":
+      return { fromDesktop: true, toDesktop: false }
+    case "in":
+      return { fromDesktop: false, toDesktop: true }
+    case "off":
+      return { fromDesktop: false, toDesktop: false }
+  }
+  return { fromDesktop: true, toDesktop: true }
+}
+
+/**
+ * What a desktop opens with: the display's size and density, the browser's
+ * time zone (the session's), and its settings (a JSON object; none: core's
+ * defaults).
+ */
+export function connectData(
+  size: { width: number; height: number; dpi: number },
+  timezone?: string,
+  settings?: DesktopSettings,
+): string {
   const q = new URLSearchParams({
     width: String(Math.round(size.width)),
     height: String(Math.round(size.height)),
     dpi: String(Math.round(size.dpi)),
   })
   if (timezone) q.set("timezone", timezone)
+  if (settings && Object.keys(settings).length > 0) q.set("settings", JSON.stringify(settings))
   return q.toString()
 }
 

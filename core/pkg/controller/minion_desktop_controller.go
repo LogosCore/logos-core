@@ -2,16 +2,21 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	gws "github.com/gorilla/websocket"
+	"github.com/logoscore/logos-core/core/pkg/desktops"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/guacd"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -77,15 +82,17 @@ const (
 
 var timezonePattern = regexp.MustCompile(`^[A-Za-z0-9_+\-/]{1,64}$`)
 
-// Desktop handles GET /api/v1/minion-tasks/{id}/desktop?width=&height=&dpi=&timezone=.
+// Desktop handles GET /api/v1/minion-tasks/{id}/desktop?width=&height=&dpi=&timezone=&settings=.
 //
 // A WebSocket for a desktop of a desktop task (front rdp, vnc, ssh or
 // telnet), for an operator of its operation, speaking the Guacamole
 // protocol with the web app's Guacamole client (subprotocol guacamole):
 // core opens a session in guacd with the task's server, through the
-// task's operational port, logging in with the task's credential, then
-// relays it; the client's tunnel pings are answered. A desktop that does
-// not open sends an error instruction (its message and status code) and
+// task's operational port, logging in with the task's credential and
+// drawing it by the settings the operator picked as it opened (a JSON
+// object: desktops.Fields, GraphQL minionDesktopSettings), then relays
+// it; the client's tunnel pings are answered. A desktop that does not
+// open sends an error instruction (its message and status code) and
 // closes with the code as the reason.
 //
 //	@Summary		Open a desktop on a desktop task
@@ -96,6 +103,7 @@ var timezonePattern = regexp.MustCompile(`^[A-Za-z0-9_+\-/]{1,64}$`)
 //	@Param			height		query	int		false	"Height in pixels (768)"
 //	@Param			dpi			query	int		false	"DPI (96)"
 //	@Param			timezone	query	string	false	"IANA time zone"
+//	@Param			settings	query	string	false	"The desktop's settings: a JSON object of its front's (minionDesktopSettings), each left out its default"
 //	@Router			/minion-tasks/{id}/desktop [get]
 func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -172,13 +180,18 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 		fail(guacd.StatusServerError, "core could not read the task's port")
 		return
 	}
+	settings, err := desktopSettings(front, c.Query("settings"), dc.cfg.CoreHost, port.Port)
+	if err != nil {
+		fail(guacd.StatusClientBadRequest, err.Error())
+		return
+	}
 	login, err := dc.login(ctx, t)
 	if err != nil {
 		fail(guacd.StatusClientForbidden, err.Error())
 		return
 	}
 	username := c.GetString("username")
-	cfg := guacd.Config{Protocol: front, Params: desktopParams(front, dc.cfg.CoreHost, port.Port, t.Args, login),
+	cfg := guacd.Config{Protocol: front, Params: desktopParams(front, dc.cfg.CoreHost, port.Port, settings, login),
 		Width: width, Height: height, DPI: dpi, Images: []string{"image/png", "image/jpeg", "image/webp"}, Timezone: tz, Name: username}
 	sess, err := guacd.Open(ctx, dc.cfg.Guacd, cfg)
 	if err != nil {
@@ -226,12 +239,40 @@ func (dc *MinionDesktopController) login(ctx context.Context, t *models.MinionTa
 	return &cred, nil
 }
 
+// desktopSettings are the guacd params of the settings a desktop opens
+// with (raw: the JSON object the web app sent; none, the defaults), for its
+// server at host:port; an error says which are wrong.
+func desktopSettings(front, raw, host string, port int) (map[string]string, error) {
+	var values map[string]any
+	if raw != "" {
+		d := json.NewDecoder(strings.NewReader(raw))
+		d.UseNumber()
+		if err := d.Decode(&values); err != nil {
+			return nil, errors.New("the desktop's settings are no JSON object")
+		}
+	}
+	params, problems := desktops.Params(front, values, host, port)
+	if problems != nil {
+		keys := slices.Sorted(maps.Keys(problems))
+		said := make([]string, len(keys))
+		for i, k := range keys {
+			said[i] = k + ": " + problems[k]
+		}
+		return nil, errors.New("the desktop's settings: " + strings.Join(said, "; "))
+	}
+	return params, nil
+}
+
 // desktopParams are a desktop session's connection params, by guacd's
-// names: its server is core's port for the task (host, port), its login
-// the credential's (login: none, the desktop asks), and RDP's settings the
-// task's args'.
-func desktopParams(front, host string, port int, args models.JSONMap, login *protocol.Credential) map[string]string {
-	p := map[string]string{"hostname": host, "port": strconv.Itoa(port)}
+// names: its settings' (desktopSettings), then what no setting changes:
+// its server, core's port for the task (host, port), and its login, the
+// credential's (login: none, the desktop asks).
+func desktopParams(front, host string, port int, settings map[string]string, login *protocol.Credential) map[string]string {
+	p := maps.Clone(settings)
+	if p == nil {
+		p = map[string]string{}
+	}
+	p["hostname"], p["port"] = host, strconv.Itoa(port)
 	if login != nil {
 		switch front {
 		case protocol.FrontRDP:
@@ -250,15 +291,6 @@ func desktopParams(front, host string, port int, args models.JSONMap, login *pro
 		}
 	}
 	if front == protocol.FrontRDP {
-		security, _ := protocol.ArgString(args, protocol.ParamSecurity)
-		if security == "" {
-			security = protocol.RDPSecurity()[0]
-		}
-		ignore, ok := protocol.ArgBool(args, protocol.ParamIgnoreCert)
-		p["security"] = security
-		p["ignore-cert"] = strconv.FormatBool(ignore || !ok)
-		// The desktop follows the web app's size as it changes.
-		p["resize-method"] = "display-update"
 		p["client-name"] = "logos"
 	}
 	return p

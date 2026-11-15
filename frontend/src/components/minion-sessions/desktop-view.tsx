@@ -8,6 +8,7 @@ import {
   CTRL_ALT_DEL,
   FRONT_RDP,
   FRONT_VNC,
+  clipboardWays,
   connectData,
   desktopName,
   desktopURL,
@@ -16,19 +17,24 @@ import {
   requiredLabel,
   requiredSecret,
   statusText,
+  viewOnly,
+  type DesktopSettings,
 } from "./desktop-values"
 
 // A desktop task's desktop, drawn (a chunk of its own: desktop-code.ts):
 // Guacamole's client over core's socket, its display fitted to the frame
 // (the remote size follows the frame where the protocol allows: RDP), the
 // keys typed while the frame has focus going to the server, its clipboard
-// both ways through a panel, and the login the server asks for when the
-// task gave none. Each one opened is its own session with the server.
+// through a panel (the ways its settings let it go), and the login the
+// server asks for when the task gave none. Each one opened is its own
+// session with the server, drawn by the settings it opened with.
 
 export interface DesktopViewProps {
   taskId: string
   /** Its front: rdp, vnc, ssh or telnet. */
   front: string
+  /** What it opens with (DesktopSettingsDialog): core checks them. */
+  settings: DesktopSettings
   /** Why it may be slow: the session's connection waits for the minion's calls. */
   warning?: string | null
   onClose: () => void
@@ -41,7 +47,7 @@ type Phase = "connecting" | "connected" | "ended"
 /** A session that ended with no error from guacd: its connection failed, or guacd did. */
 const UNEXPLAINED_END = "guacd ended the session without saying why: it may have failed (its log says what happened)"
 
-export function DesktopView({ taskId, front, warning, onClose, onRestart }: DesktopViewProps) {
+export function DesktopView({ taskId, front, settings, warning, onClose, onRestart }: DesktopViewProps) {
   const frameRef = useRef<HTMLDivElement>(null)
   const clientRef = useRef<Guacamole.Client | null>(null)
   const [phase, setPhase] = useState<Phase>("connecting")
@@ -81,7 +87,8 @@ export function DesktopView({ taskId, front, warning, onClose, onRestart }: Desk
       }
       reader.onend = () => {
         setRemoteClip(text)
-        // Where the page may write the clipboard, the server's copy is there too.
+        // Where the page may write the clipboard, the server's copy is
+        // there too (guacd sends none where the settings keep it there).
         navigator.clipboard?.writeText(text).catch(() => {})
       }
     }
@@ -105,7 +112,7 @@ export function DesktopView({ taskId, front, warning, onClose, onRestart }: Desk
       const ratio = window.devicePixelRatio || 1
       return { width: frame.clientWidth * ratio, height: frame.clientHeight * ratio, dpi: displayDPI(ratio) }
     }
-    client.connect(connectData(size(), Intl.DateTimeFormat().resolvedOptions().timeZone))
+    client.connect(connectData(size(), Intl.DateTimeFormat().resolvedOptions().timeZone, settings))
     let resized = 0
     const observer = new ResizeObserver(() => {
       fit()
@@ -131,7 +138,7 @@ export function DesktopView({ taskId, front, warning, onClose, onRestart }: Desk
       element.remove()
       clientRef.current = null
     }
-  }, [taskId])
+  }, [taskId, settings])
 
   const send = (keysyms: readonly number[]) => {
     const client = clientRef.current
@@ -164,6 +171,8 @@ export function DesktopView({ taskId, front, warning, onClose, onRestart }: Desk
   }
 
   const graphical = front === FRONT_RDP || front === FRONT_VNC
+  const watched = viewOnly(settings)
+  const clip = clipboardWays(settings)
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border">
       <div className="flex min-h-8 flex-wrap items-center gap-1 border-b px-2 py-1 text-xs">
@@ -173,24 +182,33 @@ export function DesktopView({ taskId, front, warning, onClose, onRestart }: Desk
           <span className={cn("truncate", error ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
             {error ?? (phase === "connecting" ? "connecting…" : phase === "connected" ? "connected" : "ended")}
           </span>
+          {watched && !error && <span className="shrink-0 text-muted-foreground">· view only</span>}
           {warning && <span className="truncate text-amber-600 dark:text-amber-400">· {warning}</span>}
         </span>
-        {graphical && phase === "connected" && (
+        {graphical && !watched && phase === "connected" && (
           <Button variant="ghost" size="xs" title="Send Ctrl+Alt+Del" onClick={() => send(CTRL_ALT_DEL)}>
             <KeyboardIcon />
             Ctrl+Alt+Del
           </Button>
         )}
-        <Button
-          variant={clipOpen ? "secondary" : "ghost"}
-          size="xs"
-          aria-pressed={clipOpen}
-          title="The desktop's clipboard, and text to send it"
-          onClick={() => setClipOpen((o) => !o)}
-        >
-          <ClipboardIcon />
-          Clipboard
-        </Button>
+        {(clip.fromDesktop || clip.toDesktop) && (
+          <Button
+            variant={clipOpen ? "secondary" : "ghost"}
+            size="xs"
+            aria-pressed={clipOpen}
+            title={
+              clip.fromDesktop && clip.toDesktop
+                ? "The desktop's clipboard, and text to send it"
+                : clip.fromDesktop
+                  ? "The desktop's clipboard (nothing of yours reaches it)"
+                  : "Text to send the desktop's clipboard (nothing it copies reaches you)"
+            }
+            onClick={() => setClipOpen((o) => !o)}
+          >
+            <ClipboardIcon />
+            Clipboard
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-xs"
@@ -210,50 +228,54 @@ export function DesktopView({ taskId, front, warning, onClose, onRestart }: Desk
           <XIcon />
         </Button>
       </div>
-      {clipOpen && (
-        <div className="grid gap-2 border-b p-2 text-xs @2xl:grid-cols-2">
-          <label className="flex flex-col gap-1">
-            <span className="text-muted-foreground">The desktop copied</span>
-            <textarea readOnly value={remoteClip} rows={3} className="resize-none rounded-md border bg-muted/30 p-1.5 font-mono" />
-          </label>
-          <form
-            className="flex flex-col gap-1"
-            onSubmit={(e) => {
-              e.preventDefault()
-              sendClipboard(localClip)
-              frameRef.current?.focus()
-            }}
-          >
-            <span className="text-muted-foreground">Text for the desktop to paste</span>
-            <textarea
-              value={localClip}
-              onChange={(e) => setLocalClip(e.target.value)}
-              rows={3}
-              className="resize-none rounded-md border p-1.5 font-mono"
-            />
-            <span className="flex gap-1">
-              <Button type="submit" size="xs" variant="secondary" disabled={localClip === ""}>
-                Send to the desktop
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                title="Read your clipboard (the browser asks first) and send it"
-                onClick={() =>
-                  void navigator.clipboard
-                    ?.readText()
-                    .then((text) => {
-                      setLocalClip(text)
-                      sendClipboard(text)
-                    })
-                    .catch(() => {})
-                }
-              >
-                Send your clipboard
-              </Button>
-            </span>
-          </form>
+      {clipOpen && (clip.fromDesktop || clip.toDesktop) && (
+        <div className={cn("grid gap-2 border-b p-2 text-xs", clip.fromDesktop && clip.toDesktop && "@2xl:grid-cols-2")}>
+          {clip.fromDesktop && (
+            <label className="flex flex-col gap-1">
+              <span className="text-muted-foreground">The desktop copied</span>
+              <textarea readOnly value={remoteClip} rows={3} className="resize-none rounded-md border bg-muted/30 p-1.5 font-mono" />
+            </label>
+          )}
+          {clip.toDesktop && (
+            <form
+              className="flex flex-col gap-1"
+              onSubmit={(e) => {
+                e.preventDefault()
+                sendClipboard(localClip)
+                frameRef.current?.focus()
+              }}
+            >
+              <span className="text-muted-foreground">Text for the desktop to paste</span>
+              <textarea
+                value={localClip}
+                onChange={(e) => setLocalClip(e.target.value)}
+                rows={3}
+                className="resize-none rounded-md border p-1.5 font-mono"
+              />
+              <span className="flex gap-1">
+                <Button type="submit" size="xs" variant="secondary" disabled={localClip === ""}>
+                  Send to the desktop
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  title="Read your clipboard (the browser asks first) and send it"
+                  onClick={() =>
+                    void navigator.clipboard
+                      ?.readText()
+                      .then((text) => {
+                        setLocalClip(text)
+                        sendClipboard(text)
+                      })
+                      .catch(() => {})
+                  }
+                >
+                  Send your clipboard
+                </Button>
+              </span>
+            </form>
+          )}
         </div>
       )}
       <div className="relative flex min-h-0 flex-1">
