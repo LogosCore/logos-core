@@ -51,6 +51,10 @@ type Config struct {
 	Images []string
 	// Name is who opens it, as guacd logs it.
 	Name string
+	// Dialed, when set, is told guacd's address as core reached it, before
+	// the session asks guacd for anything: guacd connects to the desktop's
+	// server from there (where nothing translates addresses between them).
+	Dialed func(remote net.Addr)
 }
 
 // HandshakeWait bounds the session's opening, guacd's ready included
@@ -91,6 +95,9 @@ func Open(ctx context.Context, addr string, c Config) (*Session, error) {
 	}
 	deadline, _ := ctx.Deadline()
 	_ = conn.SetDeadline(deadline)
+	if c.Dialed != nil {
+		c.Dialed(conn.RemoteAddr())
+	}
 	s := &Session{conn: conn, r: bufio.NewReaderSize(conn, 32<<10)}
 	if err := s.handshake(c); err != nil {
 		_ = conn.Close()

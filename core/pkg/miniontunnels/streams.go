@@ -456,6 +456,8 @@ func (s *Service) serveForward(t *tunnel, c net.Conn) {
 	if t.fwdPath != "" {
 		req = request{kind: t.fwdKind, path: t.fwdPath}
 	}
+	// A desktop's from guacd: who opened it in the web app.
+	req.client = s.desktopClient(t, c)
 	st, _ := s.newStream(t, c, req, true)
 	if st == nil {
 		reset()

@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -1212,6 +1214,57 @@ func TestDesktopPortForwards(t *testing.T) {
 	eventually(t, "the stream ends done", func() bool { return r.stream(1).End == models.TunnelEndDone })
 	if rec := r.stream(1); rec.Host != host || rec.Port != port {
 		t.Errorf("record %+v", rec)
+	}
+}
+
+// A desktop's port names guacd's connections for each desktop the web
+// app opened (DesktopClient): its operator, the first from guacd's address
+// and a later one (a reconnect) while it is the task's one desktop from
+// there; with two desktops open, a later one is guacd's, as one is once
+// they ended; a client of another address is its address.
+func TestDesktopClientNames(t *testing.T) {
+	host, port := splitAddr(t, echo(t))
+	r := newRig(t, 0, nil, func(o *Opening) { o.Purpose, o.Host, o.HostPort = protocol.FrontRDP, host, port })
+	r.tasks.ack(r.task)
+	startMinion(t, r)
+	guacd := netip.MustParseAddr("127.0.0.1")
+	n := uint64(0)
+	from := func(addr string) string {
+		t.Helper()
+		d := net.Dialer{LocalAddr: &net.TCPAddr{IP: net.ParseIP(addr)}}
+		c, err := d.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(r.port)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		roundTrip(t, c, 1024)
+		_ = c.Close()
+		n++
+		var client string
+		eventually(t, fmt.Sprintf("stream %d", n), func() bool { client = r.stream(n).Client; return client != "" })
+		return client
+	}
+	alice := r.svc.DesktopClient(r.task, guacd, "web: alice")
+	if got := from("127.0.0.1"); got != "web: alice" {
+		t.Errorf("alice's desktop: %q", got)
+	}
+	if got := from("127.0.0.1"); got != "web: alice" {
+		t.Errorf("alice's reconnect: %q", got)
+	}
+	bob := r.svc.DesktopClient(r.task, guacd, "web: bob")
+	if got := from("127.0.0.1"); got != "web: bob" {
+		t.Errorf("bob's desktop: %q", got)
+	}
+	if got := from("127.0.0.1"); !strings.HasPrefix(got, "web (guacd 127.0.0.1:") {
+		t.Errorf("one of two desktops: %q", got)
+	}
+	alice()
+	bob()
+	bob()
+	if got := from("127.0.0.1"); !strings.HasPrefix(got, "web (guacd 127.0.0.1:") {
+		t.Errorf("guacd, no desktop open: %q", got)
+	}
+	if got := from("127.0.0.2"); !strings.HasPrefix(got, "127.0.0.2:") {
+		t.Errorf("an operator's own client: %q", got)
 	}
 }
 

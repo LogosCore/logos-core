@@ -8,7 +8,13 @@ metadata:
     {{- include "logos.labels" . | nindent 4 }}
     app.kubernetes.io/component: guacd
 spec:
+  # Headless: core reaches guacd's pod at its own address, the one guacd
+  # connects to desktops' ports from, by which core names those
+  # connections in a tunnel's streams list ("web: alice"). Behind a
+  # cluster IP, core would see that address instead, and the list
+  # guacd's (the desktops still work).
   type: ClusterIP
+  clusterIP: None
   ports:
     - name: guacd
       port: {{ .Values.guacd.port }}

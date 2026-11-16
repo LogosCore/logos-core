@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"net"
 	"net/http"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,9 +31,12 @@ import (
 )
 
 // DesktopPorts finds a desktop task's operational port (the tunnels:
-// miniontunnels.Service): guacd reaches its server through it.
+// miniontunnels.Service): guacd reaches its server through it, its
+// connections there named for the desktop's operator until release
+// (DesktopClient), as its streams list says them.
 type DesktopPorts interface {
 	Port(ctx context.Context, task uuid.UUID) (*models.OperationalPort, error)
+	DesktopClient(task uuid.UUID, from netip.Addr, client string) (release func())
 }
 
 // DesktopCredentials resolves a desktop's login (credentialrefs.Resolver).
@@ -223,8 +228,23 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 		rec = dc.recs.Begin(ctx, recordings.Beginning{TaskID: id, Front: front, UserID: userID, Username: username, Settings: values,
 			Width: width, Height: height, Keys: settings["read-only"] != "true"})
 	}
+	// guacd's connections to the task's port for this desktop are the
+	// operator's in its streams list ("web: alice", as a web terminal's),
+	// named from guacd's address before guacd connects, for as long as the
+	// desktop lasts.
+	var release func()
+	defer func() {
+		if release != nil {
+			release()
+		}
+	}()
 	cfg := guacd.Config{Protocol: front, Params: desktopParams(id, front, dc.cfg.CoreHost, port.Port, settings, login),
-		Width: width, Height: height, DPI: dpi, Images: []string{"image/png", "image/jpeg", "image/webp"}, Name: username}
+		Width: width, Height: height, DPI: dpi, Images: []string{"image/png", "image/jpeg", "image/webp"}, Name: username,
+		Dialed: func(remote net.Addr) {
+			if ta, ok := remote.(*net.TCPAddr); ok {
+				release = dc.ports.DesktopClient(id, ta.AddrPort().Addr(), "web: "+username)
+			}
+		}}
 	sess, err := guacd.Open(ctx, dc.cfg.Guacd, cfg)
 	if err != nil {
 		var ge *guacd.Error

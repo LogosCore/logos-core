@@ -115,10 +115,17 @@ Set `address` to the host they reach it at, which the web app shows.
 
 The tunnels' desktop fronts (RDP, VNC, SSH and Telnet, drawn in the web
 app) need Apache Guacamole's proxy daemon: `guacd` runs as a Deployment of
-its own, behind a ClusterIP Service only core reaches (`GUACD_ADDRESS`).
+its own, behind a headless Service only core reaches (`GUACD_ADDRESS`).
 guacd reaches each desktop's server through core's operational ports, by
 their Service (`GUACD_CORE_HOST`), so desktops need operational ports too;
 without them, or with `guacd.enabled: false`, core offers no desktop front.
+The Service is headless (`clusterIP: None`) so that core reaches guacd's
+pod at the address guacd connects from: that is how a tunnel's streams
+list names a desktop's connections by its operator (`web: alice`), not
+by guacd's address. A release installed before it was headless keeps
+its cluster IP, which Kubernetes does not change in place: delete the
+guacd Service before upgrading (`kubectl delete service
+<release>-logos-guacd`).
 Its image is ours, `ghcr.io/logoscore/logos-guacd` (`deploy/guacd`):
 guacamole-server 1.6.0 built against FreeRDP 3, where the official image's
 FreeRDP 2 aborts a desktop resized during a paint. Its guacamole-server

@@ -8,9 +8,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	neturl "net/url"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,6 +39,35 @@ func (p portsByTask) Port(_ context.Context, task uuid.UUID) (*models.Operationa
 		return nil, repository.ErrNotFound
 	}
 	return &models.OperationalPort{Port: n, TaskID: task}, nil
+}
+
+// DesktopClient names nothing.
+func (p portsByTask) DesktopClient(uuid.UUID, netip.Addr, string) func() { return func() {} }
+
+// claimingPorts are portsByTask that keep what each desktop names guacd's
+// connections, and count the names released.
+type claimingPorts struct {
+	portsByTask
+	mu       sync.Mutex
+	claims   []string
+	released int
+}
+
+func (p *claimingPorts) DesktopClient(task uuid.UUID, from netip.Addr, client string) func() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.claims = append(p.claims, task.String()+" "+from.String()+" "+client)
+	return func() {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		p.released++
+	}
+}
+
+func (p *claimingPorts) named() ([]string, int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.claims), p.released
 }
 
 // credsByID are the operation's credentials, resolved as credentialrefs
@@ -159,7 +190,8 @@ func TestDesktopSocket(t *testing.T) {
 	addr, connect := oneGuacd(t)
 	creds := credsByID{cred.String(): {ID: cred.String(), Type: protocol.CredentialTypePlaintext, Username: "admin", Realm: "CORP", Password: "S3cret;,"}}
 	recs := testRecordings(task, opID)
-	dc := NewMinionDesktopController(portsByTask{task: 24005}, tasks, creds, ops, recs, DesktopConfig{Guacd: addr, CoreHost: "logos-core"},
+	ports := &claimingPorts{portsByTask: portsByTask{task: 24005}}
+	dc := NewMinionDesktopController(ports, tasks, creds, ops, recs, DesktopConfig{Guacd: addr, CoreHost: "logos-core"},
 		func(*http.Request) bool { return true }, zap.NewNop())
 	var who uuid.UUID
 	r := gin.New()
@@ -250,8 +282,20 @@ func TestDesktopSocket(t *testing.T) {
 		t.Fatalf("relayed %q", got)
 	}
 
+	// guacd's connections to the port for it were named the operator's,
+	// from guacd's address as core reached it, until it closed.
+	if claims, _ := ports.named(); !slices.Equal(claims, []string{task.String() + " 127.0.0.1 web: alice"}) {
+		t.Errorf("named %v", claims)
+	}
 	_ = conn.Close()
 	rec := ended(t, recs, task, 1)[0]
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		if _, released := ports.named(); released == 1 {
+			break
+		} else if time.Now().After(deadline) {
+			t.Fatalf("released %d", released)
+		}
+	}
 	if rec.End != models.DesktopRecordingEndClosed || rec.State != models.DesktopRecordingSaved || rec.Username != "alice" ||
 		rec.UserID != operator || !rec.Keys || rec.Settings["quality"] != "speed" || rec.Width != 1920 || rec.Height != 1080 ||
 		rec.Front != "rdp" || rec.Number != 1 {

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"slices"
 	"strconv"
 	"sync"
@@ -134,6 +135,11 @@ type Service struct {
 	// its wake for what goes again (rtt.go).
 	rotation map[uuid.UUID]int
 	rtt      map[uuid.UUID]*rttState
+	// desktopClaims name guacd's connections to desktop tasks' ports, by
+	// task; guacdAddrs are the addresses guacd was reached at, the latest
+	// last (desktop_clients.go).
+	desktopClaims map[uuid.UUID][]*desktopClaim
+	guacdAddrs    []netip.Addr
 
 	unsubscribe func()
 	stop        chan struct{}

@@ -146,10 +146,16 @@ func fakeGuacd(t *testing.T, args []string, errorAt string) (string, <-chan []In
 
 func TestOpen(t *testing.T) {
 	addr, got := fakeGuacd(t, []string{"VERSION_1_5_0", "hostname", "port", "username", "password", "color-depth"}, "")
+	var dialed net.Addr
 	s, err := Open(context.Background(), addr, Config{Protocol: "rdp", Width: 1280, Height: 720, DPI: 96, Name: "alice",
-		Params: map[string]string{"hostname": "core", "port": "24005", "username": "admin", "password": "p,a;s.s", "unasked": ""}})
+		Params: map[string]string{"hostname": "core", "port": "24005", "username": "admin", "password": "p,a;s.s", "unasked": ""},
+		Dialed: func(remote net.Addr) { dialed = remote }})
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Where core reached guacd, said before the session opened.
+	if dialed == nil || dialed.String() != addr {
+		t.Errorf("dialed %v, want %s", dialed, addr)
 	}
 	defer func() { _ = s.Close() }()
 	if s.ID != "$conn-1" || s.Version != "VERSION_1_5_0" {
