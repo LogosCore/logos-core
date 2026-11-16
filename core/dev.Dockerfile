@@ -1,6 +1,7 @@
 FROM golang:1.25
 
-RUN go install github.com/air-verse/air@latest
+# Pinned: air v1.67.2 and later need Go 1.26, and this image is 1.25.
+RUN go install github.com/air-verse/air@v1.67.1
 
 WORKDIR /app
 
