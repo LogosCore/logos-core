@@ -1,12 +1,14 @@
 package repository
 
 import (
+	"context"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -143,5 +145,75 @@ func TestIntegrationMinionTaskFilters(t *testing.T) {
 	stored, _ := repo.FindByTaskID(ctx, legacy)
 	if stored.SearchText != "shell --command=id" {
 		t.Fatalf("backfilled %q", stored.SearchText)
+	}
+}
+
+// A switch task's line says its connection by name: one queued with line
+// names is found by the name (and keeps it when an arg changes); one stored
+// before them gets them from its session's connections, once, and one of a
+// session gone keeps the place, done all the same.
+func TestIntegrationMinionTaskLineNames(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionTaskRepository(db)
+	op, session, gone := uuid.New(), uuid.New(), uuid.New()
+	t0 := time.Now().UTC().Truncate(time.Millisecond)
+	add := func(i int, sid uuid.UUID, names map[string]string) uuid.UUID {
+		t.Helper()
+		id := uuid.New()
+		if err := repo.Insert(ctx, &models.MinionTask{TaskID: id, OperationID: op, SessionID: sid, Command: "switch",
+			Action: protocol.ActionSwitchConnection, Args: models.JSONMap{"conn": 2}, LineNames: names,
+			State: models.MinionTaskQueued, QueuedAt: t0.Add(time.Duration(i) * time.Second)}); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	search := func(sid uuid.UUID, text string) []uuid.UUID {
+		t.Helper()
+		rows, err := repo.ListBySession(ctx, sid, MinionTaskFilter{Search: text}, nil, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []uuid.UUID
+		for _, r := range rows {
+			out = append(out, r.TaskID)
+		}
+		return out
+	}
+	queued := add(0, session, map[string]string{"conn": "https"})
+	if got := search(session, "switch --conn=https"); !slices.Equal(got, []uuid.UUID{queued}) {
+		t.Fatalf("by name: %v", got)
+	}
+	if err := repo.SetArg(ctx, queued, "for", "1h"); err != nil {
+		t.Fatal(err)
+	}
+	if got := search(session, "--conn=https --for=1h"); !slices.Equal(got, []uuid.UUID{queued}) {
+		t.Fatalf("by name, an arg changed: %v", got)
+	}
+
+	legacy := add(1, session, nil)
+	orphan := add(2, gone, nil)
+	if got := search(session, "https"); slices.Contains(got, legacy) {
+		t.Fatal("a task stored with the place matched the name")
+	}
+	asked := 0
+	names := func(_ context.Context, sid uuid.UUID) ([]string, error) {
+		asked++
+		if sid == session {
+			return []string{"ws", "https"}, nil
+		}
+		return nil, nil
+	}
+	if n, err := repo.BackfillLineNames(ctx, names); err != nil || n != 2 || asked != 2 {
+		t.Fatalf("backfill %d (sessions asked %d): %v", n, asked, err)
+	}
+	if n, _ := repo.BackfillLineNames(ctx, names); n != 0 {
+		t.Fatalf("backfill again %d", n)
+	}
+	if got := search(session, "switch --conn=https"); !slices.Contains(got, legacy) {
+		t.Fatalf("backfilled, by name: %v", got)
+	}
+	if stored, _ := repo.FindByTaskID(ctx, orphan); stored.SearchText != "switch --conn=2" {
+		t.Fatalf("a session gone: %q", stored.SearchText)
 	}
 }

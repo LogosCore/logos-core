@@ -13,10 +13,10 @@ import (
 // bumped each time), listed the latest first a page at a time, their
 // numbers saved as they go, the stale ones found and ended once, deleted
 // one by one or with their operation.
-func TestIntegrationDesktopRecordings(t *testing.T) {
+func TestIntegrationRecordings(t *testing.T) {
 	db := integrationDB(t)
 	ctx := testCtx(t)
-	repo := NewDesktopRecordingRepository(db)
+	repo := NewRecordingRepository(db)
 	tasks := NewMinionTaskRepository(db)
 	if err := db.IndexSetupErr(); err != nil {
 		t.Fatalf("indexes: %v", err)
@@ -42,21 +42,21 @@ func TestIntegrationDesktopRecordings(t *testing.T) {
 	ids := make([]uuid.UUID, 4)
 	for n := 1; n <= 3; n++ {
 		ids[n] = uuid.New()
-		rec := &models.DesktopRecording{RecordingID: ids[n], OperationID: op, TaskID: task, Number: int64(n), Front: "rdp",
-			Settings: models.JSONMap{"quality": "best", "view_only": true}, State: models.DesktopRecordingSaved, StartedAt: t0, SeenAt: t0}
+		rec := &models.Recording{RecordingID: ids[n], OperationID: op, TaskID: task, Number: int64(n), Front: "rdp",
+			Settings: models.JSONMap{"quality": "best", "view_only": true}, State: models.RecordingStateSaved, StartedAt: t0, SeenAt: t0}
 		if n == 3 {
-			rec.State, rec.SeenAt = models.DesktopRecordingRecording, t0.Add(-5*time.Minute)
+			rec.State, rec.SeenAt = models.RecordingStateRecording, t0.Add(-5*time.Minute)
 		}
 		if err := repo.Insert(ctx, rec); err != nil {
 			t.Fatal(err)
 		}
 	}
-	other := &models.DesktopRecording{RecordingID: uuid.New(), OperationID: uuid.New(), TaskID: uuid.New(), Number: 1,
-		State: models.DesktopRecordingRecording, SeenAt: t0.Add(-time.Hour)}
+	other := &models.Recording{RecordingID: uuid.New(), OperationID: uuid.New(), TaskID: uuid.New(), Number: 1,
+		State: models.RecordingStateRecording, SeenAt: t0.Add(-time.Hour)}
 	if err := repo.Insert(ctx, other); err != nil {
 		t.Fatal(err)
 	}
-	numbers := func(recs []models.DesktopRecording) []int64 {
+	numbers := func(recs []models.Recording) []int64 {
 		out := []int64{}
 		for _, r := range recs {
 			out = append(out, r.Number)
@@ -88,14 +88,14 @@ func TestIntegrationDesktopRecordings(t *testing.T) {
 	if err != nil || len(stale) != 2 {
 		t.Fatalf("stale %v %v", numbers(stale), err)
 	}
-	end := bson.M{"state": models.DesktopRecordingSaved, "end": models.DesktopRecordingEndCoreStopped}
+	end := bson.M{"state": models.RecordingStateSaved, "end": models.RecordingEndCoreStopped}
 	if ok, err := repo.EndStale(ctx, ids[3], before, end); !ok || err != nil {
 		t.Errorf("end stale: %v %v", ok, err)
 	}
 	if ok, err := repo.EndStale(ctx, ids[3], before, end); ok || err != nil {
 		t.Errorf("ended twice: %v %v", ok, err)
 	}
-	if got, _ := repo.FindByID(ctx, ids[3]); got.State != models.DesktopRecordingSaved || got.End != models.DesktopRecordingEndCoreStopped || got.Parts != 2 {
+	if got, _ := repo.FindByID(ctx, ids[3]); got.State != models.RecordingStateSaved || got.End != models.RecordingEndCoreStopped || got.Parts != 2 {
 		t.Errorf("ended %+v", got)
 	}
 

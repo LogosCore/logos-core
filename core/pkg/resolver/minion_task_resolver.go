@@ -77,8 +77,8 @@ type IMinionTaskResolver interface {
 	MinionTunnelStreams(ctx context.Context, taskID string, last *int, before, search, state *string) (*model.MinionTunnelStreamPage, error)
 	// Desktops' recordings (desktop_recording_resolver.go): a task's, a
 	// page at a time; one deleted.
-	DesktopRecordings(ctx context.Context, taskID string, last *int, before *string) (*model.DesktopRecordingPage, error)
-	DeleteDesktopRecording(ctx context.Context, id string) (bool, error)
+	Recordings(ctx context.Context, taskID string, last *int, before *string) (*model.RecordingPage, error)
+	DeleteRecording(ctx context.Context, id string) (bool, error)
 	OperationalPorts(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error)
 	// LoadPort is a task's port, for a subscriber: nil when it has none.
 	LoadPort(ctx context.Context, taskID string) *model.OperationalPort
@@ -501,6 +501,7 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	t := &models.MinionTask{TaskID: taskID, OperationID: s.OperationID, SessionID: s.SessionID, Command: command,
 		Op: commands[i].Op, Args: values, CredentialIDs: credentialIDs, WireArgs: wireBytes, Result: commands[i].Result, Action: commands[i].Action,
 		IssuedBy: uid, State: models.MinionTaskQueued, QueuedAt: time.Now().UTC(), Upload: upload, LineRest: lineRest(commands[i].Params)}
+	t.LineNames = r.lineNames(ctx, s, commands[i].Params, t.Args)
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		if tunnel {
 			r.tunnels.Close(ctx, taskID)

@@ -100,7 +100,7 @@ type EnvironmentSettings struct {
 	MinionFileBucket  string
 	MinionFileMaxSize int64 // bytes; the largest file a minion may send
 
-	// DesktopRecordingBucket keeps the desktops' recordings
+	// DesktopRecordingBucket keeps the desktops' and the terminals' recordings
 	// (contracts/minion-messages/tunnels.md, Recordings).
 	DesktopRecordingBucket string
 

@@ -140,6 +140,9 @@ type Service struct {
 	// last (desktop_clients.go).
 	desktopClaims map[uuid.UUID][]*desktopClaim
 	guacdAddrs    []netip.Addr
+	// recordings records the terminals' sessions
+	// (WithTerminalRecordings): none, and none is.
+	recordings TerminalRecordings
 
 	unsubscribe func()
 	stop        chan struct{}

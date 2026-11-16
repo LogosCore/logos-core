@@ -99,14 +99,14 @@ func testRecordings(task, opID uuid.UUID) *recordings.Service {
 }
 
 // ended waits for the task's recordings to be n, each ended.
-func ended(t *testing.T, recs *recordings.Service, task uuid.UUID, n int) []models.DesktopRecording {
+func ended(t *testing.T, recs *recordings.Service, task uuid.UUID, n int) []models.Recording {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		page, err := recs.List(context.Background(), task, 0, 10)
 		done := err == nil && len(page) == n
 		for _, r := range page {
-			done = done && r.State != models.DesktopRecordingRecording
+			done = done && r.State != models.RecordingStateRecording
 		}
 		if done {
 			return page
@@ -296,7 +296,7 @@ func TestDesktopSocket(t *testing.T) {
 			t.Fatalf("released %d", released)
 		}
 	}
-	if rec.End != models.DesktopRecordingEndClosed || rec.State != models.DesktopRecordingSaved || rec.Username != "alice" ||
+	if rec.End != models.RecordingEndClosed || rec.State != models.RecordingStateSaved || rec.Username != "alice" ||
 		rec.UserID != operator || !rec.Keys || rec.Settings["quality"] != "speed" || rec.Width != 1920 || rec.Height != 1080 ||
 		rec.Front != "rdp" || rec.Number != 1 {
 		t.Errorf("recording %+v", rec)
@@ -389,7 +389,7 @@ func TestDesktopRefused(t *testing.T) {
 	}
 	// One got as far as guacd: its recording says why it did not open. The
 	// others did not: no recording.
-	if rec := ended(t, recs, task, 1)[0]; rec.State != models.DesktopRecordingFailed || rec.End != models.DesktopRecordingEndNotOpened ||
+	if rec := ended(t, recs, task, 1)[0]; rec.State != models.RecordingStateFailed || rec.End != models.RecordingEndNotOpened ||
 		!strings.Contains(rec.Msg, "core cannot reach guacd") || rec.Parts != 0 {
 		t.Errorf("recording %+v", rec)
 	}
@@ -482,7 +482,7 @@ func TestDesktopSilentWebApp(t *testing.T) {
 		got += string(b)
 	}
 	// Then nothing from the web app.
-	if rec := ended(t, recs, task, 1)[0]; rec.End != models.DesktopRecordingEndClosed || rec.State != models.DesktopRecordingSaved {
+	if rec := ended(t, recs, task, 1)[0]; rec.End != models.RecordingEndClosed || rec.State != models.RecordingStateSaved {
 		t.Errorf("recording %+v", rec)
 	}
 }
@@ -497,7 +497,7 @@ func TestDesktopWebAppTakesNothing(t *testing.T) {
 	conn, recs, task := openDesktop(t, floodGuacd(t), testRecordings)
 	// The web app reads nothing, and says nothing.
 	_ = conn
-	if rec := ended(t, recs, task, 1)[0]; rec.End != models.DesktopRecordingEndClosed || rec.State != models.DesktopRecordingSaved {
+	if rec := ended(t, recs, task, 1)[0]; rec.End != models.RecordingEndClosed || rec.State != models.RecordingStateSaved {
 		t.Errorf("recording %+v", rec)
 	}
 }

@@ -215,6 +215,16 @@ type BuildConnections struct {
 	Items []protocol.BuildConnection `json:"items"`
 }
 
+// Names are the connections' names, in the build's order: place n (from
+// 1, what a minion's conn says) is Names()[n-1].
+func (c BuildConnections) Names() []string {
+	out := make([]string, len(c.Items))
+	for i, it := range c.Items {
+		out[i] = it.Endpoint.Name
+	}
+	return out
+}
+
 func (c BuildConnections) MarshalBSON() ([]byte, error) {
 	if c.Items == nil {
 		c.Items = []protocol.BuildConnection{}

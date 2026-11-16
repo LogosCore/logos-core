@@ -98,10 +98,10 @@ func (f *Store) Keys() []string {
 // repository sets them.
 type Repo struct {
 	mu   sync.Mutex
-	recs map[uuid.UUID]*models.DesktopRecording
+	recs map[uuid.UUID]*models.Recording
 }
 
-func NewRepo() *Repo { return &Repo{recs: map[uuid.UUID]*models.DesktopRecording{}} }
+func NewRepo() *Repo { return &Repo{recs: map[uuid.UUID]*models.Recording{}} }
 
 // Len is how many it keeps.
 func (f *Repo) Len() int {
@@ -110,7 +110,7 @@ func (f *Repo) Len() int {
 	return len(f.recs)
 }
 
-func (f *Repo) Insert(_ context.Context, r *models.DesktopRecording) error {
+func (f *Repo) Insert(_ context.Context, r *models.Recording) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	c := *r
@@ -118,7 +118,7 @@ func (f *Repo) Insert(_ context.Context, r *models.DesktopRecording) error {
 	return nil
 }
 
-func (f *Repo) FindByID(_ context.Context, id uuid.UUID) (*models.DesktopRecording, error) {
+func (f *Repo) FindByID(_ context.Context, id uuid.UUID) (*models.Recording, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	r, ok := f.recs[id]
@@ -129,10 +129,10 @@ func (f *Repo) FindByID(_ context.Context, id uuid.UUID) (*models.DesktopRecordi
 	return &c, nil
 }
 
-func (f *Repo) ListByTask(_ context.Context, taskID uuid.UUID, before, limit int64) ([]models.DesktopRecording, error) {
+func (f *Repo) ListByTask(_ context.Context, taskID uuid.UUID, before, limit int64) ([]models.Recording, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	var out []models.DesktopRecording
+	var out []models.Recording
 	for _, r := range f.recs {
 		if r.TaskID == taskID && (before == 0 || r.Number < before) {
 			out = append(out, *r)
@@ -145,7 +145,7 @@ func (f *Repo) ListByTask(_ context.Context, taskID uuid.UUID, before, limit int
 	return out, nil
 }
 
-func apply(r *models.DesktopRecording, set bson.M) {
+func apply(r *models.Recording, set bson.M) {
 	for k, v := range set {
 		switch k {
 		case "parts":
@@ -184,12 +184,12 @@ func (f *Repo) Save(_ context.Context, id uuid.UUID, set bson.M) error {
 	return nil
 }
 
-func (f *Repo) Stale(_ context.Context, before time.Time) ([]models.DesktopRecording, error) {
+func (f *Repo) Stale(_ context.Context, before time.Time) ([]models.Recording, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	var out []models.DesktopRecording
+	var out []models.Recording
 	for _, r := range f.recs {
-		if r.State == models.DesktopRecordingRecording && r.SeenAt.Before(before) {
+		if r.State == models.RecordingStateRecording && r.SeenAt.Before(before) {
 			out = append(out, *r)
 		}
 	}
@@ -200,17 +200,17 @@ func (f *Repo) EndStale(_ context.Context, id uuid.UUID, before time.Time, set b
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	r, ok := f.recs[id]
-	if !ok || r.State != models.DesktopRecordingRecording || !r.SeenAt.Before(before) {
+	if !ok || r.State != models.RecordingStateRecording || !r.SeenAt.Before(before) {
 		return false, nil
 	}
 	apply(r, set)
 	return true, nil
 }
 
-func (f *Repo) ListByOperation(_ context.Context, op uuid.UUID) ([]models.DesktopRecording, error) {
+func (f *Repo) ListByOperation(_ context.Context, op uuid.UUID) ([]models.Recording, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	var out []models.DesktopRecording
+	var out []models.Recording
 	for _, r := range f.recs {
 		if r.OperationID == op {
 			out = append(out, *r)

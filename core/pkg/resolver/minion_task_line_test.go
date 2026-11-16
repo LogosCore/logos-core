@@ -1,9 +1,14 @@
 package resolver
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/logoscore/logos-golang-protocol/protocol"
+
+	"github.com/logoscore/logos-core/core/pkg/models"
 )
 
 // The cases of the console's restParam and lineOf (command-line.ts).
@@ -45,5 +50,38 @@ func TestLineRest(t *testing.T) {
 		if got := lineRest(c.params); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+type failingTaskBuilds struct{}
+
+func (failingTaskBuilds) FindByBuildID(context.Context, uuid.UUID) (*models.Build, error) {
+	return nil, errors.New("mongo is down")
+}
+
+// A task's connection param is shown by its connection's name, read from
+// the session's build: what the task list's search finds. A param of
+// another format, or none given, reads no build; a build not read leaves
+// the place.
+func TestLineNames(t *testing.T) {
+	ctx := context.Background()
+	s := &models.MinionSession{SessionID: uuid.New(), BuildID: uuid.New()}
+	conn := protocol.FieldSpec{Key: "conn", Type: protocol.FieldInt, Format: protocol.FormatConnection}
+	forParam := protocol.FieldSpec{Key: "for", Type: protocol.FieldDuration}
+	b := &models.Build{Connections: models.BuildConnections{Items: []protocol.BuildConnection{
+		{Endpoint: protocol.ChannelEndpointExport{Name: "ws"}}, {Endpoint: protocol.ChannelEndpointExport{Name: "https"}}}}}
+	r := &minionTaskResolver{builds: fakeTaskBuilds{b: b}}
+	if got := r.lineNames(ctx, s, []protocol.FieldSpec{conn, forParam}, models.JSONMap{"conn": 2, "for": "1h"}); len(got) != 1 || got["conn"] != "https" {
+		t.Errorf("switch: %v", got)
+	}
+	none := &minionTaskResolver{builds: failingTaskBuilds{}}
+	if got := none.lineNames(ctx, s, []protocol.FieldSpec{forParam}, models.JSONMap{"for": "1h"}); got != nil {
+		t.Errorf("no connection param: %v", got)
+	}
+	if got := none.lineNames(ctx, s, []protocol.FieldSpec{conn}, models.JSONMap{}); got != nil {
+		t.Errorf("no conn given: %v", got)
+	}
+	if got := none.lineNames(ctx, s, []protocol.FieldSpec{conn}, models.JSONMap{"conn": 1}); got != nil {
+		t.Errorf("a build not read: %v", got)
 	}
 }

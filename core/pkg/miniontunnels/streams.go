@@ -228,6 +228,9 @@ type stream struct {
 	rttAt  time.Time
 	// udp: a UDP association's (udp.go); nil for a TCP stream.
 	udp *assoc
+	// recorder records a terminal's stream (terminal_recording.go): nil
+	// for any other, and one not recorded.
+	recorder TerminalRecorder
 	// kind is what it opens past a TCP connection or a UDP association:
 	// a unix socket, a pipe, a process, an accept (protocol.TunnelKind...);
 	// a process's args and terminal size go with its open.
@@ -599,8 +602,12 @@ func (s *Service) readClient(st *stream) {
 			return
 		}
 		n := min(len(buf), st.upFree())
+		rec := st.recorder
 		s.mu.Unlock()
 		k, err := st.client.Read(buf[:n])
+		if k > 0 && rec != nil {
+			rec.Input(buf[:k])
+		}
 		s.mu.Lock()
 		if st.gone {
 			s.mu.Unlock()
@@ -670,8 +677,12 @@ func (s *Service) writeClient(st *stream) {
 			return
 		}
 		piece := st.down[:min(len(st.down), protocol.MaxTunnelData)]
+		rec := st.recorder
 		s.mu.Unlock()
 		_, err := st.client.Write(piece)
+		if err == nil && rec != nil {
+			rec.Output(piece)
+		}
 		s.mu.Lock()
 		if st.gone {
 			s.mu.Unlock()
@@ -766,6 +777,7 @@ func (s *Service) drop(st *stream, end string, reset bool) {
 	}
 	now := s.now()
 	st.rec.EndedAt, st.rec.End = &now, end
+	s.endRecording(st)
 	st.t.changed, st.t.counted = true, true
 	rec := st.rec
 	rec.Up, rec.Down = st.upBytes, st.downBytes

@@ -16,10 +16,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// A desktop's recording is its operation's to read, viewers too: its file
-// as it was recorded, an attachment; one whose desktop did not open has
-// none.
-func TestDesktopRecordingFile(t *testing.T) {
+// A recording is its operation's to read, viewers too: its file as it was
+// recorded, an attachment named for its format; one whose desktop did not
+// open has none.
+func TestRecordingFile(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	viewer := uuid.New()
 	opID, task := uuid.New(), uuid.New()
@@ -29,20 +29,20 @@ func TestDesktopRecordingFile(t *testing.T) {
 	saved := recs.Begin(ctx, recordings.Beginning{TaskID: task, Front: "vnc", Username: "ann"})
 	stream := "4.size,1.0,4.1024,3.768;4.sync,3.100;"
 	saved.FromGuacd([]byte(stream))
-	saved.End(models.DesktopRecordingEndClosed)
+	saved.End(models.RecordingEndClosed)
 	failed := recs.Begin(ctx, recordings.Beginning{TaskID: task, Front: "vnc"})
 	failed.Fail("core cannot reach guacd")
 
-	dc := NewDesktopRecordingController(recs, ops, zap.NewNop())
+	dc := NewRecordingController(recs, ops, zap.NewNop())
 	who := viewer
 	r := gin.New()
-	r.GET("/desktop-recordings/:id", func(c *gin.Context) {
+	r.GET("/recordings/:id", func(c *gin.Context) {
 		c.Set("userID", who.String())
 		c.Set("roles", []string{"user"})
 	}, dc.File)
 	get := func(id string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/desktop-recordings/"+id, nil))
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/recordings/"+id, nil))
 		return w
 	}
 	w := get(saved.ID().String())
@@ -56,6 +56,17 @@ func TestDesktopRecordingFile(t *testing.T) {
 	}
 	if w := get(uuid.NewString()); w.Code != http.StatusNotFound {
 		t.Errorf("none: %d", w.Code)
+	}
+	// A terminal's: an asciicast, named for the terminal.
+	term := recs.Begin(ctx, recordings.Beginning{TaskID: task, Front: "terminal", Client: "10.0.0.5:41022", Width: 80, Height: 24, Keys: true})
+	term.Output([]byte("$ "))
+	term.End(models.RecordingEndClosed)
+	w = get(term.ID().String())
+	body, _ = io.ReadAll(w.Body)
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "application/x-asciicast" ||
+		!strings.HasPrefix(string(body), `{"version":2,"width":80,"height":24,`) || !strings.HasSuffix(string(body), `"o","$ "]`+"\n") ||
+		!strings.Contains(w.Header().Get("Content-Disposition"), "terminal-"+task.String()[:8]+"-3.cast") {
+		t.Errorf("a terminal's: %d %q %v", w.Code, body, w.Header())
 	}
 	who = uuid.New()
 	if w := get(saved.ID().String()); w.Code != http.StatusNotFound {

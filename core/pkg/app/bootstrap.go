@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/logoscore/logos-core/core/pkg/auth"
 	"github.com/logoscore/logos-core/core/pkg/auth/oidc"
 	"github.com/logoscore/logos-core/core/pkg/blob"
@@ -95,7 +97,7 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		MinionFolder:       repository.NewMinionSessionFolderRepository(db),
 		MinionTask:         repository.NewMinionTaskRepository(db),
 		MinionFile:         repository.NewMinionFileRepository(db),
-		DesktopRecording:   repository.NewDesktopRecordingRepository(db),
+		Recording:          repository.NewRecordingRepository(db),
 		FsEntry:            repository.NewFsEntryRepository(db),
 		MinionFeedback:     repository.NewMinionFeedbackRepository(db),
 		MinionIdentity:     repository.NewMinionIdentityRepository(db),
@@ -468,6 +470,29 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 		}
 	}
 
+	// Switch tasks' lines said their connection's place, not its name.
+	if n, err := repos.MinionTask.BackfillLineNames(ctx, func(ctx context.Context, sessionID uuid.UUID) ([]string, error) {
+		s, err := repos.MinionSession.FindBySessionID(ctx, sessionID)
+		if repository.IsNotFound(err) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		b, err := repos.Build.FindByBuildID(ctx, s.BuildID)
+		if repository.IsNotFound(err) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return b.Connections.Names(), nil
+	}); err != nil {
+		l.Warn("minion task line names backfill failed", zap.Error(err))
+	} else if n > 0 {
+		l.Info("minion task line names backfill complete", zap.Int64("rows", n))
+	}
+
 	// Not a backfill, a sweep: session marks outlive what they mark, as a
 	// closed session leaves by its TTL, unheard, and deleting a user
 	// cascades nothing. Few and small, so once a boot is enough.
@@ -504,9 +529,9 @@ func newBuildService(ctx context.Context, e *environment.EnvironmentSettings, l 
 	), nil
 }
 
-// newRecordingService stands up the desktops' recordings: their bucket and
-// the service that keeps them. A store that cannot be reached is fatal, as
-// for the minion files'.
+// newRecordingService stands up the desktops' and the terminals'
+// recordings: their bucket and the service that keeps them. A store that
+// cannot be reached is fatal, as for the minion files'.
 func newRecordingService(ctx context.Context, e *environment.EnvironmentSettings, l *zap.Logger, repos *Repositories,
 	bus eventbus.IEventBus) (*recordings.Service, error) {
 	store, err := blob.NewS3Store(ctx, blob.S3Config{
@@ -516,9 +541,9 @@ func newRecordingService(ctx context.Context, e *environment.EnvironmentSettings
 		Bucket:    e.DesktopRecordingBucket,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize the desktop recording store: %w", err)
+		return nil, fmt.Errorf("failed to initialize the recording store: %w", err)
 	}
-	return recordings.NewService(repos.DesktopRecording, repos.MinionTask, store, bus, recordings.DefaultConfig(), l), nil
+	return recordings.NewService(repos.Recording, repos.MinionTask, store, bus, recordings.DefaultConfig(), l), nil
 }
 
 // newMinionFileService stands up the files minions send: their bucket and

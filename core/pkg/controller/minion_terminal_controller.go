@@ -24,7 +24,7 @@ import (
 // MinionTerminals is what the terminal controller needs
 // (miniontunnels.Service).
 type MinionTerminals interface {
-	OpenTerminal(task uuid.UUID, client string, rows, cols int) (*miniontunnels.Terminal, error)
+	OpenTerminal(task uuid.UUID, user miniontunnels.TerminalUser, rows, cols int) (*miniontunnels.Terminal, error)
 }
 
 // TerminalTasks finds a terminal's task (repository.IMinionTaskRepository).
@@ -139,8 +139,8 @@ func (tc *MinionTerminalController) Terminal(c *gin.Context) {
 		return
 	}
 	defer func() { _ = conn.Close() }()
-	client := "web: " + c.GetString("username")
-	tm, err := tc.terminals.OpenTerminal(id, client, rows, cols)
+	userID, _ := uuid.Parse(c.GetString("userID"))
+	tm, err := tc.terminals.OpenTerminal(id, miniontunnels.TerminalUser{ID: userID, Name: c.GetString("username")}, rows, cols)
 	if err != nil {
 		code := terminalCloseRefused
 		if !errors.Is(err, miniontunnels.ErrNoTerminal) {

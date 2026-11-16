@@ -14,27 +14,27 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/repository"
 )
 
-// The desktops' recordings as the web app lists them (docs:
-// contracts/minion-messages/tunnels.md, Recordings): a desktop task's, a
-// page at a time, the latest first; one deleted by an operator. Their
-// files: GET /api/v1/desktop-recordings/{id} (controller).
+// The recordings as the web app lists them (docs:
+// contracts/minion-messages/tunnels.md, Recordings): a desktop or terminal
+// task's, a page at a time, the latest first; one deleted by an operator. Their
+// files: GET /api/v1/recordings/{id} (controller).
 
 const (
 	defaultRecordingPage = 50
 	maxRecordingPage     = 200
 )
 
-// TaskRecordings reads and deletes the desktops' recordings
+// TaskRecordings reads and deletes the recordings
 // (recordings.Service).
 type TaskRecordings interface {
-	List(ctx context.Context, taskID uuid.UUID, before, limit int64) ([]models.DesktopRecording, error)
-	Recording(ctx context.Context, id uuid.UUID) (*models.DesktopRecording, error)
-	Delete(ctx context.Context, id uuid.UUID) (*models.DesktopRecording, error)
+	List(ctx context.Context, taskID uuid.UUID, before, limit int64) ([]models.Recording, error)
+	Recording(ctx context.Context, id uuid.UUID) (*models.Recording, error)
+	Delete(ctx context.Context, id uuid.UUID) (*models.Recording, error)
 }
 
-// DesktopRecordings is a page of a desktop task's recordings, the latest
+// Recordings is a page of a desktop or terminal task's recordings, the latest
 // first, for a viewer of its session's operation.
-func (r *minionTaskResolver) DesktopRecordings(ctx context.Context, taskID string, last *int, before *string) (*model.DesktopRecordingPage, error) {
+func (r *minionTaskResolver) Recordings(ctx context.Context, taskID string, last *int, before *string) (*model.RecordingPage, error) {
 	tid, err := uuid.Parse(taskID)
 	if err != nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid task ID")
@@ -49,7 +49,7 @@ func (r *minionTaskResolver) DesktopRecordings(ctx context.Context, taskID strin
 	if _, err := r.session(ctx, t.SessionID.String(), models.OperationRoleViewer); err != nil {
 		return nil, err
 	}
-	page := &model.DesktopRecordingPage{Recordings: []*model.DesktopRecording{}}
+	page := &model.RecordingPage{Recordings: []*model.Recording{}}
 	if r.recordings == nil {
 		return page, nil
 	}
@@ -78,9 +78,9 @@ func (r *minionTaskResolver) DesktopRecordings(ctx context.Context, taskID strin
 	return page, nil
 }
 
-// DeleteDesktopRecording deletes a recording that ended, its file with it,
+// DeleteRecording deletes a recording that ended, its file with it,
 // for an operator of its session's operation.
-func (r *minionTaskResolver) DeleteDesktopRecording(ctx context.Context, id string) (bool, error) {
+func (r *minionTaskResolver) DeleteRecording(ctx context.Context, id string) (bool, error) {
 	rid, err := uuid.Parse(id)
 	if err != nil {
 		return false, moduleGQLError(ctx, errCodeBadUserInput, "invalid recording ID")
@@ -111,12 +111,20 @@ func (r *minionTaskResolver) DeleteDesktopRecording(ctx context.Context, id stri
 }
 
 // recordingModel is a recording as GraphQL.
-func recordingModel(rec *models.DesktopRecording) *model.DesktopRecording {
-	m := &model.DesktopRecording{ID: rec.RecordingID.String(), TaskID: rec.TaskID.String(), Number: int(rec.Number), Front: rec.Front,
-		UserID: rec.UserID.String(), Username: rec.Username, Width: rec.Width, Height: rec.Height, Keys: rec.Keys, State: rec.State,
+func recordingModel(rec *models.Recording) *model.Recording {
+	m := &model.Recording{ID: rec.RecordingID.String(), TaskID: rec.TaskID.String(), Number: int(rec.Number), Front: rec.Front,
+		Format: rec.FileFormat(), Username: rec.Username, Client: rec.Client, Stream: int(rec.Stream), Width: rec.Width, Height: rec.Height, Keys: rec.Keys, State: rec.State,
 		StartedAt: rec.StartedAt.UTC().Format(time.RFC3339Nano), EndedAt: taskTime(rec.EndedAt), DurationMs: int(rec.DurationMs),
 		Size: int(rec.Size), Lost: int(rec.Lost), End: strPtr(rec.End), Msg: strPtr(rec.Msg),
-		Path: "/desktop-recordings/" + rec.RecordingID.String()}
+		Path: "/recordings/" + rec.RecordingID.String()}
+	if rec.UserID != uuid.Nil {
+		id := rec.UserID.String()
+		m.UserID = &id
+	}
+	if m.Client == "" && rec.Username != "" {
+		// A desktop's recorded before recordings said their client.
+		m.Client = "web: " + rec.Username
+	}
 	if len(rec.Settings) > 0 {
 		m.Settings = map[string]any(rec.Settings)
 	}

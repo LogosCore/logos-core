@@ -1,18 +1,18 @@
-// Package recordings keeps the desktops' recordings (docs:
-// contracts/minion-messages/tunnels.md, Recordings). Each desktop core
-// relays for the web app (controller: minion_desktop_controller.go) is
-// recorded as it goes, in the format guacd's own recordings have, which
-// Guacamole's player plays: the protocol's instructions as guacd sent them
-// to the web app, with the operator's mouse and keys each where it came
-// (mouse x, y, mask and key keysym, pressed, each with a timestamp on
-// guacd's clock, from its last sync). Core keeps it in parts as it goes
+// Package recordings keeps the desktops' and the terminals' recordings
+// (docs: contracts/minion-messages/tunnels.md, Recordings). Each desktop
+// core relays for the web app (controller: minion_desktop_controller.go)
+// is recorded as it goes, in the format guacd's own recordings have, which
+// Guacamole's player plays (desktop.go); each terminal session of a
+// terminal task (miniontunnels: a web terminal, or a client of its raw
+// port) as an asciicast, which asciinema plays (terminal.go). Core keeps
+// it in parts as it goes
 // (parts/<recording>/<n>, a part every few seconds, and when one grows
 // large), so a core that stops loses only what it had not kept; a part the
 // store does not take is tried again with the next, and past a bound
 // dropped (the recording's lost bytes: it plays past them). A recording is
 // read as its parts one after another. One whose core stopped is ended by
-// the next sweep. Recordings stay in the desktop recordings bucket until
-// their operation is deleted, or an operator deletes one.
+// the next sweep. Recordings stay in their bucket until their operation is
+// deleted, or an operator deletes one.
 package recordings
 
 import (
@@ -28,6 +28,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.uber.org/zap"
 )
@@ -40,7 +41,7 @@ type Store interface {
 	Delete(ctx context.Context, key string) error
 }
 
-// Tasks counts a desktop task's recordings on the task
+// Tasks counts a desktop or terminal task's recordings on the task
 // (repository.IMinionTaskRepository).
 type Tasks interface {
 	AddRecording(ctx context.Context, taskID uuid.UUID, kept, made int) (*models.MinionTask, error)
@@ -72,7 +73,7 @@ func DefaultConfig() Config {
 }
 
 type Service struct {
-	repo   repository.IDesktopRecordingRepository
+	repo   repository.IRecordingRepository
 	tasks  Tasks
 	store  Store
 	bus    eventbus.IEventBus
@@ -85,7 +86,8 @@ type Service struct {
 
 	// active are the recordings this core records now; gone the
 	// operations whose recordings are being deleted (the zero time), or
-	// were lately (until when: goneFor), whose desktops are not recorded.
+	// were lately (until when: goneFor), whose desktops and terminals are
+	// not recorded.
 	mu     sync.Mutex
 	active map[uuid.UUID]*Recorder
 	gone   map[uuid.UUID]time.Time
@@ -94,11 +96,11 @@ type Service struct {
 }
 
 // goneFor is how long after an operation's recordings were deleted a
-// desktop of its that begins is still not recorded: one that counted its
-// task as the operation went is not left behind it.
+// desktop or terminal of its that begins is still not recorded: one that
+// counted its task as the operation went is not left behind it.
 const goneFor = 10 * time.Minute
 
-func NewService(repo repository.IDesktopRecordingRepository, tasks Tasks, store Store, bus eventbus.IEventBus, cfg Config, logger *zap.Logger) *Service {
+func NewService(repo repository.IRecordingRepository, tasks Tasks, store Store, bus eventbus.IEventBus, cfg Config, logger *zap.Logger) *Service {
 	return &Service{repo: repo, tasks: tasks, store: store, bus: bus, cfg: cfg, logger: logger.Named("recordings"),
 		now: func() time.Time { return time.Now().UTC() }, clock: time.Now,
 		active: map[uuid.UUID]*Recorder{}, gone: map[uuid.UUID]time.Time{}, stop: make(chan struct{})}
@@ -106,37 +108,53 @@ func NewService(repo repository.IDesktopRecordingRepository, tasks Tasks, store 
 
 func partKey(id uuid.UUID, n int) string { return fmt.Sprintf("parts/%s/%06d", id, n) }
 
-// Beginning is a desktop about to open: whose, and what with.
+// Beginning is a desktop or a terminal session about to open: whose, and
+// what with.
 type Beginning struct {
 	TaskID uuid.UUID
-	// Front is the desktop's: rdp, vnc, ssh or telnet.
-	Front    string
+	// Front is the task's: rdp, vnc, ssh or telnet (a desktop, recorded
+	// as guac), or terminal (an asciicast).
+	Front string
+	// UserID and Username: the operator who opens it; none for a
+	// terminal's raw port. Client: who, as the task's streams say it.
 	UserID   uuid.UUID
 	Username string
-	// Settings are what it opens with, as the web app sent them.
+	Client   string
+	// Stream is a terminal's, its number in the task.
+	Stream uint64
+	// Settings are what a desktop opens with, as the web app sent them.
 	Settings map[string]any
-	Width    int
-	Height   int
-	// Keys: the operator's mouse and keys reach its server (it is not
-	// view only), so the recording holds them.
+	// Width and Height: a desktop's display in pixels, a terminal's
+	// columns and rows.
+	Width  int
+	Height int
+	// Keys: the operator's mouse and keys reach the desktop's server (it
+	// is not view only), or what is typed reaches the terminal's process,
+	// so the recording holds them.
 	Keys bool
 }
 
-// Begin starts a desktop's recording, as it opens: nil when it cannot be
-// kept (said in the log), and the desktop opens unrecorded. Each of the
-// Recorder's methods takes nil.
+// Begin starts a desktop's or a terminal's recording, as it opens: nil
+// when it cannot be kept (said in the log), and it opens unrecorded. Each
+// of the Recorder's methods takes nil.
 func (s *Service) Begin(ctx context.Context, b Beginning) *Recorder {
+	what := "A desktop"
+	format := models.RecordingFormatGuac
+	if b.Front == protocol.FrontTerminal {
+		what, format = "A terminal", models.RecordingFormatAsciicast
+	}
 	t, err := s.tasks.AddRecording(ctx, b.TaskID, 1, 1)
 	if err != nil {
-		s.logger.Error("A desktop opens unrecorded: count its recording", zap.String("task_id", b.TaskID.String()), zap.Error(err))
+		s.logger.Error(what+" opens unrecorded: count its recording", zap.String("task_id", b.TaskID.String()), zap.Error(err))
 		return nil
 	}
 	now := s.now()
-	rec := &models.DesktopRecording{RecordingID: uuid.New(), OperationID: t.OperationID, SessionID: t.SessionID, TaskID: t.TaskID,
-		Number: t.RecordingsMade, Front: b.Front, UserID: b.UserID, Username: b.Username, Settings: b.Settings,
-		Width: b.Width, Height: b.Height, Keys: b.Keys, State: models.DesktopRecordingRecording, StartedAt: now, SeenAt: now}
+	rec := &models.Recording{RecordingID: uuid.New(), OperationID: t.OperationID, SessionID: t.SessionID, TaskID: t.TaskID,
+		Number: t.RecordingsMade, Front: b.Front, Format: format, UserID: b.UserID, Username: b.Username, Client: b.Client,
+		Stream: b.Stream, Settings: b.Settings, Width: b.Width, Height: b.Height, Keys: b.Keys, State: models.RecordingStateRecording,
+		StartedAt: now, SeenAt: now}
 	if err := s.repo.Insert(ctx, rec); err != nil {
-		s.logger.Error("A desktop opens unrecorded: keep its recording", zap.String("task_id", b.TaskID.String()), zap.Error(err))
+		s.logger.Error(what+" opens unrecorded: keep its recording", zap.String("task_id", b.TaskID.String()), zap.Error(err))
 		if t, err := s.tasks.AddRecording(context.WithoutCancel(ctx), b.TaskID, -1, 0); err == nil {
 			s.publish(t)
 		}
@@ -147,7 +165,7 @@ func (s *Service) Begin(ctx context.Context, b Beginning) *Recorder {
 		s.mu.Unlock()
 		// Its operation is being deleted, or was as it began: its record
 		// goes rather than outlive it.
-		s.logger.Info("A desktop opens unrecorded: its operation is deleted", zap.String("task_id", b.TaskID.String()))
+		s.logger.Info(what+" opens unrecorded: its operation is deleted", zap.String("task_id", b.TaskID.String()))
 		_ = s.repo.Delete(context.WithoutCancel(ctx), rec.RecordingID)
 		_, _ = s.tasks.AddRecording(context.WithoutCancel(ctx), b.TaskID, -1, 0)
 		return nil
@@ -168,43 +186,44 @@ func (s *Service) goneLocked(operationID uuid.UUID) bool {
 }
 
 // Recording is one by its id: IsNotFound for none.
-func (s *Service) Recording(ctx context.Context, id uuid.UUID) (*models.DesktopRecording, error) {
+func (s *Service) Recording(ctx context.Context, id uuid.UUID) (*models.Recording, error) {
 	return s.repo.FindByID(ctx, id)
 }
 
 // List is a page of a task's recordings, the latest first: those numbered
 // below before (0: from the latest), at most limit.
-func (s *Service) List(ctx context.Context, taskID uuid.UUID, before, limit int64) ([]models.DesktopRecording, error) {
+func (s *Service) List(ctx context.Context, taskID uuid.UUID, before, limit int64) ([]models.Recording, error) {
 	return s.repo.ListByTask(ctx, taskID, before, limit)
 }
 
-// ErrNothing: the recording has nothing to read (its desktop did not open).
-var ErrNothing = errors.New("the desktop did not open: nothing was recorded")
+// ErrNothing: the recording has nothing to read (its desktop or terminal
+// did not open).
+var ErrNothing = errors.New("it did not open: nothing was recorded")
 
 // Open reads a recording: its parts one after another, as far as they are
 // kept now (one recording goes on). Its size is the record's.
-func (s *Service) Open(ctx context.Context, id uuid.UUID) (io.ReadCloser, *models.DesktopRecording, error) {
+func (s *Service) Open(ctx context.Context, id uuid.UUID) (io.ReadCloser, *models.Recording, error) {
 	rec, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, nil, err
 	}
-	if rec.State == models.DesktopRecordingFailed {
+	if rec.State == models.RecordingStateFailed {
 		return nil, rec, ErrNothing
 	}
 	return &partsReader{ctx: ctx, store: s.store, id: rec.RecordingID, n: rec.Parts}, rec, nil
 }
 
 // ErrRecording: a recording still recording is not deleted.
-var ErrRecording = errors.New("it is still recording: close its desktop first")
+var ErrRecording = errors.New("it is still recording: close its desktop or terminal first")
 
 // Delete drops a recording that ended, its parts with it: IsNotFound for
 // none.
-func (s *Service) Delete(ctx context.Context, id uuid.UUID) (*models.DesktopRecording, error) {
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) (*models.Recording, error) {
 	rec, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	if rec.State == models.DesktopRecordingRecording {
+	if rec.State == models.RecordingStateRecording {
 		return rec, ErrRecording
 	}
 	s.dropParts(ctx, *rec)
@@ -221,8 +240,8 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) (*models.DesktopReco
 }
 
 // DeleteByOperation drops an operation's recordings, parts and all: those
-// recording now stop being recorded first, and a desktop of its that
-// begins meanwhile, or within goneFor, is not recorded.
+// recording now stop being recorded first, and a desktop or terminal of
+// its that begins meanwhile, or within goneFor, is not recorded.
 func (s *Service) DeleteByOperation(ctx context.Context, operationID uuid.UUID) error {
 	s.mu.Lock()
 	s.gone[operationID] = time.Time{}
@@ -244,7 +263,7 @@ func (s *Service) DeleteByOperation(ctx context.Context, operationID uuid.UUID) 
 		}
 		s.gone[operationID] = now.Add(goneFor)
 	}()
-	endAll(going, models.DesktopRecordingEndClosed)
+	endAll(going, models.RecordingEndClosed)
 	recs, err := s.repo.ListByOperation(ctx, operationID)
 	if err != nil {
 		return err
@@ -257,7 +276,7 @@ func (s *Service) DeleteByOperation(ctx context.Context, operationID uuid.UUID) 
 
 // dropParts deletes a recording's parts: those it says, and any past them
 // (kept as its core stopped, before it said so).
-func (s *Service) dropParts(ctx context.Context, rec models.DesktopRecording) {
+func (s *Service) dropParts(ctx context.Context, rec models.Recording) {
 	for n := 0; n < rec.Parts; n++ {
 		_ = s.store.Delete(ctx, partKey(rec.RecordingID, n))
 	}
@@ -289,8 +308,8 @@ func (s *Service) Start() {
 }
 
 // Stop ends the sweeps, and the recordings this core records: each keeps
-// what it has, ended core_stopped (their desktops go on unrecorded until
-// core does stop).
+// what it has, ended core_stopped (their desktops and terminals go on
+// unrecorded until core does stop).
 func (s *Service) Stop() {
 	select {
 	case <-s.stop:
@@ -304,7 +323,7 @@ func (s *Service) Stop() {
 		going = append(going, r)
 	}
 	s.mu.Unlock()
-	endAll(going, models.DesktopRecordingEndCoreStopped)
+	endAll(going, models.RecordingEndCoreStopped)
 }
 
 // endAll ends recordings at once (each keeps its last part as it can),
@@ -347,8 +366,8 @@ func (s *Service) Sweep(ctx context.Context) {
 			}
 			parts, size = parts+1, size+info.ContentLength
 		}
-		ok, err := s.repo.EndStale(ctx, rec.RecordingID, before, bson.M{"state": models.DesktopRecordingSaved,
-			"end": models.DesktopRecordingEndCoreStopped, "ended_at": rec.SeenAt, "parts": parts, "size": size})
+		ok, err := s.repo.EndStale(ctx, rec.RecordingID, before, bson.M{"state": models.RecordingStateSaved,
+			"end": models.RecordingEndCoreStopped, "ended_at": rec.SeenAt, "parts": parts, "size": size})
 		if err != nil {
 			s.logger.Error("Recordings: end one whose core stopped", zap.String("recording_id", rec.RecordingID.String()), zap.Error(err))
 			continue

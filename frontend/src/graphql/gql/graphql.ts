@@ -679,33 +679,6 @@ export type CredentialValidity =
   | 'UNKNOWN'
   | 'VALID';
 
-export type DesktopRecording = {
-  durationMs: Scalars['Int']['output'];
-  end?: Maybe<Scalars['String']['output']>;
-  endedAt?: Maybe<Scalars['String']['output']>;
-  front: Scalars['String']['output'];
-  height: Scalars['Int']['output'];
-  id: Scalars['ID']['output'];
-  keys: Scalars['Boolean']['output'];
-  lost: Scalars['Int']['output'];
-  msg?: Maybe<Scalars['String']['output']>;
-  number: Scalars['Int']['output'];
-  path: Scalars['String']['output'];
-  settings?: Maybe<Scalars['JSON']['output']>;
-  size: Scalars['Int']['output'];
-  startedAt: Scalars['String']['output'];
-  state: Scalars['String']['output'];
-  taskId: Scalars['ID']['output'];
-  userId: Scalars['ID']['output'];
-  username: Scalars['String']['output'];
-  width: Scalars['Int']['output'];
-};
-
-export type DesktopRecordingPage = {
-  before?: Maybe<Scalars['String']['output']>;
-  recordings: Array<DesktopRecording>;
-};
-
 export type EventAction =
   | 'CREATED'
   | 'DELETED'
@@ -1813,13 +1786,13 @@ export type Mutation = {
   deleteCredential: Scalars['Boolean']['output'];
   deleteCredentialComment: Credential;
   deleteCustomTimelineEvent: Scalars['Boolean']['output'];
-  deleteDesktopRecording: Scalars['Boolean']['output'];
   deleteHash: Scalars['Boolean']['output'];
   deleteHost: Scalars['Boolean']['output'];
   deleteMinionSessionFolder: Scalars['Boolean']['output'];
   deleteModule: Scalars['Boolean']['output'];
   deleteMyAPIKey: Scalars['Boolean']['output'];
   deleteOperation: Scalars['Boolean']['output'];
+  deleteRecording: Scalars['Boolean']['output'];
   deleteTask: Scalars['Boolean']['output'];
   deleteUser: Scalars['Boolean']['output'];
   deleteWikiDocument: Scalars['Boolean']['output'];
@@ -2102,11 +2075,6 @@ export type MutationDeleteCustomTimelineEventArgs = {
 };
 
 
-export type MutationDeleteDesktopRecordingArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
 export type MutationDeleteHashArgs = {
   id: Scalars['ID']['input'];
 };
@@ -2128,6 +2096,11 @@ export type MutationDeleteModuleArgs = {
 
 
 export type MutationDeleteOperationArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteRecordingArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -2695,7 +2668,6 @@ export type Query = {
   credentialTags: Array<Scalars['String']['output']>;
   credentialTypes: Array<CredentialTypeSpec>;
   credentials: CredentialConnection;
-  desktopRecordings: DesktopRecordingPage;
   factoryKinds: Array<FactoryKind>;
   fileBrowser: FsMachine;
   fileBrowserEntries: FsEntryPage;
@@ -2744,6 +2716,7 @@ export type Query = {
   operation: Operation;
   operationalPorts: OperationalPortConnection;
   operations: OperationConnection;
+  recordings: RecordingPage;
   session: Session;
   sessions: SessionConnection;
   skillChangelog: SkillChangelog;
@@ -2860,13 +2833,6 @@ export type QueryCredentialsArgs = {
   type?: InputMaybe<CredentialType>;
   types?: InputMaybe<Array<CredentialType>>;
   validity?: InputMaybe<Array<CredentialValidity>>;
-};
-
-
-export type QueryDesktopRecordingsArgs = {
-  before?: InputMaybe<Scalars['String']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  taskId: Scalars['ID']['input'];
 };
 
 
@@ -3196,6 +3162,13 @@ export type QueryOperationsArgs = {
 };
 
 
+export type QueryRecordingsArgs = {
+  before?: InputMaybe<Scalars['String']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  taskId: Scalars['ID']['input'];
+};
+
+
 export type QuerySessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -3447,6 +3420,36 @@ export type QueryWikiSearchArgs = {
 
 export type QueryWikiTemplatesArgs = {
   operationId: Scalars['ID']['input'];
+};
+
+export type Recording = {
+  client: Scalars['String']['output'];
+  durationMs: Scalars['Int']['output'];
+  end?: Maybe<Scalars['String']['output']>;
+  endedAt?: Maybe<Scalars['String']['output']>;
+  format: Scalars['String']['output'];
+  front: Scalars['String']['output'];
+  height: Scalars['Int']['output'];
+  id: Scalars['ID']['output'];
+  keys: Scalars['Boolean']['output'];
+  lost: Scalars['Int']['output'];
+  msg?: Maybe<Scalars['String']['output']>;
+  number: Scalars['Int']['output'];
+  path: Scalars['String']['output'];
+  settings?: Maybe<Scalars['JSON']['output']>;
+  size: Scalars['Int']['output'];
+  startedAt: Scalars['String']['output'];
+  state: Scalars['String']['output'];
+  stream: Scalars['Int']['output'];
+  taskId: Scalars['ID']['output'];
+  userId?: Maybe<Scalars['ID']['output']>;
+  username: Scalars['String']['output'];
+  width: Scalars['Int']['output'];
+};
+
+export type RecordingPage = {
+  before?: Maybe<Scalars['String']['output']>;
+  recordings: Array<Recording>;
 };
 
 export type ReorderWikiDocumentSiblingsInput = {
@@ -5118,21 +5121,21 @@ export type MinionTunnelStreamsQueryVariables = Exact<{
 
 export type MinionTunnelStreamsQuery = { minionTunnelStreams: { before?: string | null, streams: Array<{ stream: number, client: string, host: string, port: number, path?: string | null, udp: boolean, kind?: string | null, program?: string | null, terminal?: boolean | null, exit?: number | null, came?: string | null, openedAt: string, state: string, result?: string | null, bound?: string | null, msg?: string | null, endedAt?: string | null, end?: string | null, up: number, down: number }> } };
 
-export type DesktopRecordingsQueryVariables = Exact<{
+export type RecordingsQueryVariables = Exact<{
   taskId: Scalars['ID']['input'];
   last?: InputMaybe<Scalars['Int']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
 }>;
 
 
-export type DesktopRecordingsQuery = { desktopRecordings: { before?: string | null, recordings: Array<{ id: string, taskId: string, number: number, front: string, userId: string, username: string, settings?: unknown | null, width: number, height: number, keys: boolean, state: string, startedAt: string, endedAt?: string | null, durationMs: number, size: number, lost: number, end?: string | null, msg?: string | null, path: string }> } };
+export type RecordingsQuery = { recordings: { before?: string | null, recordings: Array<{ id: string, taskId: string, number: number, front: string, format: string, userId?: string | null, username: string, client: string, stream: number, settings?: unknown | null, width: number, height: number, keys: boolean, state: string, startedAt: string, endedAt?: string | null, durationMs: number, size: number, lost: number, end?: string | null, msg?: string | null, path: string }> } };
 
-export type DeleteDesktopRecordingMutationVariables = Exact<{
+export type DeleteRecordingMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type DeleteDesktopRecordingMutation = { deleteDesktopRecording: boolean };
+export type DeleteRecordingMutation = { deleteRecording: boolean };
 
 export type MinionTaskOutputQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -12076,16 +12079,19 @@ export const MinionTunnelStreamsDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<MinionTunnelStreamsQuery, MinionTunnelStreamsQueryVariables>;
-export const DesktopRecordingsDocument = new TypedDocumentString(`
-    query DesktopRecordings($taskId: ID!, $last: Int, $before: String) {
-  desktopRecordings(taskId: $taskId, last: $last, before: $before) {
+export const RecordingsDocument = new TypedDocumentString(`
+    query Recordings($taskId: ID!, $last: Int, $before: String) {
+  recordings(taskId: $taskId, last: $last, before: $before) {
     recordings {
       id
       taskId
       number
       front
+      format
       userId
       username
+      client
+      stream
       settings
       width
       height
@@ -12103,12 +12109,12 @@ export const DesktopRecordingsDocument = new TypedDocumentString(`
     before
   }
 }
-    `) as unknown as TypedDocumentString<DesktopRecordingsQuery, DesktopRecordingsQueryVariables>;
-export const DeleteDesktopRecordingDocument = new TypedDocumentString(`
-    mutation DeleteDesktopRecording($id: ID!) {
-  deleteDesktopRecording(id: $id)
+    `) as unknown as TypedDocumentString<RecordingsQuery, RecordingsQueryVariables>;
+export const DeleteRecordingDocument = new TypedDocumentString(`
+    mutation DeleteRecording($id: ID!) {
+  deleteRecording(id: $id)
 }
-    `) as unknown as TypedDocumentString<DeleteDesktopRecordingMutation, DeleteDesktopRecordingMutationVariables>;
+    `) as unknown as TypedDocumentString<DeleteRecordingMutation, DeleteRecordingMutationVariables>;
 export const MinionTaskOutputDocument = new TypedDocumentString(`
     query MinionTaskOutput($id: ID!) {
   minionTask(id: $id) {

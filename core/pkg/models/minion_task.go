@@ -64,6 +64,10 @@ type MinionTask struct {
 	// shell's command line, a path). Empty: every value goes as an option.
 	// Set when it is queued, from its command's params.
 	LineRest string `bson:"line_rest,omitempty" json:"-"`
+	// LineNames is what its line shows of a param in place of its value: a
+	// connection param's connection by name (MinionTaskLineNames). Set when
+	// it is queued, from its session's build's connections.
+	LineNames map[string]string `bson:"line_names,omitempty" json:"-"`
 	// SearchText is its line as the console shows it: what the session's
 	// task list search reads (MinionTaskSearchText).
 	SearchText string `bson:"search_text,omitempty" json:"-"`
@@ -115,7 +119,7 @@ type MinionTask struct {
 	FeedbackErrors   int `bson:"feedback_errors,omitempty" json:"feedback_errors,omitempty"`
 	FeedbackWarnings int `bson:"feedback_warnings,omitempty" json:"feedback_warnings,omitempty"`
 	// Recordings counts a desktop task's recordings kept
-	// (models.DesktopRecording); RecordingsMade how many it had, deleted
+	// (models.Recording); RecordingsMade how many it had, deleted
 	// ones too: the next one's number is one more.
 	Recordings     int   `bson:"recordings,omitempty" json:"recordings,omitempty"`
 	RecordingsMade int64 `bson:"recordings_made,omitempty" json:"recordings_made,omitempty"`

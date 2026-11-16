@@ -544,22 +544,6 @@ paths:
       summary: Channel sync (data plane)
       tags:
       - Channels
-  /desktop-recordings/{id}:
-    get:
-      parameters:
-      - description: Recording ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/octet-stream
-      responses: {}
-      security:
-      - BearerAuth: []
-      summary: Download a desktop's recording
-      tags:
-      - Minion tasks
   /enroll:
     post:
       consumes:
@@ -985,10 +969,6 @@ paths:
         in: query
         name: dpi
         type: integer
-      - description: IANA time zone
-        in: query
-        name: timezone
-        type: string
       - description: 'The desktop''s settings: a JSON object of its front''s (minionDesktopSettings),
           each left out its default'
         in: query
@@ -1036,6 +1016,22 @@ paths:
       security:
       - BearerAuth: []
       summary: Open a web terminal on a terminal task
+      tags:
+      - Minion tasks
+  /recordings/{id}:
+    get:
+      parameters:
+      - description: Recording ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Download a desktop's or a terminal's recording
       tags:
       - Minion tasks
   /skills:

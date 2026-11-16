@@ -189,6 +189,8 @@ export function TaskDetail({
   const isTunnel = t.tunnel != null
   // A desktop task's: each desktop opened here, recorded.
   const isDesktop = t.tunnel != null && !t.tunnel.reverse && isDesktopFront(t.tunnel.front)
+  // Its sessions are recorded: a desktop's, or a terminal's.
+  const recorded = isDesktop || (t.tunnel != null && !t.tunnel.reverse && t.tunnel.front === FRONT_TERMINAL)
   // A delegate task's: what it serves and carries.
   const isDelegate = t.delegate != null
   const hasData =
@@ -218,11 +220,11 @@ export function TaskDetail({
   const [tab, setTab] = useState<"output" | "data" | "feedback" | "recordings" | "json" | null>(null)
   // Data alone shows as data; with output, the output first. An upload
   // shows its progress first, whatever it prints. Feedback and a desktop's
-  // recordings only when asked.
+  // or a terminal's recordings only when asked.
   const shown =
     tab === "json"
       ? "json"
-      : tab === "recordings" && isDesktop
+      : tab === "recordings" && recorded
         ? "recordings"
       : tab === "feedback" && hasFeedback
         ? "feedback"
@@ -256,8 +258,12 @@ export function TaskDetail({
               {isDelegate ? "Delegate" : isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? (t.tunnel?.front === FRONT_FORWARD ? "Forward" : t.tunnel?.front === FRONT_TERMINAL ? "Terminal" : t.tunnel?.front === FRONT_VPN ? "VPN" : t.tunnel && isDesktopFront(t.tunnel.front) ? desktopName(t.tunnel.front) : "Proxy") : "Data"}
             </TabButton>
           )}
-          {isDesktop && (
-            <TabButton active={shown === "recordings"} onClick={() => setTab("recordings")} title="Each desktop opened here, recorded: they play here">
+          {recorded && (
+            <TabButton
+              active={shown === "recordings"}
+              onClick={() => setTab("recordings")}
+              title={isDesktop ? "Each desktop opened here, recorded: they play here" : "Each terminal session, recorded: they play here"}
+            >
               <span className="inline-flex items-center gap-1.5">
                 Recordings
                 {t.recordings > 0 && <span className="text-muted-foreground tabular-nums">{t.recordings}</span>}

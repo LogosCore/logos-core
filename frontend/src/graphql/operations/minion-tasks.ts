@@ -198,18 +198,21 @@ export const MinionTunnelStreamsQuery = graphql(`
   }
 `)
 
-// A desktop task's recordings, the latest first a page at a time: each
-// desktop opened in the web app, recorded (core: minion_tasks.graphql).
-export const DesktopRecordingsQuery = graphql(`
-  query DesktopRecordings($taskId: ID!, $last: Int, $before: String) {
-    desktopRecordings(taskId: $taskId, last: $last, before: $before) {
+// A desktop or terminal task's recordings, the latest first a page at a time: each
+// desktop opened in the web app, or terminal session, recorded (core: minion_tasks.graphql).
+export const RecordingsQuery = graphql(`
+  query Recordings($taskId: ID!, $last: Int, $before: String) {
+    recordings(taskId: $taskId, last: $last, before: $before) {
       recordings {
         id
         taskId
         number
         front
+        format
         userId
         username
+        client
+        stream
         settings
         width
         height
@@ -230,9 +233,9 @@ export const DesktopRecordingsQuery = graphql(`
 `)
 
 // Deletes a recording that ended, its file with it.
-export const DeleteDesktopRecordingMutation = graphql(`
-  mutation DeleteDesktopRecording($id: ID!) {
-    deleteDesktopRecording(id: $id)
+export const DeleteRecordingMutation = graphql(`
+  mutation DeleteRecording($id: ID!) {
+    deleteRecording(id: $id)
   }
 `)
 

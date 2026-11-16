@@ -169,6 +169,10 @@ type IMinionTaskRepository interface {
 	SetImportant(ctx context.Context, taskID uuid.UUID, important bool, by uuid.UUID, at time.Time) (*models.MinionTask, bool, error)
 	// BackfillSearchText gives the tasks stored without a search text one.
 	BackfillSearchText(ctx context.Context) (int64, error)
+	// BackfillLineNames gives the switch_connection tasks stored without
+	// line names theirs, from their session's connections' names (names:
+	// nil for a session or build gone).
+	BackfillLineNames(ctx context.Context, names func(ctx context.Context, sessionID uuid.UUID) ([]string, error)) (int64, error)
 	// Parts returns a task's output parts in seq order.
 	Parts(ctx context.Context, taskID uuid.UUID) ([]models.MinionTaskPart, error)
 	// OutParts are the parts with output, in seq order, their output only.
@@ -773,6 +777,47 @@ func (r *minionTaskRepository) BackfillSearchText(ctx context.Context) (int64, e
 	for i := range ts {
 		ok, err := matched(r.tasks.UpdateOne(ctx, bson.M{"task_id": ts[i].TaskID, "search_text": bson.M{"$exists": false}},
 			bson.M{"$set": bson.M{"search_text": models.MinionTaskSearchText(&ts[i])}}))
+		if err != nil {
+			return n, fmt.Errorf("backfill task %s: %w", ts[i].TaskID, err)
+		}
+		if ok {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// BackfillLineNames gives the tasks of a switch_connection command stored
+// before tasks had line names (models.MinionTask.LineNames) theirs, and
+// the search text that reads them: their line said the connection's place,
+// where the console shows its name. Its conn (protocol.ActionSwitchConnection)
+// is the connection param core knows without the command's schema. A task
+// whose place no name says alone keeps the place; each is done once (empty
+// line names say so). Idempotent.
+func (r *minionTaskRepository) BackfillLineNames(ctx context.Context, names func(ctx context.Context, sessionID uuid.UUID) ([]string, error)) (int64, error) {
+	var ts []models.MinionTask
+	if err := r.tasks.Find(ctx, bson.M{"action": protocol.ActionSwitchConnection, "args.conn": bson.M{"$exists": true},
+		"line_names": bson.M{"$exists": false}}).
+		Select(bson.M{"task_id": 1, "session_id": 1, "command": 1, "args": 1, "line_rest": 1}).All(&ts); err != nil {
+		return 0, fmt.Errorf("find switch tasks without line names: %w", err)
+	}
+	bySession := map[uuid.UUID][]string{}
+	var n int64
+	for i := range ts {
+		conns, ok := bySession[ts[i].SessionID]
+		if !ok {
+			var err error
+			if conns, err = names(ctx, ts[i].SessionID); err != nil {
+				return n, fmt.Errorf("the connections of session %s: %w", ts[i].SessionID, err)
+			}
+			bySession[ts[i].SessionID] = conns
+		}
+		ts[i].LineNames = models.MinionTaskLineNames([]string{"conn"}, ts[i].Args, conns)
+		set := bson.M{"line_names": map[string]string{}, "search_text": models.MinionTaskSearchText(&ts[i])}
+		if ts[i].LineNames != nil {
+			set["line_names"] = ts[i].LineNames
+		}
+		ok, err := matched(r.tasks.UpdateOne(ctx, bson.M{"task_id": ts[i].TaskID, "line_names": bson.M{"$exists": false}}, bson.M{"$set": set}))
 		if err != nil {
 			return n, fmt.Errorf("backfill task %s: %w", ts[i].TaskID, err)
 		}

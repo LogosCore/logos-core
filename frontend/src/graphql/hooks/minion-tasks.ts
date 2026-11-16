@@ -14,8 +14,8 @@ import { useSubscription } from "@/hooks/use-subscription"
 import {
   CancelMinionTaskDocument,
   CreateMinionVpnKeyDocument,
-  DeleteDesktopRecordingDocument,
-  DesktopRecordingsDocument,
+  DeleteRecordingDocument,
+  RecordingsDocument,
   DisconnectMinionVpnClientDocument,
   SetMinionTunnelRoutesDocument,
   MinionDesktopSettingsDocument,
@@ -32,7 +32,7 @@ import {
   QueueMinionTaskDocument,
   SetMinionTaskImportantDocument,
   SetMinionTunnelCapDocument,
-  type DesktopRecordingsQuery,
+  type RecordingsQuery,
   type MinionTaskFieldsFragment,
   type MinionTasksQuery,
 } from "@/graphql/gql/graphql"
@@ -237,12 +237,12 @@ export function useMinionTunnelStreams(taskId: string, filter: TunnelStreamsFilt
  * core bumps it as one starts, ends or is deleted, and its live update
  * says so).
  */
-export function useDesktopRecordings(taskId: string, version: string, enabled = true) {
+export function useRecordings(taskId: string, version: string, enabled = true) {
   const query = useInfiniteQuery({
     queryKey: minionTaskKeys.recordings(taskId),
-    queryFn: ({ pageParam }) => graphqlClient(DesktopRecordingsDocument, { taskId, last: 50, before: pageParam }),
+    queryFn: ({ pageParam }) => graphqlClient(RecordingsDocument, { taskId, last: 50, before: pageParam }),
     initialPageParam: null as string | null,
-    getNextPageParam: (last) => last.desktopRecordings.before ?? undefined,
+    getNextPageParam: (last) => last.recordings.before ?? undefined,
     enabled,
   })
   const { refetch } = query
@@ -255,13 +255,13 @@ export function useDesktopRecordings(taskId: string, version: string, enabled = 
   return query
 }
 
-type RecordingPages = InfiniteData<DesktopRecordingsQuery, string | null>
+type RecordingPages = InfiniteData<RecordingsQuery, string | null>
 
 /** Deletes a recording that ended: gone from its task's list at once. */
-export function useDeleteDesktopRecording(taskId: string) {
+export function useDeleteRecording(taskId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => graphqlClient(DeleteDesktopRecordingDocument, { id }),
+    mutationFn: (id: string) => graphqlClient(DeleteRecordingDocument, { id }),
     onSuccess: (_data, id) =>
       queryClient.setQueryData<RecordingPages>(minionTaskKeys.recordings(taskId), (data) =>
         data
@@ -269,9 +269,9 @@ export function useDeleteDesktopRecording(taskId: string) {
               ...data,
               pages: data.pages.map((p) => ({
                 ...p,
-                desktopRecordings: {
-                  ...p.desktopRecordings,
-                  recordings: p.desktopRecordings.recordings.filter((r) => r.id !== id),
+                recordings: {
+                  ...p.recordings,
+                  recordings: p.recordings.recordings.filter((r) => r.id !== id),
                 },
               })),
             }

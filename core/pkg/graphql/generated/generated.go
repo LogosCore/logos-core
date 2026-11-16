@@ -503,33 +503,6 @@ type ComplexityRoot struct {
 		Tasks     func(childComplexity int) int
 	}
 
-	DesktopRecording struct {
-		DurationMs func(childComplexity int) int
-		End        func(childComplexity int) int
-		EndedAt    func(childComplexity int) int
-		Front      func(childComplexity int) int
-		Height     func(childComplexity int) int
-		ID         func(childComplexity int) int
-		Keys       func(childComplexity int) int
-		Lost       func(childComplexity int) int
-		Msg        func(childComplexity int) int
-		Number     func(childComplexity int) int
-		Path       func(childComplexity int) int
-		Settings   func(childComplexity int) int
-		Size       func(childComplexity int) int
-		StartedAt  func(childComplexity int) int
-		State      func(childComplexity int) int
-		TaskID     func(childComplexity int) int
-		UserID     func(childComplexity int) int
-		Username   func(childComplexity int) int
-		Width      func(childComplexity int) int
-	}
-
-	DesktopRecordingPage struct {
-		Before     func(childComplexity int) int
-		Recordings func(childComplexity int) int
-	}
-
 	FactoryKind struct {
 		Icon       func(childComplexity int) int
 		IconLight  func(childComplexity int) int
@@ -1469,13 +1442,13 @@ type ComplexityRoot struct {
 		DeleteCredential              func(childComplexity int, id string) int
 		DeleteCredentialComment       func(childComplexity int, credentialID string, commentID string) int
 		DeleteCustomTimelineEvent     func(childComplexity int, id string) int
-		DeleteDesktopRecording        func(childComplexity int, id string) int
 		DeleteHash                    func(childComplexity int, id string) int
 		DeleteHost                    func(childComplexity int, id string) int
 		DeleteMinionSessionFolder     func(childComplexity int, id string) int
 		DeleteModule                  func(childComplexity int, instance string) int
 		DeleteMyAPIKey                func(childComplexity int) int
 		DeleteOperation               func(childComplexity int, id string) int
+		DeleteRecording               func(childComplexity int, id string) int
 		DeleteTask                    func(childComplexity int, id string) int
 		DeleteUser                    func(childComplexity int, id string) int
 		DeleteWikiDocument            func(childComplexity int, id string) int
@@ -1669,7 +1642,6 @@ type ComplexityRoot struct {
 		CredentialTags                     func(childComplexity int, operationID string) int
 		CredentialTypes                    func(childComplexity int) int
 		Credentials                        func(childComplexity int, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, types []models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
-		DesktopRecordings                  func(childComplexity int, taskID string, last *int, before *string) int
 		FactoryKinds                       func(childComplexity int) int
 		FileBrowser                        func(childComplexity int, sessionID string) int
 		FileBrowserEntries                 func(childComplexity int, sessionID string, path *string, after *string, first *int, search *string, sort *string, desc *bool, showDeleted *bool, foldersOnly *bool) int
@@ -1718,6 +1690,7 @@ type ComplexityRoot struct {
 		Operation                          func(childComplexity int, id string) int
 		OperationalPorts                   func(childComplexity int, operationID string, search *string, first *int, after *string, last *int, before *string) int
 		Operations                         func(childComplexity int, search *string, sortBy *model.OperationSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
+		Recordings                         func(childComplexity int, taskID string, last *int, before *string) int
 		Session                            func(childComplexity int, id string) int
 		Sessions                           func(childComplexity int, userID *string, search *string, activeOnly *bool, first *int, after *string, last *int, before *string) int
 		SkillChangelog                     func(childComplexity int) int
@@ -1757,6 +1730,36 @@ type ComplexityRoot struct {
 		WikiOperationPresence              func(childComplexity int, operationID string) int
 		WikiSearch                         func(childComplexity int, operationID string, scope *string, query string, offset *int, limit *int) int
 		WikiTemplates                      func(childComplexity int, operationID string) int
+	}
+
+	Recording struct {
+		Client     func(childComplexity int) int
+		DurationMs func(childComplexity int) int
+		End        func(childComplexity int) int
+		EndedAt    func(childComplexity int) int
+		Format     func(childComplexity int) int
+		Front      func(childComplexity int) int
+		Height     func(childComplexity int) int
+		ID         func(childComplexity int) int
+		Keys       func(childComplexity int) int
+		Lost       func(childComplexity int) int
+		Msg        func(childComplexity int) int
+		Number     func(childComplexity int) int
+		Path       func(childComplexity int) int
+		Settings   func(childComplexity int) int
+		Size       func(childComplexity int) int
+		StartedAt  func(childComplexity int) int
+		State      func(childComplexity int) int
+		Stream     func(childComplexity int) int
+		TaskID     func(childComplexity int) int
+		UserID     func(childComplexity int) int
+		Username   func(childComplexity int) int
+		Width      func(childComplexity int) int
+	}
+
+	RecordingPage struct {
+		Before     func(childComplexity int) int
+		Recordings func(childComplexity int) int
 	}
 
 	Route struct {
@@ -2393,7 +2396,7 @@ type MutationResolver interface {
 	SetMinionTunnelRoutes(ctx context.Context, taskID string, routes []string) (*model.MinionTask, error)
 	CreateMinionVPNKey(ctx context.Context, taskID string) (*model.MinionVPNKey, error)
 	DisconnectMinionVPNClient(ctx context.Context, taskID string, client string) (*model.MinionTask, error)
-	DeleteDesktopRecording(ctx context.Context, id string) (bool, error)
+	DeleteRecording(ctx context.Context, id string) (bool, error)
 	MinionStreamLink(ctx context.Context, taskID string) (*model.MinionStreamLink, error)
 	UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
 	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
@@ -2504,7 +2507,7 @@ type QueryResolver interface {
 	MinionTunnelStreams(ctx context.Context, taskID string, last *int, before *string, search *string, state *string) (*model.MinionTunnelStreamPage, error)
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
 	MinionDesktopSettings(ctx context.Context, front string) ([]*model.ModuleField, error)
-	DesktopRecordings(ctx context.Context, taskID string, last *int, before *string) (*model.DesktopRecordingPage, error)
+	Recordings(ctx context.Context, taskID string, last *int, before *string) (*model.RecordingPage, error)
 	MinionFileStrings(ctx context.Context, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) (*model.MinionFileStringPage, error)
 	Module(ctx context.Context, instance string) (*models.Module, error)
 	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
@@ -4517,134 +4520,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CredentialUsage.Tasks(childComplexity), true
-
-	case "DesktopRecording.durationMs":
-		if e.ComplexityRoot.DesktopRecording.DurationMs == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.DurationMs(childComplexity), true
-	case "DesktopRecording.end":
-		if e.ComplexityRoot.DesktopRecording.End == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.End(childComplexity), true
-	case "DesktopRecording.endedAt":
-		if e.ComplexityRoot.DesktopRecording.EndedAt == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.EndedAt(childComplexity), true
-	case "DesktopRecording.front":
-		if e.ComplexityRoot.DesktopRecording.Front == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.Front(childComplexity), true
-	case "DesktopRecording.height":
-		if e.ComplexityRoot.DesktopRecording.Height == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.Height(childComplexity), true
-	case "DesktopRecording.id":
-		if e.ComplexityRoot.DesktopRecording.ID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.ID(childComplexity), true
-	case "DesktopRecording.keys":
-		if e.ComplexityRoot.DesktopRecording.Keys == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.Keys(childComplexity), true
-	case "DesktopRecording.lost":
-		if e.ComplexityRoot.DesktopRecording.Lost == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.Lost(childComplexity), true
-	case "DesktopRecording.msg":
-		if e.ComplexityRoot.DesktopRecording.Msg == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.Msg(childComplexity), true
-	case "DesktopRecording.number":
-		if e.ComplexityRoot.DesktopRecording.Number == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.Number(childComplexity), true
-	case "DesktopRecording.path":
-		if e.ComplexityRoot.DesktopRecording.Path == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.Path(childComplexity), true
-	case "DesktopRecording.settings":
-		if e.ComplexityRoot.DesktopRecording.Settings == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.Settings(childComplexity), true
-	case "DesktopRecording.size":
-		if e.ComplexityRoot.DesktopRecording.Size == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.Size(childComplexity), true
-	case "DesktopRecording.startedAt":
-		if e.ComplexityRoot.DesktopRecording.StartedAt == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.StartedAt(childComplexity), true
-	case "DesktopRecording.state":
-		if e.ComplexityRoot.DesktopRecording.State == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.State(childComplexity), true
-	case "DesktopRecording.taskId":
-		if e.ComplexityRoot.DesktopRecording.TaskID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.TaskID(childComplexity), true
-	case "DesktopRecording.userId":
-		if e.ComplexityRoot.DesktopRecording.UserID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.UserID(childComplexity), true
-	case "DesktopRecording.username":
-		if e.ComplexityRoot.DesktopRecording.Username == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.Username(childComplexity), true
-	case "DesktopRecording.width":
-		if e.ComplexityRoot.DesktopRecording.Width == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecording.Width(childComplexity), true
-
-	case "DesktopRecordingPage.before":
-		if e.ComplexityRoot.DesktopRecordingPage.Before == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecordingPage.Before(childComplexity), true
-	case "DesktopRecordingPage.recordings":
-		if e.ComplexityRoot.DesktopRecordingPage.Recordings == nil {
-			break
-		}
-
-		return e.ComplexityRoot.DesktopRecordingPage.Recordings(childComplexity), true
 
 	case "FactoryKind.icon":
 		if e.ComplexityRoot.FactoryKind.Icon == nil {
@@ -9065,17 +8940,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteCustomTimelineEvent(childComplexity, args["id"].(string)), true
-	case "Mutation.deleteDesktopRecording":
-		if e.ComplexityRoot.Mutation.DeleteDesktopRecording == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_deleteDesktopRecording_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.DeleteDesktopRecording(childComplexity, args["id"].(string)), true
 	case "Mutation.deleteHash":
 		if e.ComplexityRoot.Mutation.DeleteHash == nil {
 			break
@@ -9137,6 +9001,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteOperation(childComplexity, args["id"].(string)), true
+	case "Mutation.deleteRecording":
+		if e.ComplexityRoot.Mutation.DeleteRecording == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteRecording_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteRecording(childComplexity, args["id"].(string)), true
 	case "Mutation.deleteTask":
 		if e.ComplexityRoot.Mutation.DeleteTask == nil {
 			break
@@ -10457,17 +10332,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Credentials(childComplexity, args["operationId"].(string), args["search"].(*string), args["searchFields"].([]model.CredentialSearchField), args["type"].(*models.CredentialType), args["types"].([]models.CredentialType), args["tags"].([]string), args["validity"].([]models.CredentialValidity), args["sortBy"].(*model.CredentialSortField), args["sortDirection"].(*model.SortDirection), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
-	case "Query.desktopRecordings":
-		if e.ComplexityRoot.Query.DesktopRecordings == nil {
-			break
-		}
-
-		args, err := ec.field_Query_desktopRecordings_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Query.DesktopRecordings(childComplexity, args["taskId"].(string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.factoryKinds":
 		if e.ComplexityRoot.Query.FactoryKinds == nil {
 			break
@@ -10962,6 +10826,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Operations(childComplexity, args["search"].(*string), args["sortBy"].(*model.OperationSortField), args["sortDirection"].(*model.SortDirection), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
+	case "Query.recordings":
+		if e.ComplexityRoot.Query.Recordings == nil {
+			break
+		}
+
+		args, err := ec.field_Query_recordings_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Recordings(childComplexity, args["taskId"].(string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.session":
 		if e.ComplexityRoot.Query.Session == nil {
 			break
@@ -11381,6 +11256,152 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.WikiTemplates(childComplexity, args["operationId"].(string)), true
+
+	case "Recording.client":
+		if e.ComplexityRoot.Recording.Client == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Client(childComplexity), true
+	case "Recording.durationMs":
+		if e.ComplexityRoot.Recording.DurationMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.DurationMs(childComplexity), true
+	case "Recording.end":
+		if e.ComplexityRoot.Recording.End == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.End(childComplexity), true
+	case "Recording.endedAt":
+		if e.ComplexityRoot.Recording.EndedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.EndedAt(childComplexity), true
+	case "Recording.format":
+		if e.ComplexityRoot.Recording.Format == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Format(childComplexity), true
+	case "Recording.front":
+		if e.ComplexityRoot.Recording.Front == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Front(childComplexity), true
+	case "Recording.height":
+		if e.ComplexityRoot.Recording.Height == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Height(childComplexity), true
+	case "Recording.id":
+		if e.ComplexityRoot.Recording.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.ID(childComplexity), true
+	case "Recording.keys":
+		if e.ComplexityRoot.Recording.Keys == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Keys(childComplexity), true
+	case "Recording.lost":
+		if e.ComplexityRoot.Recording.Lost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Lost(childComplexity), true
+	case "Recording.msg":
+		if e.ComplexityRoot.Recording.Msg == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Msg(childComplexity), true
+	case "Recording.number":
+		if e.ComplexityRoot.Recording.Number == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Number(childComplexity), true
+	case "Recording.path":
+		if e.ComplexityRoot.Recording.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Path(childComplexity), true
+	case "Recording.settings":
+		if e.ComplexityRoot.Recording.Settings == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Settings(childComplexity), true
+	case "Recording.size":
+		if e.ComplexityRoot.Recording.Size == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Size(childComplexity), true
+	case "Recording.startedAt":
+		if e.ComplexityRoot.Recording.StartedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.StartedAt(childComplexity), true
+	case "Recording.state":
+		if e.ComplexityRoot.Recording.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.State(childComplexity), true
+	case "Recording.stream":
+		if e.ComplexityRoot.Recording.Stream == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Stream(childComplexity), true
+	case "Recording.taskId":
+		if e.ComplexityRoot.Recording.TaskID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.TaskID(childComplexity), true
+	case "Recording.userId":
+		if e.ComplexityRoot.Recording.UserID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.UserID(childComplexity), true
+	case "Recording.username":
+		if e.ComplexityRoot.Recording.Username == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Username(childComplexity), true
+	case "Recording.width":
+		if e.ComplexityRoot.Recording.Width == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Width(childComplexity), true
+
+	case "RecordingPage.before":
+		if e.ComplexityRoot.RecordingPage.Before == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RecordingPage.Before(childComplexity), true
+	case "RecordingPage.recordings":
+		if e.ComplexityRoot.RecordingPage.Recordings == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RecordingPage.Recordings(childComplexity), true
 
 	case "Route.destination":
 		if e.ComplexityRoot.Route.Destination == nil {
@@ -16587,8 +16608,9 @@ type MinionTask {
   # How many errors and warnings its minion sent about it, all of them.
   feedbackErrors: Int!
   feedbackWarnings: Int!
-  # A desktop task's recordings kept, one a desktop opened in the web app
-  # (desktopRecordings lists them); 0 for any other task.
+  # A desktop or terminal task's recordings kept: one for each desktop
+  # opened in the web app, or each terminal session (recordings lists
+  # them); 0 for any other task.
   recordings: Int!
   # Counts the task's changes: of two copies, the one with the higher rev
   # is the newer (a mutation's answer can come after live updates).
@@ -16984,54 +17006,73 @@ type MinionFileStringPage {
   done: Boolean!
 }
 
-# The recording of one desktop a desktop task's tunnel drew in the web app
-# (docs: contracts/minion-messages/tunnels.md, Recordings): each desktop
-# opened is recorded as it goes, what it showed, and the operator's mouse
-# and keys (a view-only one's has none), in Guacamole's format. Kept until
-# its operation is deleted, or an operator deletes it.
-type DesktopRecording {
+# The recording of one desktop a desktop task's tunnel drew in the web app,
+# or of one terminal session of a terminal task (docs:
+# contracts/minion-messages/tunnels.md, Recordings), recorded as it goes.
+# A desktop's: what it showed, and the operator's mouse and keys (a
+# view-only one's has none), in Guacamole's format. A terminal's: what the
+# process wrote, what was typed, and the terminal's sizes, as an asciicast
+# (v2). Kept until its operation is deleted, or an operator deletes it.
+type Recording {
   id: ID!
   taskId: ID!
   # Its number in the task, from 1.
   number: Int!
-  # The desktop's front: rdp, vnc, ssh or telnet.
+  # The task's front: rdp, vnc, ssh or telnet (a desktop), or terminal.
   front: String!
-  # Who opened the desktop.
-  userId: ID!
+  # Its file's format: guac (Guacamole's session recording) or asciicast.
+  format: String!
+  # Who opened it: an operator in the web app (userId, username), or, for
+  # a terminal's raw port, no one known (userId and username empty).
+  userId: ID
   username: String!
+  # Who it was, as the task's streams list says it: web: <user>, or a raw
+  # client's address. A desktop's: web: <user>.
+  client: String!
+  # A terminal's stream, its number in the task's streams; 0 for a
+  # desktop.
+  stream: Int!
   # What it opened with: the settings picked (minionDesktopSettings), as
-  # the web app sent them, each left out at its default.
+  # the web app sent them, each left out at its default. None for a
+  # terminal.
   settings: JSON
-  # The display it opened at, in pixels.
+  # The size it opened at: a desktop's display in pixels, a terminal's in
+  # columns (width) and rows (height).
   width: Int!
   height: Int!
-  # It holds the operator's mouse and keys (false: a view-only desktop's).
+  # It holds what was typed: the operator's mouse and keys (false: a
+  # view-only desktop's), or a terminal's input (always).
   keys: Boolean!
-  # RECORDING (the desktop is open), SAVED (it ended: it plays) or FAILED
-  # (the desktop did not open: nothing was recorded).
+  # RECORDING (it is open), SAVED (it ended: it plays) or FAILED (it did
+  # not open: nothing was recorded).
   state: String!
   startedAt: String!
   endedAt: String
-  # How long it plays, milliseconds: from guacd's first frame to its last.
+  # How long it plays, milliseconds: a desktop's from guacd's first frame
+  # to its last, a terminal's to its last event.
   durationMs: Int!
   # Its bytes, as far as core kept them, and those it could not keep (its
   # store failed): the recording plays past them.
   size: Int!
   lost: Int!
-  # How it ended: closed (the web app closed the desktop), desktop (guacd
-  # ended it: its server's end, or an error), core_stopped (core stopped
-  # as it recorded: its last seconds are lost) or not_opened; null while
-  # it records. msg: guacd's error, or why the desktop did not open.
+  # How it ended: closed (the web app closed the desktop, or the
+  # terminal's client left), desktop (guacd ended it: its server's end, or
+  # an error), process (the terminal's process ended: msg its exit),
+  # task_ended (the task ended), reset (the minion's end of the terminal
+  # was lost), core_stopped (core stopped as it recorded: its last seconds
+  # are lost) or not_opened; null while it records. msg: guacd's error,
+  # the process's exit, or why it did not open.
   end: String
   msg: String
-  # Its file, Guacamole's session recording (what guacd's own recordings
-  # are, which guacenc makes a video of): a path under /api/v1.
+  # Its file: Guacamole's session recording (what guacd's own recordings
+  # are, which guacenc makes a video of), or an asciicast (which asciinema
+  # plays): a path under /api/v1.
   path: String!
 }
 
 # A page of a task's recordings, the latest first.
-type DesktopRecordingPage {
-  recordings: [DesktopRecording!]!
+type RecordingPage {
+  recordings: [Recording!]!
   # Where the next (older) page starts; null on the last.
   before: String
 }
@@ -17080,9 +17121,9 @@ extend type Query {
   minionDesktopSettings(front: String!): [ModuleField!]!
     @hasPermission(permission: "operation:member")
 
-  # A desktop task's recordings, the latest first, at most last (50 by
+  # A desktop or terminal task's recordings, the latest first, at most last (50 by
   # default, 200 at most), before a page's cursor. Needs at least viewer.
-  desktopRecordings(taskId: ID!, last: Int, before: String): DesktopRecordingPage!
+  recordings(taskId: ID!, last: Int, before: String): RecordingPage!
     @hasPermission(permission: "operation:member")
 
   # A page of the printable strings in a kept file, read from after (0, or
@@ -17135,9 +17176,9 @@ extend type Mutation {
   disconnectMinionVPNClient(taskId: ID!, client: ID!): MinionTask!
     @hasPermission(permission: "operation:member")
 
-  # Deletes a desktop's recording that ended, its file with it. Needs
+  # Deletes a recording that ended, its file with it. Needs
   # operator; agent API keys are rejected.
-  deleteDesktopRecording(id: ID!): Boolean!
+  deleteRecording(id: ID!): Boolean!
     @hasPermission(permission: "operation:member")
 
   # A signed link to download a stream_file task's stream (for curl).
@@ -20164,17 +20205,6 @@ func (ec *executionContext) field_Mutation_deleteCustomTimelineEvent_args(ctx co
 	return args, nil
 }
 
-func (ec *executionContext) field_Mutation_deleteDesktopRecording_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["id"] = arg0
-	return args, nil
-}
-
 func (ec *executionContext) field_Mutation_deleteHash_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -20220,6 +20250,17 @@ func (ec *executionContext) field_Mutation_deleteModule_args(ctx context.Context
 }
 
 func (ec *executionContext) field_Mutation_deleteOperation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteRecording_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
@@ -21556,27 +21597,6 @@ func (ec *executionContext) field_Query_credentials_args(ctx context.Context, ra
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_desktopRecordings_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "taskId", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["taskId"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
-	if err != nil {
-		return nil, err
-	}
-	args["last"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
-	if err != nil {
-		return nil, err
-	}
-	args["before"] = arg2
-	return args, nil
-}
-
 func (ec *executionContext) field_Query_fileBrowserEntries_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -22630,6 +22650,27 @@ func (ec *executionContext) field_Query_operations_args(ctx context.Context, raw
 		return nil, err
 	}
 	args["before"] = arg6
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_recordings_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "taskId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["taskId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["last"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg2
 	return args, nil
 }
 
@@ -33496,655 +33537,6 @@ func (ec *executionContext) fieldContext_CredentialUsage_tasks(_ context.Context
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_id(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_id,
-		func(ctx context.Context) (any, error) {
-			return obj.ID, nil
-		},
-		nil,
-		ec.marshalNID2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_taskId(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_taskId,
-		func(ctx context.Context) (any, error) {
-			return obj.TaskID, nil
-		},
-		nil,
-		ec.marshalNID2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_taskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_number(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_number,
-		func(ctx context.Context) (any, error) {
-			return obj.Number, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_number(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_front(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_front,
-		func(ctx context.Context) (any, error) {
-			return obj.Front, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_front(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_userId(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_userId,
-		func(ctx context.Context) (any, error) {
-			return obj.UserID, nil
-		},
-		nil,
-		ec.marshalNID2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_userId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_username(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_username,
-		func(ctx context.Context) (any, error) {
-			return obj.Username, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_username(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_settings(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_settings,
-		func(ctx context.Context) (any, error) {
-			return obj.Settings, nil
-		},
-		nil,
-		ec.marshalOJSON2interface,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_settings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type JSON does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_width(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_width,
-		func(ctx context.Context) (any, error) {
-			return obj.Width, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_width(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_height(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_height,
-		func(ctx context.Context) (any, error) {
-			return obj.Height, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_height(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_keys(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_keys,
-		func(ctx context.Context) (any, error) {
-			return obj.Keys, nil
-		},
-		nil,
-		ec.marshalNBoolean2bool,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_keys(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Boolean does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_state(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_state,
-		func(ctx context.Context) (any, error) {
-			return obj.State, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_startedAt(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_startedAt,
-		func(ctx context.Context) (any, error) {
-			return obj.StartedAt, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_startedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_endedAt(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_endedAt,
-		func(ctx context.Context) (any, error) {
-			return obj.EndedAt, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_endedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_durationMs(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_durationMs,
-		func(ctx context.Context) (any, error) {
-			return obj.DurationMs, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_durationMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_size(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_size,
-		func(ctx context.Context) (any, error) {
-			return obj.Size, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_lost(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_lost,
-		func(ctx context.Context) (any, error) {
-			return obj.Lost, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_lost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_end(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_end,
-		func(ctx context.Context) (any, error) {
-			return obj.End, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_end(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_msg(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_msg,
-		func(ctx context.Context) (any, error) {
-			return obj.Msg, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_msg(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecording_path(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecording) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecording_path,
-		func(ctx context.Context) (any, error) {
-			return obj.Path, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecording_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecording",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecordingPage_recordings(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecordingPage) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecordingPage_recordings,
-		func(ctx context.Context) (any, error) {
-			return obj.Recordings, nil
-		},
-		nil,
-		ec.marshalNDesktopRecording2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐDesktopRecordingᚄ,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecordingPage_recordings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecordingPage",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_DesktopRecording_id(ctx, field)
-			case "taskId":
-				return ec.fieldContext_DesktopRecording_taskId(ctx, field)
-			case "number":
-				return ec.fieldContext_DesktopRecording_number(ctx, field)
-			case "front":
-				return ec.fieldContext_DesktopRecording_front(ctx, field)
-			case "userId":
-				return ec.fieldContext_DesktopRecording_userId(ctx, field)
-			case "username":
-				return ec.fieldContext_DesktopRecording_username(ctx, field)
-			case "settings":
-				return ec.fieldContext_DesktopRecording_settings(ctx, field)
-			case "width":
-				return ec.fieldContext_DesktopRecording_width(ctx, field)
-			case "height":
-				return ec.fieldContext_DesktopRecording_height(ctx, field)
-			case "keys":
-				return ec.fieldContext_DesktopRecording_keys(ctx, field)
-			case "state":
-				return ec.fieldContext_DesktopRecording_state(ctx, field)
-			case "startedAt":
-				return ec.fieldContext_DesktopRecording_startedAt(ctx, field)
-			case "endedAt":
-				return ec.fieldContext_DesktopRecording_endedAt(ctx, field)
-			case "durationMs":
-				return ec.fieldContext_DesktopRecording_durationMs(ctx, field)
-			case "size":
-				return ec.fieldContext_DesktopRecording_size(ctx, field)
-			case "lost":
-				return ec.fieldContext_DesktopRecording_lost(ctx, field)
-			case "end":
-				return ec.fieldContext_DesktopRecording_end(ctx, field)
-			case "msg":
-				return ec.fieldContext_DesktopRecording_msg(ctx, field)
-			case "path":
-				return ec.fieldContext_DesktopRecording_path(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type DesktopRecording", field.Name)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _DesktopRecordingPage_before(ctx context.Context, field graphql.CollectedField, obj *model.DesktopRecordingPage) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_DesktopRecordingPage_before,
-		func(ctx context.Context) (any, error) {
-			return obj.Before, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_DesktopRecordingPage_before(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "DesktopRecordingPage",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -63221,15 +62613,15 @@ func (ec *executionContext) fieldContext_Mutation_disconnectMinionVPNClient(ctx 
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_deleteDesktopRecording(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Mutation_deleteRecording(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Mutation_deleteDesktopRecording,
+		ec.fieldContext_Mutation_deleteRecording,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().DeleteDesktopRecording(ctx, fc.Args["id"].(string))
+			return ec.Resolvers.Mutation().DeleteRecording(ctx, fc.Args["id"].(string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -63256,7 +62648,7 @@ func (ec *executionContext) _Mutation_deleteDesktopRecording(ctx context.Context
 	)
 }
 
-func (ec *executionContext) fieldContext_Mutation_deleteDesktopRecording(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Mutation_deleteRecording(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Mutation",
 		Field:      field,
@@ -63273,7 +62665,7 @@ func (ec *executionContext) fieldContext_Mutation_deleteDesktopRecording(ctx con
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_deleteDesktopRecording_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Mutation_deleteRecording_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -73343,15 +72735,15 @@ func (ec *executionContext) fieldContext_Query_minionDesktopSettings(ctx context
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_desktopRecordings(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_recordings(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Query_desktopRecordings,
+		ec.fieldContext_Query_recordings,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().DesktopRecordings(ctx, fc.Args["taskId"].(string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+			return ec.Resolvers.Query().Recordings(ctx, fc.Args["taskId"].(string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -73359,11 +72751,11 @@ func (ec *executionContext) _Query_desktopRecordings(ctx context.Context, field 
 			directive1 := func(ctx context.Context) (any, error) {
 				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
 				if err != nil {
-					var zeroVal *model.DesktopRecordingPage
+					var zeroVal *model.RecordingPage
 					return zeroVal, err
 				}
 				if ec.Directives.HasPermission == nil {
-					var zeroVal *model.DesktopRecordingPage
+					var zeroVal *model.RecordingPage
 					return zeroVal, errors.New("directive hasPermission is not implemented")
 				}
 				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
@@ -73372,13 +72764,13 @@ func (ec *executionContext) _Query_desktopRecordings(ctx context.Context, field 
 			next = directive1
 			return next
 		},
-		ec.marshalNDesktopRecordingPage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐDesktopRecordingPage,
+		ec.marshalNRecordingPage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐRecordingPage,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_desktopRecordings(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_recordings(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -73387,11 +72779,11 @@ func (ec *executionContext) fieldContext_Query_desktopRecordings(ctx context.Con
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "recordings":
-				return ec.fieldContext_DesktopRecordingPage_recordings(ctx, field)
+				return ec.fieldContext_RecordingPage_recordings(ctx, field)
 			case "before":
-				return ec.fieldContext_DesktopRecordingPage_before(ctx, field)
+				return ec.fieldContext_RecordingPage_before(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type DesktopRecordingPage", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type RecordingPage", field.Name)
 		},
 	}
 	defer func() {
@@ -73401,7 +72793,7 @@ func (ec *executionContext) fieldContext_Query_desktopRecordings(ctx context.Con
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_desktopRecordings_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Query_recordings_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -76965,6 +76357,748 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 				return ec.fieldContext___Schema_directives(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Schema", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_id(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_taskId(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_taskId,
+		func(ctx context.Context) (any, error) {
+			return obj.TaskID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_taskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_number(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_number,
+		func(ctx context.Context) (any, error) {
+			return obj.Number, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_number(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_front(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_front,
+		func(ctx context.Context) (any, error) {
+			return obj.Front, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_front(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_format(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_format,
+		func(ctx context.Context) (any, error) {
+			return obj.Format, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_format(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_userId(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_userId,
+		func(ctx context.Context) (any, error) {
+			return obj.UserID, nil
+		},
+		nil,
+		ec.marshalOID2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_userId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_username(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_username,
+		func(ctx context.Context) (any, error) {
+			return obj.Username, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_username(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_client(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_client,
+		func(ctx context.Context) (any, error) {
+			return obj.Client, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_client(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_stream(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_stream,
+		func(ctx context.Context) (any, error) {
+			return obj.Stream, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_stream(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_settings(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_settings,
+		func(ctx context.Context) (any, error) {
+			return obj.Settings, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_settings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_width(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_width,
+		func(ctx context.Context) (any, error) {
+			return obj.Width, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_width(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_height(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_height,
+		func(ctx context.Context) (any, error) {
+			return obj.Height, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_height(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_keys(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_keys,
+		func(ctx context.Context) (any, error) {
+			return obj.Keys, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_keys(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_state(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_state,
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_startedAt(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_startedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.StartedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_startedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_endedAt(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_endedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.EndedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_endedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_durationMs(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_durationMs,
+		func(ctx context.Context) (any, error) {
+			return obj.DurationMs, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_durationMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_size(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_size,
+		func(ctx context.Context) (any, error) {
+			return obj.Size, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_lost(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_lost,
+		func(ctx context.Context) (any, error) {
+			return obj.Lost, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_lost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_end(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_end,
+		func(ctx context.Context) (any, error) {
+			return obj.End, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_end(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_msg(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_msg,
+		func(ctx context.Context) (any, error) {
+			return obj.Msg, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_msg(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_path(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_path,
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RecordingPage_recordings(ctx context.Context, field graphql.CollectedField, obj *model.RecordingPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RecordingPage_recordings,
+		func(ctx context.Context) (any, error) {
+			return obj.Recordings, nil
+		},
+		nil,
+		ec.marshalNRecording2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐRecordingᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_RecordingPage_recordings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RecordingPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Recording_id(ctx, field)
+			case "taskId":
+				return ec.fieldContext_Recording_taskId(ctx, field)
+			case "number":
+				return ec.fieldContext_Recording_number(ctx, field)
+			case "front":
+				return ec.fieldContext_Recording_front(ctx, field)
+			case "format":
+				return ec.fieldContext_Recording_format(ctx, field)
+			case "userId":
+				return ec.fieldContext_Recording_userId(ctx, field)
+			case "username":
+				return ec.fieldContext_Recording_username(ctx, field)
+			case "client":
+				return ec.fieldContext_Recording_client(ctx, field)
+			case "stream":
+				return ec.fieldContext_Recording_stream(ctx, field)
+			case "settings":
+				return ec.fieldContext_Recording_settings(ctx, field)
+			case "width":
+				return ec.fieldContext_Recording_width(ctx, field)
+			case "height":
+				return ec.fieldContext_Recording_height(ctx, field)
+			case "keys":
+				return ec.fieldContext_Recording_keys(ctx, field)
+			case "state":
+				return ec.fieldContext_Recording_state(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_Recording_startedAt(ctx, field)
+			case "endedAt":
+				return ec.fieldContext_Recording_endedAt(ctx, field)
+			case "durationMs":
+				return ec.fieldContext_Recording_durationMs(ctx, field)
+			case "size":
+				return ec.fieldContext_Recording_size(ctx, field)
+			case "lost":
+				return ec.fieldContext_Recording_lost(ctx, field)
+			case "end":
+				return ec.fieldContext_Recording_end(ctx, field)
+			case "msg":
+				return ec.fieldContext_Recording_msg(ctx, field)
+			case "path":
+				return ec.fieldContext_Recording_path(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Recording", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RecordingPage_before(ctx context.Context, field graphql.CollectedField, obj *model.RecordingPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RecordingPage_before,
+		func(ctx context.Context) (any, error) {
+			return obj.Before, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_RecordingPage_before(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RecordingPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -96130,164 +96264,6 @@ func (ec *executionContext) _CredentialUsage(ctx context.Context, sel ast.Select
 	return out
 }
 
-var desktopRecordingImplementors = []string{"DesktopRecording"}
-
-func (ec *executionContext) _DesktopRecording(ctx context.Context, sel ast.SelectionSet, obj *model.DesktopRecording) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, desktopRecordingImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("DesktopRecording")
-		case "id":
-			out.Values[i] = ec._DesktopRecording_id(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "taskId":
-			out.Values[i] = ec._DesktopRecording_taskId(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "number":
-			out.Values[i] = ec._DesktopRecording_number(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "front":
-			out.Values[i] = ec._DesktopRecording_front(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "userId":
-			out.Values[i] = ec._DesktopRecording_userId(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "username":
-			out.Values[i] = ec._DesktopRecording_username(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "settings":
-			out.Values[i] = ec._DesktopRecording_settings(ctx, field, obj)
-		case "width":
-			out.Values[i] = ec._DesktopRecording_width(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "height":
-			out.Values[i] = ec._DesktopRecording_height(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "keys":
-			out.Values[i] = ec._DesktopRecording_keys(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "state":
-			out.Values[i] = ec._DesktopRecording_state(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "startedAt":
-			out.Values[i] = ec._DesktopRecording_startedAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "endedAt":
-			out.Values[i] = ec._DesktopRecording_endedAt(ctx, field, obj)
-		case "durationMs":
-			out.Values[i] = ec._DesktopRecording_durationMs(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "size":
-			out.Values[i] = ec._DesktopRecording_size(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "lost":
-			out.Values[i] = ec._DesktopRecording_lost(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "end":
-			out.Values[i] = ec._DesktopRecording_end(ctx, field, obj)
-		case "msg":
-			out.Values[i] = ec._DesktopRecording_msg(ctx, field, obj)
-		case "path":
-			out.Values[i] = ec._DesktopRecording_path(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
-
-	for label, dfs := range deferred {
-		ec.ProcessDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
-var desktopRecordingPageImplementors = []string{"DesktopRecordingPage"}
-
-func (ec *executionContext) _DesktopRecordingPage(ctx context.Context, sel ast.SelectionSet, obj *model.DesktopRecordingPage) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, desktopRecordingPageImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("DesktopRecordingPage")
-		case "recordings":
-			out.Values[i] = ec._DesktopRecordingPage_recordings(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "before":
-			out.Values[i] = ec._DesktopRecordingPage_before(ctx, field, obj)
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
-
-	for label, dfs := range deferred {
-		ec.ProcessDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
 var factoryKindImplementors = []string{"FactoryKind"}
 
 func (ec *executionContext) _FactoryKind(ctx context.Context, sel ast.SelectionSet, obj *model.FactoryKind) graphql.Marshaler {
@@ -103426,9 +103402,9 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "deleteDesktopRecording":
+		case "deleteRecording":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_deleteDesktopRecording(ctx, field)
+				return ec._Mutation_deleteRecording(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -105846,7 +105822,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "desktopRecordings":
+		case "recordings":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -105855,7 +105831,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_desktopRecordings(ctx, field)
+				res = ec._Query_recordings(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -106797,6 +106773,176 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___schema(ctx, field)
 			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var recordingImplementors = []string{"Recording"}
+
+func (ec *executionContext) _Recording(ctx context.Context, sel ast.SelectionSet, obj *model.Recording) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, recordingImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Recording")
+		case "id":
+			out.Values[i] = ec._Recording_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "taskId":
+			out.Values[i] = ec._Recording_taskId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "number":
+			out.Values[i] = ec._Recording_number(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "front":
+			out.Values[i] = ec._Recording_front(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "format":
+			out.Values[i] = ec._Recording_format(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userId":
+			out.Values[i] = ec._Recording_userId(ctx, field, obj)
+		case "username":
+			out.Values[i] = ec._Recording_username(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "client":
+			out.Values[i] = ec._Recording_client(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "stream":
+			out.Values[i] = ec._Recording_stream(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "settings":
+			out.Values[i] = ec._Recording_settings(ctx, field, obj)
+		case "width":
+			out.Values[i] = ec._Recording_width(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "height":
+			out.Values[i] = ec._Recording_height(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "keys":
+			out.Values[i] = ec._Recording_keys(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._Recording_state(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "startedAt":
+			out.Values[i] = ec._Recording_startedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "endedAt":
+			out.Values[i] = ec._Recording_endedAt(ctx, field, obj)
+		case "durationMs":
+			out.Values[i] = ec._Recording_durationMs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._Recording_size(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lost":
+			out.Values[i] = ec._Recording_lost(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "end":
+			out.Values[i] = ec._Recording_end(ctx, field, obj)
+		case "msg":
+			out.Values[i] = ec._Recording_msg(ctx, field, obj)
+		case "path":
+			out.Values[i] = ec._Recording_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var recordingPageImplementors = []string{"RecordingPage"}
+
+func (ec *executionContext) _RecordingPage(ctx context.Context, sel ast.SelectionSet, obj *model.RecordingPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, recordingPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RecordingPage")
+		case "recordings":
+			out.Values[i] = ec._RecordingPage_recordings(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "before":
+			out.Values[i] = ec._RecordingPage_before(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -113311,46 +113457,6 @@ func (ec *executionContext) marshalNCredentialValidity2githubᚗcomᚋlogoscore�
 	return res
 }
 
-func (ec *executionContext) marshalNDesktopRecording2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐDesktopRecordingᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.DesktopRecording) graphql.Marshaler {
-	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
-		fc := graphql.GetFieldContext(ctx)
-		fc.Result = &v[i]
-		return ec.marshalNDesktopRecording2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐDesktopRecording(ctx, sel, v[i])
-	})
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
-func (ec *executionContext) marshalNDesktopRecording2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐDesktopRecording(ctx context.Context, sel ast.SelectionSet, v *model.DesktopRecording) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._DesktopRecording(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalNDesktopRecordingPage2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐDesktopRecordingPage(ctx context.Context, sel ast.SelectionSet, v model.DesktopRecordingPage) graphql.Marshaler {
-	return ec._DesktopRecordingPage(ctx, sel, &v)
-}
-
-func (ec *executionContext) marshalNDesktopRecordingPage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐDesktopRecordingPage(ctx context.Context, sel ast.SelectionSet, v *model.DesktopRecordingPage) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._DesktopRecordingPage(ctx, sel, v)
-}
-
 func (ec *executionContext) unmarshalNEventAction2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐEventAction(ctx context.Context, v any) (model.EventAction, error) {
 	var res model.EventAction
 	err := res.UnmarshalGQL(v)
@@ -115325,6 +115431,46 @@ func (ec *executionContext) unmarshalNPresenceAction2githubᚗcomᚋlogoscoreᚋ
 
 func (ec *executionContext) marshalNPresenceAction2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐPresenceAction(ctx context.Context, sel ast.SelectionSet, v model.PresenceAction) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNRecording2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐRecordingᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Recording) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNRecording2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐRecording(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNRecording2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐRecording(ctx context.Context, sel ast.SelectionSet, v *model.Recording) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Recording(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNRecordingPage2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐRecordingPage(ctx context.Context, sel ast.SelectionSet, v model.RecordingPage) graphql.Marshaler {
+	return ec._RecordingPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNRecordingPage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐRecordingPage(ctx context.Context, sel ast.SelectionSet, v *model.RecordingPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._RecordingPage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNReorderWikiDocumentSiblingsInput2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐReorderWikiDocumentSiblingsInput(ctx context.Context, v any) (model.ReorderWikiDocumentSiblingsInput, error) {

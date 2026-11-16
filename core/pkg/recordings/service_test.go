@@ -122,14 +122,14 @@ func TestRecordingKeepsGuacdsInstructionsAndTheOperatorsInput(t *testing.T) {
 	errIns := enc("error", "Disconnected by the server", "521")
 	// The end of guacd's: an instruction it never ended is not kept.
 	r.FromGuacd([]byte(sync2 + errIns + "4.sync,2.5"))
-	r.End(models.DesktopRecordingEndDesktop)
+	r.End(models.RecordingEndDesktop)
 
 	want := size + sync1 + enc("key", "97", "1", "5250") + img + enc("mouse", "10", "20", "1", "5350") + sync2 + errIns
 	if got := g.file(t, r.ID()); got != want {
 		t.Errorf("recorded\n%q\nwant\n%q", got, want)
 	}
 	rec, _ := g.repo.FindByID(context.Background(), r.ID())
-	if rec.State != models.DesktopRecordingSaved || rec.End != models.DesktopRecordingEndDesktop || rec.Msg != "Disconnected by the server" ||
+	if rec.State != models.RecordingStateSaved || rec.End != models.RecordingEndDesktop || rec.Msg != "Disconnected by the server" ||
 		rec.DurationMs != 400 || rec.Parts != 1 || rec.Size != int64(len(want)) || rec.Lost != 0 || rec.EndedAt == nil || rec.Number != 1 ||
 		!rec.Keys || rec.Username != "ann" || rec.Width != 1280 {
 		t.Errorf("record %+v", rec)
@@ -137,7 +137,7 @@ func TestRecordingKeepsGuacdsInstructionsAndTheOperatorsInput(t *testing.T) {
 	// Ended: what comes after is not recorded, and ending it again is
 	// nothing.
 	r.FromGuacd([]byte(sync1))
-	r.End(models.DesktopRecordingEndClosed)
+	r.End(models.RecordingEndClosed)
 	if again, _ := g.repo.FindByID(context.Background(), r.ID()); again.Size != rec.Size || again.End != rec.End {
 		t.Errorf("after its end: %+v", again)
 	}
@@ -145,7 +145,7 @@ func TestRecordingKeepsGuacdsInstructionsAndTheOperatorsInput(t *testing.T) {
 	var none *Recorder
 	none.FromGuacd([]byte(sync1))
 	none.FromWeb(guacd.Instruction{Opcode: "key", Args: []string{"97", "1"}})
-	none.End(models.DesktopRecordingEndClosed)
+	none.End(models.RecordingEndClosed)
 	none.Fail("x")
 }
 
@@ -157,7 +157,7 @@ func TestRecordingViewOnlyHoldsNoInput(t *testing.T) {
 	r.FromGuacd([]byte(sync1))
 	r.FromWeb(guacd.Instruction{Opcode: "key", Args: []string{"97", "1"}})
 	r.FromWeb(guacd.Instruction{Opcode: "mouse", Args: []string{"1", "2", "0"}})
-	r.End(models.DesktopRecordingEndClosed)
+	r.End(models.RecordingEndClosed)
 	if got := g.file(t, r.ID()); got != sync1 {
 		t.Errorf("recorded %q", got)
 	}
@@ -169,7 +169,7 @@ func TestRecordingOfADesktopThatDidNotOpen(t *testing.T) {
 	r := g.begin(t, true)
 	r.Fail("core cannot reach guacd")
 	rec, _ := g.repo.FindByID(context.Background(), r.ID())
-	if rec.State != models.DesktopRecordingFailed || rec.End != models.DesktopRecordingEndNotOpened || rec.Msg != "core cannot reach guacd" ||
+	if rec.State != models.RecordingStateFailed || rec.End != models.RecordingEndNotOpened || rec.Msg != "core cannot reach guacd" ||
 		rec.Parts != 0 {
 		t.Errorf("record %+v", rec)
 	}
@@ -203,7 +203,7 @@ func TestRecordingPartsAndAStoreThatFails(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 	}
-	r.End(models.DesktopRecordingEndClosed)
+	r.End(models.RecordingEndClosed)
 	if got := g.file(t, r.ID()); got != want.String() {
 		t.Errorf("recorded %d bytes, want %d", len(got), want.Len())
 	}
@@ -227,7 +227,7 @@ func TestRecordingLosesWholeInstructions(t *testing.T) {
 	r.FromGuacd([]byte(big[:50]))
 	r.FromGuacd([]byte(big[50:]))
 	r.FromGuacd([]byte(small))
-	r.End(models.DesktopRecordingEndClosed)
+	r.End(models.RecordingEndClosed)
 	if got := g.file(t, r.ID()); got != small+small {
 		t.Errorf("recorded %q", got)
 	}
@@ -240,9 +240,9 @@ func TestRecordingLosesWholeInstructions(t *testing.T) {
 	g2.store.Fail(3)
 	r2 := g2.begin(t, false)
 	r2.FromGuacd([]byte(small))
-	r2.End(models.DesktopRecordingEndClosed)
+	r2.End(models.RecordingEndClosed)
 	rec2, _ := g2.repo.FindByID(context.Background(), r2.ID())
-	if rec2.Parts != 0 || rec2.Lost != int64(len(small)) || rec2.State != models.DesktopRecordingSaved {
+	if rec2.Parts != 0 || rec2.Lost != int64(len(small)) || rec2.State != models.RecordingStateSaved {
 		t.Errorf("record %+v", rec2)
 	}
 }
@@ -251,8 +251,8 @@ func TestRecordingLosesWholeInstructions(t *testing.T) {
 // its core's last word too; one this core records is its own to end.
 func TestSweepEndsRecordingsWhoseCoreStopped(t *testing.T) {
 	g := newRig(testConfig())
-	gone := models.DesktopRecording{RecordingID: uuid.New(), TaskID: g.task.TaskID, Number: 1,
-		State: models.DesktopRecordingRecording, Parts: 1, Size: 3, SeenAt: g.clock.now()}
+	gone := models.Recording{RecordingID: uuid.New(), TaskID: g.task.TaskID, Number: 1,
+		State: models.RecordingStateRecording, Parts: 1, Size: 3, SeenAt: g.clock.now()}
 	_ = g.repo.Insert(context.Background(), &gone)
 	_ = g.store.Put(context.Background(), partKey(gone.RecordingID, 0), strings.NewReader("abc"), 3, "")
 	_ = g.store.Put(context.Background(), partKey(gone.RecordingID, 1), strings.NewReader("defg"), 4, "")
@@ -260,17 +260,17 @@ func TestSweepEndsRecordingsWhoseCoreStopped(t *testing.T) {
 	g.clock.add(3 * time.Minute)
 	g.svc.Sweep(context.Background())
 	rec, _ := g.repo.FindByID(context.Background(), gone.RecordingID)
-	if rec.State != models.DesktopRecordingSaved || rec.End != models.DesktopRecordingEndCoreStopped || rec.Parts != 2 || rec.Size != 7 ||
+	if rec.State != models.RecordingStateSaved || rec.End != models.RecordingEndCoreStopped || rec.Parts != 2 || rec.Size != 7 ||
 		rec.EndedAt == nil || !rec.EndedAt.Equal(gone.SeenAt) {
 		t.Errorf("swept %+v", rec)
 	}
 	if got := g.file(t, gone.RecordingID); got != "abcdefg" {
 		t.Errorf("read %q", got)
 	}
-	if still, _ := g.repo.FindByID(context.Background(), mine.ID()); still.State != models.DesktopRecordingRecording {
+	if still, _ := g.repo.FindByID(context.Background(), mine.ID()); still.State != models.RecordingStateRecording {
 		t.Errorf("this core's: %s", still.State)
 	}
-	mine.End(models.DesktopRecordingEndClosed)
+	mine.End(models.RecordingEndClosed)
 }
 
 // Delete: one that ended goes, parts and all, and its task counts it
@@ -284,7 +284,7 @@ func TestDeleteAndStop(t *testing.T) {
 	if _, err := g.svc.Delete(ctx, a.ID()); !errors.Is(err, ErrRecording) {
 		t.Fatalf("delete one recording: %v", err)
 	}
-	a.End(models.DesktopRecordingEndClosed)
+	a.End(models.RecordingEndClosed)
 	if _, err := g.svc.Delete(ctx, a.ID()); err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestDeleteAndStop(t *testing.T) {
 	b.FromGuacd([]byte(enc("sync", "1")))
 	c := g.begin(t, false)
 	c.FromGuacd([]byte(enc("sync", "2")))
-	c.End(models.DesktopRecordingEndClosed)
+	c.End(models.RecordingEndClosed)
 	if page, _ := g.svc.List(ctx, g.task.TaskID, 0, 10); len(page) != 2 || page[0].Number != 3 || page[1].Number != 2 {
 		t.Errorf("list %+v", page)
 	}
@@ -317,11 +317,11 @@ func TestDeleteAndStop(t *testing.T) {
 	d.FromGuacd([]byte(enc("sync", "4")))
 	g.svc.Stop()
 	rec, _ := g.repo.FindByID(ctx, d.ID())
-	if rec.State != models.DesktopRecordingSaved || rec.End != models.DesktopRecordingEndCoreStopped || rec.Parts != 1 {
+	if rec.State != models.RecordingStateSaved || rec.End != models.RecordingEndCoreStopped || rec.Parts != 1 {
 		t.Errorf("stopped %+v", rec)
 	}
-	d.End(models.DesktopRecordingEndClosed)
-	if again, _ := g.repo.FindByID(ctx, d.ID()); again.End != models.DesktopRecordingEndCoreStopped {
+	d.End(models.RecordingEndClosed)
+	if again, _ := g.repo.FindByID(ctx, d.ID()); again.End != models.RecordingEndCoreStopped {
 		t.Errorf("ended again: %s", again.End)
 	}
 }
@@ -345,7 +345,7 @@ func TestRecordingHoldsNoMoreThanMaxHeld(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	// Held and this one are past MaxHeld: this one is lost.
 	r.FromGuacd([]byte(second))
-	r.End(models.DesktopRecordingEndClosed)
+	r.End(models.RecordingEndClosed)
 	if got := g.file(t, r.ID()); got != first {
 		t.Errorf("recorded %q", got)
 	}
@@ -364,7 +364,7 @@ func TestRecordingStopsAtUnreadableBytes(t *testing.T) {
 	r.FromGuacd([]byte(a + b[:5]))
 	r.FromGuacd([]byte(b[5:] + enc("sync", "2") + "x!;" + enc("sync", "3")))
 	r.FromGuacd([]byte(enc("sync", "4")))
-	r.End(models.DesktopRecordingEndClosed)
+	r.End(models.RecordingEndClosed)
 	if got := g.file(t, r.ID()); got != a+b+enc("sync", "2") {
 		t.Errorf("recorded %q", got)
 	}
@@ -381,11 +381,11 @@ func TestRecordingLastPartWithinPutWait(t *testing.T) {
 	r := g.begin(t, false)
 	r.FromGuacd([]byte(enc("sync", "1")))
 	start := time.Now()
-	r.End(models.DesktopRecordingEndClosed)
+	r.End(models.RecordingEndClosed)
 	if took := time.Since(start); took > 900*time.Millisecond {
 		t.Errorf("ended in %v", took)
 	}
-	if rec, _ := g.repo.FindByID(context.Background(), r.ID()); rec.State != models.DesktopRecordingSaved || rec.Parts != 0 {
+	if rec, _ := g.repo.FindByID(context.Background(), r.ID()); rec.State != models.RecordingStateSaved || rec.Parts != 0 {
 		t.Errorf("record %+v", rec)
 	}
 }
@@ -396,7 +396,7 @@ type insertGate struct {
 	entered, release chan struct{}
 }
 
-func (g *insertGate) Insert(ctx context.Context, r *models.DesktopRecording) error {
+func (g *insertGate) Insert(ctx context.Context, r *models.Recording) error {
 	close(g.entered)
 	<-g.release
 	return g.Repo.Insert(ctx, r)
@@ -421,7 +421,7 @@ func TestRecordingBegunAsItsOperationGoes(t *testing.T) {
 	r := <-got
 	if r != nil {
 		r.FromGuacd([]byte(enc("sync", "1")))
-		r.End(models.DesktopRecordingEndClosed)
+		r.End(models.RecordingEndClosed)
 		t.Error("recorded")
 	}
 	if n := g.repo.Len(); n != 0 || len(g.store.Keys()) != 0 {
@@ -435,5 +435,5 @@ func TestRecordingBegunAsItsOperationGoes(t *testing.T) {
 	g.clock.add(goneFor + time.Second)
 	g.svc.repo = g.repo
 	r = g.begin(t, false)
-	r.End(models.DesktopRecordingEndClosed)
+	r.End(models.RecordingEndClosed)
 }

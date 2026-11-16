@@ -81,7 +81,7 @@ func TestTerminalWeb(t *testing.T) {
 	r := newRig(t, 0, nil, aTerminal(""))
 	r.tasks.ack(r.task)
 	m := startMinion(t, r)
-	tm, err := r.svc.OpenTerminal(r.task, "web: alice", 40, 120)
+	tm, err := r.svc.OpenTerminal(r.task, TerminalUser{Name: "alice"}, 40, 120)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestTerminalCtlGoesAgain(t *testing.T) {
 	r := newRig(t, 0, nil, aTerminal("sh"))
 	r.tasks.ack(r.task)
 	m := startMinion(t, r, func(m *fakeMinion) { m.dropCtl = 2 })
-	tm, err := r.svc.OpenTerminal(r.task, "web", 24, 80)
+	tm, err := r.svc.OpenTerminal(r.task, TerminalUser{Name: "bob"}, 24, 80)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,14 +213,14 @@ func TestTerminalCtlQueue(t *testing.T) {
 // Only a terminal's task takes a web terminal, of a size a terminal has.
 func TestOpenTerminalRefuses(t *testing.T) {
 	r := newRig(t, 0, nil)
-	if _, err := r.svc.OpenTerminal(r.task, "web", 24, 80); !errors.Is(err, ErrNoTerminal) {
+	if _, err := r.svc.OpenTerminal(r.task, TerminalUser{Name: "bob"}, 24, 80); !errors.Is(err, ErrNoTerminal) {
 		t.Errorf("a SOCKS proxy's: %v", err)
 	}
-	if _, err := r.svc.OpenTerminal(uuid.New(), "web", 24, 80); !errors.Is(err, ErrNoTerminal) {
+	if _, err := r.svc.OpenTerminal(uuid.New(), TerminalUser{Name: "bob"}, 24, 80); !errors.Is(err, ErrNoTerminal) {
 		t.Errorf("no tunnel: %v", err)
 	}
 	term := newRig(t, 0, nil, aTerminal("sh"))
-	if _, err := term.svc.OpenTerminal(term.task, "web", 0, 80); err == nil {
+	if _, err := term.svc.OpenTerminal(term.task, TerminalUser{Name: "bob"}, 0, 80); err == nil {
 		t.Error("no rows")
 	}
 }

@@ -194,8 +194,8 @@ type RecordingCleanup interface {
 	DeleteByOperation(ctx context.Context, operationID uuid.UUID) error
 }
 
-// WithDesktopRecordings adds the desktops' recordings for cascade delete.
-func WithDesktopRecordings(recs RecordingCleanup) OperationResolverOption {
+// WithRecordings adds the desktops' and the terminals' recordings for cascade delete.
+func WithRecordings(recs RecordingCleanup) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.recordings = recs
 	}

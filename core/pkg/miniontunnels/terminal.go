@@ -49,6 +49,7 @@ func (s *Service) serveTerminal(t *tunnel, c net.Conn) {
 		_ = c.Close()
 		return
 	}
+	s.recordTerminal(st, TerminalUser{})
 	s.runProcess(st)
 }
 
@@ -66,14 +67,18 @@ func (s *Service) runProcess(st *stream) {
 	select {
 	case r := <-st.replied:
 		if r.Result != protocol.TunnelOpen {
-			say(st.client, startNote(st.rec.Program, r))
+			note := startNote(st.rec.Program, r)
+			say(st.client, note)
+			s.failRecording(st, note)
 			s.mu.Lock()
 			s.drop(st, models.TunnelEndNotOpened, false)
 			s.mu.Unlock()
 			return
 		}
 	case <-timer.C:
-		say(st.client, "[logos: the minion did not answer in time]")
+		note := "[logos: the minion did not answer in time]"
+		say(st.client, note)
+		s.failRecording(st, note)
 		s.mu.Lock()
 		s.abort(st, models.TunnelEndNoReply)
 		s.mu.Unlock()
@@ -115,9 +120,10 @@ type Terminal struct {
 }
 
 // OpenTerminal opens a stream for a web terminal of rows and cols on the
-// task's terminal; client names who asked (its streams list it).
-// ErrNoTerminal when the task runs none here, or takes no more streams.
-func (s *Service) OpenTerminal(task uuid.UUID, client string, rows, cols int) (*Terminal, error) {
+// task's terminal, for user (its streams list it as web: <name>), and
+// begins its recording. ErrNoTerminal when the task runs none here, or
+// takes no more streams.
+func (s *Service) OpenTerminal(task uuid.UUID, user TerminalUser, rows, cols int) (*Terminal, error) {
 	if err := protocol.TunnelProcess("", nil, uint64(max(rows, 0)), uint64(max(cols, 0))); err != nil || rows == 0 {
 		return nil, fmt.Errorf("a terminal is 1 to %d rows and cols", protocol.MaxTunnelTerm)
 	}
@@ -130,11 +136,12 @@ func (s *Service) OpenTerminal(task uuid.UUID, client string, rows, cols int) (*
 	}
 	near, far := newPipe()
 	req := t.processRequest(rows, cols)
-	req.client = client
+	req.client = "web: " + user.Name
 	st, _ := s.newStream(t, near, req, true)
 	if st == nil {
 		return nil, fmt.Errorf("%w: as many streams open as the task takes", ErrNoTerminal)
 	}
+	s.recordTerminal(st, user)
 	s.done.Add(1)
 	go func() {
 		defer s.done.Done()
@@ -163,7 +170,16 @@ func (tm *Terminal) Resize(rows, cols int) error {
 	if rows < 1 || cols < 1 || rows > protocol.MaxTunnelTerm || cols > protocol.MaxTunnelTerm {
 		return fmt.Errorf("a terminal is 1 to %d rows and cols", protocol.MaxTunnelTerm)
 	}
-	return tm.ctl(protocol.TunnelCtlItem{Rows: uint64(rows), Cols: uint64(cols)})
+	if err := tm.ctl(protocol.TunnelCtlItem{Rows: uint64(rows), Cols: uint64(cols)}); err != nil {
+		return err
+	}
+	tm.s.mu.Lock()
+	rec := tm.st.recorder
+	tm.s.mu.Unlock()
+	if rec != nil {
+		rec.Resize(cols, rows)
+	}
+	return nil
 }
 
 // Signal sends the process a signal (protocol.TunnelSignalInterrupt, ...).

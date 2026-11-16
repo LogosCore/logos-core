@@ -120,10 +120,18 @@ describe("a recording's state", () => {
   })
 })
 
-test("recordingFileName is core's", () => {
-  expect(recordingFileName({ front: "rdp", taskId: "3f2a9c1b-0000-4000-8000-000000000000", number: 4 })).toBe(
-    "desktop-rdp-3f2a9c1b-4.guac",
-  )
+test("recordingFileName is core's, a terminal's transcript beside it", () => {
+  const taskId = "3f2a9c1b-0000-4000-8000-000000000000"
+  expect(recordingFileName({ front: "rdp", format: "guac", taskId, number: 4 })).toBe("desktop-rdp-3f2a9c1b-4.guac")
+  expect(recordingFileName({ front: "terminal", format: "asciicast", taskId, number: 2 })).toBe("terminal-3f2a9c1b-2.cast")
+  expect(recordingFileName({ front: "terminal", format: "asciicast", taskId, number: 2 }, "txt")).toBe("terminal-3f2a9c1b-2.txt")
+})
+
+test("a terminal's ends are said", () => {
+  const r = { state: "SAVED", size: 10, lost: 0, msg: "exit 3" }
+  expect(recordingState({ ...r, end: "process" })).toEqual({ label: "process ended", tone: "muted", detail: "exit 3" })
+  expect(recordingState({ ...r, end: "task_ended", msg: null }).label).toBe("task ended")
+  expect(recordingState({ ...r, end: "reset", msg: null }).label).toBe("lost by the minion")
 })
 
 test("settingsSummary says those not at their defaults, as the form does", () => {

@@ -17,39 +17,42 @@ import (
 	"go.uber.org/zap"
 )
 
-// DesktopRecordingFiles reads the desktops' recordings (recordings.Service).
-type DesktopRecordingFiles interface {
-	Open(ctx context.Context, id uuid.UUID) (io.ReadCloser, *models.DesktopRecording, error)
+// RecordingFiles reads the desktops' and the terminals' recordings
+// (recordings.Service).
+type RecordingFiles interface {
+	Open(ctx context.Context, id uuid.UUID) (io.ReadCloser, *models.Recording, error)
 }
 
-// DesktopRecordingController serves the desktops' recordings' files (docs:
+// RecordingController serves the recordings' files (docs:
 // contracts/minion-messages/tunnels.md, Recordings).
-type DesktopRecordingController struct {
-	recs   DesktopRecordingFiles
+type RecordingController struct {
+	recs   RecordingFiles
 	opRepo gqlctx.OperationFinder
 	logger *zap.Logger
 }
 
-func NewDesktopRecordingController(recs DesktopRecordingFiles, opRepo gqlctx.OperationFinder, logger *zap.Logger) *DesktopRecordingController {
-	return &DesktopRecordingController{recs: recs, opRepo: opRepo, logger: logger}
+func NewRecordingController(recs RecordingFiles, opRepo gqlctx.OperationFinder, logger *zap.Logger) *RecordingController {
+	return &RecordingController{recs: recs, opRepo: opRepo, logger: logger}
 }
 
-// File handles GET /api/v1/desktop-recordings/{id}.
+// File handles GET /api/v1/recordings/{id}.
 //
-// A desktop's recording, for anyone who can see its operation: Guacamole's
-// session recording, as guacd writes its own (the protocol's instructions
-// the web app got, the operator's mouse and keys between them), which
-// Guacamole's player plays and guacenc makes a video of. One still
-// recording reads as far as core kept it. An attachment, saved as
-// desktop-<front>-<task>-<number>.guac.
+// A recording, for anyone who can see its operation. A desktop's:
+// Guacamole's session recording, as guacd writes its own (the protocol's
+// instructions the web app got, the operator's mouse and keys between
+// them), which Guacamole's player plays and guacenc makes a video of,
+// saved as desktop-<front>-<task>-<number>.guac. A terminal's: an
+// asciicast v2 (what the process wrote, what was typed, the terminal's
+// sizes), which asciinema plays, saved as terminal-<task>-<number>.cast.
+// One still recording reads as far as core kept it. An attachment.
 //
-//	@Summary		Download a desktop's recording
+//	@Summary		Download a desktop's or a terminal's recording
 //	@Tags			Minion tasks
 //	@Produce		application/octet-stream
 //	@Security		BearerAuth
 //	@Param			id	path	string	true	"Recording ID"
-//	@Router			/desktop-recordings/{id} [get]
-func (rc *DesktopRecordingController) File(c *gin.Context) {
+//	@Router			/recordings/{id} [get]
+func (rc *RecordingController) File(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, responses.NewErrorResponse("recording not found"))
@@ -58,7 +61,7 @@ func (rc *DesktopRecordingController) File(c *gin.Context) {
 	body, rec, err := rc.recs.Open(c.Request.Context(), id)
 	if rec == nil {
 		if err != nil && !repository.IsNotFound(err) {
-			rc.logger.Error("Failed to load a desktop recording", zap.String("recording_id", id.String()), zap.Error(err))
+			rc.logger.Error("Failed to load a recording", zap.String("recording_id", id.String()), zap.Error(err))
 			c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
 			return
 		}
@@ -82,16 +85,21 @@ func (rc *DesktopRecordingController) File(c *gin.Context) {
 	}
 	defer func() { _ = body.Close() }()
 	name := fmt.Sprintf("desktop-%s-%s-%d.guac", rec.Front, rec.TaskID.String()[:8], rec.Number)
-	c.Header("Content-Type", "application/octet-stream")
-	c.Header("Content-Disposition", contentDispositionFor(name, "application/octet-stream", false))
+	contentType := "application/octet-stream"
+	if rec.FileFormat() == models.RecordingFormatAsciicast {
+		name = fmt.Sprintf("terminal-%s-%d.cast", rec.TaskID.String()[:8], rec.Number)
+		contentType = "application/x-asciicast"
+	}
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Disposition", contentDispositionFor(name, contentType, false))
 	c.Header("X-Content-Type-Options", "nosniff")
 	// One that ended stays as it is; one recording grows.
-	if rec.State == models.DesktopRecordingRecording {
+	if rec.State == models.RecordingStateRecording {
 		c.Header("Cache-Control", "no-store")
 	} else {
 		c.Header("Cache-Control", "private, max-age=3600")
 	}
 	if err := writeFileBody(c.Writer, c.Request, body, rec.Size); err != nil {
-		rc.logger.Debug("Desktop recording download aborted", zap.String("recording_id", id.String()), zap.Error(err))
+		rc.logger.Debug("Recording download aborted", zap.String("recording_id", id.String()), zap.Error(err))
 	}
 }

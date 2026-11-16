@@ -3,48 +3,42 @@ package recordings
 import (
 	"bytes"
 	"context"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/logoscore/logos-core/core/pkg/guacd"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.uber.org/zap"
 )
 
-// Recorder records one desktop as core relays it: guacd's bytes
-// (FromGuacd), the web app's mouse and keys (FromWeb), until it ends (End,
-// Fail). Its methods are safe from the relay's two goroutines at once,
-// and do nothing on a nil Recorder (a desktop unrecorded) or one ended.
+// Recorder records one desktop or one terminal session as core relays it,
+// in its recording's format: a desktop's guacd bytes and the web app's
+// mouse and keys (desktop.go: FromGuacd, FromWeb), a terminal's output,
+// input and sizes (terminal.go: Output, Input, Resize), until it ends
+// (End, EndWith, Fail). What comes is held whole (an instruction, an
+// event) and kept as parts by its loop. Its methods are safe from the
+// relay's goroutines at once, and do nothing on a nil Recorder (one
+// unrecorded) or one ended.
 type Recorder struct {
 	s   *Service
-	rec models.DesktopRecording
+	rec models.Recording
 
 	mu sync.Mutex
-	// buf holds whole instructions, in order, not kept yet; pending the
-	// bytes of guacd's instruction that has not ended; held counts what the
-	// loop took from buf and has not kept yet (a part the store has not
-	// taken): buf and held stay within MaxHeld together.
-	buf     []byte
-	pending []byte
-	held    int
-	scan    scanner
-	// synced: guacd sent a sync; first and last are the timestamps of its
-	// first and last, lastAt when the last came (on the service's clock).
-	synced      bool
-	first, last int64
-	lastAt      time.Time
-	// lost counts the bytes dropped; unreadable: guacd's bytes stopped
-	// being Guacamole's as the scanner reads them (none since recorded).
-	lost       int64
-	unreadable bool
-	// said is guacd's error, the last it sent.
-	said  string
+	// buf holds whole instructions or events, in order, not kept yet; held
+	// counts what the loop took from buf and has not kept yet (a part the
+	// store has not taken): buf and held stay within MaxHeld together.
+	buf  []byte
+	held int
+	// lost counts the bytes dropped.
+	lost  int64
 	ended bool
 	end   string
 	msg   string
+
+	// A desktop's (desktop.go), and a terminal's (terminal.go).
+	desk deskState
+	term termState
 
 	// full: buf grew past a part; closing: it ended; done: its last part
 	// is kept and its record says it ended.
@@ -53,10 +47,13 @@ type Recorder struct {
 	done    chan struct{}
 }
 
-func newRecorder(s *Service, rec *models.DesktopRecording) *Recorder {
+func newRecorder(s *Service, rec *models.Recording) *Recorder {
 	r := &Recorder{s: s, rec: *rec, full: make(chan struct{}, 1), closing: make(chan struct{}), done: make(chan struct{})}
-	r.scan.onSync = r.synced0
-	r.scan.onError = func(message string, _ int) { r.said = message }
+	if rec.FileFormat() == models.RecordingFormatAsciicast {
+		r.beginTerminal()
+	} else {
+		r.beginDesktop()
+	}
 	return r
 }
 
@@ -68,85 +65,8 @@ func (r *Recorder) ID() uuid.UUID {
 	return r.rec.RecordingID
 }
 
-// synced0 is a sync of guacd's: its frames' time. Called with mu held.
-func (r *Recorder) synced0(ts int64) {
-	if !r.synced {
-		r.synced, r.first = true, ts
-	}
-	r.last, r.lastAt = ts, r.s.clock()
-}
-
-// FromGuacd records what guacd sent the web app: b as it came, cut
-// anywhere.
-func (r *Recorder) FromGuacd(b []byte) {
-	if r == nil || len(b) == 0 {
-		return
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.ended || r.unreadable {
-		return
-	}
-	end := r.scan.scan(b)
-	if r.scan.bad {
-		// Not Guacamole's as core reads it: what came since its last
-		// whole instruction, and anything after, is not recorded; the
-		// instructions b ended before it are.
-		if end > 0 {
-			r.keep(r.pending, b[:end])
-		}
-		r.pending = nil
-		r.unreadable = true
-		r.s.logger.Warn("A desktop's recording stops: guacd's bytes do not read as instructions",
-			zap.String("recording_id", r.rec.RecordingID.String()))
-		return
-	}
-	if end == 0 {
-		r.pending = append(r.pending, b...)
-		return
-	}
-	// The instructions b ends: the first began in what came before.
-	r.keep(r.pending, b[:end])
-	r.pending = append(r.pending[:0], b[end:]...)
-}
-
-// FromWeb records an instruction the web app sent guacd: its mouse and
-// keys, each with a timestamp on guacd's clock (its last sync's, and the
-// time since), where it came. Only once guacd synced: its player reads
-// none before its first frame.
-func (r *Recorder) FromWeb(ins guacd.Instruction) {
-	if r == nil || !r.rec.Keys {
-		return
-	}
-	var want int
-	switch ins.Opcode {
-	case "mouse":
-		want = 3
-	case "key":
-		want = 2
-	default:
-		return
-	}
-	if len(ins.Args) < want {
-		return
-	}
-	for _, a := range ins.Args[:want] {
-		if _, err := strconv.Atoi(a); err != nil {
-			return
-		}
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.ended || r.unreadable || !r.synced {
-		return
-	}
-	ts := r.last + r.s.clock().Sub(r.lastAt).Milliseconds()
-	args := append(append([]string{}, ins.Args[:want]...), strconv.FormatInt(ts, 10))
-	r.keep([]byte(guacd.Instruction{Opcode: ins.Opcode, Args: args}.Encode()))
-}
-
-// keep adds whole instructions to buf, all of them or, past MaxHeld (with
-// what the loop holds), none (lost). Called with mu held.
+// keep adds whole instructions or events to buf, all of them or, past
+// MaxHeld (with what the loop holds), none (lost). Called with mu held.
 func (r *Recorder) keep(parts ...[]byte) {
 	n := 0
 	for _, p := range parts {
@@ -167,15 +87,18 @@ func (r *Recorder) keep(parts ...[]byte) {
 	}
 }
 
-// End ends the recording, as its desktop ended (end: how,
-// models.DesktopRecordingEnd...): what it holds is kept, and its record
-// says it ended; it returns once it does. An end of the desktop's own
-// carries guacd's error, if it sent one.
+// End ends the recording, as its desktop or terminal ended (end: how,
+// models.RecordingEnd...): what it holds is kept, and its record says it
+// ended; it returns once it does. A desktop's own end carries guacd's
+// error, if it sent one.
 func (r *Recorder) End(end string) { r.close(end, "") }
 
-// Fail ends a recording whose desktop did not open (msg: why): nothing
-// recorded.
-func (r *Recorder) Fail(msg string) { r.close(models.DesktopRecordingEndNotOpened, msg) }
+// EndWith ends it as End does, saying msg (a terminal's process's exit).
+func (r *Recorder) EndWith(end, msg string) { r.close(end, msg) }
+
+// Fail ends a recording whose desktop or terminal did not open (msg:
+// why): nothing recorded.
+func (r *Recorder) Fail(msg string) { r.close(models.RecordingEndNotOpened, msg) }
 
 func (r *Recorder) close(end, msg string) {
 	if r == nil {
@@ -188,23 +111,26 @@ func (r *Recorder) close(end, msg string) {
 		return
 	}
 	r.ended, r.end, r.msg = true, end, msg
-	if end == models.DesktopRecordingEndDesktop && r.said != "" {
-		r.msg = r.said
+	if end == models.RecordingEndDesktop && r.desk.said != "" {
+		r.msg = r.desk.said
 	}
 	r.mu.Unlock()
 	close(r.closing)
 	<-r.done
 }
 
-// take is what to keep next: buf's instructions, with how far it came;
-// they count as held until the loop says (holding).
+// take is what to keep next: buf's instructions or events, with how long
+// the recording plays so far; they count as held until the loop says
+// (holding).
 func (r *Recorder) take() (data []byte, dur, lost int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	data, r.buf = r.buf, nil
 	r.held += len(data)
-	if r.synced {
-		dur = r.last - r.first
+	if r.rec.FileFormat() == models.RecordingFormatAsciicast {
+		dur = r.term.last
+	} else if r.desk.synced {
+		dur = r.desk.last - r.desk.first
 	}
 	return data, dur, r.lost
 }
@@ -265,7 +191,7 @@ func (r *Recorder) loop() {
 			default:
 				dropped += int64(len(data))
 				r.holding(0)
-				r.s.logger.Warn("A desktop's recording lost a part: the store did not take it", zap.String("recording_id", id.String()),
+				r.s.logger.Warn("A recording lost a part: the store did not take it", zap.String("recording_id", id.String()),
 					zap.Int("bytes", len(data)), zap.Error(err))
 			}
 		}
@@ -275,9 +201,9 @@ func (r *Recorder) loop() {
 			r.mu.Lock()
 			end, msg := r.end, r.msg
 			r.mu.Unlock()
-			set["state"], set["end"], set["ended_at"] = models.DesktopRecordingSaved, end, now
-			if end == models.DesktopRecordingEndNotOpened {
-				set["state"] = models.DesktopRecordingFailed
+			set["state"], set["end"], set["ended_at"] = models.RecordingStateSaved, end, now
+			if end == models.RecordingEndNotOpened {
+				set["state"] = models.RecordingStateFailed
 			}
 			if msg != "" {
 				set["msg"] = msg
@@ -287,7 +213,7 @@ func (r *Recorder) loop() {
 		err := r.s.repo.Save(ctx, id, set)
 		cancel()
 		if err != nil {
-			r.s.logger.Warn("A desktop's recording: keep its numbers", zap.String("recording_id", id.String()), zap.Error(err))
+			r.s.logger.Warn("A recording: keep its numbers", zap.String("recording_id", id.String()), zap.Error(err))
 		}
 		if last {
 			ctx, cancel := context.WithTimeout(context.Background(), r.s.cfg.PutWait)
@@ -296,8 +222,8 @@ func (r *Recorder) loop() {
 			if err == nil {
 				r.s.publish(t)
 			}
-			r.s.logger.Info("A desktop's recording ended", zap.String("recording_id", id.String()), zap.String("end", set["end"].(string)),
-				zap.Int("parts", parts), zap.Int64("size", size), zap.Int64("lost", lost+dropped))
+			r.s.logger.Info("A recording ended", zap.String("recording_id", id.String()), zap.String("front", r.rec.Front),
+				zap.String("end", set["end"].(string)), zap.Int("parts", parts), zap.Int64("size", size), zap.Int64("lost", lost+dropped))
 			return
 		}
 	}

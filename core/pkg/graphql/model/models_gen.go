@@ -524,33 +524,6 @@ type CredentialUsage struct {
 	Tasks     int                      `json:"tasks"`
 }
 
-type DesktopRecording struct {
-	ID         string  `json:"id"`
-	TaskID     string  `json:"taskId"`
-	Number     int     `json:"number"`
-	Front      string  `json:"front"`
-	UserID     string  `json:"userId"`
-	Username   string  `json:"username"`
-	Settings   any     `json:"settings,omitempty"`
-	Width      int     `json:"width"`
-	Height     int     `json:"height"`
-	Keys       bool    `json:"keys"`
-	State      string  `json:"state"`
-	StartedAt  string  `json:"startedAt"`
-	EndedAt    *string `json:"endedAt,omitempty"`
-	DurationMs int     `json:"durationMs"`
-	Size       int     `json:"size"`
-	Lost       int     `json:"lost"`
-	End        *string `json:"end,omitempty"`
-	Msg        *string `json:"msg,omitempty"`
-	Path       string  `json:"path"`
-}
-
-type DesktopRecordingPage struct {
-	Recordings []*DesktopRecording `json:"recordings"`
-	Before     *string             `json:"before,omitempty"`
-}
-
 type FactoryKind struct {
 	ModuleName string       `json:"moduleName"`
 	Schema     *BuildSchema `json:"schema"`
@@ -1591,6 +1564,36 @@ type OperatorFocusInput struct {
 }
 
 type Query struct {
+}
+
+type Recording struct {
+	ID         string  `json:"id"`
+	TaskID     string  `json:"taskId"`
+	Number     int     `json:"number"`
+	Front      string  `json:"front"`
+	Format     string  `json:"format"`
+	UserID     *string `json:"userId,omitempty"`
+	Username   string  `json:"username"`
+	Client     string  `json:"client"`
+	Stream     int     `json:"stream"`
+	Settings   any     `json:"settings,omitempty"`
+	Width      int     `json:"width"`
+	Height     int     `json:"height"`
+	Keys       bool    `json:"keys"`
+	State      string  `json:"state"`
+	StartedAt  string  `json:"startedAt"`
+	EndedAt    *string `json:"endedAt,omitempty"`
+	DurationMs int     `json:"durationMs"`
+	Size       int     `json:"size"`
+	Lost       int     `json:"lost"`
+	End        *string `json:"end,omitempty"`
+	Msg        *string `json:"msg,omitempty"`
+	Path       string  `json:"path"`
+}
+
+type RecordingPage struct {
+	Recordings []*Recording `json:"recordings"`
+	Before     *string      `json:"before,omitempty"`
 }
 
 type ReorderWikiDocumentSiblingsInput struct {

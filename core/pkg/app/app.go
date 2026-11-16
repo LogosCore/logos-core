@@ -94,7 +94,7 @@ type Repositories struct {
 	MinionFolder       repository.IMinionSessionFolderRepository
 	MinionTask         repository.IMinionTaskRepository
 	MinionFile         repository.IMinionFileRepository
-	DesktopRecording   repository.IDesktopRecordingRepository
+	Recording          repository.IRecordingRepository
 	FsEntry            repository.IFsEntryRepository
 	MinionFeedback     repository.IMinionFeedbackRepository
 	MinionIdentity     repository.IMinionIdentityRepository
@@ -170,7 +170,7 @@ type App struct {
 	minionFiles *minionfiles.Service
 	// minionStreams relays the files minions stream (stream_file tasks).
 	minionStreams *minionstreams.Service
-	// recordings keeps the desktops' recordings.
+	// recordings keeps the desktops' and the terminals' recordings.
 	recordings *recordings.Service
 	// minionTunnels holds tunnel tasks' SOCKS ports and their streams.
 	minionTunnels *miniontunnels.Service
@@ -288,7 +288,8 @@ func NewApp() (*App, error) {
 	tunnelsCfg.Desktops = e.Guacd != ""
 	minionTunnels := miniontunnels.New(tunnelsCfg, repos.OperationalPort, repos.MinionTask, bus, l).
 		WithListeners(repos.MinionListener).
-		WithVPN(repos.VPNTunnel, repos.VPNKey, vpnRoles{users: repos.User, ops: repos.Operation})
+		WithVPN(repos.VPNTunnel, repos.VPNKey, vpnRoles{users: repos.User, ops: repos.Operation}).
+		WithTerminalRecordings(terminalRecordings{recordingSvc})
 	minionSync := minionsync.NewService(repos.Build, repos.MinionStaging, repos.MinionSession, repos.MinionReservation, infra.cache, bus, l).
 		WithTasks(repos.MinionTask).WithFiles(minionFiles).WithStreams(minionStreams).WithFileBrowser(fileBrowser).
 		WithFeedback(repos.MinionFeedback).WithIdentities(repos.MinionIdentity).WithCredentials(credentialRefs).

@@ -46,7 +46,8 @@ func BuildSearchText(b *Build) string {
 // order, a list's items and a map's k=v pairs comma-joined, a value with a
 // space or a quote in it (or none at all) quoted. Unlike a record's search
 // text it holds keys: the line shows them. A connection param holds the
-// value it keeps, where the console shows the connection's name.
+// place it keeps, where the console shows the connection's name: its
+// LineNames say what the line shows instead.
 func MinionTaskSearchText(t *MinionTask) string {
 	args := jsonArgs(t.Args)
 	parts := []string{t.Command}
@@ -57,11 +58,77 @@ func MinionTaskSearchText(t *MinionTask) string {
 		rest = t.LineRest
 	}
 	for _, k := range slices.Sorted(maps.Keys(args)) {
-		if k != rest {
-			parts = append(parts, "--"+k+"="+lineQuote(lineShow(args[k])))
+		if k == rest {
+			continue
 		}
+		shown, named := t.LineNames[k]
+		if !named {
+			shown = lineShow(args[k])
+		}
+		parts = append(parts, "--"+k+"="+lineQuote(shown))
 	}
 	return strings.Join(parts, " ")
+}
+
+// MinionTaskLineNames is what a task's line shows of its connection params
+// (keys: a param of protocol.FormatConnection each) in place of their
+// values, as the console's connectionText does (frontend minion-sessions/
+// connection-choices.ts: change them together): the name of the build's
+// connection at that place, from 1 (names, in the build's order), when no
+// other connection has that name, case aside. A place no name says alone
+// is shown as it is (none here). Nil for none.
+func MinionTaskLineNames(keys []string, args JSONMap, names []string) map[string]string {
+	values := jsonArgs(args)
+	var out map[string]string
+	for _, k := range keys {
+		v, ok := values[k]
+		if !ok {
+			continue
+		}
+		place, ok := connectionPlace(v)
+		if !ok || place < 1 || place > len(names) {
+			continue
+		}
+		name := names[place-1]
+		alone := true
+		for i, other := range names {
+			if i != place-1 && strings.EqualFold(other, name) {
+				alone = false
+			}
+		}
+		if alone {
+			if out == nil {
+				out = map[string]string{}
+			}
+			out[k] = name
+		}
+	}
+	return out
+}
+
+// connectionPlace is a connection param's value as a place, as
+// JavaScript's Number reads it: a whole number, or text of one.
+func connectionPlace(v any) (int, bool) {
+	var f float64
+	switch x := v.(type) {
+	case float64:
+		f = x
+	case string:
+		t := strings.TrimSpace(x)
+		if t == "" {
+			return 0, false
+		}
+		var err error
+		if f, err = strconv.ParseFloat(t, 64); err != nil {
+			return 0, false
+		}
+	default:
+		return 0, false
+	}
+	if f != float64(int(f)) {
+		return 0, false
+	}
+	return int(f), true
 }
 
 // jsonArgs are args as the console reads them, through JSON: numbers

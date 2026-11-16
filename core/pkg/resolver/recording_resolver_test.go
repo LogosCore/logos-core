@@ -44,12 +44,12 @@ func (o oneSession) FindBySessionID(_ context.Context, id uuid.UUID) (*models.Mi
 
 // fakeRecordings are a task's recordings, in memory.
 type fakeRecordings struct {
-	recs    map[uuid.UUID]models.DesktopRecording
+	recs    map[uuid.UUID]models.Recording
 	deleted []uuid.UUID
 }
 
-func (f *fakeRecordings) List(_ context.Context, taskID uuid.UUID, before, limit int64) ([]models.DesktopRecording, error) {
-	var out []models.DesktopRecording
+func (f *fakeRecordings) List(_ context.Context, taskID uuid.UUID, before, limit int64) ([]models.Recording, error) {
+	var out []models.Recording
 	for _, r := range f.recs {
 		if r.TaskID == taskID && (before == 0 || r.Number < before) {
 			out = append(out, r)
@@ -59,7 +59,7 @@ func (f *fakeRecordings) List(_ context.Context, taskID uuid.UUID, before, limit
 	return out[:min(int64(len(out)), limit)], nil
 }
 
-func (f *fakeRecordings) Recording(_ context.Context, id uuid.UUID) (*models.DesktopRecording, error) {
+func (f *fakeRecordings) Recording(_ context.Context, id uuid.UUID) (*models.Recording, error) {
 	r, ok := f.recs[id]
 	if !ok {
 		return nil, repository.ErrNotFound
@@ -67,9 +67,9 @@ func (f *fakeRecordings) Recording(_ context.Context, id uuid.UUID) (*models.Des
 	return &r, nil
 }
 
-func (f *fakeRecordings) Delete(_ context.Context, id uuid.UUID) (*models.DesktopRecording, error) {
+func (f *fakeRecordings) Delete(_ context.Context, id uuid.UUID) (*models.Recording, error) {
 	r := f.recs[id]
-	if r.State == models.DesktopRecordingRecording {
+	if r.State == models.RecordingStateRecording {
 		return &r, recordings.ErrRecording
 	}
 	delete(f.recs, id)
@@ -79,23 +79,23 @@ func (f *fakeRecordings) Delete(_ context.Context, id uuid.UUID) (*models.Deskto
 
 // A desktop task's recordings, a page at a time, the latest first, for a
 // viewer; deleted by an operator alone, and one recording not at all.
-func TestDesktopRecordings(t *testing.T) {
+func TestRecordings(t *testing.T) {
 	operator, viewer := uuid.New(), uuid.New()
 	op := models.Operation{OperationID: uuid.New(), Members: []models.OperationMember{
 		{UserID: operator, Role: models.OperationRoleOperator}, {UserID: viewer, Role: models.OperationRoleViewer}}}
 	session := models.MinionSession{SessionID: uuid.New(), OperationID: op.OperationID}
 	task := models.MinionTask{TaskID: uuid.New(), SessionID: session.SessionID, OperationID: op.OperationID}
-	recs := &fakeRecordings{recs: map[uuid.UUID]models.DesktopRecording{}}
+	recs := &fakeRecordings{recs: map[uuid.UUID]models.Recording{}}
 	ids := make([]uuid.UUID, 4)
 	started := time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
 	for n := 1; n <= 3; n++ {
 		id := uuid.New()
 		ids[n] = id
-		rec := models.DesktopRecording{RecordingID: id, TaskID: task.TaskID, SessionID: session.SessionID, OperationID: op.OperationID,
-			Number: int64(n), Front: "rdp", Username: "ann", State: models.DesktopRecordingSaved, StartedAt: started, Size: 100,
-			End: models.DesktopRecordingEndClosed, Settings: models.JSONMap{"quality": "best"}}
+		rec := models.Recording{RecordingID: id, TaskID: task.TaskID, SessionID: session.SessionID, OperationID: op.OperationID,
+			Number: int64(n), Front: "rdp", Username: "ann", State: models.RecordingStateSaved, StartedAt: started, Size: 100,
+			End: models.RecordingEndClosed, Settings: models.JSONMap{"quality": "best"}}
 		if n == 3 {
-			rec.State, rec.End = models.DesktopRecordingRecording, ""
+			rec.State, rec.End = models.RecordingStateRecording, ""
 		}
 		recs.recs[id] = rec
 	}
@@ -107,37 +107,54 @@ func TestDesktopRecordings(t *testing.T) {
 	}
 
 	two := 2
-	page, err := r.DesktopRecordings(as(viewer), task.TaskID.String(), &two, nil)
+	page, err := r.Recordings(as(viewer), task.TaskID.String(), &two, nil)
 	if err != nil || len(page.Recordings) != 2 || page.Recordings[0].Number != 3 || page.Recordings[1].Number != 2 ||
 		page.Before == nil || *page.Before != "2" {
 		t.Fatalf("first page %+v %v", page, err)
 	}
-	if got := page.Recordings[1]; got.Path != "/desktop-recordings/"+ids[2].String() || got.End == nil || *got.End != "closed" ||
+	if got := page.Recordings[1]; got.Path != "/recordings/"+ids[2].String() || got.End == nil || *got.End != "closed" ||
 		got.StartedAt != "2026-11-15T09:00:00Z" || got.Settings.(map[string]any)["quality"] != "best" || page.Recordings[0].End != nil {
 		t.Errorf("recording %+v", got)
 	}
-	page, err = r.DesktopRecordings(as(viewer), task.TaskID.String(), &two, page.Before)
+	page, err = r.Recordings(as(viewer), task.TaskID.String(), &two, page.Before)
 	if err != nil || len(page.Recordings) != 1 || page.Recordings[0].Number != 1 || page.Before != nil {
 		t.Fatalf("last page %+v %v", page, err)
 	}
 	bad := "x"
-	if _, err := r.DesktopRecordings(as(viewer), task.TaskID.String(), nil, &bad); err == nil {
+	if _, err := r.Recordings(as(viewer), task.TaskID.String(), nil, &bad); err == nil {
 		t.Error("a bad cursor")
 	}
-	if _, err := r.DesktopRecordings(as(uuid.New()), task.TaskID.String(), nil, nil); err == nil {
+	if _, err := r.Recordings(as(uuid.New()), task.TaskID.String(), nil, nil); err == nil {
 		t.Error("listed for one not in the operation")
 	}
 
-	if _, err := r.DeleteDesktopRecording(as(viewer), ids[1].String()); err == nil {
+	if _, err := r.DeleteRecording(as(viewer), ids[1].String()); err == nil {
 		t.Error("a viewer deleted one")
 	}
-	if _, err := r.DeleteDesktopRecording(as(operator), ids[3].String()); err == nil || !strings.Contains(err.Error(), "still recording") {
+	if _, err := r.DeleteRecording(as(operator), ids[3].String()); err == nil || !strings.Contains(err.Error(), "still recording") {
 		t.Errorf("deleted one recording: %v", err)
 	}
-	if ok, err := r.DeleteDesktopRecording(as(operator), ids[1].String()); !ok || err != nil || len(recs.deleted) != 1 || recs.deleted[0] != ids[1] {
+	if ok, err := r.DeleteRecording(as(operator), ids[1].String()); !ok || err != nil || len(recs.deleted) != 1 || recs.deleted[0] != ids[1] {
 		t.Errorf("delete: %v %v %v", ok, err, recs.deleted)
 	}
-	if _, err := r.DeleteDesktopRecording(as(operator), ids[1].String()); err == nil {
+	if _, err := r.DeleteRecording(as(operator), ids[1].String()); err == nil {
 		t.Error("deleted twice")
+	}
+}
+
+// A recording as GraphQL: its format (a desktop's from before formats,
+// guac), who (a desktop's from before clients, web: <user>), a raw
+// terminal's with no user, and its stream.
+func TestRecordingModel(t *testing.T) {
+	ann := uuid.New()
+	old := recordingModel(&models.Recording{RecordingID: uuid.New(), Front: "rdp", UserID: ann, Username: "ann"})
+	if old.Format != models.RecordingFormatGuac || old.Client != "web: ann" || old.UserID == nil || *old.UserID != ann.String() {
+		t.Errorf("a desktop's from before: %+v", old)
+	}
+	raw := recordingModel(&models.Recording{RecordingID: uuid.New(), Front: "terminal", Format: models.RecordingFormatAsciicast,
+		Client: "10.0.0.5:41022", Stream: 4, Width: 80, Height: 24, Keys: true})
+	if raw.Format != models.RecordingFormatAsciicast || raw.Client != "10.0.0.5:41022" || raw.UserID != nil || raw.Username != "" ||
+		raw.Stream != 4 || raw.Width != 80 || raw.Height != 24 {
+		t.Errorf("a raw terminal's: %+v", raw)
 	}
 }

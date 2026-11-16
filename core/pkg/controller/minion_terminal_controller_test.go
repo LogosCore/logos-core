@@ -33,8 +33,8 @@ type noTerminals struct {
 	asked []string
 }
 
-func (n *noTerminals) OpenTerminal(_ uuid.UUID, client string, rows, cols int) (*miniontunnels.Terminal, error) {
-	n.asked = append(n.asked, client+" "+itoa(rows)+"x"+itoa(cols))
+func (n *noTerminals) OpenTerminal(_ uuid.UUID, user miniontunnels.TerminalUser, rows, cols int) (*miniontunnels.Terminal, error) {
+	n.asked = append(n.asked, "web: "+user.Name+" "+itoa(rows)+"x"+itoa(cols))
 	return nil, miniontunnels.ErrNoTerminal
 }
 

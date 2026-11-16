@@ -75,5 +75,41 @@
     "rest": "",
     "args": {},
     "line": "exit"
+  },
+  {
+    "why": "a connection param shows the build's connection at that place by name",
+    "command": "switch",
+    "rest": "",
+    "args": { "conn": 2, "for": "1h" },
+    "connectionParams": ["conn"],
+    "connections": ["ws", "https"],
+    "line": "switch --conn=https --for=1h"
+  },
+  {
+    "why": "a connection's name with a space, quoted",
+    "command": "switch",
+    "rest": "",
+    "args": { "conn": 1 },
+    "connectionParams": ["conn"],
+    "connections": ["edge ws", "https"],
+    "line": "switch --conn=\"edge ws\""
+  },
+  {
+    "why": "a name two connections share (case aside) shows the place",
+    "command": "switch",
+    "rest": "",
+    "args": { "conn": 2 },
+    "connectionParams": ["conn"],
+    "connections": ["ws", "WS"],
+    "line": "switch --conn=2"
+  },
+  {
+    "why": "a place the build has no connection at shows as it is",
+    "command": "switch",
+    "rest": "",
+    "args": { "conn": 5 },
+    "connectionParams": ["conn"],
+    "connections": ["ws", "https"],
+    "line": "switch --conn=5"
   }
 ]

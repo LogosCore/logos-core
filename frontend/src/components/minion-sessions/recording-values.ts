@@ -1,13 +1,24 @@
-import type { DesktopRecordingsQuery } from "@/graphql/gql/graphql"
+import type { RecordingsQuery } from "@/graphql/gql/graphql"
 import { formatBytes } from "@/lib/format-bytes"
 import type { Tone } from "./tunnel-values"
 
-// A desktop task's recordings, as the Recordings tab shows them (docs:
-// contracts/minion-messages/tunnels.md, Recordings): each desktop opened in
-// the web app, recorded by core as it went, played here by Guacamole's own
-// player; what was typed, read from its key events.
+// A desktop or terminal task's recordings, as the Recordings tab shows them
+// (docs: contracts/minion-messages/tunnels.md, Recordings): each desktop
+// opened in the web app, or each terminal session, recorded by core as it
+// went. A desktop's plays in Guacamole's own player, what was typed read
+// from its key events; a terminal's (an asciicast) in xterm.js, as the
+// Terminal tab shows one (cast-values.ts).
 
-export type Recording = DesktopRecordingsQuery["desktopRecordings"]["recordings"][number]
+export type Recording = RecordingsQuery["recordings"]["recordings"][number]
+
+/** A recording's file formats. */
+export const GUAC = "guac"
+export const ASCIICAST = "asciicast"
+
+/** Whether it is a terminal's: an asciicast. */
+export function isTerminalRecording(r: Pick<Recording, "format">): boolean {
+  return r.format === ASCIICAST
+}
 
 export const RECORDING = "RECORDING"
 export const SAVED = "SAVED"
@@ -39,6 +50,12 @@ export function recordingState(r: Pick<Recording, "state" | "end" | "msg" | "siz
       return { label: "closed", tone: "muted", detail: lost }
     case "desktop":
       return { label: "ended by the desktop", tone: "muted", detail: said(r.msg, lost) }
+    case "process":
+      return { label: "process ended", tone: "muted", detail: said(r.msg, lost) }
+    case "task_ended":
+      return { label: "task ended", tone: "muted", detail: lost }
+    case "reset":
+      return { label: "lost by the minion", tone: "pending", detail: lost }
     case "core_stopped":
       return { label: "core stopped", tone: "pending", detail: said("its last seconds are lost", lost) }
   }
@@ -54,9 +71,15 @@ export function formatClock(ms: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`
 }
 
-/** The name a recording's file is saved as, core's. */
-export function recordingFileName(r: Pick<Recording, "front" | "taskId" | "number">): string {
-  return `desktop-${r.front}-${r.taskId.slice(0, 8)}-${r.number}.guac`
+/** The name a recording's file is saved as, core's; a terminal's transcript (ext "txt") beside it. */
+export function recordingFileName(r: Pick<Recording, "front" | "format" | "taskId" | "number">, ext?: string): string {
+  if (isTerminalRecording(r)) return `terminal-${r.taskId.slice(0, 8)}-${r.number}.${ext ?? "cast"}`
+  return `desktop-${r.front}-${r.taskId.slice(0, 8)}-${r.number}.${ext ?? "guac"}`
+}
+
+/** Who a recording's session was: its operator, else its client (a raw terminal's address). */
+export function openedBy(r: Pick<Recording, "username" | "client">): string {
+  return r.username || r.client
 }
 
 /** A key event of a recording, as its player reads them. */

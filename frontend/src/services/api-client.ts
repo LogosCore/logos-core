@@ -275,7 +275,12 @@ export async function apiFetch(
     // timeout signal). All transient from the UI's perspective — mark the
     // backend unreachable and propagate. Callers relying on React Query get
     // automatic retry / error state; direct callers see the raw error.
-    useConnectivityStore.getState().markUnreachable()
+    //
+    // Not when the caller aborted it (a component unmounted, a cancelled
+    // upload): that says nothing of the backend. Marking it would flip
+    // reachability, and its recovery re-runs App's checkAuth, which
+    // remounts the whole app, as a page reload looks.
+    if (!callerSignal?.aborted) useConnectivityStore.getState().markUnreachable()
     throw err
   }
 
@@ -309,7 +314,7 @@ export async function apiFetch(
       signal: withTimeout(callerSignal, timeoutMs),
     })
   } catch (err) {
-    useConnectivityStore.getState().markUnreachable()
+    if (!callerSignal?.aborted) useConnectivityStore.getState().markUnreachable()
     throw err
   }
   return res

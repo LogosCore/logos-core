@@ -5,6 +5,8 @@ import (
 
 	"github.com/logoscore/logos-core/core/pkg/controller"
 	gql "github.com/logoscore/logos-core/core/pkg/graphql"
+	"github.com/logoscore/logos-core/core/pkg/miniontunnels"
+	"github.com/logoscore/logos-core/core/pkg/recordings"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/resolver"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
@@ -33,7 +35,7 @@ type controllers struct {
 	stream    *controller.MinionStreamController
 	terminal  *controller.MinionTerminalController
 	desktop   *controller.MinionDesktopController
-	recording *controller.DesktopRecordingController
+	recording *controller.RecordingController
 	vpn       *controller.VPNController
 	wiki      *controller.WikiController
 	transfer  *controller.WikiTransferController
@@ -112,7 +114,7 @@ func (a *App) buildControllers() *controllers {
 			gql.WSOriginCheck(a.env.CORSAllowedOrigins), a.logger),
 		desktop: controller.NewMinionDesktopController(a.minionTunnels, a.repos.MinionTask, a.credentialRefs, a.repos.Operation, a.recordings,
 			controller.DesktopConfig{Guacd: a.env.Guacd, CoreHost: a.env.GuacdCoreHost}, gql.WSOriginCheck(a.env.CORSAllowedOrigins), a.logger),
-		recording: controller.NewDesktopRecordingController(a.recordings, a.repos.Operation, a.logger),
+		recording: controller.NewRecordingController(a.recordings, a.repos.Operation, a.logger),
 		vpn:       controller.NewVPNController(a.minionTunnels, a.env.VPNClientDir, a.logger),
 		wiki:      controller.NewWikiController(a.repos.WikiDocument, a.repos.Operation, a.env.HocuspocusTicketSecret, a.logger),
 
@@ -206,7 +208,7 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithMinionSessionFolderRepo(a.repos.MinionFolder),
 			resolver.WithMinionTaskRepo(a.repos.MinionTask),
 			resolver.WithMinionFiles(a.minionFiles),
-			resolver.WithDesktopRecordings(a.recordings),
+			resolver.WithRecordings(a.recordings),
 			resolver.WithFsEntryRepo(a.repos.FsEntry),
 			resolver.WithMinionFeedbackRepo(a.repos.MinionFeedback),
 			resolver.WithMinionIdentityRepo(a.repos.MinionIdentity),
@@ -274,4 +276,19 @@ func (a *App) channelModule(ctx context.Context, instance string) (string, error
 		return "", nil
 	}
 	return m.Name, nil
+}
+
+// terminalRecordings records the terminals' sessions for the tunnels
+// (miniontunnels.TerminalRecordings), by the recordings service: each
+// typed in, so the recording holds what was typed.
+type terminalRecordings struct{ s *recordings.Service }
+
+func (t terminalRecordings) BeginTerminal(ctx context.Context, b miniontunnels.TerminalBeginning) miniontunnels.TerminalRecorder {
+	r := t.s.Begin(ctx, recordings.Beginning{TaskID: b.Task, Front: protocol.FrontTerminal, UserID: b.User.ID, Username: b.User.Name,
+		Client: b.Client, Stream: b.Stream, Width: b.Cols, Height: b.Rows, Keys: true})
+	if r == nil {
+		// Not a nil Recorder in the interface: the stream is not recorded.
+		return nil
+	}
+	return r
 }

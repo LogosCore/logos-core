@@ -376,32 +376,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/desktop-recordings/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/octet-stream"
-                ],
-                "tags": [
-                    "Minion tasks"
-                ],
-                "summary": "Download a desktop's recording",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Recording ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {}
-            }
-        },
         "/enroll": {
             "post": {
                 "description": "Create the initial admin account. Only works when no users exist (cold startup).",
@@ -1048,12 +1022,6 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "IANA time zone",
-                        "name": "timezone",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
                         "description": "The desktop's settings: a JSON object of its front's (minionDesktopSettings), each left out its default",
                         "name": "settings",
                         "in": "query"
@@ -1118,6 +1086,32 @@ const docTemplate = `{
                         "description": "Columns (80)",
                         "name": "cols",
                         "in": "query"
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/recordings/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Minion tasks"
+                ],
+                "summary": "Download a desktop's or a terminal's recording",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Recording ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {}

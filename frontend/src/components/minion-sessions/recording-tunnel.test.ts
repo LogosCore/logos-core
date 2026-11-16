@@ -39,11 +39,11 @@ describe("recordingTunnel", () => {
     const chunks = cuts.slice(1).map((end, i) => text.slice(cuts[i], end))
     const fetch = vi.fn(async () => new Response(body(chunks)))
     vi.stubGlobal("fetch", fetch)
-    const tunnel = recordingTunnel("/api/v1/desktop-recordings/r1")
+    const tunnel = recordingTunnel("/api/v1/recordings/r1")
     const { seen, closed } = watch(tunnel)
     tunnel.connect()
     await closed
-    expect(fetch).toHaveBeenCalledWith("/api/v1/desktop-recordings/r1", expect.objectContaining({ credentials: "same-origin" }))
+    expect(fetch).toHaveBeenCalledWith("/api/v1/recordings/r1", expect.objectContaining({ credentials: "same-origin" }))
     expect(seen.instructions).toEqual(["sync,100", "name,Привет", "key,97,1,150"])
     expect(seen.states).toEqual([CONNECTING, OPEN, CLOSED])
     expect(seen.errors).toEqual([])

@@ -12,8 +12,9 @@ type MinionTask {
   # How many errors and warnings its minion sent about it, all of them.
   feedbackErrors: Int!
   feedbackWarnings: Int!
-  # A desktop task's recordings kept, one a desktop opened in the web app
-  # (desktopRecordings lists them); 0 for any other task.
+  # A desktop or terminal task's recordings kept: one for each desktop
+  # opened in the web app, or each terminal session (recordings lists
+  # them); 0 for any other task.
   recordings: Int!
   # Counts the task's changes: of two copies, the one with the higher rev
   # is the newer (a mutation's answer can come after live updates).
@@ -409,54 +410,73 @@ type MinionFileStringPage {
   done: Boolean!
 }
 
-# The recording of one desktop a desktop task's tunnel drew in the web app
-# (docs: contracts/minion-messages/tunnels.md, Recordings): each desktop
-# opened is recorded as it goes, what it showed, and the operator's mouse
-# and keys (a view-only one's has none), in Guacamole's format. Kept until
-# its operation is deleted, or an operator deletes it.
-type DesktopRecording {
+# The recording of one desktop a desktop task's tunnel drew in the web app,
+# or of one terminal session of a terminal task (docs:
+# contracts/minion-messages/tunnels.md, Recordings), recorded as it goes.
+# A desktop's: what it showed, and the operator's mouse and keys (a
+# view-only one's has none), in Guacamole's format. A terminal's: what the
+# process wrote, what was typed, and the terminal's sizes, as an asciicast
+# (v2). Kept until its operation is deleted, or an operator deletes it.
+type Recording {
   id: ID!
   taskId: ID!
   # Its number in the task, from 1.
   number: Int!
-  # The desktop's front: rdp, vnc, ssh or telnet.
+  # The task's front: rdp, vnc, ssh or telnet (a desktop), or terminal.
   front: String!
-  # Who opened the desktop.
-  userId: ID!
+  # Its file's format: guac (Guacamole's session recording) or asciicast.
+  format: String!
+  # Who opened it: an operator in the web app (userId, username), or, for
+  # a terminal's raw port, no one known (userId and username empty).
+  userId: ID
   username: String!
+  # Who it was, as the task's streams list says it: web: <user>, or a raw
+  # client's address. A desktop's: web: <user>.
+  client: String!
+  # A terminal's stream, its number in the task's streams; 0 for a
+  # desktop.
+  stream: Int!
   # What it opened with: the settings picked (minionDesktopSettings), as
-  # the web app sent them, each left out at its default.
+  # the web app sent them, each left out at its default. None for a
+  # terminal.
   settings: JSON
-  # The display it opened at, in pixels.
+  # The size it opened at: a desktop's display in pixels, a terminal's in
+  # columns (width) and rows (height).
   width: Int!
   height: Int!
-  # It holds the operator's mouse and keys (false: a view-only desktop's).
+  # It holds what was typed: the operator's mouse and keys (false: a
+  # view-only desktop's), or a terminal's input (always).
   keys: Boolean!
-  # RECORDING (the desktop is open), SAVED (it ended: it plays) or FAILED
-  # (the desktop did not open: nothing was recorded).
+  # RECORDING (it is open), SAVED (it ended: it plays) or FAILED (it did
+  # not open: nothing was recorded).
   state: String!
   startedAt: String!
   endedAt: String
-  # How long it plays, milliseconds: from guacd's first frame to its last.
+  # How long it plays, milliseconds: a desktop's from guacd's first frame
+  # to its last, a terminal's to its last event.
   durationMs: Int!
   # Its bytes, as far as core kept them, and those it could not keep (its
   # store failed): the recording plays past them.
   size: Int!
   lost: Int!
-  # How it ended: closed (the web app closed the desktop), desktop (guacd
-  # ended it: its server's end, or an error), core_stopped (core stopped
-  # as it recorded: its last seconds are lost) or not_opened; null while
-  # it records. msg: guacd's error, or why the desktop did not open.
+  # How it ended: closed (the web app closed the desktop, or the
+  # terminal's client left), desktop (guacd ended it: its server's end, or
+  # an error), process (the terminal's process ended: msg its exit),
+  # task_ended (the task ended), reset (the minion's end of the terminal
+  # was lost), core_stopped (core stopped as it recorded: its last seconds
+  # are lost) or not_opened; null while it records. msg: guacd's error,
+  # the process's exit, or why it did not open.
   end: String
   msg: String
-  # Its file, Guacamole's session recording (what guacd's own recordings
-  # are, which guacenc makes a video of): a path under /api/v1.
+  # Its file: Guacamole's session recording (what guacd's own recordings
+  # are, which guacenc makes a video of), or an asciicast (which asciinema
+  # plays): a path under /api/v1.
   path: String!
 }
 
 # A page of a task's recordings, the latest first.
-type DesktopRecordingPage {
-  recordings: [DesktopRecording!]!
+type RecordingPage {
+  recordings: [Recording!]!
   # Where the next (older) page starts; null on the last.
   before: String
 }
@@ -505,9 +525,9 @@ extend type Query {
   minionDesktopSettings(front: String!): [ModuleField!]!
     @hasPermission(permission: "operation:member")
 
-  # A desktop task's recordings, the latest first, at most last (50 by
+  # A desktop or terminal task's recordings, the latest first, at most last (50 by
   # default, 200 at most), before a page's cursor. Needs at least viewer.
-  desktopRecordings(taskId: ID!, last: Int, before: String): DesktopRecordingPage!
+  recordings(taskId: ID!, last: Int, before: String): RecordingPage!
     @hasPermission(permission: "operation:member")
 
   # A page of the printable strings in a kept file, read from after (0, or
@@ -560,9 +580,9 @@ extend type Mutation {
   disconnectMinionVPNClient(taskId: ID!, client: ID!): MinionTask!
     @hasPermission(permission: "operation:member")
 
-  # Deletes a desktop's recording that ended, its file with it. Needs
+  # Deletes a recording that ended, its file with it. Needs
   # operator; agent API keys are rejected.
-  deleteDesktopRecording(id: ID!): Boolean!
+  deleteRecording(id: ID!): Boolean!
     @hasPermission(permission: "operation:member")
 
   # A signed link to download a stream_file task's stream (for curl).
