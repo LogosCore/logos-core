@@ -17,9 +17,9 @@ import (
 // front.
 func TestFields(t *testing.T) {
 	want := map[string]string{
-		protocol.FrontRDP:      "quality,keyboard,clipboard,view_only,workstation_name,resize,console,program,remote_app,security,ignore_cert",
+		protocol.FrontRDP:      "quality,keyboard,clipboard,view_only,workstation_name,client_name,timezone,resize,console,program,remote_app,security,ignore_cert",
 		protocol.FrontVNC:      "quality,clipboard,view_only,clipboard_encoding,cursor",
-		protocol.FrontSSH:      "command,color_scheme,font_size,clipboard,view_only,scrollback,keepalive,host_key",
+		protocol.FrontSSH:      "command,color_scheme,font_size,clipboard,view_only,timezone,scrollback,keepalive,host_key",
 		protocol.FrontTelnet:   "color_scheme,font_size,clipboard,view_only,scrollback,username_prompt,password_prompt,login_success,login_failure",
 		protocol.FrontForward:  "",
 		protocol.FrontTerminal: "",
@@ -91,10 +91,10 @@ func TestParamsChosen(t *testing.T) {
 	}{
 		{"rdp, every setting", protocol.FrontRDP, map[string]any{"quality": "speed", "keyboard": "de-de-qwertz", "clipboard": "out",
 			"view_only": true, "resize": "fixed", "console": true, "program": ` C:\tools\run.exe `, "remote_app": "||notepad",
-			"security": "nla", "ignore_cert": false, "workstation_name": "desktop-4f7q2kd"},
+			"security": "nla", "ignore_cert": false, "workstation_name": "desktop-4f7q2kd", "client_name": "Laptop-07", "timezone": "Europe/Kyiv"},
 			map[string]string{"disable-gfx": "true", "color-depth": "16", "server-layout": "de-de-qwertz", "disable-paste": "true",
 				"read-only": "true", "console": "true", "initial-program": `C:\tools\run.exe`, "remote-app": "||notepad",
-				"security": "nla", "ignore-cert": "false", "workstation-name": "DESKTOP-4F7Q2KD"}},
+				"security": "nla", "ignore-cert": "false", "workstation-name": "DESKTOP-4F7Q2KD", "client-name": "LAPTOP-07", "timezone": "Europe/Kyiv"}},
 		{"rdp at its best, reconnecting", protocol.FrontRDP, map[string]any{"quality": "best", "resize": "reconnect", "clipboard": "in"},
 			map[string]string{"enable-font-smoothing": "true", "enable-wallpaper": "true", "enable-theming": "true",
 				"enable-desktop-composition": "true", "enable-full-window-drag": "true", "enable-menu-animations": "true",
@@ -107,9 +107,9 @@ func TestParamsChosen(t *testing.T) {
 		{"vnc at its best", protocol.FrontVNC, map[string]any{"quality": "best"},
 			map[string]string{"force-lossless": "true", "clipboard-encoding": "ISO8859-1", "cursor": "local"}},
 		{"ssh, a command, a keepalive and a host key", protocol.FrontSSH, map[string]any{"command": "top", "color_scheme": "black-white",
-			"font_size": json.Number("16"), "scrollback": 5000, "keepalive": "1500ms", "host_key": "target.lan ssh-ed25519 " + key + " root@target"},
+			"font_size": json.Number("16"), "scrollback": 5000, "keepalive": "1500ms", "host_key": "target.lan ssh-ed25519 " + key + " root@target", "timezone": "America/New_York"},
 			map[string]string{"command": "top", "color-scheme": "black-white", "font-size": "16", "scrollback": "5000",
-				"server-alive-interval": "2", "host-key": "[core]:41000 ssh-ed25519 " + key}},
+				"server-alive-interval": "2", "host-key": "[core]:41000 ssh-ed25519 " + key, "timezone": "America/New_York"}},
 		{"telnet's prompts", protocol.FrontTelnet, map[string]any{"username_prompt": "User Name:", "password_prompt": "Password:",
 			"login_success": "[>#]$", "login_failure": "% (Login invalid|Bad passwords)", "view_only": true},
 			map[string]string{"color-scheme": "gray-black", "font-size": "12", "scrollback": "1000", "read-only": "true",
@@ -130,27 +130,52 @@ func TestParamsChosen(t *testing.T) {
 	}
 }
 
-// A task's own workstation name: Windows' kind, DESKTOP- and seven
-// capitals and digits, a setting's own taken; the same for the task each
-// time, another for another task.
-func TestDefaultWorkstation(t *testing.T) {
+// A task's own computer name: Windows' kind, DESKTOP- and seven capitals
+// and digits, a setting's own taken; the same for the task each time,
+// another for another task.
+func TestComputerName(t *testing.T) {
 	task := uuid.New()
-	name := DefaultWorkstation(task)
+	name := ComputerName(task)
 	if !regexp.MustCompile(`^DESKTOP-[A-Z0-9]{7}$`).MatchString(name) {
 		t.Fatalf("%q", name)
 	}
-	if !workstationName.MatchString(name) || len(name) > maxWorkstation {
+	if !computerName.MatchString(name) || len(name) > maxComputerName {
 		t.Errorf("%q is no setting's", name)
 	}
-	if DefaultWorkstation(task) != name {
+	if ComputerName(task) != name {
 		t.Error("not the same for the task")
 	}
 	seen := map[string]bool{name: true}
 	for range 100 {
-		seen[DefaultWorkstation(uuid.New())] = true
+		seen[ComputerName(uuid.New())] = true
 	}
 	if len(seen) < 100 {
 		t.Errorf("%d names for 101 tasks", len(seen))
+	}
+}
+
+// One computer, one name: a name left out is the other's, both the task's
+// with neither, each its own when both are set.
+func TestComputerNames(t *testing.T) {
+	task := uuid.New()
+	own := ComputerName(task)
+	for _, c := range []struct{ ws, client, wantWS, wantClient string }{
+		{"", "", own, own},
+		{"WS01", "", "WS01", "WS01"},
+		{"", "LAPTOP-07", "LAPTOP-07", "LAPTOP-07"},
+		{"WS01", "LAPTOP-07", "WS01", "LAPTOP-07"},
+	} {
+		p := map[string]string{"hostname": "core"}
+		if c.ws != "" {
+			p["workstation-name"] = c.ws
+		}
+		if c.client != "" {
+			p["client-name"] = c.client
+		}
+		ComputerNames(task, p)
+		if p["workstation-name"] != c.wantWS || p["client-name"] != c.wantClient || p["hostname"] != "core" {
+			t.Errorf("%q %q: %v", c.ws, c.client, p)
+		}
 	}
 }
 
@@ -176,6 +201,11 @@ func TestParamsProblems(t *testing.T) {
 		{protocol.FrontRDP, map[string]any{"workstation_name": `CORP\WS01`}, "workstation_name", "letters, digits and hyphens"},
 		{protocol.FrontRDP, map[string]any{"workstation_name": "123456"}, "workstation_name", "not digits alone"},
 		{protocol.FrontRDP, map[string]any{"workstation_name": "DESKTOP-4F7Q2KDX"}, "workstation_name", "longer than 15"},
+		{protocol.FrontRDP, map[string]any{"timezone": "Mars/Olympus_Mons"}, "timezone", "no such time zone"},
+		{protocol.FrontRDP, map[string]any{"timezone": "Local"}, "timezone", "as IANA names it"},
+		{protocol.FrontVNC, map[string]any{"timezone": "UTC"}, "timezone", "not a declared field"},
+		{protocol.FrontRDP, map[string]any{"client_name": "logos.lan"}, "client_name", "letters, digits and hyphens"},
+		{protocol.FrontRDP, map[string]any{"client_name": "DESKTOP-4F7Q2KDX"}, "client_name", "longer than 15"},
 		{protocol.FrontTelnet, map[string]any{"login_failure": "(["}, "login_failure", "not a regular expression"},
 		{protocol.FrontForward, map[string]any{"quality": "best"}, "quality", "not a declared field"},
 	} {

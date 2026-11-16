@@ -14,6 +14,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+	// The time zones a setting is checked against (Timezone), whatever
+	// core's host has.
+	_ "time/tzdata"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -35,6 +39,9 @@ const (
 	Security    = "security"
 	IgnoreCert  = "ignore_cert"
 	Workstation = "workstation_name"
+	ClientName  = "client_name"
+	// RDP's and SSH's: the time zone the server is told.
+	Timezone = "timezone"
 	// VNC's.
 	ClipboardEncoding = "clipboard_encoding"
 	Cursor            = "cursor"
@@ -68,8 +75,10 @@ const (
 	maxCommand = 2048
 	maxHostKey = 2048
 	maxPrompt  = 256
-	// A NetBIOS name's (Workstation).
-	maxWorkstation = 15
+	// A NetBIOS name's (Workstation, ClientName): RDP's client name is cut
+	// there too.
+	maxComputerName = 15
+	maxTimezone     = 64
 )
 
 // Fields are a desktop front's settings, the form's order, each with its
@@ -80,9 +89,13 @@ func Fields(front string) []protocol.FieldSpec {
 	switch front {
 	case protocol.FrontRDP:
 		fields = []protocol.FieldSpec{quality(front), keyboard(), clipboard(), viewOnly(),
-			{Key: Workstation, Type: protocol.FieldString, Label: "Workstation name", MaxLength: maxWorkstation,
+			{Key: Workstation, Type: protocol.FieldString, Label: "Workstation name", MaxLength: maxComputerName,
 				Placeholder: "DESKTOP-4F7Q2KD",
-				Description: "The computer name the server's logon events show. None: a DESKTOP-XXXXXXX of this tunnel's own."},
+				Description: "The computer name the server's logon events show. None: the client name, or a DESKTOP-XXXXXXX of this tunnel's own."},
+			{Key: ClientName, Type: protocol.FieldString, Label: "Client name", MaxLength: maxComputerName,
+				Placeholder: "DESKTOP-4F7Q2KD",
+				Description: "The computer name the server's session shows (CLIENTNAME). None: the workstation name, or a DESKTOP-XXXXXXX of this tunnel's own."},
+			timezone(front),
 			{Key: Resize, Type: protocol.FieldEnum, Label: "Resize", Default: "follow", Advanced: true,
 				Description: "What the session does as the desktop's pane changes size.",
 				Options: []protocol.EnumOption{
@@ -124,7 +137,7 @@ func Fields(front string) []protocol.FieldSpec {
 		fields = []protocol.FieldSpec{
 			{Key: Command, Type: protocol.FieldString, Label: "Command", MaxLength: maxCommand,
 				Description: "A command the server runs instead of a shell: the session ends with it. None: the login's shell."},
-			colorScheme(), fontSize(), clipboard(), viewOnly(), scrollback(),
+			colorScheme(), fontSize(), clipboard(), viewOnly(), timezone(front), scrollback(),
 			{Key: Keepalive, Type: protocol.FieldDuration, Label: "Keepalive", Default: "0s", Min: "0s", Max: "1h", Advanced: true,
 				Description: "How often an idle session tells the server it is there, so that no firewall drops it: 0s never."},
 			{Key: HostKey, Type: protocol.FieldString, Label: "Host key", MaxLength: maxHostKey, Advanced: true,
@@ -235,6 +248,15 @@ func viewOnly() protocol.FieldSpec {
 		Description: "Watch it: no key or click of yours reaches the server."}
 }
 
+func timezone(front string) protocol.FieldSpec {
+	description := "The time zone the server is told the client is in: an IANA name. None: your browser's."
+	if front == protocol.FrontSSH {
+		description = "The session's TZ, where the server takes it (AcceptEnv TZ): an IANA name. None: your browser's."
+	}
+	return protocol.FieldSpec{Key: Timezone, Type: protocol.FieldString, Label: "Time zone", MaxLength: maxTimezone,
+		Format: protocol.FormatTimezone, Placeholder: "Europe/Berlin", Description: description}
+}
+
 func colorScheme() protocol.FieldSpec {
 	return protocol.FieldSpec{Key: ColorScheme, Type: protocol.FieldEnum, Label: "Colors", Default: "gray-black",
 		Description: "The terminal's text and background.",
@@ -321,11 +343,16 @@ func Params(front string, values map[string]any, host string, port int) (map[str
 		}
 		set("initial-program", str(Program))
 		set("remote-app", str(RemoteApp))
-		if name := str(Workstation); name != "" {
-			if !workstationName.MatchString(name) || strings.Trim(name, "0123456789") == "" {
-				return nil, map[string]string{Workstation: "a computer name: letters, digits and hyphens, not digits alone"}
+		for _, n := range [][2]string{{Workstation, "workstation-name"}, {ClientName, "client-name"}} {
+			key, param := n[0], n[1]
+			name := str(key)
+			if name == "" {
+				continue
 			}
-			p["workstation-name"] = strings.ToUpper(name)
+			if !computerName.MatchString(name) || strings.Trim(name, "0123456789") == "" {
+				return nil, map[string]string{key: "a computer name: letters, digits and hyphens, not digits alone"}
+			}
+			p[param] = strings.ToUpper(name)
 		}
 		p["security"] = str(Security)
 		p["ignore-cert"] = strconv.FormatBool(on(IgnoreCert))
@@ -339,6 +366,12 @@ func Params(front string, values map[string]any, host string, port int) (map[str
 		p["color-scheme"] = str(ColorScheme)
 		p["font-size"] = num(FontSize)
 		p["scrollback"] = num(Scrollback)
+	}
+	if tz := str(Timezone); tz != "" {
+		if err := checkTimezone(tz); err != nil {
+			return nil, map[string]string{Timezone: err.Error()}
+		}
+		p["timezone"] = tz
 	}
 	switch front {
 	case protocol.FrontSSH:
@@ -380,11 +413,29 @@ func Params(front string, values map[string]any, host string, port int) (map[str
 	return p, nil
 }
 
-// DefaultWorkstation is the workstation name of a task's RDP desktops when
-// none is set (Workstation): as Windows names a new computer, DESKTOP- and
-// seven capitals and digits, drawn from the task's id, so that every
-// desktop of a tunnel is the same computer to its server.
-func DefaultWorkstation(task uuid.UUID) string {
+// ComputerNames fills an RDP desktop's computer names that its settings
+// left out (params: Params'), as one computer has one name: its workstation
+// name (NTLM's) the client name, its client name the workstation name, and
+// with neither, both the task's own (ComputerName).
+func ComputerNames(task uuid.UUID, params map[string]string) {
+	ws, client := params["workstation-name"], params["client-name"]
+	switch {
+	case ws == "" && client == "":
+		ws = ComputerName(task)
+		client = ws
+	case ws == "":
+		ws = client
+	case client == "":
+		client = ws
+	}
+	params["workstation-name"], params["client-name"] = ws, client
+}
+
+// ComputerName is the computer name of a task's RDP desktops when their
+// settings give none (ComputerNames): as Windows names a new computer,
+// DESKTOP- and seven capitals and digits, drawn from the task's id, so
+// that every desktop of a tunnel is the same computer to its server.
+func ComputerName(task uuid.UUID) string {
 	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	sum := sha256.Sum256(append([]byte("logos-workstation:"), task[:]...))
 	name := []byte("DESKTOP-0000000")
@@ -394,9 +445,21 @@ func DefaultWorkstation(task uuid.UUID) string {
 	return string(name)
 }
 
-// workstationName is a computer name as Windows takes one (Workstation),
-// its length the field's.
-var workstationName = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+// checkTimezone: a time zone as IANA names it (Europe/Berlin, UTC), one
+// guacd's time zones have too: Go's own names, but for its "Local".
+func checkTimezone(tz string) error {
+	if tz == "Local" || strings.ContainsAny(tz, " ,") {
+		return errors.New("a time zone as IANA names it: Europe/Berlin, America/New_York, UTC")
+	}
+	if _, err := time.LoadLocation(tz); err != nil {
+		return errors.New("no such time zone: an IANA name, such as Europe/Berlin, America/New_York, UTC")
+	}
+	return nil
+}
+
+// computerName is a computer name as Windows takes one (Workstation,
+// ClientName), its length the field's.
+var computerName = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
 
 // knownHost is an SSH server's host key as guacd checks it: a known_hosts
 // line for the address guacd connects to (host:port, core's), which

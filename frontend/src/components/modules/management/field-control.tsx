@@ -20,6 +20,7 @@ import { useConnectionChoices } from "@/components/minion-sessions/use-connectio
 import { move } from "@/components/builds/build-values"
 import { FORMATS as GENERATED_FORMATS } from "@/lib/word-generator"
 import { UserAgentCheck, UserAgentGenerator } from "./user-agent-generator"
+import { TimezoneInput } from "./timezone-input"
 import { WordGenerator } from "./word-generator"
 import {
   BYTE_UNITS,
@@ -37,6 +38,8 @@ import {
 
 /** A string or secret over several lines (protocol.FormatMultiline): a PEM key, say. */
 const MULTILINE_FORMAT = "multiline"
+/** A time zone as IANA names it (protocol.FormatTimezone): Europe/Berlin. */
+const TIMEZONE_FORMAT = "timezone"
 
 interface FieldControlProps {
   field: FieldDef
@@ -363,6 +366,21 @@ export function FieldControl({
             </div>
             <UserAgentCheck value={checked} isDefault={empty} onUpdate={setText} disabled={disabled} />
           </div>
+        )
+      }
+      // A time zone (protocol.FormatTimezone): the browser's suggested as
+      // it is typed.
+      if (field.type === "string" && field.format === TIMEZONE_FORMAT) {
+        return (
+          <TimezoneInput
+            id={id}
+            value={text}
+            onChange={setText}
+            disabled={disabled}
+            invalid={invalid}
+            placeholder={placeholder}
+            maxLength={field.maxLength ?? undefined}
+          />
         )
       }
       if (field.type === "string" && field.format && GENERATED_FORMATS.includes(field.format)) {

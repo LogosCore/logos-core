@@ -41,7 +41,12 @@ change marked `logos:`). Each adds a connection param guacd does not have:
   FreeRDP gives the host's name, a container's id. FreeRDP 3 takes one
   (`FreeRDP_SspiClientHostname`, `credssp_auth.c`); FreeRDP 2 would not,
   and the patch sets nothing there. Core sends one with every RDP desktop:
-  the setting `workstation_name`, or the task's own.
+  the setting `workstation_name`, else `client_name`, else the task's own.
+
+The runtime image has the time zones too (`tzdata`, Apache's has none):
+guacd gives an RDP session's time zone to FreeRDP as `TZ`, which FreeRDP
+reads from `/usr/share/zoneinfo` to tell the server; without them every
+desktop's was UTC.
 
 Core refuses a desktop whose params guacd does not ask for (`pkg/guacd`,
 `0x0100`), saying which: every RDP desktop sends a workstation name (the
@@ -57,7 +62,7 @@ official 1.6.0 image's libssh2, libtelnet, libvncclient and libwebsockets
 builds). `LOGOS_REVISION` is our build of them, one up for each change of
 the patches or the Dockerfile. The image is tagged
 `<guacamole-server>-freerdp<FreeRDP>-logos<revision>`:
-`ghcr.io/logoscore/logos-guacd:1.6.0-freerdp3.30.0-logos1`.
+`ghcr.io/logoscore/logos-guacd:1.6.0-freerdp3.30.0-logos2`.
 
 - **CI**: `.github/workflows/publish-guacd.yml` builds it (linux/amd64:
   FreeRDP takes too long under emulation for arm64), checks guacd starts and

@@ -223,6 +223,22 @@ interface SuggestionInputProps {
    * members dialog, where the suggestions query is gated on `search.length > 0`).
    */
   openOnFocus?: boolean
+
+  /**
+   * When true, the search is the value itself (a name typed whole, say):
+   * picking an option puts its value in the box, rather than selecting it
+   * and clearing the search; `selected` stays null.
+   */
+  freeText?: boolean
+
+  /** The input's id, for a label's htmlFor. */
+  id?: string
+
+  /** Marks the input invalid (aria-invalid). */
+  invalid?: boolean
+
+  /** The input's maxLength. */
+  maxLength?: number
 }
 
 export function SuggestionInput({
@@ -237,6 +253,10 @@ export function SuggestionInput({
   className,
   disabled = false,
   openOnFocus = false,
+  freeText = false,
+  id,
+  invalid,
+  maxLength,
 }: SuggestionInputProps) {
   const [isOpen, setIsOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -256,6 +276,12 @@ export function SuggestionInput({
   }
 
   function selectOption(option: SuggestionOption) {
+    if (freeText) {
+      onSearchChange(option.value)
+      setIsOpen(false)
+      setHighlightedIndex(-1)
+      return
+    }
     onSelect(option)
     onSearchChange("")
     setIsOpen(false)
@@ -277,8 +303,14 @@ export function SuggestionInput({
         moveHighlight(-1)
       }
     } else if (e.key === "Enter") {
+      const picking = isOpen && highlightedIndex >= 0 && highlightedIndex < options.length
+      // Free text with nothing picked: Enter is the form's, as in any box.
+      if (freeText && !picking) {
+        setIsOpen(false)
+        return
+      }
       e.preventDefault()
-      if (isOpen && highlightedIndex >= 0 && highlightedIndex < options.length) {
+      if (picking) {
         selectOption(options[highlightedIndex])
       }
     } else if (e.key === "Escape") {
@@ -346,6 +378,11 @@ export function SuggestionInput({
     >
       <Input
         ref={inputRef}
+        id={id}
+        aria-invalid={invalid || undefined}
+        maxLength={maxLength}
+        autoComplete="off"
+        spellCheck={false}
         value={displayValue}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}

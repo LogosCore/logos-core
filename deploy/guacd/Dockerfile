@@ -354,6 +354,11 @@ RUN apk add --no-cache                \
         util-linux-login && \
     xargs apk add --no-cache < ${PREFIX_DIR}/DEPENDENCIES
 
+# logos: the time zones. guacd gives a session's (its timezone param, or
+# the web app's) to FreeRDP as TZ, which FreeRDP reads from here to tell
+# the server; without them each was UTC.
+RUN apk add --no-cache tzdata
+
 # Runtime environment
 ENV LC_ALL=C.UTF-8
 ENV LD_LIBRARY_PATH=${PREFIX_DIR}/lib

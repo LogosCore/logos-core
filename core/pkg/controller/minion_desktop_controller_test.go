@@ -217,7 +217,7 @@ func TestDesktopSocket(t *testing.T) {
 		t.Fatalf("no connect: %q", read())
 	}
 	if want := []string{"VERSION_1_5_0", "logos-core", "24005", "CORP", "admin", "S3cret;,", "nla", "false", "display-update",
-		"16", "true", "en-us-qwerty", "", "", "logos", desktops.DefaultWorkstation(task)}; !slices.Equal(values, want) {
+		"16", "true", "en-us-qwerty", "", "", desktops.ComputerName(task), desktops.ComputerName(task)}; !slices.Equal(values, want) {
 		t.Fatalf("connect %v, want %v", values, want)
 	}
 	if got := read(); got != "4.sync,3.100;" {

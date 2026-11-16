@@ -285,9 +285,8 @@ func desktopSettings(front, raw, host string, port int) (map[string]any, map[str
 // desktopParams are a desktop session's connection params, by guacd's
 // names: its settings' (desktopSettings), then what no setting changes:
 // its server, core's port for the task (host, port), and its login, the
-// credential's (login: none, the desktop asks). An RDP desktop's
-// workstation name, when none is set, is the task's own
-// (desktops.DefaultWorkstation).
+// credential's (login: none, the desktop asks). An RDP desktop's computer
+// names that no setting gives are filled (desktops.ComputerNames).
 func desktopParams(task uuid.UUID, front, host string, port int, settings map[string]string, login *protocol.Credential) map[string]string {
 	p := maps.Clone(settings)
 	if p == nil {
@@ -312,10 +311,7 @@ func desktopParams(task uuid.UUID, front, host string, port int, settings map[st
 		}
 	}
 	if front == protocol.FrontRDP {
-		p["client-name"] = "logos"
-		if p["workstation-name"] == "" {
-			p["workstation-name"] = desktops.DefaultWorkstation(task)
-		}
+		desktops.ComputerNames(task, p)
 	}
 	return p
 }
