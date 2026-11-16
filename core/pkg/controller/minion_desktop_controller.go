@@ -6,7 +6,6 @@ import (
 	"errors"
 	"maps"
 	"net/http"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -90,9 +89,7 @@ const (
 	desktopMinDPI, desktopMaxDPI   = 48, 480
 )
 
-var timezonePattern = regexp.MustCompile(`^[A-Za-z0-9_+\-/]{1,64}$`)
-
-// Desktop handles GET /api/v1/minion-tasks/{id}/desktop?width=&height=&dpi=&timezone=&settings=.
+// Desktop handles GET /api/v1/minion-tasks/{id}/desktop?width=&height=&dpi=&settings=.
 //
 // A WebSocket for a desktop of a desktop task (front rdp, vnc, ssh or
 // telnet), for an operator of its operation, speaking the Guacamole
@@ -113,7 +110,6 @@ var timezonePattern = regexp.MustCompile(`^[A-Za-z0-9_+\-/]{1,64}$`)
 //	@Param			width		query	int		false	"Width in pixels (1024)"
 //	@Param			height		query	int		false	"Height in pixels (768)"
 //	@Param			dpi			query	int		false	"DPI (96)"
-//	@Param			timezone	query	string	false	"IANA time zone"
 //	@Param			settings	query	string	false	"The desktop's settings: a JSON object of its front's (minionDesktopSettings), each left out its default"
 //	@Router			/minion-tasks/{id}/desktop [get]
 func (dc *MinionDesktopController) Desktop(c *gin.Context) {
@@ -153,10 +149,6 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 	width := clampInt(queryInt(c, "width", 1024), desktopMinSide, desktopMaxSide)
 	height := clampInt(queryInt(c, "height", 768), desktopMinSide, desktopMaxSide)
 	dpi := clampInt(queryInt(c, "dpi", 96), desktopMinDPI, desktopMaxDPI)
-	tz := c.Query("timezone")
-	if !timezonePattern.MatchString(tz) {
-		tz = ""
-	}
 	conn, err := dc.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		// The upgrader answered already.
@@ -201,6 +193,17 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 		fail(guacd.StatusClientForbidden, err.Error())
 		return
 	}
+	// A fixed screen (an RDP desktop's by default) is its size, not the
+	// pane's: the recording's too.
+	if w, err := strconv.Atoi(settings["width"]); err == nil {
+		width = w
+	}
+	if h, err := strconv.Atoi(settings["height"]); err == nil {
+		height = h
+	}
+	if d, err := strconv.Atoi(settings["dpi"]); err == nil {
+		dpi = d
+	}
 	username := c.GetString("username")
 	var rec *recordings.Recorder
 	if dc.recs != nil {
@@ -209,7 +212,7 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 			Width: width, Height: height, Keys: settings["read-only"] != "true"})
 	}
 	cfg := guacd.Config{Protocol: front, Params: desktopParams(id, front, dc.cfg.CoreHost, port.Port, settings, login),
-		Width: width, Height: height, DPI: dpi, Images: []string{"image/png", "image/jpeg", "image/webp"}, Timezone: tz, Name: username}
+		Width: width, Height: height, DPI: dpi, Images: []string{"image/png", "image/jpeg", "image/webp"}, Name: username}
 	sess, err := guacd.Open(ctx, dc.cfg.Guacd, cfg)
 	if err != nil {
 		var ge *guacd.Error

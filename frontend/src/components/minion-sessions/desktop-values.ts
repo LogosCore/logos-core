@@ -42,13 +42,26 @@ export function desktopURL(taskId: string, loc: Pick<Location, "protocol" | "hos
  */
 export type DesktopSettings = Readonly<Record<string, unknown>>
 
-/** The settings the view reads itself: whether it takes input, and which way its clipboard goes. */
+/** The settings the view reads itself: whether it takes input, which way its clipboard goes, and its screen's size. */
 export const SETTING_VIEW_ONLY = "view_only"
 export const SETTING_CLIPBOARD = "clipboard"
+export const SETTING_SCREEN = "screen"
 
 /** Whether a desktop is only watched: no key or click reaches its server. */
 export function viewOnly(settings: DesktopSettings): boolean {
   return settings[SETTING_VIEW_ONLY] === true
+}
+
+/**
+ * Whether a desktop's screen follows its pane (RDP's "pane" sizes): the
+ * pane's size goes to the server as it changes. Otherwise it keeps the
+ * size it opened with (RDP's fixed sizes, the default; VNC's, the
+ * server's) and the pane scales it.
+ */
+export function followsPane(front: string, settings: DesktopSettings): boolean {
+  if (front !== FRONT_RDP) return front === FRONT_SSH || front === FRONT_TELNET
+  const screen = settings[SETTING_SCREEN]
+  return screen === "pane" || screen === "pane-reconnect"
 }
 
 /** Which way a desktop's clipboard goes: both by default. */
@@ -65,21 +78,16 @@ export function clipboardWays(settings: DesktopSettings): { fromDesktop: boolean
 }
 
 /**
- * What a desktop opens with: the display's size and density, the browser's
- * time zone (the session's), and its settings (a JSON object; none: core's
- * defaults).
+ * What a desktop opens with: the display's size and density, and its
+ * settings (a JSON object; none: core's defaults). Not the browser's time
+ * zone: a session's is its setting's, UTC by default.
  */
-export function connectData(
-  size: { width: number; height: number; dpi: number },
-  timezone?: string,
-  settings?: DesktopSettings,
-): string {
+export function connectData(size: { width: number; height: number; dpi: number }, settings?: DesktopSettings): string {
   const q = new URLSearchParams({
     width: String(Math.round(size.width)),
     height: String(Math.round(size.height)),
     dpi: String(Math.round(size.dpi)),
   })
-  if (timezone) q.set("timezone", timezone)
   if (settings && Object.keys(settings).length > 0) q.set("settings", JSON.stringify(settings))
   return q.toString()
 }

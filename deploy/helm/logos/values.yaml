@@ -337,7 +337,7 @@ guacd:
   # one, so another guacd opens no RDP desktop.
   image:
     repository: ghcr.io/logoscore/logos-guacd
-    tag: "1.6.0-freerdp3.30.0-logos2"
+    tag: "1.6.0-freerdp3.30.0-logos4"
     pullPolicy: IfNotPresent
   port: 4822
   resources:

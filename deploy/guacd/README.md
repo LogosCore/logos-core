@@ -33,7 +33,7 @@ newest 3.x (3.31.0 to 3.33.1 are FreeRDP's fixes this image does without).
 
 `patches/*.patch`, applied in their order to the release's source before
 it builds (`Dockerfile`: Apache's, but for where it takes the source; each
-change marked `logos:`). Each adds a connection param guacd does not have:
+change marked `logos:`), each about what an RDP server learns of the client:
 
 - `0001-rdp-workstation-name.patch`: RDP's `workstation-name`, the
   computer name NTLM's login (NLA) gives the server, which its logon
@@ -43,10 +43,25 @@ change marked `logos:`). Each adds a connection param guacd does not have:
   and the patch sets nothing there. Core sends one with every RDP desktop:
   the setting `workstation_name`, else `client_name`, else the task's own.
 
+- `0002-rdp-timezone.patch`: RDP's `timezone` reaches the server. guacd
+  sets `TZ`, but FreeRDP 3 reads the zone once, when it makes its settings
+  (`freerdp_settings_new`), before that: every desktop told the server UTC.
+  The patch reads the zone again (`GetTimeZoneInformation`,
+  `GetDynamicTimeZoneInformation`) after setting `TZ`.
+
+- `0003-rdp-os-type.patch`: RDP's `os-major-type` and `os-minor-type`,
+  the client's operating system the server is told (the general
+  capability set; RdpCoreTS 169 logs it). guacd sends 0 and 0, which no
+  other client does; core sends Windows' (1 and 3) by default.
+
+- `0004-rdp-abort-when-left.patch`: an RDP connection still opening as its
+  last user leaves is abandoned (FreeRDP's `freerdp_abort_connect_context`,
+  from the client's free handler), where guacd went on to log in for no
+  one; and the login FreeRDP asks for once that user left fails, where
+  guacd tried the server again without one, over a new connection.
+
 The runtime image has the time zones too (`tzdata`, Apache's has none):
-guacd gives an RDP session's time zone to FreeRDP as `TZ`, which FreeRDP
-reads from `/usr/share/zoneinfo` to tell the server; without them every
-desktop's was UTC.
+FreeRDP reads `TZ`'s zone from `/usr/share/zoneinfo`.
 
 Core refuses a desktop whose params guacd does not ask for (`pkg/guacd`,
 `0x0100`), saying which: every RDP desktop sends a workstation name (the
@@ -62,7 +77,7 @@ official 1.6.0 image's libssh2, libtelnet, libvncclient and libwebsockets
 builds). `LOGOS_REVISION` is our build of them, one up for each change of
 the patches or the Dockerfile. The image is tagged
 `<guacamole-server>-freerdp<FreeRDP>-logos<revision>`:
-`ghcr.io/logoscore/logos-guacd:1.6.0-freerdp3.30.0-logos2`.
+`ghcr.io/logoscore/logos-guacd:1.6.0-freerdp3.30.0-logos4`.
 
 - **CI**: `.github/workflows/publish-guacd.yml` builds it (linux/amd64:
   FreeRDP takes too long under emulation for arm64), checks guacd starts and

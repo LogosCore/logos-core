@@ -388,7 +388,7 @@ services:
         WITH_LIBTELNET: "0.23"
         WITH_LIBVNCCLIENT: "LibVNCServer-0.9.15"
         WITH_LIBWEBSOCKETS: "v4.3.5"
-    image: logos-guacd:1.6.0-freerdp3.30.0-logos2
+    image: logos-guacd:1.6.0-freerdp3.30.0-logos4
     container_name: logos-guacd
     restart: unless-stopped
     profiles:

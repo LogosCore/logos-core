@@ -95,7 +95,8 @@ func oneGuacd(t *testing.T) (string, <-chan []string) {
 		defer func() { _ = c.Close() }()
 		r := bufio.NewReader(c)
 		args := []string{"VERSION_1_5_0", "hostname", "port", "domain", "username", "password", "security", "ignore-cert", "resize-method",
-			"color-depth", "disable-gfx", "server-layout", "enable-font-smoothing", "read-only", "client-name", "workstation-name"}
+			"color-depth", "disable-gfx", "server-layout", "enable-font-smoothing", "read-only", "client-name", "workstation-name",
+			"width", "height", "dpi", "os-major-type", "os-minor-type", "timezone"}
 		ready := false
 		for {
 			ins, err := guacd.Read(r)
@@ -155,7 +156,7 @@ func TestDesktopSocket(t *testing.T) {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 	url := func(id uuid.UUID) string {
-		return "ws" + strings.TrimPrefix(srv.URL, "http") + "/minion-tasks/" + id.String() + "/desktop?width=1280&height=720&dpi=96&timezone=Europe/Kyiv" +
+		return "ws" + strings.TrimPrefix(srv.URL, "http") + "/minion-tasks/" + id.String() + "/desktop?width=1280&height=720&dpi=96" +
 			"&settings=" + neturl.QueryEscape(`{"quality":"speed","security":"nla","ignore_cert":false}`)
 	}
 	dialer := gws.Dialer{Subprotocols: []string{"guacamole"}}
@@ -216,8 +217,9 @@ func TestDesktopSocket(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatalf("no connect: %q", read())
 	}
-	if want := []string{"VERSION_1_5_0", "logos-core", "24005", "CORP", "admin", "S3cret;,", "nla", "false", "display-update",
-		"16", "true", "en-us-qwerty", "", "", desktops.ComputerName(task), desktops.ComputerName(task)}; !slices.Equal(values, want) {
+	if want := []string{"VERSION_1_5_0", "logos-core", "24005", "CORP", "admin", "S3cret;,", "nla", "false", "",
+		"16", "true", "en-us-qwerty", "", "", desktops.ComputerName(task), desktops.ComputerName(task),
+		"1920", "1080", "96", "1", "3", "UTC"}; !slices.Equal(values, want) {
 		t.Fatalf("connect %v, want %v", values, want)
 	}
 	if got := read(); got != "4.sync,3.100;" {
@@ -236,7 +238,7 @@ func TestDesktopSocket(t *testing.T) {
 	_ = conn.Close()
 	rec := ended(t, recs, task, 1)[0]
 	if rec.End != models.DesktopRecordingEndClosed || rec.State != models.DesktopRecordingSaved || rec.Username != "alice" ||
-		rec.UserID != operator || !rec.Keys || rec.Settings["quality"] != "speed" || rec.Width != 1280 || rec.Height != 720 ||
+		rec.UserID != operator || !rec.Keys || rec.Settings["quality"] != "speed" || rec.Width != 1920 || rec.Height != 1080 ||
 		rec.Front != "rdp" || rec.Number != 1 {
 		t.Errorf("recording %+v", rec)
 	}

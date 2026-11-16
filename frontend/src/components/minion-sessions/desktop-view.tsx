@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
-import { ClipboardIcon, ExpandIcon, KeyboardIcon, LoaderIcon, RotateCcwIcon, XIcon } from "lucide-react"
+import { ClipboardIcon, ExpandIcon, KeyboardIcon, LoaderIcon, LogOutIcon, RotateCcwIcon, XIcon } from "lucide-react"
 import Guacamole from "@/vendor/guacamole/guacamole-common"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ import {
   desktopURL,
   displayDPI,
   fitScale,
+  followsPane,
   requiredLabel,
   requiredSecret,
   statusText,
@@ -23,12 +24,16 @@ import {
 
 // A desktop task's desktop, drawn (a chunk of its own: desktop-code.ts):
 // Guacamole's client over core's socket, its display fitted to the frame
-// (the remote size follows the frame where the protocol allows: RDP), the
+// (the remote size a monitor's, or the frame's where its settings say:
+// RDP's "Follow the pane", and a terminal's), the
 // keys typed while the frame has focus going to the server, its clipboard
 // through a panel (the ways its settings let it go), and the login the
 // server asks for when the task gave none. Each one opened is its own
 // session with the server, drawn by the settings it opened with, and
-// recorded by core (the task's Recordings tab).
+// recorded by core (the task's Recordings tab). Closing an RDP desktop
+// only disconnects it, the Windows session left signed in on the server:
+// closing one connected reminds to sign out first, and so does the
+// browser, leaving the page.
 
 export interface DesktopViewProps {
   taskId: string
@@ -58,6 +63,8 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
   const [clipOpen, setClipOpen] = useState(false)
   const [remoteClip, setRemoteClip] = useState("")
   const [localClip, setLocalClip] = useState("")
+  // Closing asked: the reminder to sign out shows.
+  const [closing, setClosing] = useState(false)
 
   useEffect(() => {
     const frame = frameRef.current
@@ -113,10 +120,20 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
       const ratio = window.devicePixelRatio || 1
       return { width: frame.clientWidth * ratio, height: frame.clientHeight * ratio, dpi: displayDPI(ratio) }
     }
-    client.connect(connectData(size(), Intl.DateTimeFormat().resolvedOptions().timeZone, settings))
+    // Opened once this effect stays: one undone at once (React's StrictMode
+    // mounts each component twice in development) opens no session, which
+    // guacd would have connected to the server for no one.
+    let started = false
+    const start = window.setTimeout(() => {
+      started = true
+      client.connect(connectData(size(), settings))
+    })
+    const follows = followsPane(front, settings)
     let resized = 0
     const observer = new ResizeObserver(() => {
       fit()
+      // A fixed screen keeps its size: the pane scales it.
+      if (!follows) return
       window.clearTimeout(resized)
       resized = window.setTimeout(() => {
         const s = size()
@@ -126,6 +143,7 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
     observer.observe(frame)
     frame.focus()
     return () => {
+      window.clearTimeout(start)
       document.removeEventListener("fullscreenchange", releaseKeys)
       window.removeEventListener("blur", releaseKeys)
       observer.disconnect()
@@ -135,11 +153,11 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
       keyboard.onkeydown = null
       keyboard.onkeyup = null
       client.onstatechange = null
-      client.disconnect()
+      if (started) client.disconnect()
       element.remove()
       clientRef.current = null
     }
-  }, [taskId, settings])
+  }, [taskId, front, settings])
 
   const send = (keysyms: readonly number[]) => {
     const client = clientRef.current
@@ -174,6 +192,17 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
   const graphical = front === FRONT_RDP || front === FRONT_VNC
   const watched = viewOnly(settings)
   const clip = clipboardWays(settings)
+  // A Windows session this closes would stay signed in: one the operator
+  // can sign out of (not view only), still connected.
+  const signedIn = front === FRONT_RDP && phase === "connected" && !watched
+  const close = () => (signedIn ? setClosing(true) : onClose())
+  useEffect(() => {
+    if (!signedIn) return
+    // The browser's own prompt: what it says is its own.
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener("beforeunload", warn)
+    return () => window.removeEventListener("beforeunload", warn)
+  }, [signedIn])
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border">
       <div className="flex min-h-8 flex-wrap items-center gap-1 border-b px-2 py-1 text-xs">
@@ -230,7 +259,7 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
             Reconnect
           </Button>
         )}
-        <Button variant="ghost" size="icon-xs" title="Close the desktop: its session ends" aria-label="Close the desktop" onClick={onClose}>
+        <Button variant="ghost" size="icon-xs" title="Close the desktop" aria-label="Close the desktop" onClick={close}>
           <XIcon />
         </Button>
       </div>
@@ -321,6 +350,44 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
                 </Button>
               </span>
             </form>
+          </div>
+        )}
+        {closing && signedIn && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 p-4">
+            <div role="alertdialog" aria-label="Sign out first?" className="flex max-w-sm flex-col gap-2 rounded-md border bg-popover p-3 text-sm shadow-md">
+              <span className="font-medium">Sign out first?</span>
+              <span className="text-xs text-muted-foreground">
+                Closing only disconnects: Windows keeps the session signed in, its programs running, until someone signs out.
+              </span>
+              <span className="flex flex-wrap justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  title="Send Ctrl+Alt+Del: its menu has Sign out"
+                  onClick={() => {
+                    setClosing(false)
+                    send(CTRL_ALT_DEL)
+                  }}
+                >
+                  <LogOutIcon />
+                  Ctrl+Alt+Del
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  autoFocus
+                  onClick={() => {
+                    setClosing(false)
+                    frameRef.current?.focus()
+                  }}
+                >
+                  Back to the desktop
+                </Button>
+                <Button variant="destructive" size="xs" onClick={onClose}>
+                  Close anyway
+                </Button>
+              </span>
+            </div>
           </div>
         )}
         {phase === "ended" && (

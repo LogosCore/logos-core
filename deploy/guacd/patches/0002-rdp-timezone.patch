@@ -1,0 +1,61 @@
+diff --git a/src/protocols/rdp/settings.c b/src/protocols/rdp/settings.c
+index b859d60..8f477b0 100644
+--- a/src/protocols/rdp/settings.c
++++ b/src/protocols/rdp/settings.c
+@@ -36,12 +36,14 @@
+ #include <guacamole/user.h>
+ #include <guacamole/wol-constants.h>
+ #include <winpr/crt.h>
++#include <winpr/timezone.h>
+ #include <winpr/wtypes.h>
+ 
+ #include <errno.h>
+ #include <stddef.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <time.h>
+ 
+ /**
+  * A warning to log when NLA mode is selected while FIPS mode is active on the
+@@ -1623,10 +1625,40 @@ void guac_rdp_push_settings(guac_client* client,
+                 "Unable to forward timezone: TZ environment variable "
+                 "could not be set: %s", strerror(errno));
+         }
++
++        /* FreeRDP 3 reads the time zone once, when it makes its settings
++         * (freerdp_settings_new), before TZ is set above: without reading it
++         * again, the server is told the host's zone (UTC in a container). */
++#if FREERDP_VERSION_MAJOR >= 3
++        else {
++            DYNAMIC_TIME_ZONE_INFORMATION dynamic = { 0 };
++            TIME_ZONE_INFORMATION* tz = freerdp_settings_get_pointer_writable(
++                    rdp_settings, FreeRDP_ClientTimeZone);
++
++            tzset();
++            if (tz != NULL)
++                GetTimeZoneInformation(tz);
++            GetDynamicTimeZoneInformation(&dynamic);
++
++            if (!freerdp_settings_set_string_from_utf16N(rdp_settings,
++                        FreeRDP_DynamicDSTTimeZoneKeyName,
++                        dynamic.TimeZoneKeyName,
++                        ARRAYSIZE(dynamic.TimeZoneKeyName))
++                    || !freerdp_settings_set_bool(rdp_settings,
++                        FreeRDP_DynamicDaylightTimeDisabled,
++                        dynamic.DynamicDaylightTimeDisabled))
++                guac_client_log(client, GUAC_LOG_WARNING, "Unable to forward "
++                        "timezone: FreeRDP's settings refused it.");
++
++            guac_client_log(client, GUAC_LOG_DEBUG, "Timezone \"%s\": "
++                    "UTC%+d minutes now.", guac_settings->timezone,
++                    tz != NULL ? -(int) tz->Bias : 0);
++        }
++#endif
+     }
+ 
+     /* Device redirection */
+-    freerdp_settings_set_bool(rdp_settings, FreeRDP_DeviceRedirection, 
++    freerdp_settings_set_bool(rdp_settings, FreeRDP_DeviceRedirection,
+             (guac_settings->audio_enabled || guac_settings->drive_enabled || guac_settings->printing_enabled));
+ 
+     /* Security */

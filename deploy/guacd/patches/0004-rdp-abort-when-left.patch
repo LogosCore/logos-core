@@ -1,0 +1,136 @@
+diff --git a/src/protocols/rdp/client.c b/src/protocols/rdp/client.c
+index 8b2e683..8133725 100644
+--- a/src/protocols/rdp/client.c
++++ b/src/protocols/rdp/client.c
+@@ -259,6 +259,10 @@ int guac_rdp_client_free_handler(guac_client* client) {
+      */
+     guac_argv_stop();
+ 
++    /* logos: and an RDP connection still opening stops, rather than log in
++     * for no one before the thread below ends. */
++    guac_rdp_abort_connect();
++
+     /* Wait for client thread */
+     pthread_join(rdp_client->client_thread, NULL);
+ 
+diff --git a/src/protocols/rdp/rdp.c b/src/protocols/rdp/rdp.c
+index aad1763..2c56026 100644
+--- a/src/protocols/rdp/rdp.c
++++ b/src/protocols/rdp/rdp.c
+@@ -58,6 +58,7 @@
+ #include <freerdp/primary.h>
+ #include <freerdp/settings.h>
+ #include <freerdp/update.h>
++#include <freerdp/version.h>
+ #include <guacamole/argv.h>
+ #include <guacamole/audio.h>
+ #include <guacamole/client.h>
+@@ -74,6 +75,7 @@
+ #include <winpr/synch.h>
+ #include <winpr/wtypes.h>
+ 
++#include <pthread.h>
+ #include <stdlib.h>
+ #include <time.h>
+ 
+@@ -163,6 +165,31 @@ static BOOL rdp_freerdp_load_channels(freerdp* instance) {
+  *     Returns FALSE if an error occurs during the initialization of the
+  *     FreeRDP GDI system.
+  */
++/**
++ * logos: the FreeRDP instance connecting now (freerdp_connect), if any: a
++ * guacd process has one connection, so one at most.
++ */
++static freerdp* guac_rdp_connecting = NULL;
++
++/**
++ * logos: guards guac_rdp_connecting, which another thread aborts.
++ */
++static pthread_mutex_t guac_rdp_connecting_lock = PTHREAD_MUTEX_INITIALIZER;
++
++void guac_rdp_abort_connect(void) {
++
++    pthread_mutex_lock(&guac_rdp_connecting_lock);
++    if (guac_rdp_connecting != NULL) {
++#if FREERDP_VERSION_MAJOR >= 3
++        freerdp_abort_connect_context(guac_rdp_connecting->context);
++#else
++        freerdp_abort_connect(guac_rdp_connecting);
++#endif
++    }
++    pthread_mutex_unlock(&guac_rdp_connecting_lock);
++
++}
++
+ static BOOL rdp_freerdp_pre_connect(freerdp* instance) {
+ 
+     rdpContext* context = GUAC_RDP_CONTEXT(instance);
+@@ -268,6 +295,15 @@ static BOOL rdp_freerdp_authenticate(freerdp* instance, char** username,
+     guac_rdp_settings* settings = rdp_client->settings;
+     char* params[4] = {NULL};
+     int i = 0;
++
++    /* logos: no one is left to log in (the connection's last user left as
++     * it opened): fail it here rather than try the server without a login,
++     * which FreeRDP does again over a new connection. */
++    if (client->state != GUAC_CLIENT_RUNNING) {
++        guac_client_log(client, GUAC_LOG_INFO, "No user is left to log "
++                "in: the RDP connection is abandoned.");
++        return FALSE;
++    }
+     
+     /* If the client does not support the "required" instruction, warn and
+      * quit.
+@@ -317,6 +353,10 @@ static BOOL rdp_freerdp_authenticate(freerdp* instance, char** username,
+         *username = guac_strdup(settings->username);
+         *password = guac_strdup(settings->password);
+         *domain = guac_strdup(settings->domain);
++
++        /* logos: the wait ended as the last user left. */
++        if (client->state != GUAC_CLIENT_RUNNING)
++            return FALSE;
+         
+     }
+     
+@@ -585,8 +625,22 @@ static int guac_rdp_handle_connection(guac_client* client) {
+     guac_rwlock_release_lock(&(rdp_client->lock));
+     guac_rwlock_acquire_read_lock(&(rdp_client->lock));
+ 
++    /* logos: the connection's last user may leave as it opens: they are
++     * gone already, or guac_rdp_abort_connect stops it from here on. */
++    pthread_mutex_lock(&guac_rdp_connecting_lock);
++    guac_rdp_connecting = rdp_inst;
++    pthread_mutex_unlock(&guac_rdp_connecting_lock);
++    if (client->state != GUAC_CLIENT_RUNNING)
++        guac_rdp_abort_connect();
++
+     /* Connect to RDP server */
+-    if (!freerdp_connect(rdp_inst)) {
++    BOOL connected = freerdp_connect(rdp_inst);
++
++    pthread_mutex_lock(&guac_rdp_connecting_lock);
++    guac_rdp_connecting = NULL;
++    pthread_mutex_unlock(&guac_rdp_connecting_lock);
++
++    if (!connected) {
+         guac_rdp_client_abort(client, rdp_inst);
+         goto fail;
+     }
+diff --git a/src/protocols/rdp/rdp.h b/src/protocols/rdp/rdp.h
+index dc7c264..9013f71 100644
+--- a/src/protocols/rdp/rdp.h
++++ b/src/protocols/rdp/rdp.h
+@@ -288,6 +288,13 @@ typedef struct rdp_freerdp_context {
+  */
+ void* guac_rdp_client_thread(void* data);
+ 
++/**
++ * logos: stops the RDP connection opening now, if one is: its user left.
++ * FreeRDP gives up where it is (the TCP connection, TLS, NLA) rather than
++ * log in for no one. Safe from any thread.
++ */
++void guac_rdp_abort_connect(void);
++
+ /**
+  * Enqueues the given input event for future processing by a call to
+  * guac_rdp_handle_input_events(). The values from the input event will be

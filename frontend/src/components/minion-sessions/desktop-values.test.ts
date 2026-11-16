@@ -7,6 +7,7 @@ import {
   desktopURL,
   displayDPI,
   fitScale,
+  followsPane,
   isDesktopFront,
   requiredLabel,
   requiredSecret,
@@ -25,15 +26,25 @@ describe("a desktop", () => {
   test("its socket, and what it opens with", () => {
     expect(desktopURL("t 1", { protocol: "https:", host: "logos.example:8443" })).toBe("wss://logos.example:8443/api/v1/minion-tasks/t%201/desktop")
     expect(desktopURL("t1", { protocol: "http:", host: "localhost:8080" })).toBe("ws://localhost:8080/api/v1/minion-tasks/t1/desktop")
-    expect(connectData({ width: 1280.4, height: 719.6, dpi: 96 }, "Europe/Kyiv")).toBe("width=1280&height=720&dpi=96&timezone=Europe%2FKyiv")
+    expect(connectData({ width: 1280.4, height: 719.6, dpi: 96 })).toBe("width=1280&height=720&dpi=96")
     expect(connectData({ width: 800, height: 600, dpi: 192 })).toBe("width=800&height=600&dpi=192")
     // Its settings, a JSON object; none said: core's defaults.
-    const q = new URLSearchParams(connectData({ width: 800, height: 600, dpi: 96 }, "UTC", { quality: "speed", view_only: true }))
+    const q = new URLSearchParams(connectData({ width: 800, height: 600, dpi: 96 }, { quality: "speed", view_only: true }))
     expect(JSON.parse(q.get("settings") ?? "")).toEqual({ quality: "speed", view_only: true })
-    expect(connectData({ width: 800, height: 600, dpi: 96 }, undefined, {})).toBe("width=800&height=600&dpi=96")
+    expect(connectData({ width: 800, height: 600, dpi: 96 }, {})).toBe("width=800&height=600&dpi=96")
     expect(displayDPI(1)).toBe(96)
     expect(displayDPI(2)).toBe(192)
     expect(displayDPI(0)).toBe(96)
+  })
+
+  test("whose screen follows its pane: RDP's pane sizes, and a terminal; not RDP's fixed ones (its default) or VNC's", () => {
+    expect(followsPane("rdp", {})).toBe(false)
+    expect(followsPane("rdp", { screen: "1920x1080" })).toBe(false)
+    expect(followsPane("rdp", { screen: "pane" })).toBe(true)
+    expect(followsPane("rdp", { screen: "pane-reconnect" })).toBe(true)
+    expect(followsPane("vnc", { screen: "pane" })).toBe(false)
+    expect(followsPane("ssh", {})).toBe(true)
+    expect(followsPane("telnet", {})).toBe(true)
   })
 
   test("its settings the view reads: input, and the clipboard's ways", () => {

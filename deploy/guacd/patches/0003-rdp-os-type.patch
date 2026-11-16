@@ -1,0 +1,76 @@
+diff --git a/src/protocols/rdp/settings.c b/src/protocols/rdp/settings.c
+index 7061b93..88c08fa 100644
+--- a/src/protocols/rdp/settings.c
++++ b/src/protocols/rdp/settings.c
+@@ -91,6 +91,8 @@ const char* GUAC_RDP_CLIENT_ARGS[] = {
+     "static-channels",
+     "client-name",
+     "workstation-name",
++    "os-major-type",
++    "os-minor-type",
+     "enable-wallpaper",
+     "enable-theming",
+     "enable-font-smoothing",
+@@ -363,6 +365,18 @@ enum RDP_ARGS_IDX {
+      */
+     IDX_WORKSTATION_NAME,
+ 
++    /**
++     * The client's operating system the server is told (the general
++     * capability set's osMajorType, as MS-RDPBCGR numbers it: 1 Windows),
++     * or blank for none (0).
++     */
++    IDX_OS_MAJOR_TYPE,
++
++    /**
++     * Its osMinorType (3 Windows NT), or blank for none (0).
++     */
++    IDX_OS_MINOR_TYPE,
++
+     /**
+      * "true" if the desktop wallpaper should be visible, "false" or blank if
+      * the desktop wallpaper should be hidden.
+@@ -939,6 +953,14 @@ guac_rdp_settings* guac_rdp_parse_args(guac_user* user,
+         guac_user_parse_args_string(user, GUAC_RDP_CLIENT_ARGS, argv,
+                 IDX_WORKSTATION_NAME, NULL);
+ 
++    /* Client operating system (general capability set) */
++    settings->os_major_type =
++        guac_user_parse_args_int(user, GUAC_RDP_CLIENT_ARGS, argv,
++                IDX_OS_MAJOR_TYPE, 0);
++    settings->os_minor_type =
++        guac_user_parse_args_int(user, GUAC_RDP_CLIENT_ARGS, argv,
++                IDX_OS_MINOR_TYPE, 0);
++
+     /* Initial program */
+     settings->initial_program =
+         guac_user_parse_args_string(user, GUAC_RDP_CLIENT_ARGS, argv,
+@@ -1795,8 +1817,8 @@ void guac_rdp_push_settings(guac_client* client,
+     freerdp_settings_set_uint32(rdp_settings, FreeRDP_OffscreenSupportLevel, !guac_settings->disable_offscreen_caching);
+     freerdp_settings_set_uint32(rdp_settings, FreeRDP_GlyphSupportLevel, 
+             (!guac_settings->disable_glyph_caching ? GLYPH_SUPPORT_FULL : GLYPH_SUPPORT_NONE));
+-    freerdp_settings_set_uint32(rdp_settings, FreeRDP_OsMajorType, OSMAJORTYPE_UNSPECIFIED);
+-    freerdp_settings_set_uint32(rdp_settings, FreeRDP_OsMinorType, OSMINORTYPE_UNSPECIFIED);
++    freerdp_settings_set_uint32(rdp_settings, FreeRDP_OsMajorType, guac_settings->os_major_type);
++    freerdp_settings_set_uint32(rdp_settings, FreeRDP_OsMinorType, guac_settings->os_minor_type);
+     freerdp_settings_set_bool(rdp_settings, FreeRDP_DesktopResize, TRUE);
+ 
+ #ifdef HAVE_RDPSETTINGS_ALLOWUNANOUNCEDORDERSFROMSERVER
+diff --git a/src/protocols/rdp/settings.h b/src/protocols/rdp/settings.h
+index fd2fc25..05cd60e 100644
+--- a/src/protocols/rdp/settings.h
++++ b/src/protocols/rdp/settings.h
+@@ -297,6 +297,13 @@ typedef struct guac_rdp_settings {
+      */
+     char* workstation_name;
+ 
++    /**
++     * The client's operating system the server is told: the general
++     * capability set's osMajorType and osMinorType (0 and 0: none said).
++     */
++    int os_major_type;
++    int os_minor_type;
++
+     /**
+      * The type of security to use for the connection.
+      */

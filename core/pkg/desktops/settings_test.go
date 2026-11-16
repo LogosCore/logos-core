@@ -17,7 +17,7 @@ import (
 // front.
 func TestFields(t *testing.T) {
 	want := map[string]string{
-		protocol.FrontRDP:      "quality,keyboard,clipboard,view_only,workstation_name,client_name,timezone,resize,console,program,remote_app,security,ignore_cert",
+		protocol.FrontRDP:      "quality,keyboard,clipboard,view_only,screen,workstation_name,client_name,client_os,timezone,console,program,remote_app,security,ignore_cert",
 		protocol.FrontVNC:      "quality,clipboard,view_only,clipboard_encoding,cursor",
 		protocol.FrontSSH:      "command,color_scheme,font_size,clipboard,view_only,timezone,scrollback,keepalive,host_key",
 		protocol.FrontTelnet:   "color_scheme,font_size,clipboard,view_only,scrollback,username_prompt,password_prompt,login_success,login_failure",
@@ -59,15 +59,16 @@ func TestFields(t *testing.T) {
 	}
 }
 
-// The defaults: guacd's but for smoothed text, a session that follows the
-// pane and takes a self-signed certificate (RDP's), and a terminal's
-// appearance said.
+// The defaults: guacd's but for smoothed text, a 1920x1080 screen, Windows
+// said as the client's OS, UTC, and a self-signed certificate taken (RDP's),
+// a terminal's appearance said, and UTC for SSH: nothing of the operator's
+// own (their pane's size, their time zone).
 func TestParamsByDefault(t *testing.T) {
 	want := map[string]map[string]string{
-		protocol.FrontRDP: {"enable-font-smoothing": "true", "server-layout": "en-us-qwerty", "resize-method": "display-update",
-			"security": "any", "ignore-cert": "true"},
+		protocol.FrontRDP: {"enable-font-smoothing": "true", "server-layout": "en-us-qwerty", "width": "1920", "height": "1080",
+			"dpi": "96", "os-major-type": "1", "os-minor-type": "3", "timezone": "UTC", "security": "any", "ignore-cert": "true"},
 		protocol.FrontVNC:     {"clipboard-encoding": "ISO8859-1", "cursor": "local"},
-		protocol.FrontSSH:     {"color-scheme": "gray-black", "font-size": "12", "scrollback": "1000"},
+		protocol.FrontSSH:     {"color-scheme": "gray-black", "font-size": "12", "scrollback": "1000", "timezone": "UTC"},
 		protocol.FrontTelnet:  {"color-scheme": "gray-black", "font-size": "12", "scrollback": "1000"},
 		protocol.FrontForward: {},
 	}
@@ -90,16 +91,20 @@ func TestParamsChosen(t *testing.T) {
 		want   map[string]string
 	}{
 		{"rdp, every setting", protocol.FrontRDP, map[string]any{"quality": "speed", "keyboard": "de-de-qwertz", "clipboard": "out",
-			"view_only": true, "resize": "fixed", "console": true, "program": ` C:\tools\run.exe `, "remote_app": "||notepad",
+			"view_only": true, "screen": "1366x768", "client_os": "linux", "console": true, "program": ` C:\tools\run.exe `, "remote_app": "||notepad",
 			"security": "nla", "ignore_cert": false, "workstation_name": "desktop-4f7q2kd", "client_name": "Laptop-07", "timezone": "Europe/Kyiv"},
 			map[string]string{"disable-gfx": "true", "color-depth": "16", "server-layout": "de-de-qwertz", "disable-paste": "true",
-				"read-only": "true", "console": "true", "initial-program": `C:\tools\run.exe`, "remote-app": "||notepad",
+				"read-only": "true", "width": "1366", "height": "768", "dpi": "96", "os-major-type": "4", "os-minor-type": "7", "console": "true", "initial-program": `C:\tools\run.exe`, "remote-app": "||notepad",
 				"security": "nla", "ignore-cert": "false", "workstation-name": "DESKTOP-4F7Q2KD", "client-name": "LAPTOP-07", "timezone": "Europe/Kyiv"}},
-		{"rdp at its best, reconnecting", protocol.FrontRDP, map[string]any{"quality": "best", "resize": "reconnect", "clipboard": "in"},
+		{"rdp at its best, following the pane, reconnecting", protocol.FrontRDP, map[string]any{"quality": "best", "screen": "pane-reconnect",
+			"clipboard": "in", "client_os": "none"},
 			map[string]string{"enable-font-smoothing": "true", "enable-wallpaper": "true", "enable-theming": "true",
 				"enable-desktop-composition": "true", "enable-full-window-drag": "true", "enable-menu-animations": "true",
 				"force-lossless": "true", "server-layout": "en-us-qwerty", "resize-method": "reconnect", "disable-copy": "true",
-				"security": "any", "ignore-cert": "true"}},
+				"os-major-type": "0", "os-minor-type": "0", "timezone": "UTC", "security": "any", "ignore-cert": "true"}},
+		{"rdp following the pane", protocol.FrontRDP, map[string]any{"screen": "pane"},
+			map[string]string{"enable-font-smoothing": "true", "server-layout": "en-us-qwerty", "resize-method": "display-update",
+				"os-major-type": "1", "os-minor-type": "3", "timezone": "UTC", "security": "any", "ignore-cert": "true"}},
 		{"vnc for a slow tunnel", protocol.FrontVNC, map[string]any{"quality": "speed", "clipboard": "off", "clipboard_encoding": "UTF-8",
 			"cursor": "remote"},
 			map[string]string{"encodings": "tight zrle ultra copyrect hextile zlib corre rre raw", "quality-level": "3",

@@ -80,6 +80,10 @@ jobs:
           # workstation-name is an arg, and its FreeRDP 3 code is what was built
           # (the FreeRDP 2 branch's warning is not there).
           docker run --rm --entrypoint sh logos-guacd:check -c 'so=/opt/guacamole/lib/libguac-client-rdp.so; grep -q workstation-name $so && ! grep -q "needs FreeRDP 3" $so'
+          # The client OS params (0003) and the abort as the user leaves (0004).
+          docker run --rm --entrypoint sh logos-guacd:check -c 'so=/opt/guacamole/lib/libguac-client-rdp.so; grep -q os-major-type $so && grep -q "No user is left to log" $so'
+          # The time zone is read again after TZ is set (patch 0002).
+          docker run --rm --entrypoint sh logos-guacd:check -c 'grep -q "UTC%+d minutes now" /opt/guacamole/lib/libguac-client-rdp.so'
           # The time zones FreeRDP reads TZ from.
           docker run --rm --entrypoint sh logos-guacd:check -c 'test -f /usr/share/zoneinfo/Europe/Kyiv'
 

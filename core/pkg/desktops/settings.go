@@ -32,7 +32,8 @@ const (
 	Quality = "quality"
 	// RDP's.
 	Keyboard    = "keyboard"
-	Resize      = "resize"
+	Screen      = "screen"
+	ClientOS    = "client_os"
 	Console     = "console"
 	Program     = "program"
 	RemoteApp   = "remote_app"
@@ -88,20 +89,20 @@ func Fields(front string) []protocol.FieldSpec {
 	var fields []protocol.FieldSpec
 	switch front {
 	case protocol.FrontRDP:
-		fields = []protocol.FieldSpec{quality(front), keyboard(), clipboard(), viewOnly(),
+		fields = []protocol.FieldSpec{quality(front), keyboard(), clipboard(), viewOnly(), screen(),
 			{Key: Workstation, Type: protocol.FieldString, Label: "Workstation name", MaxLength: maxComputerName,
 				Placeholder: "DESKTOP-4F7Q2KD",
 				Description: "The computer name the server's logon events show. None: the client name, or a DESKTOP-XXXXXXX of this tunnel's own."},
 			{Key: ClientName, Type: protocol.FieldString, Label: "Client name", MaxLength: maxComputerName,
 				Placeholder: "DESKTOP-4F7Q2KD",
 				Description: "The computer name the server's session shows (CLIENTNAME). None: the workstation name, or a DESKTOP-XXXXXXX of this tunnel's own."},
-			timezone(front),
-			{Key: Resize, Type: protocol.FieldEnum, Label: "Resize", Default: "follow", Advanced: true,
-				Description: "What the session does as the desktop's pane changes size.",
+			{Key: ClientOS, Type: protocol.FieldEnum, Label: "Client OS", Default: "windows",
+				Description: "The operating system the server is told the client runs (its logs show it).",
 				Options: []protocol.EnumOption{
-					{Value: "follow", Label: "Follow the pane", Description: "The server changes the desktop's size as it goes."},
-					{Value: "reconnect", Label: "Reconnect", Description: "The session reconnects at the new size: for a server that cannot change it live (older Windows, some xrdp)."},
-					{Value: "fixed", Label: "Fixed", Description: "The size it opened with: the pane scales it."}}},
+					{Value: "windows", Label: "Windows", Description: "As Windows' own client (mstsc) says."},
+					{Value: "linux", Label: "Linux", Description: "As FreeRDP's on Linux (xfreerdp) says."},
+					{Value: "none", Label: "Not said", Description: "guacd's own: no client does this but Guacamole."}}},
+			timezone(front),
 			{Key: Console, Type: protocol.FieldBool, Label: "Console session", Default: false, Advanced: true,
 				Description: "The server's console (admin) session, as mstsc /admin opens it: on a server, one that needs no Remote Desktop licence."},
 			{Key: Program, Type: protocol.FieldString, Label: "Program", MaxLength: maxProgram, Advanced: true,
@@ -248,13 +249,42 @@ func viewOnly() protocol.FieldSpec {
 		Description: "Watch it: no key or click of yours reaches the server."}
 }
 
+// screenSizes are the fixed sizes a desktop opens at (Screen), common
+// monitors' first: the default one, then by how many have it.
+var screenSizes = [][2]int{{1920, 1080}, {1366, 768}, {1536, 864}, {1440, 900}, {1280, 720}, {1600, 900},
+	{1280, 1024}, {1680, 1050}, {1920, 1200}, {2560, 1440}, {3840, 2160}}
+
+// The screen's sizes that follow the pane (Screen).
+const (
+	ScreenPane          = "pane"
+	ScreenPaneReconnect = "pane-reconnect"
+)
+
+func screen() protocol.FieldSpec {
+	options := make([]protocol.EnumOption, 0, len(screenSizes)+2)
+	for _, wh := range screenSizes {
+		options = append(options, protocol.EnumOption{Value: fmt.Sprintf("%dx%d", wh[0], wh[1]), Label: fmt.Sprintf("%d × %d", wh[0], wh[1])})
+	}
+	options = append(options,
+		protocol.EnumOption{Value: ScreenPane, Label: "Follow the pane",
+			Description: "The pane's size, which the server changes as the pane does: its logs show each change."},
+		protocol.EnumOption{Value: ScreenPaneReconnect, Label: "Follow the pane, reconnecting",
+			Description: "The same, the session reconnecting at each new size: for a server that cannot change it live (older Windows, some xrdp)."})
+	return protocol.FieldSpec{Key: Screen, Type: protocol.FieldEnum, Label: "Screen size", Default: options[0].Value, Options: options,
+		Description: "The desktop's size, as a monitor's: the pane scales it."}
+}
+
+// clientOS are the client operating systems' osMajorType and osMinorType
+// (ClientOS), as MS-RDPBCGR numbers them.
+var clientOS = map[string][2]string{"windows": {"1", "3"}, "linux": {"4", "7"}, "none": {"0", "0"}}
+
 func timezone(front string) protocol.FieldSpec {
-	description := "The time zone the server is told the client is in: an IANA name. None: your browser's."
+	description := "The time zone the server is told the client is in (its logs show it): an IANA name. None: UTC."
 	if front == protocol.FrontSSH {
-		description = "The session's TZ, where the server takes it (AcceptEnv TZ): an IANA name. None: your browser's."
+		description = "The session's TZ, where the server takes it (AcceptEnv TZ): an IANA name. None: UTC."
 	}
 	return protocol.FieldSpec{Key: Timezone, Type: protocol.FieldString, Label: "Time zone", MaxLength: maxTimezone,
-		Format: protocol.FormatTimezone, Placeholder: "Europe/Berlin", Description: description}
+		Format: protocol.FormatTimezone, Placeholder: "UTC", Description: description}
 }
 
 func colorScheme() protocol.FieldSpec {
@@ -332,12 +362,18 @@ func Params(front string, values map[string]any, host string, port int) (map[str
 			p[k] = v
 		}
 		p["server-layout"] = str(Keyboard)
-		switch str(Resize) {
-		case "follow":
+		switch size := str(Screen); size {
+		case ScreenPane:
 			p["resize-method"] = "display-update"
-		case "reconnect":
+		case ScreenPaneReconnect:
 			p["resize-method"] = "reconnect"
+		default:
+			// A monitor's, at its usual density, whatever the pane is.
+			w, h, _ := strings.Cut(size, "x")
+			p["width"], p["height"], p["dpi"] = w, h, "96"
 		}
+		osType := clientOS[str(ClientOS)]
+		p["os-major-type"], p["os-minor-type"] = osType[0], osType[1]
 		if on(Console) {
 			p["console"] = "true"
 		}
@@ -367,7 +403,12 @@ func Params(front string, values map[string]any, host string, port int) (map[str
 		p["font-size"] = num(FontSize)
 		p["scrollback"] = num(Scrollback)
 	}
-	if tz := str(Timezone); tz != "" {
+	if front == protocol.FrontRDP || front == protocol.FrontSSH {
+		// None: UTC, never the operator's own.
+		tz := str(Timezone)
+		if tz == "" {
+			tz = "UTC"
+		}
 		if err := checkTimezone(tz); err != nil {
 			return nil, map[string]string{Timezone: err.Error()}
 		}
