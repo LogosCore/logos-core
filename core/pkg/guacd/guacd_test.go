@@ -146,7 +146,7 @@ func fakeGuacd(t *testing.T, args []string, errorAt string) (string, <-chan []In
 
 func TestOpen(t *testing.T) {
 	addr, got := fakeGuacd(t, []string{"VERSION_1_5_0", "hostname", "port", "username", "password", "color-depth"}, "")
-	s, err := Open(context.Background(), addr, Config{Protocol: "rdp", Width: 1280, Height: 720, DPI: 96, Timezone: "Europe/Kyiv", Name: "alice",
+	s, err := Open(context.Background(), addr, Config{Protocol: "rdp", Width: 1280, Height: 720, DPI: 96, Name: "alice",
 		Params: map[string]string{"hostname": "core", "port": "24005", "username": "admin", "password": "p,a;s.s", "unasked": ""}})
 	if err != nil {
 		t.Fatal(err)
@@ -174,15 +174,16 @@ func TestOpen(t *testing.T) {
 	for _, i := range seen {
 		ops = append(ops, i.Opcode)
 	}
-	if strings.Join(ops, " ") != "select size audio video image timezone name connect" {
+	// No timezone: the browser's is not said (a desktop's is its setting).
+	if strings.Join(ops, " ") != "select size audio video image name connect" {
 		t.Fatalf("sent %v", ops)
 	}
-	if seen[0].Args[0] != "rdp" || !slices.Equal(seen[1].Args, []string{"1280", "720", "96"}) || seen[5].Args[0] != "Europe/Kyiv" {
-		t.Errorf("select, size, timezone: %v", seen)
+	if seen[0].Args[0] != "rdp" || !slices.Equal(seen[1].Args, []string{"1280", "720", "96"}) || seen[5].Args[0] != "alice" {
+		t.Errorf("select, size, name: %v", seen)
 	}
 	// connect: the version, then each arg guacd asked for, in its order.
-	if !slices.Equal(seen[7].Args, []string{"VERSION_1_5_0", "core", "24005", "admin", "p,a;s.s", ""}) {
-		t.Errorf("connect %v", seen[7].Args)
+	if !slices.Equal(seen[6].Args, []string{"VERSION_1_5_0", "core", "24005", "admin", "p,a;s.s", ""}) {
+		t.Errorf("connect %v", seen[6].Args)
 	}
 }
 
@@ -222,5 +223,77 @@ func TestVersionAtLeast(t *testing.T) {
 		if versionAtLeast(v, 1, 3) != want {
 			t.Errorf("%q", v)
 		}
+	}
+}
+
+// guacd that takes nothing once its session opened (stuck): a write to it
+// fails within WriteWait, and Close returns within CloseWait, rather than
+// wait for it for good.
+func TestWriteToStuckGuacd(t *testing.T) {
+	writeWait, closeWait := WriteWait, CloseWait
+	WriteWait, CloseWait = 200*time.Millisecond, 200*time.Millisecond
+	t.Cleanup(func() { WriteWait, CloseWait = writeWait, closeWait })
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	stuck := make(chan struct{})
+	t.Cleanup(func() { close(stuck) })
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = c.Close() }()
+		r := bufio.NewReader(c)
+		for {
+			ins, err := Read(r)
+			if err != nil {
+				return
+			}
+			switch ins.Opcode {
+			case "select":
+				_, _ = c.Write([]byte(Instruction{Opcode: "args", Args: []string{"VERSION_1_5_0", "hostname"}}.Encode()))
+			case "connect":
+				_, _ = c.Write([]byte(Instruction{Opcode: "ready", Args: []string{"$conn-1"}}.Encode()))
+				// Reads nothing more.
+				<-stuck
+				return
+			}
+		}
+	}()
+	s, err := Open(context.Background(), l.Addr().String(), Config{Protocol: "rdp", Width: 800, Height: 600, DPI: 96})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed := make(chan error, 1)
+	go func() {
+		chunk := []byte(strings.Repeat("5.mouse,1.1,1.2,1.0;", 1<<14))
+		for {
+			if _, err := s.Write(chunk); err != nil {
+				failed <- err
+				return
+			}
+		}
+	}()
+	select {
+	case err := <-failed:
+		var ne net.Error
+		if !errors.As(err, &ne) || !ne.Timeout() {
+			t.Errorf("write: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("a write to guacd that takes nothing never failed")
+	}
+	closed := make(chan struct{})
+	go func() {
+		_ = s.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close waited for guacd")
 	}
 }

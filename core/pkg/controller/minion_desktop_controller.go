@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	gws "github.com/gorilla/websocket"
+	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
 	"github.com/logoscore/logos-core/core/pkg/desktops"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/guacd"
@@ -76,11 +77,18 @@ func NewMinionDesktopController(ports DesktopPorts, tasks TerminalTasks, creds D
 			Subprotocols: []string{"guacamole"}}}
 }
 
-const (
+// desktopReadLimit bounds one of the web app's messages: an instruction
+// (a clipboard's blob is 8 KiB).
+const desktopReadLimit = 1 << 20
+
+var (
+	// desktopWriteWait bounds a write to the web app: one that takes
+	// nothing for that long is gone.
 	desktopWriteWait = 10 * time.Second
-	// desktopReadLimit bounds one of the web app's messages: an
-	// instruction (a clipboard's blob is 8 KiB).
-	desktopReadLimit = 1 << 20
+	// desktopReadWait: a web app silent for that long is gone. Its
+	// Guacamole client pings every half second, and keeps guacd's session
+	// alive every 5 (guacd drops a user silent for 15 s).
+	desktopReadWait = time.Minute
 )
 
 // A desktop's size bounds, as the web app asks for it.
@@ -99,9 +107,10 @@ const (
 // drawing it by the settings the operator picked as it opened (a JSON
 // object: desktops.Fields, GraphQL minionDesktopSettings), then relays
 // it; the client's tunnel pings are answered. Each is recorded as it goes
-// (pkg/recordings: GraphQL desktopRecordings), one that did not open
-// too. A desktop that does not open sends an error instruction (its
-// message and status code) and closes with the code as the reason.
+// (pkg/recordings: GraphQL desktopRecordings), one guacd did not open too
+// (not one core refused before, its settings or its login). A desktop
+// that does not open sends an error instruction (its message and status
+// code) and closes with the code as the reason.
 //
 //	@Summary		Open a desktop on a desktop task
 //	@Tags			Minion tasks
@@ -188,9 +197,12 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 		fail(guacd.StatusClientBadRequest, err.Error())
 		return
 	}
-	login, err := dc.login(ctx, t)
+	login, status, err := dc.login(ctx, t)
 	if err != nil {
-		fail(guacd.StatusClientForbidden, err.Error())
+		if status == guacd.StatusServerError {
+			dc.logger.Error("Failed to read a desktop's login", zap.String("task_id", id.String()), zap.Error(err))
+		}
+		fail(status, err.Error())
 		return
 	}
 	// A fixed screen (an RDP desktop's by default) is its size, not the
@@ -233,31 +245,37 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 
 // login is the credential a desktop task's args name, as guacd gets it;
 // nil for none. One gone, or of a type the desktop does not take, is an
-// error the web app shows.
-func (dc *MinionDesktopController) login(ctx context.Context, t *models.MinionTask) (*protocol.Credential, error) {
+// error the web app shows (StatusClientForbidden); one core could not
+// read, core's (StatusServerError).
+func (dc *MinionDesktopController) login(ctx context.Context, t *models.MinionTask) (*protocol.Credential, int, error) {
 	raw, _ := protocol.ArgString(t.Args, protocol.ParamCredential)
 	if raw == "" {
-		return nil, nil
+		return nil, 0, nil
 	}
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return nil, errors.New("the desktop's login is no credential id")
+		return nil, guacd.StatusClientForbidden, errors.New("the desktop's login is no credential id")
 	}
 	if dc.creds == nil {
-		return nil, errors.New("core resolves no credentials here")
+		return nil, guacd.StatusServerError, errors.New("core resolves no credentials here")
 	}
 	given, _, err := dc.creds.Resolve(ctx, t.OperationID, []uuid.UUID{id})
-	if err != nil {
-		return nil, errors.New("the desktop's login: " + err.Error())
+	var unusable *credentialrefs.Unusable
+	switch {
+	case errors.As(err, &unusable):
+		return nil, guacd.StatusClientForbidden, errors.New("the desktop's login: " + unusable.Why +
+			": start the tunnel again with another credential, or none")
+	case err != nil:
+		return nil, guacd.StatusServerError, errors.New("core could not read the desktop's login")
 	}
 	cred, ok := given[raw]
 	if !ok {
-		return nil, errors.New("the desktop's login is gone: start the tunnel again with another credential, or none")
+		return nil, guacd.StatusClientForbidden, errors.New("the desktop's login is gone: start the tunnel again with another credential, or none")
 	}
 	if cred.Type != protocol.CredentialTypePlaintext && cred.Type != protocol.CredentialTypeKey {
-		return nil, errors.New("the desktop's login is a " + cred.Type + ": a desktop takes a password or a key")
+		return nil, guacd.StatusClientForbidden, errors.New("the desktop's login is a " + cred.Type + ": a desktop takes a password or a key")
 	}
-	return &cred, nil
+	return &cred, 0, nil
 }
 
 // desktopSettings are the settings a desktop opens with (raw: the JSON
@@ -323,8 +341,9 @@ func desktopParams(task uuid.UUID, front, host string, port int, settings map[st
 // recording it (rec: nil, it is not): guacd's bytes to the web app as they
 // come, whole characters to a message; the web app's instructions to
 // guacd, but for the tunnel's own, a ping answered. It says which ended
-// it: the web app (models.DesktopRecordingEndClosed) or guacd (...Desktop),
-// and returns once the session is closed.
+// it: the web app (models.DesktopRecordingEndClosed: it closed, went
+// silent for desktopReadWait, or took nothing for desktopWriteWait) or
+// guacd (...Desktop), and returns once the session is closed.
 func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error, wmu *sync.Mutex, rec *recordings.Recorder) string {
 	out := make(chan struct{})
 	var guacdEnded atomic.Bool
@@ -338,6 +357,9 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 				rec.FromGuacd(buf[pending : pending+n])
 				whole, rest := guacd.CutUTF8(buf[:pending+n])
 				if len(whole) > 0 && write(whole) != nil {
+					// The web app takes nothing: it is gone, and so is
+					// the socket, which ends the read below.
+					_ = conn.Close()
 					return
 				}
 				pending = copy(buf, rest)
@@ -364,6 +386,7 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 	}
 	conn.SetReadLimit(desktopReadLimit)
 	for {
+		_ = conn.SetReadDeadline(time.Now().Add(desktopReadWait))
 		kind, b, err := conn.ReadMessage()
 		if err != nil {
 			return ended()

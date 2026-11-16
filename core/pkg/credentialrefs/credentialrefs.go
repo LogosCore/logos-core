@@ -142,6 +142,35 @@ func (r *Resolver) ResolveFields(ctx context.Context, operationID uuid.UUID, fie
 	return given, nil
 }
 
+// Named is a credential a field names, as a view shows it before it is
+// used (a desktop's login, in its tunnel's view), in one read: its name
+// (its username when it has none; empty when it is gone), and why the
+// field could not use it now (empty when it could): gone, or another
+// operation's; of a type accept does not take (converted since); or
+// lacking what its type needs. err: the store was not read.
+func (r *Resolver) Named(ctx context.Context, operationID, id uuid.UUID, accept []string) (name, problem string, err error) {
+	found, err := r.load(ctx, operationID, []uuid.UUID{id})
+	if err != nil {
+		return "", "", err
+	}
+	c, ok := found[id.String()]
+	if !ok {
+		return "", "the credential is gone, or not one of the operation's", nil
+	}
+	name = c.Name
+	if name == "" {
+		name = c.Username
+	}
+	if len(accept) > 0 && !slices.Contains(accept, string(c.Type)) {
+		return name, fmt.Sprintf("a %s; the field takes %s", c.Type, strings.Join(accept, ", ")), nil
+	}
+	// What its type needs, missing: a problem to show, not a failure.
+	if invalid := Wire(c).Validate(); invalid != nil {
+		problem = invalid.Error()
+	}
+	return name, problem, nil
+}
+
 func (r *Resolver) load(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID) (map[string]models.Credential, error) {
 	if len(ids) == 0 {
 		return nil, nil

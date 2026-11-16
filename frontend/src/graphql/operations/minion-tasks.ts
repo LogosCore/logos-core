@@ -120,6 +120,7 @@ export const MinionTaskFields = graphql(`
       front
       desktop
       login
+      loginProblem
       reverse
       to
       path

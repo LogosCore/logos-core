@@ -44,18 +44,29 @@ type Config struct {
 	// the session (StatusUnsupported): a guacd older than the params, or
 	// not built as core's (deploy/guacd), would leave it out unsaid.
 	Params map[string]string
-	// Width, Height and DPI are the web app's display.
+	// Width, Height and DPI are the display's: the web app's, or a fixed
+	// screen's.
 	Width, Height, DPI int
 	// Images are the image types the web app takes (image/png, ...).
 	Images []string
-	// Timezone is the web app's (an IANA name); empty: none said.
-	Timezone string
 	// Name is who opens it, as guacd logs it.
 	Name string
 }
 
-// HandshakeWait bounds the session's opening, guacd's ready included.
-const HandshakeWait = 30 * time.Second
+// HandshakeWait bounds the session's opening, guacd's ready included
+// (guacd answers at once; one that does not is not reached, or stuck). It
+// is shorter than the web app's Guacamole tunnel waits for a word (15 s:
+// its receive timeout), which core's relay does not answer while the
+// session opens: the web app gets core's error, not its own timeout.
+const HandshakeWait = 10 * time.Second
+
+// WriteWait bounds a write to guacd once the session is open: guacd that
+// takes nothing for that long is stuck, and the write fails (the session
+// ends). CloseWait bounds the disconnect Close sends.
+var (
+	WriteWait = 10 * time.Second
+	CloseWait = 2 * time.Second
+)
 
 // Session is a desktop's session in guacd, open: what guacd sends next,
 // read with Read, and what goes to it, with Write.
@@ -126,9 +137,6 @@ func (s *Session) handshake(c Config) error {
 		{Opcode: "audio"},
 		{Opcode: "video"},
 		{Opcode: "image", Args: images},
-	}
-	if s.Version != "" && c.Timezone != "" {
-		out = append(out, Instruction{Opcode: "timezone", Args: []string{c.Timezone}})
 	}
 	if versionAtLeast(s.Version, 1, 3) && c.Name != "" {
 		out = append(out, Instruction{Opcode: "name", Args: []string{c.Name}})
@@ -207,11 +215,17 @@ func (s *Session) expect(opcode string) (Instruction, error) {
 // which a message may cut anywhere (CutUTF8 keeps characters whole).
 func (s *Session) Read(p []byte) (int, error) { return s.r.Read(p) }
 
-// Write sends guacd the web app's instructions, whole.
-func (s *Session) Write(p []byte) (int, error) { return s.conn.Write(p) }
+// Write sends guacd the web app's instructions, whole, within WriteWait.
+// Not to be called while another Write, or Close, runs.
+func (s *Session) Write(p []byte) (int, error) {
+	_ = s.conn.SetWriteDeadline(time.Now().Add(WriteWait))
+	return s.conn.Write(p)
+}
 
-// Close ends the session: guacd closes its connection to the server.
+// Close ends the session: guacd closes its connection to the server, as
+// its disconnect says (within CloseWait), or as its socket closes.
 func (s *Session) Close() error {
+	_ = s.conn.SetWriteDeadline(time.Now().Add(CloseWait))
 	_, _ = s.conn.Write([]byte(Instruction{Opcode: "disconnect"}.Encode()))
 	return s.conn.Close()
 }

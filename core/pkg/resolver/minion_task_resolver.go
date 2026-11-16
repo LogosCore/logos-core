@@ -196,10 +196,12 @@ type TaskTunnels interface {
 }
 
 // TaskCredentials resolves the credentials a task's args name (credential
-// params), each one of the operation's, of a type its param takes.
+// params), each one of the operation's, of a type its param takes; and
+// names one for a view, saying why it could not be used (Named).
 // Satisfied by *credentialrefs.Resolver.
 type TaskCredentials interface {
 	ResolveFields(ctx context.Context, operationID uuid.UUID, fields []protocol.FieldSpec, values map[string]any) (map[string]protocol.Credential, error)
+	Named(ctx context.Context, operationID, id uuid.UUID, accept []string) (name, problem string, err error)
 }
 
 // TaskFiles finds a task's file, and reads a kept one's strings
@@ -740,9 +742,6 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 		// names none; guacd draws it (MinionDesktopController).
 		if !r.tunnels.Desktops() {
 			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "core draws no desktops: it has no guacd (GUACD_ADDRESS)")
-		}
-		if path != "" {
-			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "path: a forward's, not a desktop's")
 		}
 		if to, _ := protocol.ArgInt(wire, protocol.ParamTo); to == 0 {
 			wire[protocol.ParamTo] = int64(protocol.DesktopPort(front))

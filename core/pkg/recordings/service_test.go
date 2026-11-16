@@ -311,6 +311,8 @@ func TestDeleteAndStop(t *testing.T) {
 	}
 	b.FromGuacd([]byte(enc("sync", "3")))
 
+	// (The operation's desktops are not recorded within goneFor of it.)
+	g.clock.add(goneFor + time.Second)
 	d := g.begin(t, false)
 	d.FromGuacd([]byte(enc("sync", "4")))
 	g.svc.Stop()
@@ -322,4 +324,116 @@ func TestDeleteAndStop(t *testing.T) {
 	if again, _ := g.repo.FindByID(ctx, d.ID()); again.End != models.DesktopRecordingEndCoreStopped {
 		t.Errorf("ended again: %s", again.End)
 	}
+}
+
+// What a recording holds unkept, a part the store did not take with what
+// came since, stays within MaxHeld: past it, what comes is lost, not held.
+func TestRecordingHoldsNoMoreThanMaxHeld(t *testing.T) {
+	cfg := testConfig()
+	cfg.MaxHeld, cfg.PartMax = 100, 50
+	g := newRig(cfg)
+	g.store.Fail(1)
+	r := g.begin(t, false)
+	first := enc("blob", "1", strings.Repeat("A", 48))
+	second := enc("blob", "1", strings.Repeat("B", 48))
+	r.FromGuacd([]byte(first))
+	// The part it filled is tried, and not taken: held.
+	deadline := time.Now().Add(2 * time.Second)
+	for g.store.Puts() < 1 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(20 * time.Millisecond)
+	// Held and this one are past MaxHeld: this one is lost.
+	r.FromGuacd([]byte(second))
+	r.End(models.DesktopRecordingEndClosed)
+	if got := g.file(t, r.ID()); got != first {
+		t.Errorf("recorded %q", got)
+	}
+	if rec, _ := g.repo.FindByID(context.Background(), r.ID()); rec.Lost != int64(len(second)) {
+		t.Errorf("lost %d, want %d", rec.Lost, len(second))
+	}
+}
+
+// guacd's bytes that stop reading as instructions part way through a
+// read: the instructions the read ended before them are recorded, nothing
+// after.
+func TestRecordingStopsAtUnreadableBytes(t *testing.T) {
+	g := newRig(testConfig())
+	r := g.begin(t, false)
+	a, b := enc("sync", "1"), enc("blob", "1", "AAAA")
+	r.FromGuacd([]byte(a + b[:5]))
+	r.FromGuacd([]byte(b[5:] + enc("sync", "2") + "x!;" + enc("sync", "3")))
+	r.FromGuacd([]byte(enc("sync", "4")))
+	r.End(models.DesktopRecordingEndClosed)
+	if got := g.file(t, r.ID()); got != a+b+enc("sync", "2") {
+		t.Errorf("recorded %q", got)
+	}
+}
+
+// A last part the store does not take is tried within PutWait in all,
+// not PutWait each try with the waits between: a core stopping, or an
+// operation deleted, waits that long for it at most.
+func TestRecordingLastPartWithinPutWait(t *testing.T) {
+	cfg := testConfig()
+	cfg.PutWait, cfg.RetryWait = 100*time.Millisecond, time.Second
+	g := newRig(cfg)
+	g.store.Fail(10)
+	r := g.begin(t, false)
+	r.FromGuacd([]byte(enc("sync", "1")))
+	start := time.Now()
+	r.End(models.DesktopRecordingEndClosed)
+	if took := time.Since(start); took > 900*time.Millisecond {
+		t.Errorf("ended in %v", took)
+	}
+	if rec, _ := g.repo.FindByID(context.Background(), r.ID()); rec.State != models.DesktopRecordingSaved || rec.Parts != 0 {
+		t.Errorf("record %+v", rec)
+	}
+}
+
+// insertGate holds a recording's insert until the test lets it go.
+type insertGate struct {
+	*recordingstest.Repo
+	entered, release chan struct{}
+}
+
+func (g *insertGate) Insert(ctx context.Context, r *models.DesktopRecording) error {
+	close(g.entered)
+	<-g.release
+	return g.Repo.Insert(ctx, r)
+}
+
+// A desktop that begins as its operation's recordings are deleted (its
+// task counted before the task went, its record kept after they were
+// listed) is not recorded: nothing of it outlives the operation.
+func TestRecordingBegunAsItsOperationGoes(t *testing.T) {
+	g := newRig(testConfig())
+	gate := &insertGate{Repo: g.repo, entered: make(chan struct{}), release: make(chan struct{})}
+	g.svc.repo = gate
+	got := make(chan *Recorder, 1)
+	go func() {
+		got <- g.svc.Begin(context.Background(), Beginning{TaskID: g.task.TaskID, Front: "rdp", Keys: true})
+	}()
+	<-gate.entered
+	if err := g.svc.DeleteByOperation(context.Background(), g.task.OperationID); err != nil {
+		t.Fatal(err)
+	}
+	close(gate.release)
+	r := <-got
+	if r != nil {
+		r.FromGuacd([]byte(enc("sync", "1")))
+		r.End(models.DesktopRecordingEndClosed)
+		t.Error("recorded")
+	}
+	if n := g.repo.Len(); n != 0 || len(g.store.Keys()) != 0 {
+		t.Errorf("left %d records, parts %v", n, g.store.Keys())
+	}
+	if kept, _ := g.tasks.Counts(); kept != 0 {
+		t.Errorf("the task counts %d", kept)
+	}
+	// Past goneFor, its desktops are recorded again (an operation with
+	// the id is another).
+	g.clock.add(goneFor + time.Second)
+	g.svc.repo = g.repo
+	r = g.begin(t, false)
+	r.End(models.DesktopRecordingEndClosed)
 }

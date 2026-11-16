@@ -316,142 +316,185 @@ func prompt(key, label, placeholder, description string) protocol.FieldSpec {
 // key, as JSON gives them, one left out taking its default, for a
 // session whose server guacd reaches at host:port (core's port for the
 // task: an SSH host key is checked as that address's). Problems come by
-// key, as protocol.TaskArgs says them; with any, params is nil. A front
-// that is no desktop's has none: a value is a problem.
+// key, each setting's, as protocol.TaskArgs says them; with any, params
+// is nil. A front that is no desktop's has none: a value is a problem.
 func Params(front string, values map[string]any, host string, port int) (map[string]string, map[string]string) {
 	fields := Fields(front)
 	args, problems := protocol.TaskArgs(fields, values)
 	if problems != nil {
 		return nil, problems
 	}
-	str := func(key string) string {
-		s, _ := protocol.ArgString(args, key)
-		return strings.TrimSpace(s)
-	}
-	on := func(key string) bool {
-		b, _ := protocol.ArgBool(args, key)
-		return b
-	}
-	num := func(key string) string {
-		n, _ := protocol.ArgInt(args, key)
-		return strconv.FormatInt(n, 10)
-	}
 	p := map[string]string{}
-	set := func(param, value string) {
-		if value != "" {
-			p[param] = value
-		}
-	}
 	if len(fields) == 0 {
 		return p, nil
 	}
-	switch str(Clipboard) {
-	case ClipboardOut:
-		p["disable-paste"] = "true"
-	case ClipboardIn:
-		p["disable-copy"] = "true"
-	case ClipboardOff:
-		p["disable-copy"], p["disable-paste"] = "true", "true"
-	}
-	if on(ViewOnly) {
-		p["read-only"] = "true"
-	}
+	a := settingArgs{args: args, params: p, wrong: map[string]string{}}
+	a.everyDesktop()
 	switch front {
 	case protocol.FrontRDP:
-		for k, v := range rdpQuality[str(Quality)] {
-			p[k] = v
-		}
-		p["server-layout"] = str(Keyboard)
-		switch size := str(Screen); size {
-		case ScreenPane:
-			p["resize-method"] = "display-update"
-		case ScreenPaneReconnect:
-			p["resize-method"] = "reconnect"
-		default:
-			// A monitor's, at its usual density, whatever the pane is.
-			w, h, _ := strings.Cut(size, "x")
-			p["width"], p["height"], p["dpi"] = w, h, "96"
-		}
-		osType := clientOS[str(ClientOS)]
-		p["os-major-type"], p["os-minor-type"] = osType[0], osType[1]
-		if on(Console) {
-			p["console"] = "true"
-		}
-		set("initial-program", str(Program))
-		set("remote-app", str(RemoteApp))
-		for _, n := range [][2]string{{Workstation, "workstation-name"}, {ClientName, "client-name"}} {
-			key, param := n[0], n[1]
-			name := str(key)
-			if name == "" {
-				continue
-			}
-			if !computerName.MatchString(name) || strings.Trim(name, "0123456789") == "" {
-				return nil, map[string]string{key: "a computer name: letters, digits and hyphens, not digits alone"}
-			}
-			p[param] = strings.ToUpper(name)
-		}
-		p["security"] = str(Security)
-		p["ignore-cert"] = strconv.FormatBool(on(IgnoreCert))
+		a.rdp()
+		a.timezone()
 	case protocol.FrontVNC:
-		for k, v := range vncQuality[str(Quality)] {
-			p[k] = v
-		}
-		p["clipboard-encoding"] = str(ClipboardEncoding)
-		p["cursor"] = str(Cursor)
-	case protocol.FrontSSH, protocol.FrontTelnet:
-		p["color-scheme"] = str(ColorScheme)
-		p["font-size"] = num(FontSize)
-		p["scrollback"] = num(Scrollback)
-	}
-	if front == protocol.FrontRDP || front == protocol.FrontSSH {
-		// None: UTC, never the operator's own.
-		tz := str(Timezone)
-		if tz == "" {
-			tz = "UTC"
-		}
-		if err := checkTimezone(tz); err != nil {
-			return nil, map[string]string{Timezone: err.Error()}
-		}
-		p["timezone"] = tz
-	}
-	switch front {
+		a.vnc()
 	case protocol.FrontSSH:
-		set("command", str(Command))
-		if ms, _ := protocol.ArgInt(args, Keepalive); ms > 0 {
-			// Whole seconds, up: libssh2 counts no less than 2.
-			p["server-alive-interval"] = strconv.FormatInt((ms+999)/1000, 10)
-		}
-		if key := str(HostKey); key != "" {
-			line, err := knownHost(key, host, port)
-			if err != nil {
-				return nil, map[string]string{HostKey: err.Error()}
-			}
-			p["host-key"] = line
-		}
+		a.terminal()
+		a.timezone()
+		a.ssh(host, port)
 	case protocol.FrontTelnet:
-		var wrong map[string]string
-		for key, param := range map[string]string{UsernamePrompt: "username-regex", PasswordPrompt: "password-regex",
-			LoginSuccess: "login-success-regex", LoginFailure: "login-failure-regex"} {
-			pattern := str(key)
-			if pattern == "" {
-				continue
-			}
-			// guacd's are POSIX extended: Go's syntax is close enough to
-			// catch a mistyped one.
-			if _, err := regexp.Compile(pattern); err != nil {
-				if wrong == nil {
-					wrong = map[string]string{}
-				}
-				wrong[key] = "not a regular expression: " + strings.TrimPrefix(err.Error(), "error parsing regexp: ")
-				continue
-			}
-			p[param] = pattern
-		}
-		if wrong != nil {
-			return nil, wrong
-		}
+		a.terminal()
+		a.telnet()
+	}
+	if len(a.wrong) > 0 {
+		return nil, a.wrong
 	}
 	return p, nil
+}
+
+// settingArgs are a desktop's settings as protocol.TaskArgs read them
+// (each its field's type, its default where none was given), the guacd
+// params they come to, and what is wrong with them, by key.
+type settingArgs struct {
+	args   map[string]any
+	params map[string]string
+	wrong  map[string]string
+}
+
+func (a settingArgs) str(key string) string {
+	s, _ := protocol.ArgString(a.args, key)
+	return strings.TrimSpace(s)
+}
+
+func (a settingArgs) on(key string) bool {
+	b, _ := protocol.ArgBool(a.args, key)
+	return b
+}
+
+func (a settingArgs) num(key string) string {
+	n, _ := protocol.ArgInt(a.args, key)
+	return strconv.FormatInt(n, 10)
+}
+
+// set gives param a value: none, it is not sent.
+func (a settingArgs) set(param, value string) {
+	if value != "" {
+		a.params[param] = value
+	}
+}
+
+// presets: the params of a preset's value (Quality).
+func (a settingArgs) presets(key string, by map[string]map[string]string) {
+	for k, v := range by[a.str(key)] {
+		a.params[k] = v
+	}
+}
+
+// everyDesktop: its clipboard's ways, and whether it takes input.
+func (a settingArgs) everyDesktop() {
+	switch a.str(Clipboard) {
+	case ClipboardOut:
+		a.params["disable-paste"] = "true"
+	case ClipboardIn:
+		a.params["disable-copy"] = "true"
+	case ClipboardOff:
+		a.params["disable-copy"], a.params["disable-paste"] = "true", "true"
+	}
+	if a.on(ViewOnly) {
+		a.params["read-only"] = "true"
+	}
+}
+
+func (a settingArgs) rdp() {
+	a.presets(Quality, rdpQuality)
+	a.params["server-layout"] = a.str(Keyboard)
+	switch size := a.str(Screen); size {
+	case ScreenPane:
+		a.params["resize-method"] = "display-update"
+	case ScreenPaneReconnect:
+		a.params["resize-method"] = "reconnect"
+	default:
+		// A monitor's, at its usual density, whatever the pane is.
+		w, h, _ := strings.Cut(size, "x")
+		a.params["width"], a.params["height"], a.params["dpi"] = w, h, "96"
+	}
+	osType := clientOS[a.str(ClientOS)]
+	a.params["os-major-type"], a.params["os-minor-type"] = osType[0], osType[1]
+	if a.on(Console) {
+		a.params["console"] = "true"
+	}
+	a.set("initial-program", a.str(Program))
+	a.set("remote-app", a.str(RemoteApp))
+	for key, param := range map[string]string{Workstation: "workstation-name", ClientName: "client-name"} {
+		name := a.str(key)
+		if name == "" {
+			continue
+		}
+		if !computerName.MatchString(name) || strings.Trim(name, "0123456789") == "" {
+			a.wrong[key] = "a computer name: letters, digits and hyphens, not digits alone"
+			continue
+		}
+		a.params[param] = strings.ToUpper(name)
+	}
+	a.params["security"] = a.str(Security)
+	a.params["ignore-cert"] = strconv.FormatBool(a.on(IgnoreCert))
+}
+
+func (a settingArgs) vnc() {
+	a.presets(Quality, vncQuality)
+	a.params["clipboard-encoding"] = a.str(ClipboardEncoding)
+	a.params["cursor"] = a.str(Cursor)
+}
+
+// terminal: SSH's and Telnet's appearance.
+func (a settingArgs) terminal() {
+	a.params["color-scheme"] = a.str(ColorScheme)
+	a.params["font-size"] = a.num(FontSize)
+	a.params["scrollback"] = a.num(Scrollback)
+}
+
+// timezone: RDP's and SSH's; none, UTC, never the operator's own.
+func (a settingArgs) timezone() {
+	tz := a.str(Timezone)
+	if tz == "" {
+		tz = "UTC"
+	}
+	if err := checkTimezone(tz); err != nil {
+		a.wrong[Timezone] = err.Error()
+		return
+	}
+	a.params["timezone"] = tz
+}
+
+func (a settingArgs) ssh(host string, port int) {
+	a.set("command", a.str(Command))
+	if ms, _ := protocol.ArgInt(a.args, Keepalive); ms > 0 {
+		// Whole seconds, up: libssh2 counts no less than 2.
+		a.params["server-alive-interval"] = strconv.FormatInt((ms+999)/1000, 10)
+	}
+	if key := a.str(HostKey); key != "" {
+		line, err := knownHost(key, host, port)
+		if err != nil {
+			a.wrong[HostKey] = err.Error()
+			return
+		}
+		a.params["host-key"] = line
+	}
+}
+
+// telnet: its login's prompts, guacd's POSIX extended regular
+// expressions: Go's syntax is close enough to catch a mistyped one.
+func (a settingArgs) telnet() {
+	for key, param := range map[string]string{UsernamePrompt: "username-regex", PasswordPrompt: "password-regex",
+		LoginSuccess: "login-success-regex", LoginFailure: "login-failure-regex"} {
+		pattern := a.str(key)
+		if pattern == "" {
+			continue
+		}
+		if _, err := regexp.Compile(pattern); err != nil {
+			a.wrong[key] = "not a regular expression: " + strings.TrimPrefix(err.Error(), "error parsing regexp: ")
+			continue
+		}
+		a.params[param] = pattern
+	}
 }
 
 // ComputerNames fills an RDP desktop's computer names that its settings

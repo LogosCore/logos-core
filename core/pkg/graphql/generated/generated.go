@@ -1160,37 +1160,38 @@ type ComplexityRoot struct {
 	}
 
 	MinionTunnel struct {
-		Address    func(childComplexity int) int
-		Args       func(childComplexity int) int
-		Bind       func(childComplexity int) int
-		Bound      func(childComplexity int) int
-		Cap        func(childComplexity int) int
-		Cols       func(childComplexity int) int
-		Desktop    func(childComplexity int) int
-		Down       func(childComplexity int) int
-		Front      func(childComplexity int) int
-		Kept       func(childComplexity int) int
-		Listen     func(childComplexity int) int
-		Listening  func(childComplexity int) int
-		Login      func(childComplexity int) int
-		MaxStreams func(childComplexity int) int
-		Open       func(childComplexity int) int
-		Path       func(childComplexity int) int
-		Port       func(childComplexity int) int
-		Program    func(childComplexity int) int
-		Reverse    func(childComplexity int) int
-		Routes     func(childComplexity int) int
-		Rows       func(childComplexity int) int
-		SocksBind  func(childComplexity int) int
-		Source     func(childComplexity int) int
-		StopsAt    func(childComplexity int) int
-		Streams    func(childComplexity int) int
-		TLS        func(childComplexity int) int
-		TimeoutMs  func(childComplexity int) int
-		To         func(childComplexity int) int
-		UDP        func(childComplexity int) int
-		Up         func(childComplexity int) int
-		VpnClients func(childComplexity int) int
+		Address      func(childComplexity int) int
+		Args         func(childComplexity int) int
+		Bind         func(childComplexity int) int
+		Bound        func(childComplexity int) int
+		Cap          func(childComplexity int) int
+		Cols         func(childComplexity int) int
+		Desktop      func(childComplexity int) int
+		Down         func(childComplexity int) int
+		Front        func(childComplexity int) int
+		Kept         func(childComplexity int) int
+		Listen       func(childComplexity int) int
+		Listening    func(childComplexity int) int
+		Login        func(childComplexity int) int
+		LoginProblem func(childComplexity int) int
+		MaxStreams   func(childComplexity int) int
+		Open         func(childComplexity int) int
+		Path         func(childComplexity int) int
+		Port         func(childComplexity int) int
+		Program      func(childComplexity int) int
+		Reverse      func(childComplexity int) int
+		Routes       func(childComplexity int) int
+		Rows         func(childComplexity int) int
+		SocksBind    func(childComplexity int) int
+		Source       func(childComplexity int) int
+		StopsAt      func(childComplexity int) int
+		Streams      func(childComplexity int) int
+		TLS          func(childComplexity int) int
+		TimeoutMs    func(childComplexity int) int
+		To           func(childComplexity int) int
+		UDP          func(childComplexity int) int
+		Up           func(childComplexity int) int
+		VpnClients   func(childComplexity int) int
 	}
 
 	MinionTunnelStream struct {
@@ -7511,6 +7512,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Login(childComplexity), true
+	case "MinionTunnel.loginProblem":
+		if e.ComplexityRoot.MinionTunnel.LoginProblem == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.LoginProblem(childComplexity), true
 	case "MinionTunnel.maxStreams":
 		if e.ComplexityRoot.MinionTunnel.MaxStreams == nil {
 			break
@@ -16792,6 +16799,11 @@ type MinionTunnel {
   # A desktop's login: the name of the credential it logs in with; null
   # for none (the desktop asks), a credential gone, or another front.
   login: String
+  # Why the desktop cannot log in with its credential, as opening one would
+  # say: it is gone, of a type a desktop does not take, or lacks what its
+  # type needs; or core could not read it now. Null when it can, or there
+  # is none.
+  loginProblem: String
   reverse: Boolean!
   to: String
   # A forward's to a unix socket's path or a named pipe (\\.\pipe\name,
@@ -48257,6 +48269,8 @@ func (ec *executionContext) fieldContext_MinionTask_tunnel(_ context.Context, fi
 				return ec.fieldContext_MinionTunnel_desktop(ctx, field)
 			case "login":
 				return ec.fieldContext_MinionTunnel_login(ctx, field)
+			case "loginProblem":
+				return ec.fieldContext_MinionTunnel_loginProblem(ctx, field)
 			case "reverse":
 				return ec.fieldContext_MinionTunnel_reverse(ctx, field)
 			case "to":
@@ -49710,6 +49724,35 @@ func (ec *executionContext) _MinionTunnel_login(ctx context.Context, field graph
 }
 
 func (ec *executionContext) fieldContext_MinionTunnel_login(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_loginProblem(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_loginProblem,
+		func(ctx context.Context) (any, error) {
+			return obj.LoginProblem, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_loginProblem(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MinionTunnel",
 		Field:      field,
@@ -101013,6 +101056,8 @@ func (ec *executionContext) _MinionTunnel(ctx context.Context, sel ast.Selection
 			}
 		case "login":
 			out.Values[i] = ec._MinionTunnel_login(ctx, field, obj)
+		case "loginProblem":
+			out.Values[i] = ec._MinionTunnel_loginProblem(ctx, field, obj)
 		case "reverse":
 			out.Values[i] = ec._MinionTunnel_reverse(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

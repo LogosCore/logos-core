@@ -684,13 +684,14 @@ func TestDesktopFronts(t *testing.T) {
 		t.Errorf("a port of its own: %v", err)
 	}
 	opened := len(f.opened)
-	for name, w := range map[string]map[string]any{
-		"no host": {"front": "vnc"},
-		"a path":  {"front": "ssh", "path": "/run/sshd.sock"},
-	} {
-		if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tunnelCmd, w); err == nil {
-			t.Errorf("%s opened", name)
-		}
+	if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tunnelCmd, map[string]any{"front": "vnc"}); err == nil {
+		t.Error("no host opened")
+	}
+	// A path is a forward's alone: a desktop's args refuse it (its When),
+	// before any tunnel opens.
+	if _, problems := protocol.TaskArgs(protocol.TunnelCoreParams(protocol.ActionTunnel),
+		map[string]any{"front": "ssh", "host": "h", "path": "/run/sshd.sock"}); !strings.Contains(problems[protocol.ParamPath], "only when") {
+		t.Errorf("a desktop's path: %v", problems)
 	}
 	f.desktops = false
 	if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tunnelCmd, map[string]any{"front": "rdp", "host": "dc01"}); err == nil ||
@@ -705,8 +706,29 @@ func TestDesktopFronts(t *testing.T) {
 	tunnel := protocol.ActionTunnel
 	got, err := r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), OperationID: uuid.NewString(), Action: &tunnel,
 		Args: map[string]any{"front": "rdp", "host": "dc01", "to": float64(3389)}})
-	if err != nil || got.Front != "rdp" || got.To == nil || *got.To != "dc01:3389" || !got.Desktop || got.Login != nil {
+	if err != nil || got.Front != "rdp" || got.To == nil || *got.To != "dc01:3389" || !got.Desktop || got.Login != nil ||
+		got.LoginProblem != nil {
 		t.Errorf("view %+v %v", got, err)
+	}
+	// Its login: the credential's name, and why the desktop could not log
+	// in with it, as opening one would say; one read of it.
+	pw, cert, down := uuid.New(), uuid.New(), uuid.New()
+	r.creds = fakeTaskCreds{rows: map[string]protocol.Credential{
+		pw.String():   {ID: pw.String(), Name: "dc admin", Type: protocol.CredentialTypePlaintext},
+		cert.String(): {ID: cert.String(), Name: "a cert", Type: protocol.CredentialTypeCertificate},
+		down.String(): {ID: down.String(), Type: "STORE_DOWN"},
+	}}
+	for cred, want := range map[uuid.UUID][2]string{
+		pw:         {"dc admin", ""},
+		cert:       {"a cert", "a CERTIFICATE; the field takes PLAINTEXT, KEY"},
+		uuid.New(): {"", "the credential is gone, or not one of the operation's"},
+		down:       {"", "core could not read the credential now"},
+	} {
+		got, err := r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), OperationID: uuid.NewString(), Action: &tunnel,
+			Args: map[string]any{"front": "rdp", "host": "dc01", "to": float64(3389), "credential": cred.String()}})
+		if err != nil || deref(got.Login) != want[0] || deref(got.LoginProblem) != want[1] {
+			t.Errorf("login %s: %q %q, want %q", cred, deref(got.Login), deref(got.LoginProblem), want)
+		}
 	}
 	// The settings one opens with, as the web app's form draws them; none
 	// for another front.

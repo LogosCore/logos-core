@@ -333,8 +333,8 @@ guacd:
   enabled: true
   # Ours (deploy/guacd): guacd 1.6.0 against FreeRDP 3, where the
   # official image's FreeRDP 2 aborts a desktop resized during a paint, and
-  # patched: an RDP desktop's workstation name, which core sends with each
-  # one, so another guacd opens no RDP desktop.
+  # patched (what an RDP server learns of the client: core sends a
+  # workstation name with each RDP desktop, so another guacd opens none).
   image:
     repository: ghcr.io/logoscore/logos-guacd
     tag: "1.6.0-freerdp3.30.0-logos4"

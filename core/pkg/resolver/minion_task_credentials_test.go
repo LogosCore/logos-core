@@ -3,6 +3,8 @@ package resolver
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -23,6 +25,21 @@ func (f fakeTaskCreds) ResolveFields(_ context.Context, _ uuid.UUID, fields []pr
 		out[id] = c
 	}
 	return out, nil
+}
+
+// Named: as credentialrefs.Named, over rows: a credential gone, of a type
+// accept does not take; one of type "STORE_DOWN" not read.
+func (f fakeTaskCreds) Named(_ context.Context, _ uuid.UUID, id uuid.UUID, accept []string) (string, string, error) {
+	c, ok := f.rows[id.String()]
+	switch {
+	case !ok:
+		return "", "the credential is gone, or not one of the operation's", nil
+	case c.Type == "STORE_DOWN":
+		return "", "", errors.New("load credentials: connection refused")
+	case len(accept) > 0 && !slices.Contains(accept, c.Type):
+		return c.Name, "a " + c.Type + "; the field takes " + strings.Join(accept, ", "), nil
+	}
+	return c.Name, "", nil
 }
 
 // A task's credential params carry the credentials in place of their ids:

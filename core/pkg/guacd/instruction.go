@@ -1,7 +1,8 @@
 // Package guacd speaks to guacd, Apache Guacamole's proxy daemon (docs:
 // contracts/minion-messages/tunnels.md, Desktops). Core opens a desktop's
-// session there (Open: select, args, size, audio, video, image, timezone,
-// name, connect, ready), then relays it: guacd's bytes to the web app's
+// session there (Open: select, args, size, audio, video, image, name,
+// connect, ready: no timezone, the operator's own, which its params say
+// instead), then relays it: guacd's bytes to the web app's
 // Guacamole client as they come, cut where UTF-8 allows (CutUTF8), and
 // the client's instructions to guacd, but for its tunnel's own (opcode "",
 // a ping: answered).

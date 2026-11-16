@@ -224,6 +224,11 @@ type MinionTunnel {
   # A desktop's login: the name of the credential it logs in with; null
   # for none (the desktop asks), a credential gone, or another front.
   login: String
+  # Why the desktop cannot log in with its credential, as opening one would
+  # say: it is gone, of a type a desktop does not take, or lacks what its
+  # type needs; or core could not read it now. Null when it can, or there
+  # is none.
+  loginProblem: String
   reverse: Boolean!
   to: String
   # A forward's to a unix socket's path or a named pipe (\\.\pipe\name,

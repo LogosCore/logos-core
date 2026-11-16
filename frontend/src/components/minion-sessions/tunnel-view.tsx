@@ -425,7 +425,14 @@ export function TunnelView({
                   <span className="text-muted-foreground"> · from the minion&apos;s host, through the port</span>
                 </LabelRow>
                 <LabelRow label="Login">
-                  {tunnel.login ?? <span className="text-muted-foreground">none: the server&apos;s login asks</span>}
+                  {tunnel.login ??
+                    (!tunnel.loginProblem && <span className="text-muted-foreground">none: the server&apos;s login asks</span>)}
+                  {tunnel.loginProblem && (
+                    <span className="text-red-600 dark:text-red-400">
+                      {tunnel.login && " · "}
+                      {tunnel.loginProblem}: a desktop opened now is refused
+                    </span>
+                  )}
                 </LabelRow>
                 <LabelRow label="Speaks">
                   {desktopName(front)}, drawn here by core&apos;s guacd

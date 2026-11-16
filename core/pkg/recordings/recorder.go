@@ -24,9 +24,12 @@ type Recorder struct {
 
 	mu sync.Mutex
 	// buf holds whole instructions, in order, not kept yet; pending the
-	// bytes of guacd's instruction that has not ended.
+	// bytes of guacd's instruction that has not ended; held counts what the
+	// loop took from buf and has not kept yet (a part the store has not
+	// taken): buf and held stay within MaxHeld together.
 	buf     []byte
 	pending []byte
+	held    int
 	scan    scanner
 	// synced: guacd sent a sync; first and last are the timestamps of its
 	// first and last, lastAt when the last came (on the service's clock).
@@ -87,7 +90,12 @@ func (r *Recorder) FromGuacd(b []byte) {
 	end := r.scan.scan(b)
 	if r.scan.bad {
 		// Not Guacamole's as core reads it: what came since its last
-		// whole instruction, and anything after, is not recorded.
+		// whole instruction, and anything after, is not recorded; the
+		// instructions b ended before it are.
+		if end > 0 {
+			r.keep(r.pending, b[:end])
+		}
+		r.pending = nil
 		r.unreadable = true
 		r.s.logger.Warn("A desktop's recording stops: guacd's bytes do not read as instructions",
 			zap.String("recording_id", r.rec.RecordingID.String()))
@@ -137,14 +145,14 @@ func (r *Recorder) FromWeb(ins guacd.Instruction) {
 	r.keep([]byte(guacd.Instruction{Opcode: ins.Opcode, Args: args}.Encode()))
 }
 
-// keep adds whole instructions to buf, all of them or, past MaxHeld, none
-// (lost). Called with mu held.
+// keep adds whole instructions to buf, all of them or, past MaxHeld (with
+// what the loop holds), none (lost). Called with mu held.
 func (r *Recorder) keep(parts ...[]byte) {
 	n := 0
 	for _, p := range parts {
 		n += len(p)
 	}
-	if len(r.buf)+n > r.s.cfg.MaxHeld {
+	if len(r.buf)+r.held+n > r.s.cfg.MaxHeld {
 		r.lost += int64(n)
 		return
 	}
@@ -188,15 +196,25 @@ func (r *Recorder) close(end, msg string) {
 	<-r.done
 }
 
-// take is what to keep next: buf's instructions, with how far it came.
+// take is what to keep next: buf's instructions, with how far it came;
+// they count as held until the loop says (holding).
 func (r *Recorder) take() (data []byte, dur, lost int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	data, r.buf = r.buf, nil
+	r.held += len(data)
 	if r.synced {
 		dur = r.last - r.first
 	}
 	return data, dur, r.lost
+}
+
+// holding is what the loop holds now that a put is done: n bytes the store
+// did not take, which it tries again with the next part.
+func (r *Recorder) holding(n int) {
+	r.mu.Lock()
+	r.held = n
+	r.mu.Unlock()
 }
 
 // loop keeps the recording's parts as they fill, and its numbers with each
@@ -236,16 +254,19 @@ func (r *Recorder) loop() {
 			if last {
 				tries = 3
 			}
-			if err := r.put(parts, data, tries); err != nil {
-				if !last && len(data) <= r.s.cfg.MaxHeld {
-					held = data
-				} else {
-					dropped += int64(len(data))
-					r.s.logger.Warn("A desktop's recording lost a part: the store did not take it", zap.String("recording_id", id.String()),
-						zap.Int("bytes", len(data)), zap.Error(err))
-				}
-			} else {
+			switch err := r.put(parts, data, tries); {
+			case err == nil:
 				parts, size = parts+1, size+int64(len(data))
+				r.holding(0)
+			case !last && len(data) <= r.s.cfg.MaxHeld:
+				// Tried again at the head of the next part.
+				held = data
+				r.holding(len(held))
+			default:
+				dropped += int64(len(data))
+				r.holding(0)
+				r.s.logger.Warn("A desktop's recording lost a part: the store did not take it", zap.String("recording_id", id.String()),
+					zap.Int("bytes", len(data)), zap.Error(err))
 			}
 		}
 		now := r.s.now()
@@ -269,7 +290,10 @@ func (r *Recorder) loop() {
 			r.s.logger.Warn("A desktop's recording: keep its numbers", zap.String("recording_id", id.String()), zap.Error(err))
 		}
 		if last {
-			if t, err := r.s.tasks.AddRecording(context.Background(), r.rec.TaskID, 0, 0); err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), r.s.cfg.PutWait)
+			t, err := r.s.tasks.AddRecording(ctx, r.rec.TaskID, 0, 0)
+			cancel()
+			if err == nil {
 				r.s.publish(t)
 			}
 			r.s.logger.Info("A desktop's recording ended", zap.String("recording_id", id.String()), zap.String("end", set["end"].(string)),
@@ -279,16 +303,20 @@ func (r *Recorder) loop() {
 	}
 }
 
-// put keeps part n, trying it up to tries times.
+// put keeps part n, trying it up to tries times, within PutWait in all.
 func (r *Recorder) put(n int, data []byte, tries int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), r.s.cfg.PutWait)
+	defer cancel()
 	var err error
 	for i := 0; i < tries; i++ {
 		if i > 0 {
-			time.Sleep(time.Duration(i) * r.s.cfg.RetryWait)
+			select {
+			case <-ctx.Done():
+				return err
+			case <-time.After(time.Duration(i) * r.s.cfg.RetryWait):
+			}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), r.s.cfg.PutWait)
 		err = r.s.store.Put(ctx, partKey(r.rec.RecordingID, n), bytes.NewReader(data), int64(len(data)), "application/octet-stream")
-		cancel()
 		if err == nil {
 			return nil
 		}

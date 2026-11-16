@@ -31,7 +31,7 @@ func TestIntegrationGuacd(t *testing.T) {
 	if port == "" {
 		port = "80"
 	}
-	s, err := Open(context.Background(), addr, Config{Protocol: protocol, Width: 800, Height: 600, DPI: 96, Timezone: "Europe/Kyiv", Name: "itest",
+	s, err := Open(context.Background(), addr, Config{Protocol: protocol, Width: 800, Height: 600, DPI: 96, Name: "itest",
 		// RDP takes the server's certificate, as core's desktops do.
 		Params: map[string]string{"hostname": host, "port": port, "username": "nobody", "password": "x", "ignore-cert": "true"}})
 	if err != nil {

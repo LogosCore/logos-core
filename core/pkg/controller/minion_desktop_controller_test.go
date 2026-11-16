@@ -3,6 +3,7 @@ package controller
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	gws "github.com/gorilla/websocket"
+	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
 	"github.com/logoscore/logos-core/core/pkg/desktops"
 	"github.com/logoscore/logos-core/core/pkg/guacd"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -37,15 +39,24 @@ func (p portsByTask) Port(_ context.Context, task uuid.UUID) (*models.Operationa
 	return &models.OperationalPort{Port: n, TaskID: task}, nil
 }
 
-// credsByID are the operation's credentials.
+// credsByID are the operation's credentials, resolved as credentialrefs
+// does: an id that names none is Unusable. One of type storeDown is not
+// read: the store is not reached.
 type credsByID map[string]protocol.Credential
+
+const storeDown = "STORE_DOWN"
 
 func (f credsByID) Resolve(_ context.Context, _ uuid.UUID, ids []uuid.UUID) (map[string]protocol.Credential, map[string]int64, error) {
 	out := map[string]protocol.Credential{}
 	for _, id := range ids {
-		if c, ok := f[id.String()]; ok {
-			out[id.String()] = c
+		c, ok := f[id.String()]
+		switch {
+		case !ok:
+			return nil, nil, &credentialrefs.Unusable{Why: "credential " + id.String() + " is gone, or not one of the operation's"}
+		case c.Type == storeDown:
+			return nil, nil, errors.New("load credentials: connection refused")
 		}
+		out[id.String()] = c
 	}
 	return out, nil, nil
 }
@@ -76,6 +87,12 @@ func ended(t *testing.T, recs *recordings.Service, task uuid.UUID, n int) []mode
 	}
 }
 
+// rdpGuacdArgs are the args a fake guacd asks an RDP session for: those
+// core sends (some of guacd's own).
+var rdpGuacdArgs = []string{"VERSION_1_5_0", "hostname", "port", "domain", "username", "password", "security", "ignore-cert", "resize-method",
+	"color-depth", "disable-gfx", "server-layout", "enable-font-smoothing", "read-only", "client-name", "workstation-name",
+	"width", "height", "dpi", "os-major-type", "os-minor-type", "timezone"}
+
 // oneGuacd is guacd for one session: it asks for an RDP's args (some of
 // them), keeps the connect's values, says ready and a first instruction,
 // then echoes what comes.
@@ -94,9 +111,7 @@ func oneGuacd(t *testing.T) (string, <-chan []string) {
 		}
 		defer func() { _ = c.Close() }()
 		r := bufio.NewReader(c)
-		args := []string{"VERSION_1_5_0", "hostname", "port", "domain", "username", "password", "security", "ignore-cert", "resize-method",
-			"color-depth", "disable-gfx", "server-layout", "enable-font-smoothing", "read-only", "client-name", "workstation-name",
-			"width", "height", "dpi", "os-major-type", "os-minor-type", "timezone"}
+		args := rdpGuacdArgs
 		ready := false
 		for {
 			ins, err := guacd.Read(r)
@@ -260,12 +275,14 @@ func TestDesktopSocket(t *testing.T) {
 func TestDesktopRefused(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	operator := uuid.New()
-	opID, task, gone := uuid.New(), uuid.New(), uuid.New()
+	opID, task, gone, down, unread := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	ops := operationsByID{opID: {OperationID: opID, Members: []models.OperationMember{{UserID: operator, Role: models.OperationRoleOperator}}}}
 	tasks := tasksByID{
 		task: {TaskID: task, OperationID: opID, Action: protocol.ActionTunnel, Args: models.JSONMap{"front": "vnc", "host": "h", "to": 5900}},
 		gone: {TaskID: gone, OperationID: opID, Action: protocol.ActionTunnel, Args: models.JSONMap{"front": "ssh", "host": "h", "to": 22,
 			"credential": uuid.NewString()}},
+		down: {TaskID: down, OperationID: opID, Action: protocol.ActionTunnel, Args: models.JSONMap{"front": "ssh", "host": "h", "to": 22,
+			"credential": unread.String()}},
 	}
 	// A setting another front's, or a value it does not take: nothing
 	// opens (the login is not read).
@@ -275,8 +292,9 @@ func TestDesktopRefused(t *testing.T) {
 	addr := l.Addr().String()
 	_ = l.Close()
 	recs := testRecordings(task, opID)
-	dc := NewMinionDesktopController(portsByTask{task: 24001, gone: 24002}, tasks, credsByID{}, ops, recs, DesktopConfig{Guacd: addr, CoreHost: "core"},
-		func(*http.Request) bool { return true }, zap.NewNop())
+	creds := credsByID{unread.String(): {ID: unread.String(), Type: storeDown}}
+	dc := NewMinionDesktopController(portsByTask{task: 24001, gone: 24002, down: 24004}, tasks, creds, ops, recs,
+		DesktopConfig{Guacd: addr, CoreHost: "core"}, func(*http.Request) bool { return true }, zap.NewNop())
 	r := gin.New()
 	r.GET("/minion-tasks/:id/desktop", func(c *gin.Context) {
 		c.Set("userID", operator.String())
@@ -291,7 +309,10 @@ func TestDesktopRefused(t *testing.T) {
 		text   string
 	}{
 		{task, "", "519", "core cannot reach guacd"},
-		{gone, "", "771", "the desktop's login is gone"},
+		{gone, "", "771", "the desktop's login: credential " + tasks[gone].Args["credential"].(string) + " is gone"},
+		// The credentials' store not reached: core's failure, not a
+		// refusal of the login.
+		{down, "", "512", "core could not read the desktop's login"},
 		{task, "?settings=" + settings, "768", "the desktop's settings: font_size: not a declared field"},
 		{gone, "?settings=" + settings, "768", "font_size: must be <= 48; quality: not a declared field"},
 		{task, "?settings=%7B", "768", "the desktop's settings are no JSON object"},
@@ -326,6 +347,113 @@ func TestDesktopRefused(t *testing.T) {
 	// others did not: no recording.
 	if rec := ended(t, recs, task, 1)[0]; rec.State != models.DesktopRecordingFailed || rec.End != models.DesktopRecordingEndNotOpened ||
 		!strings.Contains(rec.Msg, "core cannot reach guacd") || rec.Parts != 0 {
+		t.Errorf("recording %+v", rec)
+	}
+}
+
+// floodGuacd is guacd for one session that, once ready, sends its frames
+// as fast as it can, until its socket fails.
+func floodGuacd(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = c.Close() }()
+		r := bufio.NewReader(c)
+		for {
+			ins, err := guacd.Read(r)
+			if err != nil {
+				return
+			}
+			switch ins.Opcode {
+			case "select":
+				_, _ = c.Write([]byte(guacd.Instruction{Opcode: "args", Args: rdpGuacdArgs}.Encode()))
+			case "connect":
+				_, _ = c.Write([]byte(guacd.Instruction{Opcode: "ready", Args: []string{"$rdp-1"}}.Encode()))
+				frames := []byte(strings.Repeat("4.sync,3.100;", 1<<16))
+				go func() { _, _ = io.Copy(io.Discard, r) }()
+				for {
+					if _, err := c.Write(frames); err != nil {
+						return
+					}
+				}
+			}
+		}
+	}()
+	return l.Addr().String()
+}
+
+// openDesktop opens an RDP desktop task's desktop in a controller on
+// guacdAddr, recorded in recs: the socket, open.
+func openDesktop(t *testing.T, guacdAddr string, recs func(task, opID uuid.UUID) *recordings.Service) (*gws.Conn, *recordings.Service, uuid.UUID) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	operator, opID, task := uuid.New(), uuid.New(), uuid.New()
+	ops := operationsByID{opID: {OperationID: opID, Members: []models.OperationMember{{UserID: operator, Role: models.OperationRoleOperator}}}}
+	tasks := tasksByID{task: {TaskID: task, OperationID: opID, Action: protocol.ActionTunnel, Args: models.JSONMap{"front": "rdp", "host": "h", "to": 3389}}}
+	rs := recs(task, opID)
+	dc := NewMinionDesktopController(portsByTask{task: 24003}, tasks, credsByID{}, ops, rs, DesktopConfig{Guacd: guacdAddr, CoreHost: "core"},
+		func(*http.Request) bool { return true }, zap.NewNop())
+	r := gin.New()
+	r.GET("/minion-tasks/:id/desktop", func(c *gin.Context) {
+		c.Set("userID", operator.String())
+		c.Set("roles", []string{"user"})
+	}, dc.Desktop)
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+	conn, resp, err := gws.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/minion-tasks/"+task.String()+"/desktop", nil)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn, rs, task
+}
+
+// A web app gone silent (a laptop asleep: no close, no ping) ends its
+// desktop after desktopReadWait, and its recording: not a socket and a
+// recording held open for as long as the network keeps them.
+func TestDesktopSilentWebApp(t *testing.T) {
+	wait := desktopReadWait
+	desktopReadWait = 300 * time.Millisecond
+	t.Cleanup(func() { desktopReadWait = wait })
+	addr, _ := oneGuacd(t)
+	conn, recs, task := openDesktop(t, addr, testRecordings)
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	// The tunnel's id, then the session's first frame: it is relayed.
+	for got := ""; !strings.Contains(got, "4.sync,3.100;"); {
+		_, b, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read: %v (so far %q)", err, got)
+		}
+		got += string(b)
+	}
+	// Then nothing from the web app.
+	if rec := ended(t, recs, task, 1)[0]; rec.End != models.DesktopRecordingEndClosed || rec.State != models.DesktopRecordingSaved {
+		t.Errorf("recording %+v", rec)
+	}
+}
+
+// A web app that takes nothing (its network gone, guacd's frames piling
+// up) ends its desktop once a write to it fails, and its recording, rather
+// than wait for it to say something.
+func TestDesktopWebAppTakesNothing(t *testing.T) {
+	wait := desktopWriteWait
+	desktopWriteWait = 200 * time.Millisecond
+	t.Cleanup(func() { desktopWriteWait = wait })
+	conn, recs, task := openDesktop(t, floodGuacd(t), testRecordings)
+	// The web app reads nothing, and says nothing.
+	_ = conn
+	if rec := ended(t, recs, task, 1)[0]; rec.End != models.DesktopRecordingEndClosed || rec.State != models.DesktopRecordingSaved {
 		t.Errorf("recording %+v", rec)
 	}
 }

@@ -370,13 +370,12 @@ services:
   # (frontend/src/vendor/guacamole).
   #
   # Ours, logos-guacd (deploy/guacd/README.md): guacamole-server 1.6.0, its
-  # release commit patched (an RDP workstation name), with the time zones,
-  # and built with Apache's
-  # own Dockerfile, against FreeRDP 3, not the official image's FreeRDP 2:
-  # there guacd 1.6.0 aborts an RDP connection whose desktop is resized
-  # during a paint (GUACAMOLE-2078 is fixed for FreeRDP 3.8 and later
-  # alone). Every library pinned; the CI workflow publish-guacd.yml builds
-  # the same.
+  # release commit patched (what an RDP server learns of the client, and no
+  # login once its user left), with the time zones, built with Apache's own
+  # Dockerfile against FreeRDP 3, not the official image's FreeRDP 2: there
+  # guacd 1.6.0 aborts an RDP connection whose desktop is resized during a
+  # paint (GUACAMOLE-2078 is fixed for FreeRDP 3.8 and later alone). Every
+  # library pinned; the CI workflow publish-guacd.yml builds the same.
   guacd:
     build:
       context: ./deploy/guacd

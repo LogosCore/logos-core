@@ -230,3 +230,27 @@ func TestUsage(t *testing.T) {
 		t.Errorf("builds %d, tasks %d", u.Builds, u.Tasks)
 	}
 }
+
+// Named: a credential as a view shows it, in one read: its name, and why
+// a field could not use it now.
+func TestNamed(t *testing.T) {
+	g := newRig(t)
+	ctx := context.Background()
+	desktop := []string{protocol.CredentialTypePlaintext, protocol.CredentialTypeKey}
+	for _, c := range []struct {
+		id            uuid.UUID
+		accept        []string
+		name, problem string
+	}{
+		{g.pw, desktop, "admin", ""},
+		{g.key, desktop, "root key", ""},
+		{g.key, []string{protocol.CredentialTypePlaintext}, "root key", "a KEY; the field takes PLAINTEXT"},
+		{g.alien, desktop, "", "the credential is gone, or not one of the operation's"},
+		{uuid.New(), nil, "", "the credential is gone, or not one of the operation's"},
+	} {
+		name, problem, err := g.r.Named(ctx, g.op, c.id, c.accept)
+		if err != nil || name != c.name || problem != c.problem {
+			t.Errorf("%v %v: %q %q %v, want %q %q", c.id, c.accept, name, problem, err, c.name, c.problem)
+		}
+	}
+}

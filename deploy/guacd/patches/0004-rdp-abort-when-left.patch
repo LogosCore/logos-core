@@ -14,7 +14,7 @@ index 8b2e683..8133725 100644
      pthread_join(rdp_client->client_thread, NULL);
  
 diff --git a/src/protocols/rdp/rdp.c b/src/protocols/rdp/rdp.c
-index aad1763..2c56026 100644
+index aad1763..a5520d4 100644
 --- a/src/protocols/rdp/rdp.c
 +++ b/src/protocols/rdp/rdp.c
 @@ -58,6 +58,7 @@
@@ -33,10 +33,10 @@ index aad1763..2c56026 100644
  #include <stdlib.h>
  #include <time.h>
  
-@@ -163,6 +165,31 @@ static BOOL rdp_freerdp_load_channels(freerdp* instance) {
-  *     Returns FALSE if an error occurs during the initialization of the
-  *     FreeRDP GDI system.
-  */
+@@ -147,6 +149,31 @@ static BOOL rdp_freerdp_load_channels(freerdp* instance) {
+     return TRUE;
+ }
+ 
 +/**
 + * logos: the FreeRDP instance connecting now (freerdp_connect), if any: a
 + * guacd process has one connection, so one at most.
@@ -62,9 +62,9 @@ index aad1763..2c56026 100644
 +
 +}
 +
- static BOOL rdp_freerdp_pre_connect(freerdp* instance) {
- 
-     rdpContext* context = GUAC_RDP_CONTEXT(instance);
+ /**
+  * Prepares the FreeRDP instance for connection by setting up session-specific
+  * configurations like graphics, plugins, and RDP settings. This involves
 @@ -268,6 +295,15 @@ static BOOL rdp_freerdp_authenticate(freerdp* instance, char** username,
      guac_rdp_settings* settings = rdp_client->settings;
      char* params[4] = {NULL};

@@ -83,17 +83,25 @@ type Service struct {
 	now   func() time.Time
 	clock func() time.Time
 
-	// active are the recordings this core records now.
+	// active are the recordings this core records now; gone the
+	// operations whose recordings are being deleted (the zero time), or
+	// were lately (until when: goneFor), whose desktops are not recorded.
 	mu     sync.Mutex
 	active map[uuid.UUID]*Recorder
+	gone   map[uuid.UUID]time.Time
 	stop   chan struct{}
 	wg     sync.WaitGroup
 }
 
+// goneFor is how long after an operation's recordings were deleted a
+// desktop of its that begins is still not recorded: one that counted its
+// task as the operation went is not left behind it.
+const goneFor = 10 * time.Minute
+
 func NewService(repo repository.IDesktopRecordingRepository, tasks Tasks, store Store, bus eventbus.IEventBus, cfg Config, logger *zap.Logger) *Service {
 	return &Service{repo: repo, tasks: tasks, store: store, bus: bus, cfg: cfg, logger: logger.Named("recordings"),
 		now: func() time.Time { return time.Now().UTC() }, clock: time.Now,
-		active: map[uuid.UUID]*Recorder{}, stop: make(chan struct{})}
+		active: map[uuid.UUID]*Recorder{}, gone: map[uuid.UUID]time.Time{}, stop: make(chan struct{})}
 }
 
 func partKey(id uuid.UUID, n int) string { return fmt.Sprintf("parts/%s/%06d", id, n) }
@@ -134,13 +142,29 @@ func (s *Service) Begin(ctx context.Context, b Beginning) *Recorder {
 		}
 		return nil
 	}
-	s.publish(t)
-	r := newRecorder(s, rec)
 	s.mu.Lock()
+	if s.goneLocked(t.OperationID) {
+		s.mu.Unlock()
+		// Its operation is being deleted, or was as it began: its record
+		// goes rather than outlive it.
+		s.logger.Info("A desktop opens unrecorded: its operation is deleted", zap.String("task_id", b.TaskID.String()))
+		_ = s.repo.Delete(context.WithoutCancel(ctx), rec.RecordingID)
+		_, _ = s.tasks.AddRecording(context.WithoutCancel(ctx), b.TaskID, -1, 0)
+		return nil
+	}
+	r := newRecorder(s, rec)
 	s.active[rec.RecordingID] = r
 	s.mu.Unlock()
+	s.publish(t)
 	go r.loop()
 	return r
+}
+
+// goneLocked reports whether an operation's recordings are being deleted,
+// or were within goneFor. Called with mu held.
+func (s *Service) goneLocked(operationID uuid.UUID) bool {
+	until, ok := s.gone[operationID]
+	return ok && (until.IsZero() || s.now().Before(until))
 }
 
 // Recording is one by its id: IsNotFound for none.
@@ -196,10 +220,12 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) (*models.DesktopReco
 	return rec, nil
 }
 
-// DeleteByOperation drops an operation's recordings, parts and all: one
-// recording now stops being recorded first.
+// DeleteByOperation drops an operation's recordings, parts and all: those
+// recording now stop being recorded first, and a desktop of its that
+// begins meanwhile, or within goneFor, is not recorded.
 func (s *Service) DeleteByOperation(ctx context.Context, operationID uuid.UUID) error {
 	s.mu.Lock()
+	s.gone[operationID] = time.Time{}
 	var going []*Recorder
 	for _, r := range s.active {
 		if r.rec.OperationID == operationID {
@@ -207,9 +233,18 @@ func (s *Service) DeleteByOperation(ctx context.Context, operationID uuid.UUID) 
 		}
 	}
 	s.mu.Unlock()
-	for _, r := range going {
-		r.End(models.DesktopRecordingEndClosed)
-	}
+	defer func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		now := s.now()
+		for op, until := range s.gone {
+			if !until.IsZero() && !now.Before(until) {
+				delete(s.gone, op)
+			}
+		}
+		s.gone[operationID] = now.Add(goneFor)
+	}()
+	endAll(going, models.DesktopRecordingEndClosed)
 	recs, err := s.repo.ListByOperation(ctx, operationID)
 	if err != nil {
 		return err
@@ -269,12 +304,18 @@ func (s *Service) Stop() {
 		going = append(going, r)
 	}
 	s.mu.Unlock()
+	endAll(going, models.DesktopRecordingEndCoreStopped)
+}
+
+// endAll ends recordings at once (each keeps its last part as it can),
+// returning once all have.
+func endAll(rs []*Recorder, end string) {
 	var wg sync.WaitGroup
-	for _, r := range going {
+	for _, r := range rs {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r.End(models.DesktopRecordingEndCoreStopped)
+			r.End(end)
 		}()
 	}
 	wg.Wait()

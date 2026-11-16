@@ -220,3 +220,21 @@ func TestParamsProblems(t *testing.T) {
 		}
 	}
 }
+
+// Every wrong setting is said at once, each by its key, not the first
+// alone.
+func TestParamsProblemsAtOnce(t *testing.T) {
+	got, problems := Params(protocol.FrontRDP, map[string]any{"workstation_name": "WS 01", "client_name": "123",
+		"timezone": "Mars/Olympus_Mons"}, "core", 41000)
+	if got != nil || len(problems) != 3 || problems[Workstation] == "" || problems[ClientName] == "" || problems[Timezone] == "" {
+		t.Errorf("rdp: %v %v", got, problems)
+	}
+	got, problems = Params(protocol.FrontSSH, map[string]any{"timezone": "Local", "host_key": "not a key"}, "core", 41000)
+	if got != nil || len(problems) != 2 || problems[Timezone] == "" || problems[HostKey] == "" {
+		t.Errorf("ssh: %v %v", got, problems)
+	}
+	got, problems = Params(protocol.FrontTelnet, map[string]any{"username_prompt": "([", "login_failure": "(["}, "core", 41000)
+	if got != nil || len(problems) != 2 {
+		t.Errorf("telnet: %v %v", got, problems)
+	}
+}

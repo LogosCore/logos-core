@@ -12,11 +12,13 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/authorization"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
+	"github.com/logoscore/logos-core/core/pkg/logger"
 	"github.com/logoscore/logos-core/core/pkg/miniontunnels"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
+	"go.uber.org/zap"
 )
 
 // Tunnel tasks' proxies as the web app shows them (docs:
@@ -96,7 +98,7 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 	m.SocksBind = listening && front == protocol.FrontSOCKS && sum.Accept
 	if protocol.IsDesktopFront(front) {
 		m.Desktop = r.tunnels.Desktops()
-		m.Login = r.desktopLogin(ctx, t.OperationID, args)
+		m.Login, m.LoginProblem = r.desktopLogin(ctx, t.OperationID, args)
 	}
 	if front == protocol.FrontTerminal {
 		// Its program and size, as its args say (core put the defaults
@@ -609,26 +611,39 @@ func (r *minionTaskResolver) LoadVPNTunnel(ctx context.Context, taskID string) *
 	return r.vpnTunnelModel(v)
 }
 
-// desktopLogin is the name of the credential a desktop's args name (its
-// login); nil for none, or one core cannot resolve (gone, converted).
-func (r *minionTaskResolver) desktopLogin(ctx context.Context, operationID string, args map[string]any) *string {
-	id, _ := protocol.ArgString(args, protocol.ParamCredential)
-	op, err := uuid.Parse(operationID)
-	if id == "" || err != nil || r.creds == nil {
-		return nil
+// desktopLogin is the credential a desktop's args name (its login), as
+// its view shows it: its name (nil for none, or one gone), and why the
+// desktop could not log in with it (nil when it could, or it has none),
+// as opening one would say: gone, of a type a desktop does not take, or
+// lacking what its type needs. One read of the credential, no more.
+func (r *minionTaskResolver) desktopLogin(ctx context.Context, operationID string, args map[string]any) (login, problem *string) {
+	raw, _ := protocol.ArgString(args, protocol.ParamCredential)
+	if raw == "" {
+		return nil, nil
 	}
-	field := []protocol.FieldSpec{{Key: protocol.ParamCredential, Type: protocol.FieldCredential}}
-	given, err := r.creds.ResolveFields(ctx, op, field, map[string]any{protocol.ParamCredential: id})
+	id, err := uuid.Parse(raw)
+	op, opErr := uuid.Parse(operationID)
+	switch {
+	case err != nil || opErr != nil:
+		return nil, strPtr("no credential's id")
+	case r.creds == nil:
+		return nil, strPtr("core resolves no credentials here")
+	}
+	name, why, err := r.creds.Named(ctx, op, id, desktopLoginTypes())
 	if err != nil {
-		return nil
+		logger.From(ctx).Warn("A desktop's login: read its credential", zap.String("credential_id", raw), zap.Error(err))
+		return nil, strPtr("core could not read the credential now")
 	}
-	c, ok := given[id]
-	if !ok {
-		return nil
+	return strPtr(name), strPtr(why)
+}
+
+// desktopLoginTypes are the credential types a desktop logs in with: its
+// login param's (protocol.ParamCredential).
+func desktopLoginTypes() []string {
+	for _, f := range protocol.TunnelCoreParams(protocol.ActionTunnel) {
+		if f.Key == protocol.ParamCredential {
+			return f.Accept
+		}
 	}
-	name := c.Name
-	if name == "" {
-		name = c.Username
-	}
-	return &name
+	return nil
 }
