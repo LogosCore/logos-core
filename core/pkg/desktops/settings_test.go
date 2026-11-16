@@ -61,13 +61,14 @@ func TestFields(t *testing.T) {
 
 // The defaults: guacd's but for smoothed text, a 1920x1080 screen, Windows
 // said as the client's OS, UTC, and a self-signed certificate taken (RDP's),
-// a terminal's appearance said, and UTC for SSH: nothing of the operator's
-// own (their pane's size, their time zone).
+// a VNC server's screen never resized, a terminal's appearance said, and
+// UTC for SSH: nothing of the operator's own (their pane's size, their time
+// zone).
 func TestParamsByDefault(t *testing.T) {
 	want := map[string]map[string]string{
 		protocol.FrontRDP: {"enable-font-smoothing": "true", "server-layout": "en-us-qwerty", "width": "1920", "height": "1080",
 			"dpi": "96", "os-major-type": "1", "os-minor-type": "3", "timezone": "UTC", "security": "any", "ignore-cert": "true"},
-		protocol.FrontVNC:     {"clipboard-encoding": "ISO8859-1", "cursor": "local"},
+		protocol.FrontVNC:     {"disable-display-resize": "true", "clipboard-encoding": "ISO8859-1", "cursor": "local"},
 		protocol.FrontSSH:     {"color-scheme": "gray-black", "font-size": "12", "scrollback": "1000", "timezone": "UTC"},
 		protocol.FrontTelnet:  {"color-scheme": "gray-black", "font-size": "12", "scrollback": "1000"},
 		protocol.FrontForward: {},
@@ -108,9 +109,10 @@ func TestParamsChosen(t *testing.T) {
 		{"vnc for a slow tunnel", protocol.FrontVNC, map[string]any{"quality": "speed", "clipboard": "off", "clipboard_encoding": "UTF-8",
 			"cursor": "remote"},
 			map[string]string{"encodings": "tight zrle ultra copyrect hextile zlib corre rre raw", "quality-level": "3",
-				"compress-level": "9", "disable-copy": "true", "disable-paste": "true", "clipboard-encoding": "UTF-8", "cursor": "remote"}},
+				"compress-level": "9", "disable-copy": "true", "disable-paste": "true", "clipboard-encoding": "UTF-8", "cursor": "remote",
+				"disable-display-resize": "true"}},
 		{"vnc at its best", protocol.FrontVNC, map[string]any{"quality": "best"},
-			map[string]string{"force-lossless": "true", "clipboard-encoding": "ISO8859-1", "cursor": "local"}},
+			map[string]string{"force-lossless": "true", "clipboard-encoding": "ISO8859-1", "cursor": "local", "disable-display-resize": "true"}},
 		{"ssh, a command, a keepalive and a host key", protocol.FrontSSH, map[string]any{"command": "top", "color_scheme": "black-white",
 			"font_size": json.Number("16"), "scrollback": 5000, "keepalive": "1500ms", "host_key": "target.lan ssh-ed25519 " + key + " root@target", "timezone": "America/New_York"},
 			map[string]string{"command": "top", "color-scheme": "black-white", "font-size": "16", "scrollback": "5000",

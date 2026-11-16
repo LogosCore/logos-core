@@ -122,9 +122,10 @@ const SEQUENCES: Record<string, string> = {
 }
 
 // An escape sequence, a control character, or text up to the next of one:
-// control characters are what it reads.
+// control characters are what it reads. A CSI sequence's last character
+// may be _, win32-input-mode's.
 // eslint-disable-next-line no-control-regex
-const TOKEN = /\x1b(?:\[[0-9;?]*[~A-Za-z]|O[A-Za-z])?|[\x00-\x1f\x7f]|[^\x00-\x1f\x7f\x1b]+/g
+const TOKEN = /\x1b(?:\[[0-9;?]*[~A-Za-z_]|O[A-Za-z])?|[\x00-\x1f\x7f]|[^\x00-\x1f\x7f\x1b]+/g
 
 /** A control character's key: <Tab>, <Backspace>, <Ctrl+C>. */
 function controlName(c: string): string {
@@ -136,11 +137,82 @@ function controlName(c: string): string {
   return `<Ctrl+${"[\\]^_"[code - 0x1b]}>`
 }
 
+// A key of win32-input-mode: what a terminal sends a Windows console that
+// asked for it (ConPTY's ESC[?9001h, as a BOB minion's on Windows does), a
+// key's every press and release, ESC [ Vk ; Sc ; Uc ; Kd ; Cs ; Rc _: its
+// virtual key, scan code, character (a UTF-16 unit, 0 for none), down
+// (1) or up, its modifiers, its repeat count. A field left out is 0 (Rc:
+// 1). An escape sequence is what it reads.
+// eslint-disable-next-line no-control-regex
+const WIN32_KEY =/^\x1b\[([0-9;]*)_$/
+
+// A key that types no character, by its virtual key.
+const VIRTUAL_KEYS: Record<number, string> = {
+  0x21: "PageUp",
+  0x22: "PageDown",
+  0x23: "End",
+  0x24: "Home",
+  0x25: "Left",
+  0x26: "Up",
+  0x27: "Right",
+  0x28: "Down",
+  0x2d: "Insert",
+  0x2e: "Delete",
+}
+
+// Its modifiers (Cs): either Alt, either Ctrl, Shift.
+const ALT = 0x01 | 0x02
+const CTRL = 0x04 | 0x08
+
+/**
+ * What a win32-input-mode key typed, as inputLines says keys: its character,
+ * its name in brackets (<Up>, <F5>, <Ctrl+C>, <Alt+x>), "\r" for Enter, ""
+ * for a release or a modifier alone. Shift types its characters; Ctrl with
+ * Alt (AltGr) types its own.
+ */
+function win32Key(params: string): string {
+  const [vk = 0, , uc = 0, kd = 0, cs = 0, rc = 1] = params.split(";").map((f) => (f === "" ? undefined : Number(f)))
+  if (kd !== 1) return ""
+  const ctrl = (cs & CTRL) !== 0 && (cs & ALT) === 0
+  const alt = (cs & ALT) !== 0 && (cs & CTRL) === 0
+  let key: string
+  if (uc === 13) return "\r"
+  if (uc === 27) {
+    key = "<Esc>"
+  } else if (uc > 0 && (uc < 0x20 || uc === 0x7f)) {
+    key = controlName(String.fromCharCode(uc))
+  } else if (uc > 0) {
+    const c = String.fromCharCode(uc)
+    key = ctrl ? `<Ctrl+${c.toUpperCase()}>` : alt ? `<Alt+${c}>` : c
+  } else if (VIRTUAL_KEYS[vk]) {
+    key = `<${VIRTUAL_KEYS[vk]}>`
+  } else if (vk >= 0x70 && vk <= 0x87) {
+    key = `<F${vk - 0x6f}>`
+  } else {
+    // Shift, Ctrl, Alt, the Windows keys, Caps Lock alone: nothing typed.
+    return ""
+  }
+  return key.repeat(Math.min(Math.max(rc, 1), 100))
+}
+
+/** A token as inputLines says it: "\r" for Enter, "" for nothing typed. */
+function tokenText(token: string): string {
+  if (token === "\r" || token === "\n") return "\r"
+  if (token.startsWith("\x1b")) {
+    const win32 = WIN32_KEY.exec(token)
+    if (win32) return win32Key(win32[1])
+    return `<${SEQUENCES[token] ?? `Esc${token.slice(1)}`}>`
+  }
+  if (token.length === 1 && (token.charCodeAt(0) < 0x20 || token === "\x7f")) return controlName(token)
+  return token
+}
+
 /**
  * What was typed in a terminal's recording, line by line: each event's
- * text, its keys named in brackets (<Backspace>, <Up>, <Ctrl+C>). A line
- * ends at Enter (⏎), or where typing paused for gap ms; times are where
- * each line plays (playTimes).
+ * text, its keys named in brackets (<Backspace>, <Up>, <Ctrl+C>), a
+ * win32-input-mode client's keys as the same (a Windows console asks for
+ * that mode). A line ends at Enter (⏎), or where typing paused for gap ms;
+ * times are where each line plays (playTimes), from its first key typed.
  */
 export function inputLines(events: readonly CastEvent[], times: readonly number[], gap = 2000): TypedLine[] {
   const lines: TypedLine[] = []
@@ -156,19 +228,15 @@ export function inputLines(events: readonly CastEvent[], times: readonly number[
     if (at - last > gap) end()
     last = at
     for (const [token] of e.data.matchAll(TOKEN)) {
+      const text = tokenText(token)
+      if (text === "") continue
       line ??= { at, text: "" }
-      if (token === "\r" || token === "\n") {
+      if (text === "\r") {
         line.text += "⏎"
         end()
         continue
       }
-      if (token.startsWith("\x1b")) {
-        line.text += `<${SEQUENCES[token] ?? `Esc${token.slice(1)}`}>`
-      } else if (token.length === 1 && (token.charCodeAt(0) < 0x20 || token === "\x7f")) {
-        line.text += controlName(token)
-      } else {
-        line.text += token
-      }
+      line.text += text
     }
   })
   end()

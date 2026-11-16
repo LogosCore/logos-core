@@ -51,6 +51,34 @@ describe("a terminal's recording", () => {
     expect(keys[0].text).toBe("<Tab><Esc><Delete><Left><Esc[1;5C><Ctrl+\\>")
   })
 
+  test("reads a win32-input-mode client's keys: each press, as typed", () => {
+    // As Win11's recording has them: a Windows console asked for the mode
+    // (ESC[?9001h), and the client sent each key's press and release.
+    const key = (vk: number, uc: number, down: number, cs = 0, rc = 1) => `\x1b[${vk};0;${uc};${down};${cs};${rc}_`
+    const typed = (word: string) => [...word].flatMap((c) => [key(c.toUpperCase().charCodeAt(0), c.charCodeAt(0), 1), key(c.toUpperCase().charCodeAt(0), c.charCodeAt(0), 0)])
+    const events = [...typed("whoami"), key(13, 13, 1), key(13, 13, 0), ...typed("exit"), key(13, 13, 1)].map((data, i) => ({
+      at: 2000 + i * 100,
+      code: "i",
+      data,
+    }))
+    const lines = inputLines(events, playTimes(events, null))
+    expect(lines).toEqual([
+      { at: 2000, text: "whoami⏎" },
+      { at: 3400, text: "exit⏎" },
+    ])
+    // Shift alone types nothing, with Shift its character; Ctrl+C, Alt+x,
+    // AltGr's own character; named keys; a key held; one event holding
+    // several keys; fields left out.
+    const data =
+      key(0x10, 0, 1, 0x10) + key(0x41, 65, 1, 0x10) + key(0x43, 3, 1, 0x08) + key(0x58, 120, 1, 0x02) + key(0x51, 64, 1, 0x0a) +
+      key(0x26, 0, 1) + key(0x74, 0, 1) + key(0x2e, 0, 1, 0x100) + key(0x08, 8, 1, 0, 3) + key(0x09, 9, 1) + key(0x1b, 27, 1) + "\x1b[;;98;1_"
+    expect(inputLines([{ at: 0, code: "i", data }], [0])[0].text).toBe(
+      "A<Ctrl+C><Alt+x>@<Up><F5><Delete><Backspace><Backspace><Backspace><Tab><Esc>b",
+    )
+    // Releases alone type nothing: no line.
+    expect(inputLines([{ at: 0, code: "i", data: key(0x41, 97, 0) }], [0])).toEqual([])
+  })
+
   test("reads its sizes", () => {
     expect(parseSize("120x40")).toEqual({ cols: 120, rows: 40 })
     expect(parseSize("0x40")).toBeNull()

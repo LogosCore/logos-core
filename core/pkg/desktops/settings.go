@@ -438,7 +438,13 @@ func (a settingArgs) rdp() {
 	a.params["ignore-cert"] = strconv.FormatBool(a.on(IgnoreCert))
 }
 
+// vnc: never the server's screen size. guacd otherwise asks a server that
+// can resize (ExtendedDesktopSize: TigerVNC, RealVNC's virtual mode) to
+// take the web app's pane size the moment it connects: the console's
+// resolution changes under whoever sits at it. The pane scales the
+// server's screen instead.
 func (a settingArgs) vnc() {
+	a.params["disable-display-resize"] = "true"
 	a.presets(Quality, vncQuality)
 	a.params["clipboard-encoding"] = a.str(ClipboardEncoding)
 	a.params["cursor"] = a.str(Cursor)
