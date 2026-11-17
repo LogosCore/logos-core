@@ -105,8 +105,22 @@ func (s *Service) endRecording(st *stream) {
 	s.done.Add(1)
 	go func() {
 		defer s.done.Done()
+		// What was read, written or resized before the end is recorded
+		// first: the client is closed, so each returns.
+		st.recording.Wait()
 		r.EndWith(end, msg)
 	}()
+}
+
+// recordOne is the recorder for one read, write or resize about to go,
+// counted until it is recorded (recording.Done): nil when the stream is
+// not recorded. Called with mu held.
+func (st *stream) recordOne() TerminalRecorder {
+	if st.recorder == nil {
+		return nil
+	}
+	st.recording.Add(1)
+	return st.recorder
 }
 
 // recordingEnd is how a terminal's recording ended, by its stream's end:

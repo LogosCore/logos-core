@@ -174,10 +174,11 @@ func (tm *Terminal) Resize(rows, cols int) error {
 		return err
 	}
 	tm.s.mu.Lock()
-	rec := tm.st.recorder
+	rec := tm.st.recordOne()
 	tm.s.mu.Unlock()
 	if rec != nil {
 		rec.Resize(cols, rows)
+		tm.st.recording.Done()
 	}
 	return nil
 }

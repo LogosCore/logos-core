@@ -231,6 +231,10 @@ type stream struct {
 	// recorder records a terminal's stream (terminal_recording.go): nil
 	// for any other, and one not recorded.
 	recorder TerminalRecorder
+	// recording counts the reads, writes and resizes under way whose bytes
+	// go to recorder: its end waits for them (endRecording), so none is
+	// recorded after it. Added to with mu held while recorder is set.
+	recording sync.WaitGroup
 	// kind is what it opens past a TCP connection or a UDP association:
 	// a unix socket, a pipe, a process, an accept (protocol.TunnelKind...);
 	// a process's args and terminal size go with its open.
@@ -602,11 +606,14 @@ func (s *Service) readClient(st *stream) {
 			return
 		}
 		n := min(len(buf), st.upFree())
-		rec := st.recorder
+		rec := st.recordOne()
 		s.mu.Unlock()
 		k, err := st.client.Read(buf[:n])
-		if k > 0 && rec != nil {
-			rec.Input(buf[:k])
+		if rec != nil {
+			if k > 0 {
+				rec.Input(buf[:k])
+			}
+			st.recording.Done()
 		}
 		s.mu.Lock()
 		if st.gone {
@@ -677,11 +684,14 @@ func (s *Service) writeClient(st *stream) {
 			return
 		}
 		piece := st.down[:min(len(st.down), protocol.MaxTunnelData)]
-		rec := st.recorder
+		rec := st.recordOne()
 		s.mu.Unlock()
 		_, err := st.client.Write(piece)
-		if err == nil && rec != nil {
-			rec.Output(piece)
+		if rec != nil {
+			if err == nil {
+				rec.Output(piece)
+			}
+			st.recording.Done()
 		}
 		s.mu.Lock()
 		if st.gone {
