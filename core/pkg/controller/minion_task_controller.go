@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,6 +35,11 @@ type MinionTaskController struct {
 // operators upload (minionfiles.Service).
 type MinionFiles interface {
 	Open(ctx context.Context, fileID uuid.UUID) (io.ReadCloser, *models.MinionFile, error)
+	// OpenThumb is a screenshot's thumbnail, a JPEG, and its size.
+	OpenThumb(ctx context.Context, fileID uuid.UUID) (io.ReadCloser, int64, *models.MinionFile, error)
+	// ReadFrom reads a file still coming from off: what has come, or with
+	// follow the rest too as it comes.
+	ReadFrom(ctx context.Context, fileID uuid.UUID, off int64, follow bool) io.ReadCloser
 	PutTaskFile(ctx context.Context, operationID, by uuid.UUID, name string, body io.Reader) (*models.MinionFile, error)
 }
 
@@ -139,7 +145,10 @@ func NewMinionTaskController(tasks repository.IMinionTaskRepository, files Minio
 // type the browser shows without running anything (as a wiki file's:
 // previewAllowedContentTypes). It never changes, so it is cached by its
 // SHA-256, and byte ranges are answered: the console's hex view reads it a
-// piece at a time, a player seeks.
+// piece at a time, a player seeks. ?thumb=1 gives a screenshot's thumbnail
+// instead: a JPEG, inline. A file still coming answers too
+// (downloadComing): a range of the bytes that have come, or with
+// ?follow=1 the rest as it comes.
 //
 //	@Summary		Download a file a minion sent
 //	@Tags			Minion tasks
@@ -147,11 +156,17 @@ func NewMinionTaskController(tasks repository.IMinionTaskRepository, files Minio
 //	@Security		BearerAuth
 //	@Param			id		path	string	true	"File ID"
 //	@Param			preview	query	bool	false	"Inline, for a type the browser shows safely"
+//	@Param			thumb	query	bool	false	"A screenshot's thumbnail (a JPEG, inline) instead"
+//	@Param			follow	query	bool	false	"For a file still coming: its bytes as they come, to its end"
 //	@Router			/minion-files/{id} [get]
 func (mc *MinionTaskController) DownloadFile(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, responses.NewErrorResponse("file not found"))
+		return
+	}
+	if c.Query("thumb") == "1" || c.Query("thumb") == "true" {
+		mc.downloadThumb(c, id)
 		return
 	}
 	body, f, err := mc.files.Open(c.Request.Context(), id)
@@ -172,6 +187,10 @@ func (mc *MinionTaskController) DownloadFile(c *gin.Context) {
 		return
 	}
 	if err != nil {
+		if body == nil && (f.State == models.MinionFileReceiving || f.State == models.MinionFileJoining) {
+			mc.downloadComing(c, f)
+			return
+		}
 		c.JSON(http.StatusConflict, responses.NewErrorResponse("%s", err.Error()))
 		return
 	}
@@ -190,6 +209,118 @@ func (mc *MinionTaskController) DownloadFile(c *gin.Context) {
 	c.Header("Content-Security-Policy", fileCSPFor(contentType))
 	if err := writeFileBody(c.Writer, c.Request, body, f.Total); err != nil {
 		mc.logger.Debug("Minion file download aborted", zap.Error(err))
+	}
+}
+
+// downloadComing answers for a file still coming: a range of the bytes that
+// have come (the hex view's), or with ?follow=1 the bytes from where the
+// range starts to its end as they come (a picture drawn as it comes, text
+// that grows, a download that starts at once). Its size is the minion's, so
+// the response says its length; one whose transfer fails is cut short.
+// Nothing in it is checked yet: no ETag, nothing cached. Its type is what
+// its first chunk says, inline (?preview=1) as a kept file's would be.
+func (mc *MinionTaskController) downloadComing(c *gin.Context, f *models.MinionFile) {
+	follow := c.Query("follow") == "1" || c.Query("follow") == "true"
+	size := f.Total
+	start, end := int64(0), size
+	ranged := false
+	if r := c.GetHeader("Range"); r != "" {
+		m := byteRange.FindStringSubmatch(r)
+		if m != nil {
+			start, _ = strconv.ParseInt(m[1], 10, 64)
+			if m[2] != "" {
+				last, _ := strconv.ParseInt(m[2], 10, 64)
+				end = min(last+1, size)
+			}
+		}
+		if m == nil || start >= size || start >= end {
+			c.Header("Content-Range", "bytes */"+strconv.FormatInt(size, 10))
+			c.Status(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		ranged = true
+	}
+	if !follow && end > f.Received {
+		c.JSON(http.StatusConflict, responses.NewErrorResponse("%d of the file's %d bytes have come: ?follow=1 waits for the rest", f.Received, size))
+		return
+	}
+	contentType := f.ContentType
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	preview := c.Query("preview") == "1" || c.Query("preview") == "true"
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Disposition", contentDispositionFor(downloadName(f.Name, "file-"+f.FileID.String()[:8]), contentType, preview))
+	c.Header("Content-Length", strconv.FormatInt(end-start, 10))
+	c.Header("Accept-Ranges", "bytes")
+	c.Header("Cache-Control", "private, no-store")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Content-Security-Policy", fileCSPFor(contentType))
+	// nginx: pass the bytes on as they come.
+	c.Header("X-Accel-Buffering", "no")
+	status := http.StatusOK
+	if ranged {
+		status = http.StatusPartialContent
+		c.Header("Content-Range", "bytes "+strconv.FormatInt(start, 10)+"-"+strconv.FormatInt(end-1, 10)+"/"+strconv.FormatInt(size, 10))
+	}
+	c.Status(status)
+	c.Writer.Flush()
+	body := mc.files.ReadFrom(c.Request.Context(), f.FileID, start, follow)
+	defer func() { _ = body.Close() }()
+	buf := make([]byte, 64<<10)
+	for left := end - start; left > 0; {
+		n, err := body.Read(buf[:min(int64(len(buf)), left)])
+		if n > 0 {
+			if _, werr := c.Writer.Write(buf[:n]); werr != nil {
+				return
+			}
+			c.Writer.Flush()
+			left -= int64(n)
+		}
+		if err != nil {
+			if left > 0 {
+				mc.logger.Debug("Minion file read as it comes, cut short", zap.String("file_id", f.FileID.String()), zap.Error(err))
+			}
+			return
+		}
+	}
+}
+
+// downloadThumb answers a screenshot's thumbnail, a JPEG, inline: for
+// anyone who can see its operation, as the picture. It never changes.
+func (mc *MinionTaskController) downloadThumb(c *gin.Context, id uuid.UUID) {
+	body, size, f, err := mc.files.OpenThumb(c.Request.Context(), id)
+	if f == nil {
+		if err != nil && !repository.IsNotFound(err) {
+			mc.logger.Error("Failed to load a minion file", zap.String("file_id", id.String()), zap.Error(err))
+			c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
+			return
+		}
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("file not found"))
+		return
+	}
+	if !callerHasOperationRole(c, mc.opRepo, f.OperationID, models.OperationRoleViewer) {
+		if body != nil {
+			_ = body.Close()
+		}
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("file not found"))
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("%s", err.Error()))
+		return
+	}
+	defer body.Close()
+	name := downloadName(f.Name, "screenshot-"+id.String()[:8])
+	name = strings.TrimSuffix(name, path.Ext(name)) + "-thumb.jpg"
+	c.Header("Content-Type", "image/jpeg")
+	c.Header("Content-Disposition", contentDispositionFor(name, "image/jpeg", true))
+	c.Header("ETag", fileETagFor(hex.EncodeToString(f.SHA256)+"-thumb"))
+	c.Header("Cache-Control", "private, max-age=31536000, immutable")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Content-Security-Policy", fileCSPFor("image/jpeg"))
+	if err := writeFileBody(c.Writer, c.Request, body, size); err != nil {
+		mc.logger.Debug("Minion file thumbnail aborted", zap.Error(err))
 	}
 }
 

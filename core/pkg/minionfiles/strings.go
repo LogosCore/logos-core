@@ -60,33 +60,49 @@ type StringsPage struct {
 	// Next is where the next page reads from; the file's size when Done.
 	Next int64
 	Done bool
+	// ReadTo is where the page stopped reading (past Next while a string
+	// runs on). For a file still coming, a page that read all that has come
+	// stops there: the next one waits for more.
+	ReadTo int64
 }
 
 // Strings reads a page of a kept file's strings.
 func (s *Service) Strings(ctx context.Context, f models.MinionFile, q StringsQuery) (StringsPage, error) {
-	if f.State != models.MinionFileComplete {
+	// A file still coming is read as far as it has come (live.go).
+	whole := f.State == models.MinionFileComplete
+	have := f.Total
+	switch {
+	case whole:
+	case f.State == models.MinionFileReceiving || f.State == models.MinionFileJoining:
+		have = f.Received
+	default:
 		return StringsPage{}, fmt.Errorf("the file is %s", f.State)
 	}
-	if q.After < 0 || q.After > f.Total {
-		return StringsPage{}, fmt.Errorf("after is past the file's %d bytes", f.Total)
+	if q.After < 0 || q.After > have {
+		return StringsPage{}, fmt.Errorf("after is past the %d bytes of the file there are", have)
 	}
 	if q.After == f.Total {
-		return StringsPage{Next: f.Total, Done: true}, nil
+		return StringsPage{Next: f.Total, Done: true, ReadTo: f.Total}, nil
 	}
-	body, _, err := s.store.Get(ctx, objectKey(f.FileID))
-	if err != nil {
-		return StringsPage{}, err
+	if q.After == have {
+		return StringsPage{Next: have, ReadTo: have}, nil
+	}
+	var body io.ReadCloser
+	if whole {
+		kept, _, err := s.store.Get(ctx, objectKey(f.FileID))
+		if err != nil {
+			return StringsPage{}, err
+		}
+		if err := skipTo(kept, q.After); err != nil {
+			_ = kept.Close()
+			return StringsPage{}, fmt.Errorf("read from %d: %w", q.After, err)
+		}
+		body = kept
+	} else {
+		body = s.ReadFrom(ctx, f.FileID, q.After, false)
 	}
 	defer body.Close()
-	if sk, ok := body.(io.Seeker); ok {
-		_, err = sk.Seek(q.After, io.SeekStart)
-	} else {
-		_, err = io.CopyN(io.Discard, body, q.After)
-	}
-	if err != nil {
-		return StringsPage{}, fmt.Errorf("read from %d: %w", q.After, err)
-	}
-	return scanStrings(bufio.NewReaderSize(body, 64<<10), q, stringsBudget)
+	return scanStrings(bufio.NewReaderSize(body, 64<<10), q, stringsBudget, whole)
 }
 
 // run is a string being read.
@@ -103,12 +119,14 @@ type half struct {
 
 func printable(b byte) bool { return b >= 0x20 && b <= 0x7e || b == '\t' }
 
-// scanStrings reads r, which starts at q.After, for at most budget bytes.
+// scanStrings reads r, which starts at q.After, for at most budget bytes;
+// whole: r ends where the file does, else where the bytes that have come
+// do (a page that gets there is not the last).
 // A page's place is the earliest string still being read when it stopped
 // (or the first byte of a UTF-16 character half read): the next page reads
 // that string whole, and only the strings that start before it are this
 // page's, so none is cut by a page's end or found twice.
-func scanStrings(r io.ByteReader, q StringsQuery, budget int64) (StringsPage, error) {
+func scanStrings(r io.ByteReader, q StringsQuery, budget int64, whole bool) (StringsPage, error) {
 	ascii := q.Encoding == "" || q.Encoding == EncodingASCII
 	utf16 := q.Encoding == "" || q.Encoding == EncodingUTF16LE
 	needle := strings.ToLower(q.Search)
@@ -138,7 +156,7 @@ func scanStrings(r io.ByteReader, q StringsQuery, budget int64) (StringsPage, er
 	for (len(found) < q.First && pos < end) || holds() {
 		b, err := r.ReadByte()
 		if errors.Is(err, io.EOF) {
-			done = true
+			done = whole
 			break
 		}
 		if err != nil {
@@ -197,7 +215,7 @@ func scanStrings(r io.ByteReader, q StringsQuery, budget int64) (StringsPage, er
 			}
 		}
 	}
-	page := StringsPage{Next: next, Done: done}
+	page := StringsPage{Next: next, Done: done, ReadTo: pos}
 	for _, f := range found {
 		if done || f.Off < next {
 			page.Strings = append(page.Strings, f)

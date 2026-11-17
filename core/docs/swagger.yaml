@@ -865,6 +865,14 @@ paths:
         in: query
         name: preview
         type: boolean
+      - description: A screenshot's thumbnail (a JPEG, inline) instead
+        in: query
+        name: thumb
+        type: boolean
+      - description: 'For a file still coming: its bytes as they come, to its end'
+        in: query
+        name: follow
+        type: boolean
       produces:
       - application/octet-stream
       responses: {}

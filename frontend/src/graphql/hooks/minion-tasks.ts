@@ -177,7 +177,12 @@ export function useMinionTaskDocument(id: string, version: string, enabled: bool
  * stopped (an offset in the file), as core reads them: a page may be short,
  * or empty, and not the last.
  */
-export function useMinionFileStrings(fileId: string, filter: MinionFileStringsFilter) {
+/**
+ * A file's strings a page at a time. available: how much of it there is to
+ * read (all of it once kept; for a file still coming, what has come): a page
+ * that read all that has come waits, and the next is read once more has.
+ */
+export function useMinionFileStrings(fileId: string, filter: MinionFileStringsFilter, available: number) {
   return useInfiniteQuery({
     queryKey: minionTaskKeys.fileStrings(fileId, filter),
     queryFn: ({ pageParam }) =>
@@ -190,8 +195,9 @@ export function useMinionFileStrings(fileId: string, filter: MinionFileStringsFi
         search: filter.search || null,
       }),
     initialPageParam: 0,
-    getNextPageParam: (last) => (last.minionFileStrings.done ? undefined : last.minionFileStrings.next),
-    // The file never changes: what was read stays good.
+    getNextPageParam: (last) =>
+      last.minionFileStrings.done || last.minionFileStrings.readTo >= available ? undefined : last.minionFileStrings.next,
+    // What has come of a file never changes: what was read stays good.
     staleTime: Infinity,
     gcTime: 60_000,
   })

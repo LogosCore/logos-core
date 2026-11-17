@@ -32,6 +32,8 @@ func Check(result string, seq uint64, data []byte) error {
 		_, err = protocol.ReadFileUpload(seq, data)
 	case protocol.ResultFileStream:
 		_, err = protocol.ReadFileStream(seq, data)
+	case protocol.ResultScreenshot:
+		_, err = protocol.ReadScreenshot(seq, data)
 	case protocol.ResultDirWalk:
 		_, err = protocol.ReadDirWalk(seq, data)
 	case protocol.ResultVolumes:

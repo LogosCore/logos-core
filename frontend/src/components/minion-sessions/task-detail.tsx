@@ -177,8 +177,11 @@ export function TaskDetail({
   // Whether it gave data, known from its size until it is read (and
   // guessed for a task kept before that: parts with no output are data),
   // so an ls opens on its Data tab at once rather than on an empty Output.
-  // A file_download task's file shows from its first chunk, before its data.
-  const isFile = t.result === "file_download"
+  // A file_download task's file shows from its first chunk, before its data;
+  // a screenshot task's picture likewise.
+  const isFile = t.result === "file_download" || t.result === "screenshot"
+  // A screenshot opens on its picture: what it prints only says which.
+  const isShot = t.result === "screenshot"
   // A file_upload task's upload shows from its queueing, before its data.
   const isUpload = t.result === "file_upload" && t.upload != null
   // A file_stream task's stream shows from the minion's announcement; its
@@ -219,8 +222,9 @@ export function TaskDetail({
 
   const [tab, setTab] = useState<"output" | "data" | "feedback" | "recordings" | "json" | null>(null)
   // Data alone shows as data; with output, the output first. An upload
-  // shows its progress first, whatever it prints. Feedback and a desktop's
-  // or a terminal's recordings only when asked.
+  // shows its progress first, whatever it prints, and a screenshot its
+  // picture. Feedback and a desktop's or a terminal's recordings only when
+  // asked.
   const shown =
     tab === "json"
       ? "json"
@@ -230,7 +234,7 @@ export function TaskDetail({
         ? "feedback"
         : tab === "data" && hasData
         ? "data"
-        : tab === "output" || !hasData || (t.outputSize > 0 && !isUpload && !isStream && !isTunnel && !isDelegate)
+        : tab === "output" || !hasData || (t.outputSize > 0 && !isUpload && !isStream && !isTunnel && !isDelegate && !isShot)
           ? "output"
           : "data"
   const [wrap, setWrap] = useState(() => readFlag(WRAP_KEY, true))

@@ -60,10 +60,18 @@ func (f *fakeTasks) AddFeedback(_ context.Context, sid, id uuid.UUID, errs, warn
 	return t, nil
 }
 
-// fakeFiles holds task files in memory.
+// fakeFiles holds task files in memory, and takes screenshots' data,
+// answering each with shotProblem.
 type fakeFiles struct {
-	bodies   map[uuid.UUID][]byte
-	released []uuid.UUID
+	bodies      map[uuid.UUID][]byte
+	released    []uuid.UUID
+	shots       []protocol.Screenshot
+	shotProblem string
+}
+
+func (f *fakeFiles) TakeScreenshot(_ context.Context, _ uuid.UUID, shot protocol.Screenshot) (string, error) {
+	f.shots = append(f.shots, shot)
+	return f.shotProblem, nil
 }
 
 func (f *fakeFiles) TakeChunk(context.Context, *models.MinionSession, protocol.ChunkItem) (minionfiles.Reply, error) {
@@ -176,5 +184,34 @@ func TestUploadPull(t *testing.T) {
 	// A task ended takes no more asks.
 	if c := errCode(pull(0, xfer)); c != protocol.ErrItemUnknownTask {
 		t.Fatalf("after its end: %d", c)
+	}
+}
+
+// A screenshot task's last part hands its data to the files service (the
+// picture's size in pixels and its screen); data that is not the picture
+// core has is the task's data problem.
+func TestScreenshotEnd(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	files := &fakeFiles{bodies: map[uuid.UUID][]byte{}, shotProblem: "the data names another transfer"}
+	r.svc.WithFiles(files)
+	taskID, xfer := uuid.New(), bytes.Repeat([]byte{7}, 16)
+	tasks.rows = append(tasks.rows, models.MinionTask{TaskID: taskID, SessionID: sid, OperationID: r.build.OperationID,
+		Command: "screenshot", Result: protocol.ResultScreenshot, State: models.MinionTaskRunning})
+	data, err := protocol.WireResultData(protocol.Screenshot{Xfer: xfer, Size: 9, SHA256: make([]byte, 32), Width: 1920, Height: 1080, Display: "HDMI-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok := true
+	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(),
+		protocol.ResultItem{T: protocol.ItemResult, Task: taskID[:], Seq: 0, Done: true, OK: &ok, Data: data}); err != nil {
+		t.Fatal(err)
+	}
+	if len(files.shots) != 1 || files.shots[0].Width != 1920 || files.shots[0].Height != 1080 || files.shots[0].Display != "HDMI-1" ||
+		!bytes.Equal(files.shots[0].Xfer, xfer) {
+		t.Fatalf("shots: %+v", files.shots)
+	}
+	if p := tasks.find(taskID).DataProblem; p != "the data names another transfer" {
+		t.Fatalf("problem: %q", p)
 	}
 }

@@ -964,14 +964,26 @@ export type MinionFeedbackPage = {
 export type MinionFile = {
   contentType?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['String']['output'];
+  display?: Maybe<Scalars['String']['output']>;
   doneAt?: Maybe<Scalars['String']['output']>;
   err?: Maybe<Scalars['String']['output']>;
+  height?: Maybe<Scalars['Int']['output']>;
   id: Scalars['ID']['output'];
+  kind?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
   received: Scalars['Int']['output'];
+  sessionId?: Maybe<Scalars['ID']['output']>;
   sha256?: Maybe<Scalars['String']['output']>;
   size: Scalars['Int']['output'];
   state: Scalars['String']['output'];
+  taskId?: Maybe<Scalars['ID']['output']>;
+  thumb: Scalars['Boolean']['output'];
+  width?: Maybe<Scalars['Int']['output']>;
+};
+
+export type MinionFilePage = {
+  before?: Maybe<Scalars['String']['output']>;
+  files: Array<MinionFile>;
 };
 
 export type MinionFileString = {
@@ -984,6 +996,7 @@ export type MinionFileString = {
 export type MinionFileStringPage = {
   done: Scalars['Boolean']['output'];
   next: Scalars['Int']['output'];
+  readTo: Scalars['Int']['output'];
   strings: Array<MinionFileString>;
 };
 
@@ -2682,6 +2695,7 @@ export type Query = {
   minionDesktopSettings: Array<ModuleField>;
   minionFeedback: MinionFeedbackPage;
   minionFileStrings: MinionFileStringPage;
+  minionFiles: MinionFilePage;
   minionIdentities: MinionIdentityPage;
   minionListeners: MinionListenerConnection;
   minionSession?: Maybe<MinionSession>;
@@ -2931,6 +2945,14 @@ export type QueryMinionFileStringsArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   minLength?: InputMaybe<Scalars['Int']['input']>;
   search?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QueryMinionFilesArgs = {
+  before?: InputMaybe<Scalars['String']['input']>;
+  kind: Scalars['String']['input'];
+  last?: InputMaybe<Scalars['Int']['input']>;
+  operationId: Scalars['ID']['input'];
 };
 
 
@@ -4598,7 +4620,7 @@ export type MinionTaskQueryVariables = Exact<{
 }>;
 
 
-export type MinionTaskQuery = { minionTask?: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } | null };
+export type MinionTaskQuery = { minionTask?: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } | null };
 
 export type PublishOperatorFocusMutationVariables = Exact<{
   input: OperatorFocusInput;
@@ -5108,7 +5130,7 @@ export type MinionSessionTargetQueryVariables = Exact<{
 
 export type MinionSessionTargetQuery = { minionSession?: { id: string, operationId: string, connKind?: string | null, bindTarget?: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, delegateId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, delegate?: { id: string, number: number, host?: string | null, user?: string | null } | null, createdBy: { type: string, id: string, name?: string | null } } | null } | null };
 
-export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null };
+export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null };
 
 export type MinionTunnelStreamsQueryVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -5161,7 +5183,7 @@ export type MinionFileStringsQueryVariables = Exact<{
 }>;
 
 
-export type MinionFileStringsQuery = { minionFileStrings: { next: number, done: boolean, strings: Array<{ offset: number, length: number, encoding: string, text: string }> } };
+export type MinionFileStringsQuery = { minionFileStrings: { next: number, done: boolean, readTo: number, strings: Array<{ offset: number, length: number, encoding: string, text: string }> } };
 
 export type MinionTasksQueryVariables = Exact<{
   sessionId: Scalars['ID']['input'];
@@ -5172,7 +5194,7 @@ export type MinionTasksQueryVariables = Exact<{
 }>;
 
 
-export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null }> } };
+export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null }> } };
 
 export type MinionTaskImportantCountQueryVariables = Exact<{
   sessionId: Scalars['ID']['input'];
@@ -5209,14 +5231,14 @@ export type QueueMinionTaskMutationVariables = Exact<{
 }>;
 
 
-export type QueueMinionTaskMutation = { queueMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
+export type QueueMinionTaskMutation = { queueMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
 
 export type CancelMinionTaskMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
+export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
 
 export type SetMinionTaskImportantMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -5224,7 +5246,7 @@ export type SetMinionTaskImportantMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionTaskImportantMutation = { setMinionTaskImportant: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
+export type SetMinionTaskImportantMutation = { setMinionTaskImportant: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
 
 export type SetMinionTunnelCapMutationVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -5269,7 +5291,7 @@ export type MinionTaskChangedSubscriptionVariables = Exact<{
 }>;
 
 
-export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
+export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, recordings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null } };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -6916,6 +6938,7 @@ export const MinionTaskFieldsFragmentDoc = new TypedDocumentString(`
   file {
     id
     name
+    kind
     size
     received
     sha256
@@ -6923,6 +6946,10 @@ export const MinionTaskFieldsFragmentDoc = new TypedDocumentString(`
     err
     contentType
     doneAt
+    width
+    height
+    display
+    thumb
   }
   upload {
     fileId
@@ -9648,6 +9675,7 @@ export const MinionTaskDocument = new TypedDocumentString(`
   file {
     id
     name
+    kind
     size
     received
     sha256
@@ -9655,6 +9683,10 @@ export const MinionTaskDocument = new TypedDocumentString(`
     err
     contentType
     doneAt
+    width
+    height
+    display
+    thumb
   }
   upload {
     fileId
@@ -12163,6 +12195,7 @@ export const MinionFileStringsDocument = new TypedDocumentString(`
     }
     next
     done
+    readTo
   }
 }
     `) as unknown as TypedDocumentString<MinionFileStringsQuery, MinionFileStringsQueryVariables>;
@@ -12230,6 +12263,7 @@ export const MinionTasksDocument = new TypedDocumentString(`
   file {
     id
     name
+    kind
     size
     received
     sha256
@@ -12237,6 +12271,10 @@ export const MinionTasksDocument = new TypedDocumentString(`
     err
     contentType
     doneAt
+    width
+    height
+    display
+    thumb
   }
   upload {
     fileId
@@ -12494,6 +12532,7 @@ export const QueueMinionTaskDocument = new TypedDocumentString(`
   file {
     id
     name
+    kind
     size
     received
     sha256
@@ -12501,6 +12540,10 @@ export const QueueMinionTaskDocument = new TypedDocumentString(`
     err
     contentType
     doneAt
+    width
+    height
+    display
+    thumb
   }
   upload {
     fileId
@@ -12659,6 +12702,7 @@ export const CancelMinionTaskDocument = new TypedDocumentString(`
   file {
     id
     name
+    kind
     size
     received
     sha256
@@ -12666,6 +12710,10 @@ export const CancelMinionTaskDocument = new TypedDocumentString(`
     err
     contentType
     doneAt
+    width
+    height
+    display
+    thumb
   }
   upload {
     fileId
@@ -12824,6 +12872,7 @@ export const SetMinionTaskImportantDocument = new TypedDocumentString(`
   file {
     id
     name
+    kind
     size
     received
     sha256
@@ -12831,6 +12880,10 @@ export const SetMinionTaskImportantDocument = new TypedDocumentString(`
     err
     contentType
     doneAt
+    width
+    height
+    display
+    thumb
   }
   upload {
     fileId
@@ -13026,6 +13079,7 @@ export const MinionTaskChangedDocument = new TypedDocumentString(`
   file {
     id
     name
+    kind
     size
     received
     sha256
@@ -13033,6 +13087,10 @@ export const MinionTaskChangedDocument = new TypedDocumentString(`
     err
     contentType
     doneAt
+    width
+    height
+    display
+    thumb
   }
   upload {
     fileId

@@ -59,10 +59,14 @@ type IMinionTaskResolver interface {
 	// Document is the task's stored document as JSON, for debugging
 	// (minion_task_document.go).
 	Document(ctx context.Context, taskID string) (string, error)
-	// File is a file_download task's file, as far as it came; nil for none.
+	// File is a file_download task's file (a screenshot task's picture),
+	// as far as it came; nil for none.
 	File(ctx context.Context, taskID string) (*model.MinionFile, error)
 	// MinionFileStrings is a page of a kept file's printable strings.
 	MinionFileStrings(ctx context.Context, fileID string, after, first, minLength *int, encoding, search *string) (*model.MinionFileStringPage, error)
+	// MinionFiles is a page of an operation's files of a kind (its
+	// screenshots), newest first (minion_files.go).
+	MinionFiles(ctx context.Context, operationID, kind string, last *int, before *string) (*model.MinionFilePage, error)
 	// The file browser (file_browser_resolver.go).
 	FileBrowser(ctx context.Context, sessionID string) (*model.FsMachine, error)
 	FileBrowserEntries(ctx context.Context, sessionID string, path, after *string, first *int, search, sort *string,
@@ -212,6 +216,9 @@ type TaskFiles interface {
 	// TaskFile is an operation's task file, for a file param's value.
 	TaskFile(ctx context.Context, operationID uuid.UUID, id string) (*models.MinionFile, error)
 	Strings(ctx context.Context, f models.MinionFile, q minionfiles.StringsQuery) (minionfiles.StringsPage, error)
+	// Files is an operation's files of a kind, newest first, before a
+	// page's cursor, at most limit.
+	Files(ctx context.Context, operationID uuid.UUID, kind string, before *repository.MinionFileCursor, limit int64) ([]models.MinionFile, error)
 }
 
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
@@ -1141,13 +1148,7 @@ func (r *minionTaskResolver) File(ctx context.Context, taskID string) (*model.Mi
 	if err != nil || f == nil {
 		return nil, err
 	}
-	out := &model.MinionFile{ID: f.FileID.String(), Name: f.Name, Size: int(f.Total), Received: int(f.Received),
-		State: f.State, Err: strPtr(f.Err), ContentType: strPtr(f.ContentType), CreatedAt: f.CreateAt.UTC().Format(time.RFC3339Nano), DoneAt: taskTime(f.DoneAt)}
-	if len(f.SHA256) > 0 {
-		h := hex.EncodeToString(f.SHA256)
-		out.Sha256 = &h
-	}
-	return out, nil
+	return minionFileModel(f), nil
 }
 
 const (
@@ -1193,17 +1194,24 @@ func (r *minionTaskResolver) MinionFileStrings(ctx context.Context, fileID strin
 	if search != nil {
 		q.Search = *search
 	}
-	if f.State != models.MinionFileComplete {
+	// A file still coming is read as far as it has come.
+	have := f.Total
+	switch f.State {
+	case models.MinionFileComplete:
+	case models.MinionFileReceiving, models.MinionFileJoining:
+		have = f.Received
+	default:
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, "the file is "+strings.ToLower(f.State))
 	}
-	if q.After < 0 || q.After > f.Total {
-		return nil, moduleGQLError(ctx, errCodeBadUserInput, "after is past the file's end")
+	if q.After < 0 || q.After > have {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "after is past the file's bytes there are")
 	}
 	page, err := r.files.Strings(ctx, *f, q)
 	if err != nil {
 		return nil, fmt.Errorf("read the file's strings: %w", err)
 	}
-	out := &model.MinionFileStringPage{Strings: make([]*model.MinionFileString, 0, len(page.Strings)), Next: int(page.Next), Done: page.Done}
+	out := &model.MinionFileStringPage{Strings: make([]*model.MinionFileString, 0, len(page.Strings)), Next: int(page.Next), Done: page.Done,
+		ReadTo: int(page.ReadTo)}
 	for _, s := range page.Strings {
 		out.Strings = append(out.Strings, &model.MinionFileString{Offset: int(s.Off), Length: int(s.Len), Encoding: s.Encoding, Text: s.Text})
 	}
@@ -1421,27 +1429,41 @@ func taskTime(t *time.Time) *string {
 
 // A page cursor: the last task's queue time (unix nanoseconds) and id.
 func encodeTaskCursor(t models.MinionTask) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(t.QueuedAt.UnixNano(), 10) + ":" + t.TaskID.String()))
+	return encodeTimeIDCursor(t.QueuedAt, t.TaskID)
 }
 
 func decodeTaskCursor(s string) (*repository.MinionTaskCursor, error) {
-	raw, err := base64.RawURLEncoding.DecodeString(s)
+	at, tid, err := decodeTimeIDCursor(s)
 	if err != nil {
 		return nil, err
+	}
+	return &repository.MinionTaskCursor{QueuedAt: at, TaskID: tid}, nil
+}
+
+// encodeTimeIDCursor is a page cursor of the last row's time (unix
+// nanoseconds) and id.
+func encodeTimeIDCursor(at time.Time, id uuid.UUID) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(at.UnixNano(), 10) + ":" + id.String()))
+}
+
+func decodeTimeIDCursor(s string) (time.Time, uuid.UUID, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return time.Time{}, uuid.Nil, err
 	}
 	at, id, ok := strings.Cut(string(raw), ":")
 	if !ok {
-		return nil, fmt.Errorf("cursor")
+		return time.Time{}, uuid.Nil, fmt.Errorf("cursor")
 	}
 	ns, err := strconv.ParseInt(at, 10, 64)
 	if err != nil {
-		return nil, err
+		return time.Time{}, uuid.Nil, err
 	}
-	tid, err := uuid.Parse(id)
+	uid, err := uuid.Parse(id)
 	if err != nil {
-		return nil, err
+		return time.Time{}, uuid.Nil, err
 	}
-	return &repository.MinionTaskCursor{QueuedAt: time.Unix(0, ns).UTC(), TaskID: tid}, nil
+	return time.Unix(0, ns).UTC(), uid, nil
 }
 
 // putCredentials puts the credentials a task's credential params name in

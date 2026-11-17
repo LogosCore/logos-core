@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -179,6 +180,68 @@ func (m *memFiles) TaskFiles(_ context.Context, before time.Time) ([]models.Mini
 	return out, nil
 }
 
+func (m *memFiles) Update(_ context.Context, id uuid.UUID, set bson.M) (*models.MinionFile, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	f := m.files[id]
+	if f == nil {
+		return nil, repository.ErrNotFound
+	}
+	if v, ok := set["thumb"].(bool); ok {
+		f.Thumb = v
+	}
+	if v, ok := set["width"].(int64); ok {
+		f.Width = v
+	}
+	if v, ok := set["height"].(int64); ok {
+		f.Height = v
+	}
+	if v, ok := set["display"].(string); ok {
+		f.Display = v
+	}
+	if v, ok := set["content_type"].(string); ok {
+		f.ContentType = v
+	}
+	c := *f
+	return &c, nil
+}
+
+func (m *memFiles) ListByOperation(_ context.Context, op uuid.UUID) ([]models.MinionFile, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []models.MinionFile
+	for _, f := range m.files {
+		if f.OperationID == op {
+			out = append(out, *f)
+		}
+	}
+	return out, nil
+}
+
+func (m *memFiles) ListByKind(_ context.Context, op uuid.UUID, kind string, _ *repository.MinionFileCursor, limit int64) ([]models.MinionFile, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []models.MinionFile
+	for _, f := range m.files {
+		if f.OperationID == op && f.Kind == kind {
+			out = append(out, *f)
+		}
+	}
+	slices.SortFunc(out, func(a, b models.MinionFile) int { return b.CreateAt.Compare(a.CreateAt) })
+	return out[:min(int64(len(out)), limit)], nil
+}
+
+func (m *memFiles) DeleteByOperationID(_ context.Context, op uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id, f := range m.files {
+		if f.OperationID == op {
+			delete(m.files, id)
+		}
+	}
+	return nil
+}
+
 func (m *memFiles) Delete(_ context.Context, id uuid.UUID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -197,6 +260,30 @@ func (t tasks) UploadFileUse(_ context.Context, fileID uuid.UUID) (bool, bool, e
 		}
 	}
 	return open, named, nil
+}
+
+// problemsMu guards the data problems a join records, in its goroutine,
+// from the test reading them.
+var problemsMu sync.Mutex
+
+func (t tasks) SetDataProblem(_ context.Context, id uuid.UUID, problem string) (*models.MinionTask, error) {
+	problemsMu.Lock()
+	defer problemsMu.Unlock()
+	x, ok := t[id]
+	if !ok {
+		return nil, repository.ErrNotFound
+	}
+	if x.DataProblem == "" {
+		x.DataProblem = problem
+	}
+	c := *x
+	return &c, nil
+}
+
+func problemOf(t tasks, id uuid.UUID) string {
+	problemsMu.Lock()
+	defer problemsMu.Unlock()
+	return t[id].DataProblem
 }
 
 func (t tasks) FindByTaskID(_ context.Context, id uuid.UUID) (*models.MinionTask, error) {

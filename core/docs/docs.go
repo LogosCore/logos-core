@@ -857,6 +857,18 @@ const docTemplate = `{
                         "description": "Inline, for a type the browser shows safely",
                         "name": "preview",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "A screenshot's thumbnail (a JPEG, inline) instead",
+                        "name": "thumb",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "For a file still coming: its bytes as they come, to its end",
+                        "name": "follow",
+                        "in": "query"
                     }
                 ],
                 "responses": {}

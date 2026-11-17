@@ -82,3 +82,17 @@ export function filePreviewKind(contentType: string, filename: string, size: num
 export function panelPreviews(kind: FilePreviewKind): boolean {
   return kind.isPdf || kind.mediaKind !== null || kind.renderedKind !== null
 }
+
+// Pictures a browser draws row by row as their bytes come.
+const PROGRESSIVE_IMAGES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"])
+
+/**
+ * What of a file still coming shows as it comes, by its (canonical) content
+ * type: a picture the browser draws as its bytes come, or text; null for the
+ * rest (a PDF, a video, a document), which shows once the file is whole.
+ */
+export function liveKind(kind: FilePreviewKind, contentType: string): "image" | "text" | null {
+  if (kind.imageFormat === "native" && PROGRESSIVE_IMAGES.has(contentType)) return "image"
+  if (contentType.startsWith("text/") || contentType === "application/json") return "text"
+  return null
+}

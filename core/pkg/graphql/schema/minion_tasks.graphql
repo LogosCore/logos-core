@@ -102,8 +102,9 @@ type MinionTask {
   dataProblem: String
   # Parts before the done part that never came: lost for good.
   missingParts: Int!
-  # The file a file_download task's minion sends core, as far as it came;
-  # null for other tasks, or before its first chunk.
+  # The file a file_download task's minion sends core (a screenshot task's:
+  # its picture), as far as it came; null for other tasks, or before its
+  # first chunk.
   file: MinionFile
   # The file core sends the minion for the task's file param (an upload),
   # and how far the minion has it; null for a task without one.
@@ -118,13 +119,30 @@ type MinionTask {
   document: String!
 }
 
-# A file a minion sends core for a download_file task (docs:
-# contracts/minion-messages.md, File transfers). Kept in core's minion
-# files bucket; the bytes: GET /api/v1/minion-files/{id}.
+# A file a minion sends core for a download_file task, or a screenshot
+# task's picture (docs: contracts/minion-messages.md, File transfers). Kept
+# in core's minion files bucket; the bytes: GET /api/v1/minion-files/{id}.
 type MinionFile {
   id: ID!
-  # The file's name as the minion has it: a path on its host.
+  # The file's name as the minion has it: a path on its host, or a name
+  # alone (a screenshot's picture is on no file system).
   name: String!
+  # What it is: screenshot (a screenshot task's picture), task (a file an
+  # operator uploaded for tasks), or null (a file a minion sent from its
+  # file system: a download, a stream's copy).
+  kind: String
+  # The task it came for, and the task's session; null for a task file.
+  taskId: ID
+  sessionId: ID
+  # A screenshot's: the picture's size in pixels and its screen, as its
+  # task's data said them (null until the task's last part came; display
+  # null for every screen in one picture).
+  width: Int
+  height: Int
+  display: String
+  # Core keeps a thumbnail of it, a JPEG fitted into 400 pixels a side:
+  # GET /api/v1/minion-files/{id}?thumb=1. A screenshot's, once kept.
+  thumb: Boolean!
   # Its size, as the minion said it, and how much of it came.
   size: Int!
   received: Int!
@@ -137,7 +155,8 @@ type MinionFile {
   state: String!
   # Why it failed or was cancelled.
   err: String
-  # What its first bytes say it is (a MIME type), once kept; null before.
+  # What its first bytes say it is (a MIME type): from its first chunk, and
+  # again from the whole once kept; null before its first chunk.
   contentType: String
   createdAt: String!
   doneAt: String
@@ -408,6 +427,10 @@ type MinionFileStringPage {
   next: Int!
   # The file was read to its end.
   done: Boolean!
+  # Where the page stopped reading (past next while a string runs on). For
+  # a file still coming, a page that read all that has come stops there:
+  # ask for the next once its received is past it.
+  readTo: Int!
 }
 
 # The recording of one desktop a desktop task's tunnel drew in the web app,
@@ -488,6 +511,13 @@ type MinionTaskPage {
   before: String
 }
 
+# A page of an operation's files of a kind, newest first.
+type MinionFilePage {
+  files: [MinionFile!]!
+  # Where the next (older) page starts; null on the last.
+  before: String
+}
+
 extend type Query {
   # One task, with its output. Needs at least viewer.
   minionTask(id: ID!): MinionTask
@@ -499,6 +529,13 @@ extend type Query {
   # words), important keeps the ones marked important. Needs at least
   # viewer.
   minionTasks(sessionId: ID!, last: Int, before: String, search: String, important: Boolean): MinionTaskPage!
+    @hasPermission(permission: "operation:member")
+
+  # An operation's files of a kind (screenshot: its screenshots' pictures;
+  # task: the files operators uploaded for tasks), every session's, newest
+  # first, at most last (50 by default, 200 at most), before a page's
+  # cursor. Needs at least viewer.
+  minionFiles(operationId: ID!, kind: String!, last: Int, before: String): MinionFilePage!
     @hasPermission(permission: "operation:member")
 
   # How many of a session's tasks are marked important. Needs at least

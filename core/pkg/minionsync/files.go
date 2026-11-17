@@ -9,6 +9,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/minionfiles"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-golang-protocol/protocol"
+	"go.uber.org/zap"
 )
 
 // Files a minion sends (docs: contracts/minion-messages.md, File
@@ -24,6 +25,9 @@ type Files interface {
 	// task file; ReleaseTaskFile drops one once no task needs it.
 	ReadChunk(ctx context.Context, fileID uuid.UUID, off int64, n int) ([]byte, error)
 	ReleaseTaskFile(ctx context.Context, fileID uuid.UUID) error
+	// TakeScreenshot copies a screenshot task's data onto its picture, and
+	// says why the data is not the picture core has ("" when it is).
+	TakeScreenshot(ctx context.Context, taskID uuid.UUID, shot protocol.Screenshot) (string, error)
 }
 
 // WithFiles gives the service the files minions send. Without it, a chunk
@@ -70,8 +74,9 @@ func (s *Service) takeChunk(ctx context.Context, session *models.MinionSession, 
 // endFile ends the file of a task that ended before all of it came.
 func (s *Service) endFile(ctx context.Context, task *models.MinionTask) {
 	// A stream's copy too (minionfiles, streams.go): one the stream did not
-	// pass through whole.
-	if s.files == nil || (task.Result != protocol.ResultFileDownload && task.Result != protocol.ResultFileStream) {
+	// pass through whole; and a screenshot's picture.
+	if s.files == nil || (task.Result != protocol.ResultFileDownload && task.Result != protocol.ResultFileStream &&
+		task.Result != protocol.ResultScreenshot) {
 		return
 	}
 	reason := "the task ended before all of its file came"
@@ -82,4 +87,31 @@ func (s *Service) endFile(ctx context.Context, task *models.MinionTask) {
 		}
 	}
 	_ = s.files.AbortTask(ctx, task.TaskID, reason)
+}
+
+// endScreenshot takes a screenshot task's data, from its last part: the
+// picture's size in pixels and its screen go onto its file, and data that is
+// not the picture core has is the task's data problem.
+func (s *Service) endScreenshot(ctx context.Context, task *models.MinionTask, res protocol.ResultItem) {
+	if s.files == nil || task.Result != protocol.ResultScreenshot || len(res.Data) == 0 {
+		return
+	}
+	data, err := protocol.NamedResultData(protocol.ResultScreenshot, res.Data)
+	if err != nil {
+		return // taskdata's check says it
+	}
+	shot, err := protocol.ReadScreenshot(res.Seq, data)
+	if err != nil {
+		return // taskdata's check says it
+	}
+	problem, err := s.files.TakeScreenshot(ctx, task.TaskID, *shot)
+	if err != nil {
+		s.logger.Error("minion screenshot: take its data", zap.String("task_id", task.TaskID.String()), zap.Error(err))
+		return
+	}
+	if problem != "" {
+		if after, err := s.tasks.SetDataProblem(ctx, task.TaskID, problem); err == nil {
+			s.publishTask(after)
+		}
+	}
 }

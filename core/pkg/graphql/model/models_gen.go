@@ -747,6 +747,13 @@ type MinionFeedbackPage struct {
 type MinionFile struct {
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
+	Kind        *string `json:"kind,omitempty"`
+	TaskID      *string `json:"taskId,omitempty"`
+	SessionID   *string `json:"sessionId,omitempty"`
+	Width       *int    `json:"width,omitempty"`
+	Height      *int    `json:"height,omitempty"`
+	Display     *string `json:"display,omitempty"`
+	Thumb       bool    `json:"thumb"`
 	Size        int     `json:"size"`
 	Received    int     `json:"received"`
 	Sha256      *string `json:"sha256,omitempty"`
@@ -755,6 +762,11 @@ type MinionFile struct {
 	ContentType *string `json:"contentType,omitempty"`
 	CreatedAt   string  `json:"createdAt"`
 	DoneAt      *string `json:"doneAt,omitempty"`
+}
+
+type MinionFilePage struct {
+	Files  []*MinionFile `json:"files"`
+	Before *string       `json:"before,omitempty"`
 }
 
 type MinionFileString struct {
@@ -768,6 +780,7 @@ type MinionFileStringPage struct {
 	Strings []*MinionFileString `json:"strings"`
 	Next    int                 `json:"next"`
 	Done    bool                `json:"done"`
+	ReadTo  int                 `json:"readTo"`
 }
 
 type MinionIdentity struct {

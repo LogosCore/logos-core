@@ -72,3 +72,55 @@ func TestIntegrationMinionFiles(t *testing.T) {
 		t.Fatalf("after delete: %v", err)
 	}
 }
+
+// An operation's files of a kind, a page at a time, newest first: the
+// cursor's own second shared by two files splits them by id; another kind
+// and another operation's are not on the page. Update sets a file's fields
+// whatever its state.
+func TestIntegrationMinionFilesByKind(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionFileRepository(db)
+	if err := db.IndexSetupErr(); err != nil {
+		t.Fatalf("file indexes: %v", err)
+	}
+	t0 := time.Now().UTC().Truncate(time.Millisecond)
+	op := uuid.New()
+	insert := func(op uuid.UUID, kind string, at time.Time) *models.MinionFile {
+		t.Helper()
+		f := &models.MinionFile{FileID: uuid.New(), Kind: kind, OperationID: op, SessionID: uuid.New(), TaskID: uuid.New(),
+			Xfer: []byte(uuid.NewString()[:16]), Name: "screen.png", Total: 10, State: models.MinionFileComplete, LastChunkAt: at}
+		f.CreateAt = at
+		if err := repo.Insert(ctx, f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	oldest := insert(op, models.MinionFileKindScreenshot, t0)
+	a := insert(op, models.MinionFileKindScreenshot, t0.Add(time.Second))
+	b := insert(op, models.MinionFileKindScreenshot, t0.Add(time.Second))
+	insert(op, "", t0.Add(time.Hour))                                      // a download
+	insert(uuid.New(), models.MinionFileKindScreenshot, t0.Add(time.Hour)) // another operation's
+	newer, older := a, b
+	if a.FileID.String() < b.FileID.String() {
+		newer, older = b, a
+	}
+
+	page, err := repo.ListByKind(ctx, op, models.MinionFileKindScreenshot, nil, 2)
+	if err != nil || len(page) != 2 || page[0].FileID != newer.FileID || page[1].FileID != older.FileID {
+		t.Fatalf("first page: %v %v", page, err)
+	}
+	cursor := &MinionFileCursor{CreateAt: page[1].CreateAt, FileID: page[1].FileID}
+	rest, err := repo.ListByKind(ctx, op, models.MinionFileKindScreenshot, cursor, 2)
+	if err != nil || len(rest) != 1 || rest[0].FileID != oldest.FileID {
+		t.Fatalf("after the cursor: %v %v", rest, err)
+	}
+
+	after, err := repo.Update(ctx, oldest.FileID, bson.M{"width": int64(1920), "height": int64(1080), "thumb": true})
+	if err != nil || after.Width != 1920 || after.Height != 1080 || !after.Thumb || after.State != models.MinionFileComplete {
+		t.Fatalf("update: %+v %v", after, err)
+	}
+	if _, err := repo.Update(ctx, uuid.New(), bson.M{"thumb": true}); !IsNotFound(err) {
+		t.Fatalf("update of no file: %v", err)
+	}
+}

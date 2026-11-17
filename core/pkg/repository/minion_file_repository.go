@@ -36,7 +36,13 @@ type IMinionFileRepository interface {
 	// Idle are files receiving with no chunk since before, and files joining
 	// since before (a core that stopped on the way).
 	Idle(ctx context.Context, before time.Time) ([]models.MinionFile, error)
+	// Update sets fields of a file, whatever its state (a screenshot's
+	// size in pixels, its thumbnail). It returns the file after.
+	Update(ctx context.Context, fileID uuid.UUID, set bson.M) (*models.MinionFile, error)
 	ListByOperation(ctx context.Context, operationID uuid.UUID) ([]models.MinionFile, error)
+	// ListByKind is an operation's files of a kind (a screenshot's),
+	// newest first, before a page's cursor, at most limit.
+	ListByKind(ctx context.Context, operationID uuid.UUID, kind string, before *MinionFileCursor, limit int64) ([]models.MinionFile, error)
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
 	// TaskFiles are the task files uploaded before before.
 	TaskFiles(ctx context.Context, before time.Time) ([]models.MinionFile, error)
@@ -55,6 +61,8 @@ func NewMinionFileRepository(db database.Database) IMinionFileRepository {
 		{Key: []string{"state", "last_chunk_at"}},
 		{Key: []string{"operation_id"}},
 		{Key: []string{"kind", "createAt"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
+		// An operation's files of a kind, a page at a time (ListByKind).
+		{Key: []string{"operation_id", "kind", "-createAt", "-file_id"}},
 	})
 	return &minionFileRepository{coll: db.Collection(minionFileCollection)}
 }
@@ -118,9 +126,43 @@ func (r *minionFileRepository) Idle(ctx context.Context, before time.Time) ([]mo
 	return out, err
 }
 
+func (r *minionFileRepository) Update(ctx context.Context, fileID uuid.UUID, set bson.M) (*models.MinionFile, error) {
+	s := bson.M{"updateAt": time.Now().UTC()}
+	for k, v := range set {
+		s[k] = v
+	}
+	return r.apply(ctx, bson.M{"file_id": fileID}, bson.M{"$set": s})
+}
+
 func (r *minionFileRepository) ListByOperation(ctx context.Context, operationID uuid.UUID) ([]models.MinionFile, error) {
 	var out []models.MinionFile
 	err := r.coll.Find(ctx, bson.M{"operation_id": operationID}).All(&out)
+	return out, err
+}
+
+// MinionFileCursor is where a page of files starts: after the file made at
+// CreateAt with FileID, newest first.
+type MinionFileCursor struct {
+	CreateAt time.Time
+	FileID   uuid.UUID
+}
+
+// minionFilesByKind is ListByKind's filter: as its index has it, so the
+// page is read from it.
+func minionFilesByKind(operationID uuid.UUID, kind string, before *MinionFileCursor) bson.M {
+	filter := bson.M{"operation_id": operationID, "kind": kind}
+	if before != nil {
+		filter["$or"] = bson.A{
+			bson.M{"createAt": bson.M{"$lt": before.CreateAt}},
+			bson.M{"createAt": before.CreateAt, "file_id": bson.M{"$lt": before.FileID}},
+		}
+	}
+	return filter
+}
+
+func (r *minionFileRepository) ListByKind(ctx context.Context, operationID uuid.UUID, kind string, before *MinionFileCursor, limit int64) ([]models.MinionFile, error) {
+	var out []models.MinionFile
+	err := r.coll.Find(ctx, minionFilesByKind(operationID, kind, before)).Sort("-createAt", "-file_id").Limit(limit).All(&out)
 	return out, err
 }
 

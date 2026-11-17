@@ -1,6 +1,7 @@
 // Package minionfiles keeps the files minions send core (docs:
-// contracts/minion-messages.md, File transfers): a download_file task's file
-// comes in chunks, in order, each acked with how far core has it. Each chunk
+// contracts/minion-messages.md, File transfers): a download_file task's file,
+// or a screenshot task's picture (screenshots.go), comes in chunks, in
+// order, each acked with how far core has it. Each chunk
 // is kept as an object of its own (staging/<file>/<offset>), so any core pod
 // takes the next one and a resent chunk only writes its object again; when
 // the last comes, the chunks are joined into one object (files/<file>) in
@@ -41,10 +42,11 @@ type Store interface {
 }
 
 // Tasks reads the task a transfer says it is for, and which tasks name a
-// task file.
+// task file; it records why a screenshot's picture is not one.
 type Tasks interface {
 	FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.MinionTask, error)
 	UploadFileUse(ctx context.Context, fileID uuid.UUID) (open, named bool, err error)
+	SetDataProblem(ctx context.Context, taskID uuid.UUID, problem string) (*models.MinionTask, error)
 }
 
 type Config struct {
@@ -68,13 +70,21 @@ type Service struct {
 
 	// joining are the files this core is joining now.
 	joining sync.Map
-	stop    chan struct{}
-	wg      sync.WaitGroup
+	// thumbs holds a place for each thumbnail being made (a picture is
+	// decoded whole).
+	thumbs chan struct{}
+	// changes wakes the readers of files still coming (live.go); livePoll is
+	// how often they look when no notice comes.
+	changes  *changes
+	livePoll time.Duration
+	stop     chan struct{}
+	wg       sync.WaitGroup
 }
 
 func NewService(files repository.IMinionFileRepository, tasks Tasks, store Store, bus eventbus.IEventBus, cfg Config, logger *zap.Logger) *Service {
 	return &Service{files: files, tasks: tasks, store: store, bus: bus, cfg: cfg, logger: logger.Named("minionfiles"),
-		now: func() time.Time { return time.Now().UTC() }, stop: make(chan struct{})}
+		now: func() time.Time { return time.Now().UTC() }, thumbs: make(chan struct{}, thumbsAtOnce), changes: newChanges(),
+		livePoll: livePoll, stop: make(chan struct{})}
 }
 
 func objectKey(fileID uuid.UUID) string { return "files/" + fileID.String() }
@@ -147,6 +157,14 @@ func (s *Service) TakeChunk(ctx context.Context, session *models.MinionSession, 
 	if err != nil {
 		return Reply{}, fmt.Errorf("advance the transfer: %w", err)
 	}
+	if off == 0 && n > 0 {
+		// What it is, from its first bytes: a view of it while it comes
+		// (a picture drawn as it comes, text) needs it before the end. The
+		// join reads it again from the whole.
+		if typed, err := s.files.Update(ctx, f.FileID, bson.M{"content_type": mimetype.Detect(c.Data[:min(len(c.Data), sniffLen)]).String()}); err == nil {
+			after = typed
+		}
+	}
 	if last {
 		if after, err = s.files.Move(ctx, f.FileID, []string{models.MinionFileReceiving}, models.MinionFileJoining,
 			bson.M{"sha256": c.SHA256}); err != nil {
@@ -158,8 +176,8 @@ func (s *Service) TakeChunk(ctx context.Context, session *models.MinionSession, 
 	return Reply{Next: after.Received}, nil
 }
 
-// begin starts a transfer from its first chunk: for a file_download task of
-// the session, of a size taken.
+// begin starts a transfer from its first chunk: for a file_download or a
+// screenshot task of the session, of a size taken.
 func (s *Service) begin(ctx context.Context, session *models.MinionSession, c protocol.ChunkItem) (*models.MinionFile, *Reply, error) {
 	// 16 bytes: the chunk's Validate checked it.
 	taskID, _ := uuid.FromBytes(c.Task)
@@ -175,16 +193,16 @@ func (s *Service) begin(ctx context.Context, session *models.MinionSession, c pr
 		r := refuse(protocol.ErrItemUnknownTask, "no such task under this session")
 		return nil, &r, nil
 	}
-	if t.Result != protocol.ResultFileDownload {
-		r := refuse(protocol.ErrItemBadMessage, "the task's command does not send a file (result file_download)")
+	if !sendsFile(t.Result) {
+		r := refuse(protocol.ErrItemBadMessage, "the task's command does not send a file (result file_download or screenshot)")
 		return nil, &r, nil
 	}
 	if *c.Total > uint64(s.cfg.MaxSize) {
 		r := refuse(protocol.ErrItemTooLarge, fmt.Sprintf("a file of %d bytes is over core's %d", *c.Total, s.cfg.MaxSize))
 		return nil, &r, nil
 	}
-	f := &models.MinionFile{FileID: uuid.New(), OperationID: t.OperationID, SessionID: session.SessionID, TaskID: taskID,
-		Xfer: c.Xfer, Name: c.Name, Total: int64(*c.Total), State: models.MinionFileReceiving, LastChunkAt: s.now()}
+	f := &models.MinionFile{FileID: uuid.New(), Kind: kindOf(t.Result), OperationID: t.OperationID, SessionID: session.SessionID,
+		TaskID: taskID, Xfer: c.Xfer, Name: c.Name, Total: int64(*c.Total), State: models.MinionFileReceiving, LastChunkAt: s.now()}
 	if err := s.files.Insert(ctx, f); err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			f, err = s.files.FindByXfer(ctx, session.SessionID, c.Xfer)
@@ -266,6 +284,12 @@ func (s *Service) join(ctx context.Context, f models.MinionFile) {
 		return
 	}
 	s.dropStaging(ctx, *after)
+	// A screenshot's picture: checked to be one, and its thumbnail made.
+	if after.Kind == models.MinionFileKindScreenshot && after.State == models.MinionFileComplete {
+		if shot := s.keptScreenshot(ctx, *after); shot != nil {
+			after = shot
+		}
+	}
 	s.publish(after)
 }
 
@@ -369,6 +393,9 @@ func (s *Service) DeleteByOperation(ctx context.Context, operationID uuid.UUID) 
 	}
 	for _, f := range files {
 		_ = s.store.Delete(ctx, objectKey(f.FileID))
+		if f.Kind == models.MinionFileKindScreenshot {
+			_ = s.store.Delete(ctx, thumbKey(f.FileID))
+		}
 		s.dropStaging(ctx, f)
 	}
 	return s.files.DeleteByOperationID(ctx, operationID)
@@ -425,6 +452,7 @@ func (s *Service) Sweep(ctx context.Context) {
 }
 
 func (s *Service) publish(f *models.MinionFile) {
+	s.changes.notify(f.FileID)
 	if s.bus == nil {
 		return
 	}

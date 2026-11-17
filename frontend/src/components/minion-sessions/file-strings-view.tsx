@@ -11,10 +11,11 @@ import { cn } from "@/lib/utils"
 import { formatOffset, offsetDigits } from "./hex"
 import { usePaneRow } from "./pane-text"
 
-// A kept file's printable strings, as strings(1) finds them: read by core a
-// page at a time from where the last stopped, searched and filtered there,
-// shown as they come, more read as the list nears its end. A string opens
-// in the hex view, selected.
+// A file's printable strings, as strings(1) finds them: read by core a page
+// at a time from where the last stopped, searched and filtered there, shown
+// as they come, more read as the list nears its end; a file still coming as
+// far as it has come, more as more comes. A string opens in the hex view,
+// selected.
 
 const MIN_LENGTHS = [3, 4, 5, 6, 8, 10, 16, 32]
 const ENCODINGS: { value: MinionFileStringsFilter["encoding"]; label: string }[] = [
@@ -26,6 +27,7 @@ const ENCODINGS: { value: MinionFileStringsFilter["encoding"]; label: string }[]
 export function FileStringsView({
   fileId,
   size,
+  available = size,
   filter,
   onFilter,
   onShowInHex,
@@ -33,16 +35,20 @@ export function FileStringsView({
 }: {
   fileId: string
   size: number
+  /** How much of it there is to read: less than size while it comes. */
+  available?: number
   filter: MinionFileStringsFilter
   onFilter: (filter: MinionFileStringsFilter) => void
   onShowInHex: (offset: number, length: number) => void
   toolbar: (tools: ReactNode) => ReactNode
 }) {
-  const q = useMinionFileStrings(fileId, filter)
+  const q = useMinionFileStrings(fileId, filter, available)
   const pages = q.data?.pages ?? []
   const items = pages.flatMap((p) => p.minionFileStrings.strings)
   const readTo = pages.length > 0 ? pages[pages.length - 1].minionFileStrings.next : 0
   const done = pages.length > 0 && pages[pages.length - 1].minionFileStrings.done
+  // All that has come of a file still coming is read: more once more comes.
+  const waiting = !done && pages.length > 0 && pages[pages.length - 1].minionFileStrings.readTo >= available
   const digits = offsetDigits(size)
   const [picked, setPicked] = useState<number | null>(null)
 
@@ -108,9 +114,9 @@ export function FileStringsView({
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
         {q.isError ? (
           <p className="p-4 text-sm text-red-600 dark:text-red-400">{q.error instanceof Error ? q.error.message : "Couldn't read the strings."}</p>
-        ) : items.length === 0 && done ? (
+        ) : items.length === 0 && (done || waiting) ? (
           <p className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
-            {filter.search ? "No string holds that." : "No strings."}
+            {waiting ? "None in what has come yet." : filter.search ? "No string holds that." : "No strings."}
           </p>
         ) : (
           <div className="relative w-full font-mono text-xs" style={{ height: virtualizer.getTotalSize() }}>
@@ -162,7 +168,11 @@ export function FileStringsView({
           {items.length.toLocaleString("en-US")} {items.length === 1 ? "string" : "strings"}
         </span>
         <span>
-          {done ? "the whole file read" : `${formatBytes(readTo)} of ${formatBytes(size)} read${isFetchingNextPage || q.isLoading ? "…" : ""}`}
+          {done
+            ? "the whole file read"
+            : waiting
+              ? `${formatBytes(readTo)} of ${formatBytes(size)} read, more as the file comes`
+              : `${formatBytes(readTo)} of ${formatBytes(size)} read${isFetchingNextPage || q.isLoading ? "…" : ""}`}
         </span>
         <span className="ml-auto">Double-click a string to show it in Hex; right-click for more.</span>
       </div>

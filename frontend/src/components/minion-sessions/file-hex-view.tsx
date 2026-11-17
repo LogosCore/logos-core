@@ -36,6 +36,7 @@ const MAX_COPY = 1 << 20
 export function FileHexView({
   url,
   size,
+  available = size,
   bytes,
   place,
   onPlace,
@@ -43,6 +44,8 @@ export function FileHexView({
 }: {
   url: string
   size: number
+  /** How much of it there is to read: less than size while it comes. */
+  available?: number
   bytes: ByteBlocks
   place: HexPlace
   onPlace: (update: (p: HexPlace) => HexPlace) => void
@@ -113,6 +116,10 @@ export function FileHexView({
     if (!sel) return
     if (hi - lo + 1 > MAX_COPY) {
       toast.error("Select at most 1 MiB to copy it.")
+      return
+    }
+    if (hi >= available) {
+      toast.error("Some of those bytes have not come yet.")
       return
     }
     try {
@@ -301,7 +308,12 @@ export function FileHexView({
             ))}
           </>
         ) : (
-          <span>{size.toLocaleString("en-US")} bytes. Click a byte to select it; arrows move, Shift extends.</span>
+          <span>
+            {available < size
+              ? `${available.toLocaleString("en-US")} of ${size.toLocaleString("en-US")} bytes have come, more as they do.`
+              : `${size.toLocaleString("en-US")} bytes.`}{" "}
+            Click a byte to select it; arrows move, Shift extends.
+          </span>
         )}
       </div>
     </div>

@@ -3,7 +3,8 @@ import { BLOCK_SIZE } from "./hex"
 
 // A file's bytes for the hex view, read from the server a block at a time
 // with byte ranges as the view needs them, the last MAX_BLOCKS kept: a file
-// of any size costs a few MiB at most.
+// of any size costs a few MiB at most. A file still coming is read as far as
+// it has come (available), a block it cuts read again as more comes.
 
 const MAX_BLOCKS = 64
 
@@ -25,7 +26,7 @@ export interface ByteBlocks {
   error: string | null
 }
 
-export function useByteBlocks(url: string, size: number): ByteBlocks {
+export function useByteBlocks(url: string, size: number, available: number = size): ByteBlocks {
   const [blocks, setBlocks] = useState<ReadonlyMap<number, Uint8Array>>(() => new Map())
   const [error, setError] = useState<string | null>(null)
   // Blocks asked for and not read yet: asked once.
@@ -43,10 +44,13 @@ export function useByteBlocks(url: string, size: number): ByteBlocks {
   const want = useCallback(
     (wanted: readonly number[]) => {
       for (const i of wanted) {
-        if (blocks.has(i) || pending.current.has(i)) continue
-        pending.current.add(i)
         const start = i * BLOCK_SIZE
-        readRange(url, start, Math.min(start + BLOCK_SIZE, size)).then(
+        // As much of the block as there is to read: none of it has come yet,
+        // or all of what has come is read.
+        const end = Math.min(start + BLOCK_SIZE, size, available)
+        if (end <= start || (blocks.get(i)?.length ?? 0) >= end - start || pending.current.has(i)) continue
+        pending.current.add(i)
+        readRange(url, start, end).then(
           (data) => {
             pending.current.delete(i)
             if (current.current !== url) return
@@ -69,7 +73,7 @@ export function useByteBlocks(url: string, size: number): ByteBlocks {
         )
       }
     },
-    [blocks, url, size],
+    [blocks, url, size, available],
   )
 
   const byteAt = useCallback(

@@ -18,7 +18,7 @@ func utf16le(s string) []byte {
 func scanAll(t *testing.T, data []byte, q StringsQuery) []FoundString {
 	t.Helper()
 	q.First = 1 << 30
-	p, err := scanStrings(bytes.NewReader(data), q, int64(len(data))+1)
+	p, err := scanStrings(bytes.NewReader(data), q, int64(len(data))+1, true)
 	if err != nil || !p.Done || p.Next != int64(len(data)) {
 		t.Fatalf("scan: %+v %v", p, err)
 	}
@@ -97,7 +97,7 @@ func TestScanStringsPaged(t *testing.T) {
 			q.First = step.first
 			for after, pages := int64(0), 0; ; pages++ {
 				q.After = after
-				p, err := scanStrings(bytes.NewReader(data[after:]), q, step.budget)
+				p, err := scanStrings(bytes.NewReader(data[after:]), q, step.budget, true)
 				if err != nil || pages > len(data) {
 					t.Fatalf("page at %d: %v", after, err)
 				}

@@ -54,6 +54,7 @@ export const MinionTaskFields = graphql(`
     file {
       id
       name
+      kind
       size
       received
       sha256
@@ -61,6 +62,10 @@ export const MinionTaskFields = graphql(`
       err
       contentType
       doneAt
+      width
+      height
+      display
+      thumb
     }
     upload {
       fileId
@@ -274,6 +279,7 @@ export const MinionFileStringsQuery = graphql(`
       }
       next
       done
+      readTo
     }
   }
 `)
