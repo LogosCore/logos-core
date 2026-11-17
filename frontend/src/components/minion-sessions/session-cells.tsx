@@ -69,7 +69,7 @@ function Ago({ at, now }: { at: string; now: number }) {
 
 /** The schedule and where the session stands by it: "Late: every 60s ± 20%, due 3m ago". */
 function scheduleNote(s: MinionSessionFieldsFragment, state: "live" | "late" | "lost", now: number): string {
-  const every = s.sleepInterval != null ? `every ${formatInterval(s.sleepInterval)}${s.sleepJitter ? ` ± ${s.sleepJitter}%` : ""}` : ""
+  const every = s.sleepInterval === 0 ? "no wait" : s.sleepInterval != null ? `every ${formatInterval(s.sleepInterval)}${s.sleepJitter ? ` ± ${s.sleepJitter}%` : ""}` : ""
   const due = Date.parse(s.lateAt!) - now
   const when = due > 0 ? `late in ${formatInterval(due)}` : `due ${formatInterval(-due)} ago`
   const label = { live: "On time", late: "Late", lost: "Lost, 3 check-ins missed" }[state]

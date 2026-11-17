@@ -275,7 +275,9 @@ function SessionCard({ s }: { s: Session }) {
         )}
       </LabelRow>
       <LabelRow label="Check-ins">
-        {s.sleepInterval != null ? (
+        {s.sleepInterval === 0 ? (
+          "no wait: the next as soon as the last ends"
+        ) : s.sleepInterval != null ? (
           <>
             every {formatInterval(s.sleepInterval)}
             {s.sleepJitter ? ` ± ${s.sleepJitter}%` : ""}

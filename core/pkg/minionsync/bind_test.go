@@ -983,3 +983,26 @@ func TestBindAnswerRefusals(t *testing.T) {
 		}
 	}
 }
+
+// A page whose schedule is no wait (interval 0) is called again in a second,
+// as one under a second is; without a schedule it is not called again.
+func TestReachedSchedule(t *testing.T) {
+	s := &Service{now: func() time.Time { return time.Unix(1000, 0) }}
+	for _, c := range []struct {
+		sleep *models.MinionSessionSleep
+		want  time.Duration
+	}{
+		{&models.MinionSessionSleep{Interval: 0}, time.Second},
+		{&models.MinionSessionSleep{Interval: 1}, time.Second},
+		{&models.MinionSessionSleep{Interval: 60000}, time.Minute},
+		{nil, -1},
+	} {
+		tg := s.reached(&models.MinionTarget{}, &models.MinionSession{Sleep: c.sleep})
+		switch {
+		case c.want < 0 && tg.NextCallAt != nil:
+			t.Errorf("no schedule: next call at %v", tg.NextCallAt)
+		case c.want >= 0 && (tg.NextCallAt == nil || tg.NextCallAt.Sub(time.Unix(1000, 0)) != c.want):
+			t.Errorf("%+v: next call at %v, want in %s", c.sleep, tg.NextCallAt, c.want)
+		}
+	}
+}

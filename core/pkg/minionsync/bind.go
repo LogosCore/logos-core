@@ -933,13 +933,14 @@ func notTheMinion(status int, excerpt []byte) string {
 }
 
 // reached is t after a call that reached the minion: connected, next called
-// on the session's schedule if it has one.
+// on the session's schedule if it has one (an interval of 0, no wait, every
+// second: scheduleWait).
 func (s *Service) reached(t *models.MinionTarget, session *models.MinionSession) *models.MinionTarget {
 	now := s.now()
 	t.State, t.StateDetail, t.StateAt = models.TargetConnected, "", now
 	t.Failures, t.UnreachableSince = 0, nil
 	t.LastCallAt, t.LastOKAt, t.NextCallAt = &now, &now, nil
-	if session != nil && session.Sleep != nil && session.Sleep.Interval > 0 {
+	if session != nil && session.Sleep != nil {
 		next := now.Add(scheduleWait(session.Sleep))
 		t.NextCallAt = &next
 	}

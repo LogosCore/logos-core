@@ -925,7 +925,7 @@ func TestSessionSchedule(t *testing.T) {
 	}
 
 	// A bad one is refused, and changes nothing.
-	reply, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), protocol.SleepUpdateItem{T: protocol.ItemSleepUpdate, Interval: 0})
+	reply, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), protocol.SleepUpdateItem{T: protocol.ItemSleepUpdate, Interval: 1000, Jitter: 101})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -935,6 +935,15 @@ func TestSessionSchedule(t *testing.T) {
 	}
 	if r.sessions.rows[0].Sleep.Interval != 3_600_000 {
 		t.Fatal("a bad update was taken")
+	}
+
+	// No wait (interval 0): late and lost at once after the grace.
+	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), protocol.SleepUpdateItem{T: protocol.ItemSleepUpdate}); err != nil {
+		t.Fatal(err)
+	}
+	if s = r.sessions.rows[0]; s.Sleep.Interval != 0 || s.LateAt.Sub(*s.LastSeenAt) != models.SessionLateGrace ||
+		!s.LostAt.Equal(*s.LateAt) {
+		t.Fatalf("no wait: %+v, late %v, lost %v", s.Sleep, s.LateAt, s.LostAt)
 	}
 
 	// No schedule, no late_at.
