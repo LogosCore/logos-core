@@ -145,6 +145,8 @@ type Service struct {
 	bus         eventbus.IEventBus
 	logger      *zap.Logger
 	now         func() time.Time
+	// tunnelPack is how packing goes for each tunnel stream (tunnelpack.go).
+	tunnelPack tunnelPacking
 	// conns are the persistent connections open, by session
 	// (connections.go).
 	conns *connections
@@ -282,8 +284,13 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 	unpackItems(from, msg.Items)
 	if via != nil {
 		// What the minion acks, or has results of, is no longer on its way
-		// over via (flights.go).
-		via.landed(msg.Items)
+		// over via (flights.go); a tunnel task's ack seeds its session's
+		// round trip before its streams measure one.
+		for _, d := range via.landed(msg.Items, s.now()) {
+			if s.tunnels != nil && from.session != nil {
+				s.tunnels.SeedRTT(from.session.SessionID, d)
+			}
+		}
 	}
 	if via != nil && via.target != uuid.Nil {
 		// Over a bind-persistent target's connection only its minion

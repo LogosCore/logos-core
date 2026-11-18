@@ -59,7 +59,8 @@ func (st *stream) putCtls(f *filler, now time.Time, resend time.Duration) bool {
 		return false
 	}
 	from := st.ctlSent
-	if from > st.ctlBase && now.Sub(st.ctlSentAt) >= resend {
+	again := from > st.ctlBase && now.Sub(st.ctlSentAt) >= resend
+	if again {
 		from = st.ctlBase
 	}
 	went := false
@@ -71,6 +72,9 @@ func (st *stream) putCtls(f *filler, now time.Time, resend time.Duration) bool {
 	}
 	if went {
 		st.ctlSentAt = now
+		if again {
+			st.rec.Resends++
+		}
 	}
 	return went
 }

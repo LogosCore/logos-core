@@ -161,8 +161,9 @@ func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d d
 	room := d.room
 	add := func(item cbor.RawMessage) bool {
 		// Packed as it goes in, where the build packs (packing.go): a
-		// connection that carries little takes more.
-		item = pack(session, item)
+		// connection that carries little takes more. A tunnel's bytes as
+		// their stream's packing goes (tunnelpack.go).
+		item = s.packItem(session, item)
 		n := len(item) + itemOverhead
 		if n > room {
 			return false
@@ -302,8 +303,11 @@ func (s *Service) taskItems(ctx context.Context, session *models.MinionSession, 
 		}
 		var undo func()
 		if conn != nil {
+			// A tunnel task going out the first time: its ack's round
+			// trip seeds its session's (flights.go).
+			seed := t.SendCount == 0 && protocol.IsTunnelAction(t.Action)
 			var ok bool
-			if ok, undo = conn.fly(t.TaskID, s.now()); !ok {
+			if ok, undo = conn.fly(t.TaskID, s.now(), seed); !ok {
 				continue
 			}
 		}

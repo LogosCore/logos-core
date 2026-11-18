@@ -23,6 +23,10 @@ type Tunnels interface {
 	// Take takes one of the minion's tunnel items: what goes back at once;
 	// bad when it does not read.
 	Take(ctx context.Context, session uuid.UUID, raw cbor.RawMessage) (answers []cbor.RawMessage, bad error)
+	// SeedRTT says a round trip of the session's link, a tunnel task's push
+	// to its ack, for its tunnels to wait for an ack by before their
+	// streams measure one.
+	SeedRTT(session uuid.UUID, d time.Duration)
 }
 
 // tunnelDelay is how long a push of tunnel items waits for more: a burst of

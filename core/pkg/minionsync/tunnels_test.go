@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +24,14 @@ type fakeTunnels struct {
 	poll       time.Duration
 	polls      bool
 	room, most int
+	mu         sync.Mutex
+	seeds      []time.Duration
+}
+
+func (f *fakeTunnels) SeedRTT(_ uuid.UUID, d time.Duration) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.seeds = append(f.seeds, d)
 }
 
 func (f *fakeTunnels) Fill(_ context.Context, _ uuid.UUID, room, most int, add func(cbor.RawMessage) bool) (int, time.Duration, bool) {
@@ -215,5 +224,40 @@ func TestTunnelsHoldNoPlace(t *testing.T) {
 	run("shell", "")
 	if n, err := r.svc.room(context.Background(), session, &one); err != nil || n != 0 {
 		t.Fatalf("beside a shell: room %d %v", n, err)
+	}
+}
+
+// A tunnel task's push to its ack, over a connection kept open, seeds its
+// session's round trip for its tunnels: only its first send's ack, never a
+// task sent before (Karn's rule), another command, or a result.
+func TestTunnelTaskAckSeedsTheRoundTrip(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	tunnels := &fakeTunnels{}
+	r.svc.WithTunnels(tunnels)
+	c := connected(t, r, sid, "c1")
+	queue := func(action string, sent int) uuid.UUID {
+		id := uuid.New()
+		tasks.mu.Lock()
+		defer tasks.mu.Unlock()
+		tasks.rows = append(tasks.rows, models.MinionTask{TaskID: id, SessionID: sid, OperationID: r.build.OperationID,
+			Command: action, Action: action, Op: 15, State: models.MinionTaskQueued, SendCount: sent})
+		return id
+	}
+	tunnel, before, shell := queue(protocol.ActionTunnel, 0), queue(protocol.ActionTunnel, 1), queueTask(r, sid, tasks)
+	r.svc.Notify(context.Background(), sid)
+	if p := c.pushes(t); len(p) != 1 || len(taskIDsIn(t, p[0])) != 3 {
+		t.Fatalf("the push: %+v", p)
+	}
+	time.Sleep(50 * time.Millisecond)
+	ack := protocol.AckItem{T: protocol.ItemAck, Tasks: [][]byte{tunnel[:], before[:], shell[:]}}
+	if _, err := c.exchange(t, protocol.NewMessageID(), nil, ack); err != nil {
+		t.Fatal(err)
+	}
+	tunnels.mu.Lock()
+	seeds := tunnels.seeds
+	tunnels.mu.Unlock()
+	if len(seeds) != 1 || seeds[0] < 50*time.Millisecond || seeds[0] > 5*time.Second {
+		t.Fatalf("seeds %v: not the tunnel task's push to its ack alone", seeds)
 	}
 }

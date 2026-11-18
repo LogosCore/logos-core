@@ -79,6 +79,7 @@ func (s *Service) Streams(_ context.Context, task uuid.UUID, filter StreamFilter
 		for _, st := range t.streams {
 			rec := st.rec
 			rec.Up, rec.Down = st.upBytes, st.downBytes
+			rec.WindowUp, rec.WindowDown = st.windows()
 			take(rec)
 		}
 	}

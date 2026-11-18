@@ -46,6 +46,10 @@ const stream = (s: Partial<TunnelStream>): TunnelStream => ({
   end: null,
   up: 10,
   down: 20,
+  resends: 0,
+  probes: 0,
+  windowUp: 0,
+  windowDown: 0,
   ...s,
 })
 
@@ -69,6 +73,8 @@ const tunnel = (t: Partial<Tunnel>): Tunnel => ({
   kept: 1000,
   up: 0,
   down: 0,
+  rttMs: null,
+  resendAfterMs: null,
   vpnClients: [],
   ...t,
 })

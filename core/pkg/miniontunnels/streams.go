@@ -775,6 +775,7 @@ func (s *Service) drop(st *stream, end string, reset bool) {
 	st.gone = true
 	close(st.done)
 	delete(st.t.streams, st.id)
+	st.rec.WindowUp, st.rec.WindowDown = st.windows()
 	st.shrink()
 	st.t.streamsChanged(s.now())
 	if st.client != nil {
@@ -792,6 +793,22 @@ func (s *Service) drop(st *stream, end string, reset bool) {
 	rec := st.rec
 	rec.Up, rec.Down = st.upBytes, st.downBytes
 	st.t.ended.add(rec)
+	s.logEnded(&rec)
+}
+
+// logEnded logs a stream's end with what its link cost: at info when core
+// had to send again or probe (a slow or lossy link shows there), at debug
+// otherwise (a scan through a proxy ends thousands).
+func (s *Service) logEnded(rec *models.MinionTunnelStream) {
+	level := zap.DebugLevel
+	if rec.Resends > 0 || rec.Probes > 0 {
+		level = zap.InfoLevel
+	}
+	if ce := s.logger.Check(level, "tunnels: stream ended"); ce != nil {
+		ce.Write(zap.String("task_id", rec.TaskID.String()), zap.Uint64("stream", rec.Stream), zap.String("end", rec.End),
+			zap.Int64("up", rec.Up), zap.Int64("down", rec.Down), zap.Int64("resends", rec.Resends), zap.Int64("probes", rec.Probes),
+			zap.Int64("window_up", rec.WindowUp), zap.Int64("window_down", rec.WindowDown))
+	}
 }
 
 // Fill adds to a message for the session's minion, through add, what its
@@ -835,6 +852,9 @@ func (s *Service) Fill(ctx context.Context, session uuid.UUID, room, most int, a
 			// The minion's own streams open from its side: core answers
 			// once its connect ends.
 			if !t.reverse && t.acked && st.openDue(now, resend) && f.put(st.openItem()) {
+				if !st.openSent.IsZero() {
+					st.rec.Resends++
+				}
 				st.openSent, work = now, true
 			}
 			// An early stream's bytes go once its open went.
@@ -1099,9 +1119,25 @@ func (st *stream) dataItem(now time.Time, room int, resend time.Duration) *proto
 	return &d
 }
 
-// sent notes d went.
+// sent notes d went: a probe (one byte past the minion's room), or a send
+// again (from before what went already), counted.
 func (st *stream) sent(d protocol.TunnelDataItem, now time.Time) {
+	switch {
+	case len(d.Data) == 1 && d.Off >= st.upLimit:
+		st.rec.Probes++
+	case d.Off < st.upSent:
+		st.rec.Resends++
+	}
 	st.upSent, st.upSentAt = d.End(), now
+}
+
+// windows are the stream's rooms now: what the minion gives core past its
+// next (up), and the window core gives the minion (down).
+func (st *stream) windows() (up, down int64) {
+	if st.upLimit > st.upBase {
+		up = int64(st.upLimit - st.upBase)
+	}
+	return up, int64(st.window)
 }
 
 // Take takes one of the minion's tunnel items for the session (21 to 28):

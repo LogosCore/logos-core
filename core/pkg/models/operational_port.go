@@ -220,6 +220,17 @@ type MinionTunnelStream struct {
 	// Up: bytes the tool sent the destination; Down: back.
 	Up   int64
 	Down int64
+	// Resends: what core sent again, no ack having come in its time (the
+	// tool's bytes from the minion's ack, the stream's open, its ctls);
+	// Probes: one-byte probes of a window the minion kept shut. WindowUp is
+	// the room the minion gives core for the tool's bytes, past its next;
+	// WindowDown the window core gives the minion back (grown while the
+	// minion fills it). Live while the stream is open, as it ended once it
+	// did.
+	Resends    int64
+	Probes     int64
+	WindowUp   int64
+	WindowDown int64
 	// SearchText is what a task's streams' search matches: the tool's
 	// address and the destination.
 	SearchText string

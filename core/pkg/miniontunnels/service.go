@@ -696,6 +696,10 @@ type Summary struct {
 	// zero while a stream is open, before the minion has the task, or with
 	// no stop_idle.
 	StopsAt time.Time
+	// RTT is its session's round trip as the streams' acks measure it
+	// (zero before the first); ResendAfter how long core waits for an ack
+	// before it sends again (rtt.go). Live only.
+	RTT, ResendAfter time.Duration
 }
 
 // Summary is the task's tunnel while core listens for it; false when it
@@ -707,8 +711,12 @@ func (s *Service) Summary(task uuid.UUID) (Summary, bool) {
 	if t == nil {
 		return Summary{}, false
 	}
-	return Summary{Port: t.port, Open: len(t.streams), Streams: t.opened, Up: t.up, Down: t.down, Bound: t.bound, StopsAt: t.stopsAt(),
-		Cap: t.cap, Accept: t.accept}, true
+	sum := Summary{Port: t.port, Open: len(t.streams), Streams: t.opened, Up: t.up, Down: t.down, Bound: t.bound, StopsAt: t.stopsAt(),
+		Cap: t.cap, Accept: t.accept, ResendAfter: s.resendAfter(t.session)}
+	if r := s.rtt[t.session]; r != nil && r.have {
+		sum.RTT = r.srtt
+	}
+	return sum, true
 }
 
 // View is the task's tunnel as its task shows it: live while core listens

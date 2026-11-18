@@ -1,6 +1,7 @@
 package minionsync
 
 import (
+	"slices"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
@@ -41,17 +42,21 @@ const (
 )
 
 // flight is a task a connection carried: when it last went over it, and how
-// long the connection waits before it carries it again.
+// long the connection waits before it carries it again. seed: a tunnel
+// task's first send, whose ack's round trip seeds its session's before its
+// streams measure one (Tunnels.SeedRTT); never one sent again, whose ack
+// could answer either send (Karn's rule).
 type flight struct {
 	at   time.Time
 	wait time.Duration
+	seed bool
 }
 
 // fly reports whether c may carry task id now, and marks it on its way over
 // c when it may: a task in flight over c goes again only once its wait is
-// over. undo puts the mark back as it was, for a task that did not fit in
-// the message after all.
-func (c *Conn) fly(id uuid.UUID, now time.Time) (ok bool, undo func()) {
+// over. seed marks a tunnel task's first send (flight). undo puts the mark
+// back as it was, for a task that did not fit in the message after all.
+func (c *Conn) fly(id uuid.UUID, now time.Time, seed bool) (ok bool, undo func()) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.flights == nil {
@@ -64,9 +69,9 @@ func (c *Conn) fly(id uuid.UUID, now time.Time) (ok bool, undo func()) {
 	c.sweepFlightsLocked(now)
 	wait := resendWait
 	if flying {
-		wait = min(2*was.wait, resendMost)
+		wait, seed = min(2*was.wait, resendMost), false
 	}
-	c.flights[id] = flight{at: now, wait: wait}
+	c.flights[id] = flight{at: now, wait: wait, seed: seed}
 	return true, func() {
 		c.mu.Lock()
 		defer c.mu.Unlock()
@@ -95,9 +100,11 @@ func (c *Conn) unfly(session *models.MinionSession, items []cbor.RawMessage) {
 
 // landed takes off what is on its way over c the tasks the minion's items
 // say it has (an ack) or runs (a result, the last one too): their acks came
-// back.
-func (c *Conn) landed(items []cbor.RawMessage) {
+// back, at now. rtts are the round trips the acks of first sent tunnel
+// tasks among them took (flight.seed); a result's says how long it ran.
+func (c *Conn) landed(items []cbor.RawMessage, now time.Time) (rtts []time.Duration) {
 	var ids []uuid.UUID
+	acks := 0
 	for _, raw := range items {
 		switch protocol.ItemType(raw) {
 		case protocol.ItemAck:
@@ -109,7 +116,9 @@ func (c *Conn) landed(items []cbor.RawMessage) {
 			}
 			for _, t := range a.Tasks {
 				if id, err := uuid.FromBytes(t); err == nil {
-					ids = append(ids, id)
+					// The acks first: they seed.
+					ids = slices.Insert(ids, acks, id)
+					acks++
 				}
 			}
 		case protocol.ItemResult:
@@ -119,13 +128,19 @@ func (c *Conn) landed(items []cbor.RawMessage) {
 		}
 	}
 	if len(ids) == 0 {
-		return
+		return nil
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, id := range ids {
+	for i, id := range ids {
+		if f, ok := c.flights[id]; ok && f.seed && i < acks {
+			if d := now.Sub(f.at); d > 0 {
+				rtts = append(rtts, d)
+			}
+		}
 		delete(c.flights, id)
 	}
+	return rtts
 }
 
 // sweepFlightsLocked lets go of the flights no message picked again long
@@ -191,6 +206,8 @@ func (s *Service) retryPush(session uuid.UUID, streams bool) {
 	if _, due := s.conns.scheduled[session]; !due {
 		s.conns.retryWait[session] = min(2*wait, pushRetryMost)
 	}
+	// News meanwhile does not bring the retry sooner (pushAfter).
+	s.conns.retryAt[session] = time.Now().Add(wait)
 	s.conns.mu.Unlock()
 	s.pushAfter(session, streams, wait)
 }
@@ -201,4 +218,5 @@ func (s *Service) pushWent(session uuid.UUID) {
 	s.conns.mu.Lock()
 	defer s.conns.mu.Unlock()
 	delete(s.conns.retryWait, session)
+	delete(s.conns.retryAt, session)
 }

@@ -282,9 +282,13 @@ type connUse struct {
 type connections struct {
 	mu        sync.Mutex
 	bySession map[uuid.UUID][]connUse
-	// scheduled are the sessions a push is due for, and whether it carries
-	// the streams' acks.
-	scheduled map[uuid.UUID]bool
+	// scheduled are the sessions a push is due for: when, whether it
+	// carries the streams' acks, and its timer.
+	scheduled map[uuid.UUID]*duePush
+	// retryAt is the soonest a session's push goes while its pushes fail
+	// (retryPush): news meanwhile does not bring it sooner. A connection
+	// new to the session lets it go, with retryWait.
+	retryAt map[uuid.UUID]time.Time
 	// retryWait is how long the next retry of a session's push that did
 	// not get across waits (flights.go).
 	retryWait map[uuid.UUID]time.Duration
@@ -296,7 +300,7 @@ type connections struct {
 }
 
 func newConnections() *connections {
-	return &connections{bySession: map[uuid.UUID][]connUse{}, scheduled: map[uuid.UUID]bool{},
+	return &connections{bySession: map[uuid.UUID][]connUse{}, scheduled: map[uuid.UUID]*duePush{}, retryAt: map[uuid.UUID]time.Time{},
 		retryWait: map[uuid.UUID]time.Duration{}, sending: map[uuid.UUID]*sync.Mutex{}}
 }
 
@@ -309,10 +313,19 @@ func (cs *connections) seen(session uuid.UUID, c *Conn, at time.Time) (first boo
 	uses := cs.bySession[session]
 	first = len(uses) == 0
 	kept := []connUse{{conn: c, last: at}}
+	known := false
 	for _, u := range uses {
 		if u.conn != c {
 			kept = append(kept, u)
+		} else {
+			known = true
 		}
+	}
+	if !known {
+		// Pushes that failed on another connection say nothing of this
+		// one: the next goes as soon as news asks (flights.go, retryPush).
+		delete(cs.retryAt, session)
+		delete(cs.retryWait, session)
 	}
 	if len(kept) > maxSessionConns {
 		evicted = kept[len(kept)-1].conn
@@ -433,23 +446,51 @@ func (s *Service) pushSoon(session uuid.UUID, streams bool) {
 	s.pushAfter(session, streams, notifyDelay)
 }
 
-// pushAfter is pushSoon after delay; a push due already goes when it was
-// to.
+// duePush is a session's push to come.
+type duePush struct {
+	at      time.Time
+	streams bool
+	timer   *time.Timer
+}
+
+// pushAfter is pushSoon after delay. A push due already goes once, with
+// the streams' acks when either asked for them, at the sooner of the two
+// times (a tunnel's bytes do not wait for the coalescing of a task's
+// news), but never before the retry wait of pushes that fail (retryAt).
 func (s *Service) pushAfter(session uuid.UUID, streams bool, delay time.Duration) {
 	s.conns.mu.Lock()
-	withStreams, due := s.conns.scheduled[session]
-	s.conns.scheduled[session] = withStreams || streams
-	s.conns.mu.Unlock()
-	if due {
+	defer s.conns.mu.Unlock()
+	at := time.Now().Add(delay)
+	if floor, ok := s.conns.retryAt[session]; ok && at.Before(floor) {
+		at = floor
+	}
+	if p := s.conns.scheduled[session]; p != nil {
+		p.streams = p.streams || streams
+		// Due as soon, or going now (its timer fired: the push takes what
+		// asked for it meanwhile).
+		if !at.Before(p.at) || !p.timer.Stop() {
+			return
+		}
+		p.at = at
+		p.timer = time.AfterFunc(time.Until(at), func() { s.pushDue(session, p) })
 		return
 	}
-	time.AfterFunc(delay, func() {
-		s.conns.mu.Lock()
-		streams := s.conns.scheduled[session]
-		delete(s.conns.scheduled, session)
+	p := &duePush{at: at, streams: streams}
+	p.timer = time.AfterFunc(time.Until(at), func() { s.pushDue(session, p) })
+	s.conns.scheduled[session] = p
+}
+
+// pushDue makes the session's push p, its time come.
+func (s *Service) pushDue(session uuid.UUID, p *duePush) {
+	s.conns.mu.Lock()
+	if s.conns.scheduled[session] != p {
 		s.conns.mu.Unlock()
-		s.pushNow(context.Background(), session, streams)
-	})
+		return
+	}
+	delete(s.conns.scheduled, session)
+	streams := p.streams
+	s.conns.mu.Unlock()
+	s.pushNow(context.Background(), session, streams)
 }
 
 // Notify pushes what waits for the session now: cancels, and tasks within

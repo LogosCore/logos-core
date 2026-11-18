@@ -111,7 +111,7 @@ const TONE: Record<Tone, string> = {
 };
 
 const GRID_COLS =
-  "grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(0,1fr)_5.5rem_5.5rem]";
+  "grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(0,1fr)_4.5rem_5.5rem_5.5rem]";
 
 export function TunnelView({
   task: t,
@@ -540,6 +540,20 @@ export function TunnelView({
               </span>
               <span className="text-muted-foreground"> back</span>
             </LabelRow>
+            {tunnel.resendAfterMs != null && (
+              <LabelRow label="Round trip">
+                {/* The session's, as its streams' acks measure it: what a slow link costs each exchange. */}
+                {tunnel.rttMs != null ? (
+                  <span className="tabular-nums">{timeoutLabel(tunnel.rttMs)}</span>
+                ) : (
+                  <span className="text-muted-foreground">not measured yet</span>
+                )}
+                <span className="text-muted-foreground tabular-nums">
+                  {" "}
+                  · sends again after {timeoutLabel(tunnel.resendAfterMs)} without an ack
+                </span>
+              </LabelRow>
+            )}
           </InfoCard>
         </div>
 
@@ -602,6 +616,7 @@ export function TunnelView({
                   <div>{terminal ? "Runs" : "Destination"}</div>
                   <div>State</div>
                   <div>Opened</div>
+                  <div className="text-right">Resent</div>
                   <div className="text-right">Sent</div>
                   <div className="text-right">Received</div>
                 </>
@@ -692,14 +707,44 @@ function StreamRow({ s, reverse }: { s: TunnelStream; reverse: boolean }) {
           </span>
         )}
       </span>
-      {/* Sent by who started it: a tool's (core's up), or who connected to a reverse forward's minion (core's down). */}
-      <span className="text-right text-xs tabular-nums">
-        {formatBytes(reverse ? s.down : s.up)}
+      {/* What core sent again, no ack having come in time, and its probes of a shut window: none on a UDP association, which has no acks. */}
+      <span className="flex min-w-0 flex-col text-right text-xs tabular-nums">
+        {s.udp ? (
+          <span className="text-muted-foreground">–</span>
+        ) : (
+          <>
+            <span className={cn(s.resends === 0 && "text-muted-foreground")}>
+              {s.resends}
+            </span>
+            {s.probes > 0 && (
+              <span className="truncate text-muted-foreground">
+                {s.probes} {s.probes === 1 ? "probe" : "probes"}
+              </span>
+            )}
+          </>
+        )}
       </span>
-      <span className="text-right text-xs tabular-nums">
-        {formatBytes(reverse ? s.up : s.down)}
-      </span>
+      {/* Sent by who started it: a tool's (core's up), or who connected to a reverse forward's minion (core's down); under each, the room its receiver gives. */}
+      <StreamBytes bytes={reverse ? s.down : s.up} room={s.udp ? 0 : reverse ? s.windowDown : s.windowUp} />
+      <StreamBytes bytes={reverse ? s.up : s.down} room={s.udp ? 0 : reverse ? s.windowUp : s.windowDown} />
     </div>
+  );
+}
+
+/** A stream's bytes one way, and the room its receiver gives (its window: what may be on its way unacknowledged). */
+function StreamBytes({ bytes, room }: { bytes: number; room: number }) {
+  return (
+    <span className="flex min-w-0 flex-col text-right text-xs tabular-nums">
+      <span>{formatBytes(bytes)}</span>
+      {room > 0 && (
+        <span
+          className="truncate text-muted-foreground"
+          title="The room its receiver gives: what may be on its way, not yet acknowledged"
+        >
+          room {formatBytes(room)}
+        </span>
+      )}
+    </span>
   );
 }
 

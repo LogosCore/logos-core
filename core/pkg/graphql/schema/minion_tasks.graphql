@@ -304,6 +304,13 @@ type MinionTunnel {
   # The bytes its tools sent through it (up), and got back (down).
   up: Int!
   down: Int!
+  # Its session's round trip as its streams' acks measure it (smoothed, as
+  # TCP does), ms: null before the first ack measured one; and how long
+  # core waits for an ack before it sends again (resendAfterMs: the round
+  # trip and four times its spread, 5 s at least, a minute at most). Both
+  # null once core no longer listens for it.
+  rttMs: Int
+  resendAfterMs: Int
   # A VPN's (front vpn, docs: contracts/vpn-front): the networks its
   # clients route, CIDRs (setMinionTunnelRoutes changes them while it
   # runs), and its clients, logos-vpn on operators' machines, while it
@@ -392,6 +399,18 @@ type MinionTunnelStream {
   # The bytes the tool sent (up), and got back (down), so far.
   up: Int!
   down: Int!
+  # What its link cost so far: what core sent again, no ack having come in
+  # its time (the tool's bytes from the minion's ack, the open, its ctls),
+  # and the one-byte probes of a window the minion kept shut. Neither on a
+  # UDP association, which has no acks.
+  resends: Int!
+  probes: Int!
+  # The room each way, bytes: what the minion lets core send of the tool's
+  # bytes past its next (windowUp), and the window core gives the minion
+  # back (windowDown: it grows while the minion fills it, to 4 MiB). Live
+  # while it is open; as it ended once it did.
+  windowUp: Int!
+  windowDown: Int!
 }
 
 # A page of a tunnel task's streams, the latest first.

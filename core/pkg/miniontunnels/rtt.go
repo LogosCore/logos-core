@@ -25,9 +25,11 @@ const (
 )
 
 // rttState is a session's round trip, as its streams' acks measure it.
+// seeded: what it has is a tunnel task's push to its ack (SeedRTT), which
+// the first stream's sample replaces.
 type rttState struct {
 	srtt, rttvar time.Duration
-	have         bool
+	have, seeded bool
 	// wake is the timer that wakes the session when a send is due again;
 	// wakeAt when it fires (zero: none set).
 	wake   *time.Timer
@@ -36,8 +38,8 @@ type rttState struct {
 
 // sample takes one round trip.
 func (r *rttState) sample(d time.Duration) {
-	if !r.have {
-		r.srtt, r.rttvar, r.have = d, d/2, true
+	if !r.have || r.seeded {
+		r.srtt, r.rttvar, r.have, r.seeded = d, d/2, true, false
 		return
 	}
 	diff := r.srtt - d
@@ -46,6 +48,23 @@ func (r *rttState) sample(d time.Duration) {
 	}
 	r.rttvar = (3*r.rttvar + diff) / 4
 	r.srtt = (7*r.srtt + d) / 8
+}
+
+// SeedRTT takes a round trip of the session's link that its streams did
+// not measure (a tunnel task's push to its ack: minionsync's flights), as
+// their first sends' wait for an ack until one of them measures one: never
+// in place of a stream's sample, never below cfg.ResendAfter
+// (resendAfter). A link slower than the floor gets no send again before an
+// ack could come.
+func (s *Service) SeedRTT(session uuid.UUID, d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if r := s.rttOf(session); !r.have {
+		r.srtt, r.rttvar, r.have, r.seeded = d, d/2, true, true
+	}
 }
 
 // rttOf is the session's round trip; under s.mu.

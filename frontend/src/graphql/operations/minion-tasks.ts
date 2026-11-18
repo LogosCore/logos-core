@@ -150,6 +150,8 @@ export const MinionTaskFields = graphql(`
       kept
       up
       down
+      rttMs
+      resendAfterMs
       routes
       vpnClients {
         id
@@ -197,6 +199,10 @@ export const MinionTunnelStreamsQuery = graphql(`
         end
         up
         down
+        resends
+        probes
+        windowUp
+        windowDown
       }
       before
     }

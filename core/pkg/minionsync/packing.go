@@ -13,8 +13,9 @@ import (
 // (models.MinionSession.Compression) where that pays (protocol.Pack), each
 // in a context of its own: as the outbox adds them, so a connection that
 // carries little takes more, and the rest (answers, chunks) as the message
-// is sealed. It takes what any minion sends packed in its place
-// (protocol.UnpackItems), whatever its build.
+// is sealed; a tunnel's bytes a stream at a time, not where they did not
+// shrink lately (tunnelpack.go). It takes what any minion sends packed in
+// its place (protocol.UnpackItems), whatever its build.
 
 // packable reports whether core may pack item as it seals a message: never
 // a task (its args may carry a credential: the outbox packs a task itself,
@@ -70,6 +71,12 @@ func packMessage(session *models.MinionSession, items []cbor.RawMessage) []cbor.
 	}
 	out := make([]cbor.RawMessage, len(items))
 	for i, it := range items {
+		if protocol.ItemType(it) == protocol.ItemTunnelData {
+			// The outbox packed it, or found that packing does not pay
+			// (tunnelpack.go): not tried again.
+			out[i] = it
+			continue
+		}
 		out[i] = pack(session, it)
 	}
 	return out

@@ -68,6 +68,15 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 	m := &model.MinionTunnel{Port: port, Address: strPtr(r.tunnels.Address()), Front: front, Reverse: reverse, Listening: listening,
 		Open: sum.Open, Streams: int(sum.Streams), Kept: miniontunnels.KeptStreams, Up: int(sum.Up), Down: int(sum.Down),
 		StopsAt: taskTime(stopsAt(sum)), Cap: int(max(capNow, 0))}
+	if listening {
+		// Its session's link, as its streams' acks measure it.
+		if sum.RTT > 0 {
+			ms := int(sum.RTT.Milliseconds())
+			m.RttMs = &ms
+		}
+		ms := int(sum.ResendAfter.Milliseconds())
+		m.ResendAfterMs = &ms
+	}
 	// Its limits, as core took them when it queued the task: its args',
 	// else the defaults (openTunnel).
 	m.MaxStreams = miniontunnels.DefaultMaxStreams
@@ -347,7 +356,8 @@ var tunnelKindNames = map[int]string{
 func tunnelStreamModel(s *models.MinionTunnelStream) *model.MinionTunnelStream {
 	m := &model.MinionTunnelStream{Stream: int(s.Stream), Client: s.Client, Host: s.Host, Port: s.Port, Path: strPtr(s.Path), UDP: s.UDP,
 		OpenedAt: s.OpenedAt.UTC().Format(time.RFC3339Nano),
-		State:    "OPENING", Bound: strPtr(s.Bound), Msg: strPtr(s.Msg), EndedAt: taskTime(s.EndedAt), End: strPtr(s.End), Up: int(s.Up), Down: int(s.Down)}
+		State:    "OPENING", Bound: strPtr(s.Bound), Msg: strPtr(s.Msg), EndedAt: taskTime(s.EndedAt), End: strPtr(s.End), Up: int(s.Up), Down: int(s.Down),
+		Resends: int(s.Resends), Probes: int(s.Probes), WindowUp: int(s.WindowUp), WindowDown: int(s.WindowDown)}
 	if name, ok := tunnelKindNames[s.Kind]; ok {
 		m.Kind = &name
 	}

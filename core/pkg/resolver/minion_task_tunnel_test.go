@@ -145,17 +145,21 @@ func (f *fakeTaskTunnels) CountListeners(context.Context, uuid.UUID, string) (in
 func TestTaskTunnel(t *testing.T) {
 	ctx := context.Background()
 	live := uuid.New()
-	f := &fakeTaskTunnels{live: map[uuid.UUID]miniontunnels.Summary{live: {Port: 41003, Open: 2, Streams: 9, Up: 100, Down: 2000}},
+	f := &fakeTaskTunnels{live: map[uuid.UUID]miniontunnels.Summary{live: {Port: 41003, Open: 2, Streams: 9, Up: 100, Down: 2000,
+		RTT: 812 * time.Millisecond, ResendAfter: 5 * time.Second}},
 		ended: miniontunnels.Summary{Streams: 4, Up: 7, Down: 8}}
 	r := &minionTaskResolver{tunnels: f}
 	got, err := r.Tunnel(ctx, &model.MinionTask{ID: live.String()})
 	if err != nil || got.Port != 41003 || !got.Listening || got.Open != 2 || got.Streams != 9 || got.Up != 100 || got.Down != 2000 || got.Address != nil {
 		t.Fatalf("live: %+v %v", got, err)
 	}
+	if got.RttMs == nil || *got.RttMs != 812 || got.ResendAfterMs == nil || *got.ResendAfterMs != 5000 {
+		t.Fatalf("live: its round trip %v, resend after %v", got.RttMs, got.ResendAfterMs)
+	}
 	f.address = "ops.example.org"
 	got, err = r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), Args: map[string]any{"port": float64(41007)}})
 	if err != nil || got.Port != 41007 || got.Listening || got.Open != 0 || got.Streams != 4 || got.Up != 7 || got.Down != 8 ||
-		got.Address == nil || *got.Address != "ops.example.org" {
+		got.Address == nil || *got.Address != "ops.example.org" || got.RttMs != nil || got.ResendAfterMs != nil {
 		t.Fatalf("ended: %+v %v", got, err)
 	}
 }
@@ -179,8 +183,10 @@ func TestTunnelLimits(t *testing.T) {
 // once it ended; its result by name.
 func TestTunnelStreamModel(t *testing.T) {
 	at := time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC)
-	s := models.MinionTunnelStream{Stream: 3, Client: "10.9.0.2:50122", Host: "dc01", Port: 445, OpenedAt: at, Up: 5, Down: 6}
-	if m := tunnelStreamModel(&s); m.State != "OPENING" || m.Result != nil || m.Stream != 3 || m.OpenedAt != "2026-11-06T10:00:00Z" {
+	s := models.MinionTunnelStream{Stream: 3, Client: "10.9.0.2:50122", Host: "dc01", Port: 445, OpenedAt: at, Up: 5, Down: 6,
+		Resends: 2, Probes: 1, WindowUp: 4096, WindowDown: 1 << 20}
+	if m := tunnelStreamModel(&s); m.State != "OPENING" || m.Result != nil || m.Stream != 3 || m.OpenedAt != "2026-11-06T10:00:00Z" ||
+		m.Resends != 2 || m.Probes != 1 || m.WindowUp != 4096 || m.WindowDown != 1<<20 {
 		t.Errorf("opening: %+v", m)
 	}
 	open := protocol.TunnelOpen
