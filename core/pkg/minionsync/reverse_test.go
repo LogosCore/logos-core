@@ -249,7 +249,7 @@ func TestAnswerOverAnotherSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, _ := errMessage(protocol.ErrItemBadMessage, "a push to answer")
-	if err := r.svc.push(ctx, a, from, items); err != nil {
+	if _, err := r.svc.push(ctx, a, from, items); err != nil {
 		t.Fatal(err)
 	}
 	frames, _ := sa.taken()

@@ -125,6 +125,10 @@ type Conn struct {
 	// asked is the session core asked over it which tasks its minion still
 	// has (reacks.go).
 	asked uuid.UUID
+	// flights are the tasks on their way to its minion over it, by id
+	// (flights.go); flightsSwept is when it last let go of old ones.
+	flights      map[uuid.UUID]flight
+	flightsSwept time.Time
 }
 
 // placeOf is the build connection of c's target, once known; 0 otherwise.
@@ -140,7 +144,7 @@ func NewConn(id, kind, instance, peer string, send func(ctx context.Context, f p
 	now := time.Now()
 	return &Conn{ID: id, Kind: kind, Instance: instance, Peer: peer, send: send, close: close,
 		allowance: map[uuid.UUID]*uint64{}, active: now, unusedSince: now,
-		heard: make(chan struct{}), gone: make(chan struct{}), carried: map[uuid.UUID]bool{}}
+		heard: make(chan struct{}), gone: make(chan struct{}), carried: map[uuid.UUID]bool{}, flights: map[uuid.UUID]flight{}}
 }
 
 // claim makes session, of build, c's own when c has none: the minion whose
@@ -281,6 +285,9 @@ type connections struct {
 	// scheduled are the sessions a push is due for, and whether it carries
 	// the streams' acks.
 	scheduled map[uuid.UUID]bool
+	// retryWait is how long the next retry of a session's push that did
+	// not get across waits (flights.go).
+	retryWait map[uuid.UUID]time.Duration
 	// sending serializes a session's pushes.
 	sending map[uuid.UUID]*sync.Mutex
 	// flags serialize the writes of sessions' connected flags, by their
@@ -290,7 +297,7 @@ type connections struct {
 
 func newConnections() *connections {
 	return &connections{bySession: map[uuid.UUID][]connUse{}, scheduled: map[uuid.UUID]bool{},
-		sending: map[uuid.UUID]*sync.Mutex{}}
+		retryWait: map[uuid.UUID]time.Duration{}, sending: map[uuid.UUID]*sync.Mutex{}}
 }
 
 // seen records that c carried a message of session at at: it serves the
@@ -406,11 +413,12 @@ func (s *Service) reachable(session uuid.UUID) bool {
 }
 
 // WatchTasks makes every change to a task (queued, cancelled, a part taken)
-// news for its session (Nudge).
+// news for its session (Nudge); a task going out is not (Sent): a push for
+// it would only send it again while it is on its way.
 func (s *Service) WatchTasks() func() {
 	return s.bus.Subscribe([]eventbus.Topic{eventbus.TopicMinionTaskChanged}, func(_ context.Context, e eventbus.Event) {
 		p, ok := e.Payload.(eventbus.MinionTaskEventPayload)
-		if !ok {
+		if !ok || p.Sent {
 			return
 		}
 		if id, err := uuid.Parse(p.SessionID); err == nil {
@@ -450,14 +458,17 @@ func (s *Service) Notify(ctx context.Context, session uuid.UUID) { s.pushNow(ctx
 
 // pushNow sends the session what the outbox has for it, on the connection
 // that carried its latest message, the one before when that send fails:
-// cancels, tasks within the allowance the minion said on that connection,
-// and with streams the streams' acks (a stream it holds may go on: the
-// minion sends nothing of it meanwhile, so the ack cannot cross its
-// chunks). Nothing goes when it has no connection open: what waits goes
-// with its next exchange.
+// cancels, tasks within the allowance the minion said on that connection
+// (but those on their way over it: flights.go), and with streams the
+// streams' acks (a stream it holds may go on: the minion sends nothing of
+// it meanwhile, so the ack cannot cross its chunks). Nothing goes when it
+// has no connection open: what waits goes with its next exchange. A push
+// that does not get across (every connection failed, or its codec wrote
+// part of it) goes again by itself (retryPush).
 func (s *Service) pushNow(ctx context.Context, session uuid.UUID, streams bool) {
 	conns := s.conns.of(session)
 	if len(conns) == 0 || s.tasks == nil {
+		s.pushWent(session)
 		return
 	}
 	defer s.conns.lock(session)()
@@ -466,7 +477,7 @@ func (s *Service) pushNow(ctx context.Context, session uuid.UUID, streams bool) 
 		return
 	}
 	for _, c := range conns {
-		d := delivery{streams: streams, room: roomFor(planLimit(from.session), nil)}
+		d := delivery{streams: streams, room: roomFor(planLimit(from.session), nil), conn: c}
 		if max, ok := c.allowanceOf(session); ok {
 			if d.tasks, err = s.room(ctx, from.session, max); err != nil {
 				s.logger.Error("minion push: the allowance's room", zap.String("session_id", session.String()), zap.Error(err))
@@ -479,15 +490,23 @@ func (s *Service) pushNow(ctx context.Context, session uuid.UUID, streams bool) 
 			return
 		}
 		if len(o.items) == 0 {
+			s.pushWent(session)
 			return
 		}
-		if err := s.push(ctx, c, from, o.items); err == nil {
+		sent, err := s.push(ctx, c, from, o.items)
+		if err == nil {
+			s.pushWent(session)
+			if sent < len(o.items) {
+				// Its codec wrote part of it: the rest goes by itself.
+				s.retryPush(session, streams)
+			}
 			return
-		} else {
-			s.logger.Info("minion push failed, trying another connection", zap.String("session_id", session.String()),
-				zap.String("conn", c.ID), zap.Error(err))
 		}
+		s.logger.Info("minion push failed, trying another connection", zap.String("session_id", session.String()),
+			zap.String("conn", c.ID), zap.Error(err))
 	}
+	// Every connection failed: what the push carried goes again by itself.
+	s.retryPush(session, streams)
 }
 
 // room is how many tasks an allowance of max leaves room for: max less the
@@ -506,29 +525,34 @@ func (s *Service) room(ctx context.Context, session *models.MinionSession, allow
 }
 
 // push sends items on c as a message core starts, under the session's id,
-// and waits for its answer.
-func (s *Service) push(ctx context.Context, c *Conn, from *sender, items []cbor.RawMessage) error {
+// and waits for its answer; sent is how many of items went (its codec may
+// write part of a message, the rest waiting for the next).
+func (s *Service) push(ctx context.Context, c *Conn, from *sender, items []cbor.RawMessage) (sent int, err error) {
 	return s.pushUnder(ctx, c, from, from.session.SessionID, items)
 }
 
 // pushUnder is push under id: the session's, or a build's (core's first
-// word to a minion that has none yet).
-func (s *Service) pushUnder(ctx context.Context, c *Conn, from *sender, id uuid.UUID, items []cbor.RawMessage) error {
+// word to a minion that has none yet). The tasks of what does not go are
+// no longer on their way over c (flights.go).
+func (s *Service) pushUnder(ctx context.Context, c *Conn, from *sender, id uuid.UUID, items []cbor.RawMessage) (int, error) {
 	c.touch(s.now())
 	msgID := protocol.NewMessageID()
 	sealed, sent, err := s.writeMessage(ctx, from, id, protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: items,
 		At: unixNow(s.now())})
 	if err != nil {
-		return err
+		c.unfly(from.session, items)
+		return 0, err
 	}
+	c.unfly(from.session, items[sent:])
 	items = items[:sent]
 	s.answers.add(id, msgID, s.now())
 	if err := c.send(ctx, protocol.ConnFrame{ID: id[:], Data: sealed}); err != nil {
 		s.answers.take(id, msgID, s.now())
-		return err
+		c.unfly(from.session, items)
+		return 0, err
 	}
 	c.carry(items)
-	return nil
+	return sent, nil
 }
 
 // seenOn records that via carried a message of session: via reaches the
@@ -635,7 +659,7 @@ func (s *Service) tellClosed(ctx context.Context, c *Conn, from *sender) {
 	s.setConnected(ctx, sid)
 	items, err := errMessage(protocol.ErrItemSessionClosed, "the session is closed: start over")
 	if err == nil {
-		err = s.push(ctx, c, from, items)
+		_, err = s.push(ctx, c, from, items)
 	}
 	s.logger.Info("minion connection: its session closed, its minion told", zap.String("session_id", sid.String()),
 		zap.String("conn", c.ID), zap.Error(err))

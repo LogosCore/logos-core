@@ -66,6 +66,11 @@ type delivery struct {
 	room int
 	// tunnelRoom, when not 0, is the most the tunnels' items take of it.
 	tunnelRoom int
+	// conn is the connection kept open the message goes over (a push, or
+	// the reply over its socket): a task on its way over it does not go
+	// again there until its wait is over (flights.go). nil for a request's
+	// reply and a call, which carry it again.
+	conn *Conn
 	// count is how many items the message has besides the outbox's (and
 	// those to come after them): the tunnels keep within
 	// protocol.MaxMinionMessageItems.
@@ -247,7 +252,7 @@ func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d d
 		o.delegatePolls = polls
 	}
 	if d.tasks > 0 {
-		fresh, err := s.taskItems(ctx, session, d.tasks, add)
+		fresh, err := s.taskItems(ctx, session, d.tasks, d.conn, add)
 		if err != nil {
 			return o, err
 		}
@@ -269,9 +274,10 @@ func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d d
 
 // taskItems adds up to limit of the tasks waiting for the session through
 // add, those sent and not acknowledged first, and marks those added sent;
-// fresh when one was never sent. A task whose item no message of the
-// session's connection could carry ends failed.
-func (s *Service) taskItems(ctx context.Context, session *models.MinionSession, limit int, add func(cbor.RawMessage) bool) (fresh bool, err error) {
+// fresh when one was never sent. Over conn, a connection kept open, a task
+// on its way over it waits for its ack (flights.go). A task whose item no
+// message of the session's connection could carry ends failed.
+func (s *Service) taskItems(ctx context.Context, session *models.MinionSession, limit int, conn *Conn, add func(cbor.RawMessage) bool) (fresh bool, err error) {
 	waiting, err := s.tasks.ForDelivery(ctx, session.SessionID, limit)
 	if err != nil {
 		return false, fmt.Errorf("tasks to deliver: %w", err)
@@ -294,7 +300,17 @@ func (s *Service) taskItems(ctx context.Context, session *models.MinionSession, 
 			}
 			continue
 		}
+		var undo func()
+		if conn != nil {
+			var ok bool
+			if ok, undo = conn.fly(t.TaskID, s.now()); !ok {
+				continue
+			}
+		}
 		if !add(item) {
+			if undo != nil {
+				undo()
+			}
 			break
 		}
 		fresh = fresh || t.State == models.MinionTaskQueued
@@ -307,7 +323,7 @@ func (s *Service) taskItems(ctx context.Context, session *models.MinionSession, 
 		return false, fmt.Errorf("mark tasks sent: %w", err)
 	}
 	for _, t := range went {
-		s.publishTask(t)
+		s.publishSent(t)
 	}
 	return fresh, nil
 }

@@ -6,15 +6,19 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/minionstreams"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-golang-protocol/protocol"
+	"go.uber.org/zap"
 )
 
 // connRig is a persistent connection to the rig's service: what core sends
-// on it is kept.
+// on it is kept, but for the next fail sends, which fail with the socket
+// still open.
 type connRig struct {
 	r      *rig
 	sid    uuid.UUID
@@ -22,6 +26,7 @@ type connRig struct {
 	mu     sync.Mutex
 	sent   []protocol.ConnFrame
 	closed bool
+	fail   int
 }
 
 func newConnRig(t *testing.T, r *rig, sid uuid.UUID, name string) *connRig {
@@ -31,6 +36,10 @@ func newConnRig(t *testing.T, r *rig, sid uuid.UUID, name string) *connRig {
 		defer c.mu.Unlock()
 		if c.closed {
 			return errors.New("closed")
+		}
+		if c.fail > 0 {
+			c.fail--
+			return errors.New("the write failed")
 		}
 		c.sent = append(c.sent, f)
 		return nil
@@ -177,11 +186,17 @@ func TestPersistentConnection(t *testing.T) {
 		t.Fatal("the third task left while paused")
 	}
 
-	// A second connection carries a message: pushes go there; the first
-	// closes and the session is still connected, through the second.
+	// A second connection carries a message: its reply brings what waits
+	// (the third task, and the second, on its way over the first and never
+	// acked), and pushes go there; the first closes and the session is
+	// still connected, through the second.
 	c2 := newConnRig(t, r, sid, "c2")
-	if _, err := c2.exchange(t, protocol.NewMessageID(), nil, protocol.GetTasksItem{T: protocol.ItemGetTasks}); err != nil {
+	reply, err = c2.exchange(t, protocol.NewMessageID(), nil, protocol.GetTasksItem{T: protocol.ItemGetTasks})
+	if err != nil {
 		t.Fatal(err)
+	}
+	if got := taskIDsIn(t, r.openUnder(t, sid, r.keys, reply)); len(got) != 2 {
+		t.Fatalf("the second connection's reply: %v", got)
 	}
 	if p := c2.pushes(t); len(p) != 0 {
 		t.Fatal("a reply came as a push")
@@ -190,9 +205,11 @@ func TestPersistentConnection(t *testing.T) {
 	if !r.svc.Connected(sid) {
 		t.Fatal("not connected with the second connection open")
 	}
+	// What the reply carried is on its way over the second: news pushes
+	// it no second time.
 	r.svc.Notify(ctx, sid)
-	if p := c2.pushes(t); len(p) != 1 || len(taskIDsIn(t, p[0])) == 0 {
-		t.Fatalf("the second connection's push: %+v", p)
+	if p := c2.pushes(t); len(p) != 0 {
+		t.Fatalf("pushed again over the connection that carries it: %+v", p)
 	}
 	r.svc.Closed(ctx, c2.conn)
 	if r.svc.Connected(sid) {
@@ -285,5 +302,250 @@ func TestConnectedRecorded(t *testing.T) {
 	r.svc.resetConnected(context.Background())
 	if r.sessionRow(t, sid).Connected {
 		t.Fatal("still connected after core started")
+	}
+}
+
+// connected is a connection of the session that said its standing
+// get_tasks, no max: pushes go there.
+func connected(t *testing.T, r *rig, sid uuid.UUID, name string) *connRig {
+	t.Helper()
+	c := newConnRig(t, r, sid, name)
+	if _, err := c.exchange(t, protocol.NewMessageID(), nil, protocol.GetTasksItem{T: protocol.ItemGetTasks}); err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+// queueTask queues a shell task for the session.
+func queueTask(r *rig, sid uuid.UUID, tasks *fakeTasks) uuid.UUID {
+	id := uuid.New()
+	tasks.mu.Lock()
+	defer tasks.mu.Unlock()
+	tasks.rows = append(tasks.rows, models.MinionTask{TaskID: id, SessionID: sid, OperationID: r.build.OperationID,
+		Command: "shell", Op: 11, State: models.MinionTaskQueued})
+	return id
+}
+
+// carried is how many times msgs carry task id.
+func carried(t *testing.T, msgs []protocol.CoreMessage, id uuid.UUID) int {
+	t.Helper()
+	n := 0
+	for _, m := range msgs {
+		for _, x := range taskIDsIn(t, m) {
+			if x == id {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// liveBus gives r's service a bus that delivers, WatchTasks on it: as in
+// core, a change to a task is news for its session.
+func liveBus(t *testing.T, r *rig) {
+	bus := eventbus.NewEventBus(zap.NewNop())
+	r.svc.bus = bus
+	unwatch := r.svc.WatchTasks()
+	bus.Start()
+	t.Cleanup(func() {
+		unwatch()
+		bus.Stop(context.Background())
+	})
+}
+
+// A task that goes out is news for the console, none for the minion's
+// connections: no push for it. Any other change to it is.
+func TestSentIsNoNews(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	liveBus(t, r)
+	c := connected(t, r, sid, "c1")
+	id := queueTask(r, sid, tasks)
+	task := models.MinionTask{TaskID: id, SessionID: sid, OperationID: r.build.OperationID}
+	r.svc.publishSent(&task)
+	time.Sleep(3 * notifyDelay)
+	if p := c.pushes(t); len(p) != 0 {
+		t.Fatalf("a push for a task going out: %+v", p)
+	}
+	r.svc.publishTask(&task)
+	time.Sleep(3 * notifyDelay)
+	if n := carried(t, c.pushes(t), id); n != 1 {
+		t.Fatalf("the change pushed the task %d times", n)
+	}
+}
+
+// A task pushed over a slow link goes once while its ack is on its way
+// (round trips of seconds): neither its going out nor other news sends it
+// again.
+func TestPushedOnceWhileItsAckIsOnItsWay(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	liveBus(t, r)
+	c := connected(t, r, sid, "c1")
+	id := queueTask(r, sid, tasks)
+	r.svc.Notify(context.Background(), sid)
+	time.Sleep(5 * notifyDelay)
+	if n := carried(t, c.pushes(t), id); n != 1 {
+		t.Fatalf("pushed %d times while its ack is on its way, not once", n)
+	}
+}
+
+// A push that fails while its connection stays open goes again by itself:
+// no news may come to nudge it, and the minion sends nothing meanwhile.
+func TestFailedPushGoesAgain(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	c := connected(t, r, sid, "c1")
+	c.mu.Lock()
+	c.fail = 1
+	c.mu.Unlock()
+	id := queueTask(r, sid, tasks)
+	r.svc.Notify(context.Background(), sid)
+	if p := c.pushes(t); len(p) != 0 {
+		t.Fatalf("a failed push went: %+v", p)
+	}
+	n := 0
+	for end := time.Now().Add(pushRetryWait + 2*time.Second); n == 0 && time.Now().Before(end); {
+		time.Sleep(20 * time.Millisecond)
+		n = carried(t, c.pushes(t), id)
+	}
+	if n != 1 {
+		t.Fatalf("the retry carried the task %d times", n)
+	}
+}
+
+// A failed push leaves its tasks free: the next push over the same
+// connection carries them at once.
+func TestFailedPushLetsItsTasksGo(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	c := connected(t, r, sid, "c1")
+	c.mu.Lock()
+	c.fail = 1
+	c.mu.Unlock()
+	id := queueTask(r, sid, tasks)
+	r.svc.Notify(context.Background(), sid)
+	r.svc.Notify(context.Background(), sid)
+	if n := carried(t, c.pushes(t), id); n != 1 {
+		t.Fatalf("after a failed push the task went %d times", n)
+	}
+}
+
+// Tasks one push could not carry go in the reply to the minion's ack (its
+// get_tasks with it), and nothing on its way is pushed again.
+func TestLeftoversGoInTheAcksReply(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	liveBus(t, r)
+	c := connected(t, r, sid, "c1")
+	queued := map[uuid.UUID]bool{}
+	for range models.MaxMinionTasksPerReply + 3 {
+		queued[queueTask(r, sid, tasks)] = true
+	}
+	r.svc.Notify(context.Background(), sid)
+	pushed := c.pushes(t)
+	if len(pushed) != 1 || len(taskIDsIn(t, pushed[0])) != models.MaxMinionTasksPerReply {
+		t.Fatalf("the first push: %d messages", len(pushed))
+	}
+	var acks [][]byte
+	for _, id := range taskIDsIn(t, pushed[0]) {
+		delete(queued, id)
+		acks = append(acks, id[:])
+	}
+	reply, err := c.exchange(t, protocol.NewMessageID(), nil, protocol.AckItem{T: protocol.ItemAck, Tasks: acks},
+		protocol.GetTasksItem{T: protocol.ItemGetTasks})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rest := taskIDsIn(t, r.openUnder(t, sid, r.keys, reply))
+	for _, id := range rest {
+		delete(queued, id)
+	}
+	if len(rest) != 3 || len(queued) != 0 {
+		t.Fatalf("the ack's reply: %d tasks, %d never went", len(rest), len(queued))
+	}
+	// The acks are news: the push they nudge has nothing to carry.
+	time.Sleep(5 * notifyDelay)
+	if p := c.pushes(t); len(p) != 0 {
+		t.Fatalf("pushed again: %+v", p)
+	}
+}
+
+// News for the session pushes what is new, not a task on its way over the
+// same connection.
+func TestNotAgainOverTheSameConnection(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	c := connected(t, r, sid, "c1")
+	first := queueTask(r, sid, tasks)
+	r.svc.Notify(context.Background(), sid)
+	if n := carried(t, c.pushes(t), first); n != 1 {
+		t.Fatalf("the first push carried the task %d times", n)
+	}
+	second := queueTask(r, sid, tasks)
+	r.svc.Notify(context.Background(), sid)
+	p := c.pushes(t)
+	if carried(t, p, first) != 0 || carried(t, p, second) != 1 {
+		t.Fatalf("the second push: %+v", p)
+	}
+}
+
+// A task on its way over one connection goes again over another: the
+// minion switched, or connected again.
+func TestAgainOverANewConnection(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	c1 := connected(t, r, sid, "c1")
+	id := queueTask(r, sid, tasks)
+	r.svc.Notify(context.Background(), sid)
+	if n := carried(t, c1.pushes(t), id); n != 1 {
+		t.Fatalf("the first push carried the task %d times", n)
+	}
+	c2 := newConnRig(t, r, sid, "c2")
+	reply, err := c2.exchange(t, protocol.NewMessageID(), nil, protocol.GetTasksItem{T: protocol.ItemGetTasks})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := carried(t, []protocol.CoreMessage{r.openUnder(t, sid, r.keys, reply)}, id); n != 1 {
+		t.Fatalf("the new connection's reply carried the task %d times", n)
+	}
+}
+
+// A task whose ack never comes goes again over the same connection once
+// its wait is over (a frame lost on the way), the wait doubling each time.
+func TestAgainOverTheSameConnectionAfterItsWait(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	c := connected(t, r, sid, "c1")
+	start := time.Now().UTC()
+	var mu sync.Mutex
+	at := start
+	r.svc.now = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return at
+	}
+	id := queueTask(r, sid, tasks)
+	// pushes is how many times a push at after carries the task.
+	pushes := func(after time.Duration) int {
+		mu.Lock()
+		at = start.Add(after)
+		mu.Unlock()
+		r.svc.Notify(context.Background(), sid)
+		return carried(t, c.pushes(t), id)
+	}
+	for _, step := range []struct {
+		after time.Duration
+		want  int
+	}{
+		{0, 1},
+		{resendWait - time.Second, 0},
+		{resendWait, 1},
+		{resendWait + 2*resendWait - time.Second, 0},
+		{resendWait + 2*resendWait, 1},
+	} {
+		if n := pushes(step.after); n != step.want {
+			t.Fatalf("at %s the task went %d times, not %d", step.after, n, step.want)
+		}
 	}
 }

@@ -303,6 +303,10 @@ type MinionTaskEventPayload struct {
 	TaskID      string
 	SessionID   string
 	OperationID string
+	// Sent: the task went out to its minion, and nothing else changed: news
+	// for the console, none for the minion's connections (minionsync's
+	// WatchTasks does not push for it).
+	Sent bool
 }
 
 func NewMinionTaskChangedEvent(p MinionTaskEventPayload) Event {

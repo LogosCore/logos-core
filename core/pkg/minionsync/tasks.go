@@ -260,3 +260,12 @@ func (s *Service) publishTask(t *models.MinionTask) {
 		TaskID: t.TaskID.String(), SessionID: t.SessionID.String(), OperationID: t.OperationID.String(),
 	}))
 }
+
+// publishSent says t went out to its minion (the outbox marked it sent):
+// the console shows it, and it is no news for the minion's connections
+// (WatchTasks), which would only send it again while it is on its way.
+func (s *Service) publishSent(t *models.MinionTask) {
+	s.bus.Publish(eventbus.NewMinionTaskChangedEvent(eventbus.MinionTaskEventPayload{
+		TaskID: t.TaskID.String(), SessionID: t.SessionID.String(), OperationID: t.OperationID.String(), Sent: true,
+	}))
+}

@@ -280,6 +280,11 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 	// Packed items in their places (packing.go): one that does not unpack
 	// stays, and is answered.
 	unpackItems(from, msg.Items)
+	if via != nil {
+		// What the minion acks, or has results of, is no longer on its way
+		// over via (flights.go).
+		via.landed(msg.Items)
+	}
 	if via != nil && via.target != uuid.Nil {
 		// Over a bind-persistent target's connection only its minion
 		// speaks: one of another build reached at its address is not it,
@@ -337,11 +342,16 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 	}
 	if answer {
 		// An answer gets no reply: what core has to say back goes as a
-		// message of its own.
+		// message of its own, and what of it does not get across goes
+		// again by itself.
 		if len(items) == 0 {
 			return nil, nil
 		}
-		return nil, s.push(ctx, via, from, items)
+		sent, err := s.push(ctx, via, from, items)
+		if err != nil || sent < len(items) {
+			s.retryPush(from.session.SessionID, false)
+		}
+		return nil, err
 	}
 	// Through a call, nothing to say is the sync call's 204. Over a
 	// connection socket a request always gets its reply, empty or not, so
@@ -350,7 +360,19 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 		s.keepReply(ctx, msg.ID, nil)
 		return nil, nil
 	}
-	sealed, _, err := s.writeMessage(ctx, from, sentUnder, protocol.CoreMessage{V: protocol.MinionMessageV3, Re: msg.ID, Items: items})
+	sealed, sent, err := s.writeMessage(ctx, from, sentUnder, protocol.CoreMessage{V: protocol.MinionMessageV3, Re: msg.ID, Items: items})
+	if via != nil && from.session != nil {
+		// Over a socket, the tasks the reply does not carry are not on
+		// their way over it (flights.go): the minion sends again when none
+		// of it was written, and the rest of a part goes by itself.
+		switch {
+		case err != nil:
+			via.unfly(from.session, items)
+		case sent < len(items):
+			via.unfly(from.session, items[sent:])
+			s.retryPush(from.session.SessionID, false)
+		}
+	}
 	if errors.Is(err, ErrCodec) {
 		// Its factory did not write it: the exchange fails as an unopened
 		// message does, and the minion sends again.
@@ -930,6 +952,11 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 		// them, tasks only when asked), in the room the answers leave.
 		// The items the message has, and the chunks and poll to come.
 		d := delivery{streams: true, answered: answered, room: roomFor(planLimit(session), items), count: len(items) + len(pulls) + 1}
+		if p == pathSocket {
+			// Over a socket: a task on its way over it does not go again in
+			// the reply (flights.go).
+			d.conn = via
+		}
 		if len(pulls) > 0 {
 			// Tunnels leave uploads half the message.
 			d.tunnelRoom = d.room / 2
