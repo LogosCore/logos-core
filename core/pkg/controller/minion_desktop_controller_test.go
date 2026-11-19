@@ -566,6 +566,25 @@ func stuckGuacd(t *testing.T) string {
 	return l.Addr().String()
 }
 
+// A guacd that says nothing past guacd.ReadWait, not even its keep-alive
+// (a nop where it wrote nothing for 5 s: it is stuck, or unreachable), ends
+// its desktop, and its recording: the web app is told why, not left on its
+// last frame.
+func TestDesktopGuacdSilent(t *testing.T) {
+	readWait, closeWait := guacd.ReadWait, guacd.CloseWait
+	guacd.ReadWait, guacd.CloseWait = 300*time.Millisecond, 200*time.Millisecond
+	t.Cleanup(func() { guacd.ReadWait, guacd.CloseWait = readWait, closeWait })
+	conn, recs, task := openDesktop(t, stuckGuacd(t), testRecordings)
+	firstFrame(t, conn)
+	if said, closed := endSaid(t, conn); said.Opcode == "" || said.Args[1] != "514" || !strings.Contains(said.Args[0], "guacd said nothing") ||
+		closed == nil || closed.Text != "514" {
+		t.Errorf("said %v, closed %v", said, closed)
+	}
+	if rec := ended(t, recs, task, 1)[0]; rec.End != models.RecordingEndDesktop || rec.State != models.RecordingStateSaved {
+		t.Errorf("recording %+v", rec)
+	}
+}
+
 // A guacd that takes nothing more (stuck) ends its desktop once a write to
 // it fails, after guacd.WriteWait, and its recording: the web app is told
 // why, and the session does not wait on guacd's reader, which a guacd

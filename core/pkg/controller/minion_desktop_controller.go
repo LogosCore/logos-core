@@ -359,11 +359,12 @@ func desktopParams(task uuid.UUID, front, host string, port int, settings map[st
 // guacd, but for the tunnel's own, a ping answered. It says which ended
 // it: the web app (models.RecordingEndClosed: it closed, went silent for
 // desktopReadWait, sent what is not Guacamole's, or took nothing for
-// desktopWriteWait) or guacd (...Desktop: it ended the session, or took
-// nothing for guacd.WriteWait), and returns once the session is closed.
-// Where core ends it (silent, not Guacamole's, guacd taking nothing), the
-// web app is told why first (sayEnd): its Guacamole client ends a session
-// on that word, as on guacd's, not on its socket's close.
+// desktopWriteWait) or guacd (...Desktop: it ended the session, took
+// nothing for guacd.WriteWait, or said nothing for guacd.ReadWait), and
+// returns once the session is closed. Where core ends it (silent, not
+// Guacamole's, guacd taking nothing or silent), the web app is told why
+// first (sayEnd): its Guacamole client ends a session on that word, as on
+// guacd's, not on its socket's close.
 func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error, wmu *sync.Mutex, rec *recordings.Recorder) string {
 	out := make(chan struct{})
 	var guacdEnded atomic.Bool
@@ -371,6 +372,7 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 		defer close(out)
 		buf := make([]byte, 64<<10)
 		pending := 0
+		var readErr error
 		for {
 			n, err := sess.Read(buf[pending:])
 			if n > 0 {
@@ -385,11 +387,19 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 				pending = copy(buf, rest)
 			}
 			if err != nil {
+				readErr = err
 				break
 			}
 		}
-		// guacd ended the session: so does the socket.
 		guacdEnded.Store(true)
+		if timedOut(readErr) {
+			// guacd said nothing past guacd.ReadWait, not even its
+			// keep-alive: it is stuck, or unreachable.
+			sayEnd(conn, write, wmu, guacd.StatusUpstreamTimeout,
+				fmt.Sprintf("guacd said nothing for %s (it may be stuck): core ended the desktop", guacd.ReadWait))
+			return
+		}
+		// guacd ended the session: so does the socket.
 		wmu.Lock()
 		_ = conn.WriteControl(gws.CloseMessage, gws.FormatCloseMessage(gws.CloseNormalClosure, ""), time.Now().Add(desktopWriteWait))
 		wmu.Unlock()

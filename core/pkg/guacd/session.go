@@ -67,9 +67,15 @@ const HandshakeWait = 10 * time.Second
 
 // WriteWait bounds a write to guacd once the session is open: guacd that
 // takes nothing for that long is stuck, and the write fails (the session
-// ends). CloseWait bounds the disconnect Close sends.
+// ends). ReadWait bounds guacd's silence likewise: guacd sends a nop where
+// it wrote nothing for 5 s, looking every 5 s (its keep-alive, on in each
+// connection's process, a thread of its own), so it speaks at least every
+// 10 s, and one silent for 15 s is stuck or unreachable: the read fails (the
+// session ends), as Guacamole's own web application has it. CloseWait
+// bounds the disconnect Close sends.
 var (
 	WriteWait = 10 * time.Second
+	ReadWait  = 15 * time.Second
 	CloseWait = 2 * time.Second
 )
 
@@ -220,8 +226,13 @@ func (s *Session) expect(opcode string) (Instruction, error) {
 }
 
 // Read reads what guacd sends next, as it comes: its instructions' bytes,
-// which a message may cut anywhere (CutUTF8 keeps characters whole).
-func (s *Session) Read(p []byte) (int, error) { return s.r.Read(p) }
+// which a message may cut anywhere (CutUTF8 keeps characters whole), within
+// ReadWait (past it, a net.Error that timed out). Not to be called while
+// another Read runs.
+func (s *Session) Read(p []byte) (int, error) {
+	_ = s.conn.SetReadDeadline(time.Now().Add(ReadWait))
+	return s.r.Read(p)
+}
 
 // Write sends guacd the web app's instructions, whole, within WriteWait.
 // Not to be called while another Write, or Close, runs.
