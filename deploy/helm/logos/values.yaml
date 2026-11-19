@@ -623,6 +623,14 @@ seaweedfs:
     data:
       type: persistentVolumeClaim
       size: 5Gi
+    # A bucket grows one volume at a time, not the chart's 7: a volume server
+    # has room for about one volume a GB of free disk (the chart's
+    # volumeSizeLimitMB, 1000, caps a volume), and core's six buckets
+    # at 7 each needed 49 before they held a byte, which a small disk did not
+    # have (the bucket written last failed every write: "no free volumes
+    # left"). The chart's other growth settings stay its own.
+    extraEnvironmentVars:
+      WEED_MASTER_VOLUME_GROWTH_COPY_1: '1'
   volume:
     replicas: 1
     data:

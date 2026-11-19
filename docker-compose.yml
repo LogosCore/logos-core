@@ -233,6 +233,15 @@ services:
     container_name: logos-seaweedfs-master
     restart: unless-stopped
     command: master -ip=seaweedfs-master -ip.bind=0.0.0.0
+    # A bucket (a collection) grows one volume at a time, not SeaweedFS's
+    # 7: the volume server has room for about one volume a GB of free disk
+    # (a volume's limit: the image's entrypoint gives the master
+    # -volumeSizeLimitMB=1024; seaweedfs-volume below), and core's six
+    # buckets at 7 each needed 49 before they held a byte. On a 68 GB host,
+    # 35 were all there was: the bucket written last (desktop-recordings)
+    # failed every write.
+    environment:
+      WEED_MASTER_VOLUME_GROWTH_COPY_1: "1"
     volumes:
       - seaweedfs_master_data:/data
     healthcheck:
@@ -254,10 +263,12 @@ services:
     # not match the behaviour — trust the measurement.
     #
     # That ceiling is a real constraint, not bookkeeping: every S3 bucket is
-    # a collection, and a collection eagerly grows 7 volumes on its first
-    # write. A near-full disk therefore shows up as a *new bucket* failing
-    # every write with "no free volumes left" while existing buckets keep
-    # working. Setting -max by hand only hides that; free disk instead.
+    # a collection, and a collection grows its volumes on its first write
+    # (one here: the master's WEED_MASTER_VOLUME_GROWTH_COPY_1; SeaweedFS's
+    # own default is 7). A near-full disk therefore shows up as a *new
+    # bucket* failing every write with "no free volumes left" while existing
+    # buckets keep working. Setting -max by hand only hides that; free disk
+    # instead.
     command: volume -mserver=seaweedfs-master:9333 -ip.bind=0.0.0.0 -port=8080
     volumes:
       - seaweedfs_volume_data:/data
