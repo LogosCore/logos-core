@@ -57,9 +57,12 @@ type TerminalRecordings interface {
 }
 
 // WithTerminalRecordings records the terminals' sessions: without, none
-// is.
+// is. Under s.mu, as recordTerminal reads it: the service may serve
+// streams already.
 func (s *Service) WithTerminalRecordings(r TerminalRecordings) *Service {
+	s.mu.Lock()
 	s.recordings = r
+	s.mu.Unlock()
 	return s
 }
 
@@ -70,14 +73,16 @@ const recordingBeginWait = 10 * time.Second
 // runs: what it wrote, typed or said from then on is recorded. A stream
 // that ended meanwhile ends its recording as it did.
 func (s *Service) recordTerminal(st *stream, user TerminalUser) {
-	if s.recordings == nil {
+	s.mu.Lock()
+	recordings := s.recordings
+	if recordings == nil {
+		s.mu.Unlock()
 		return
 	}
-	s.mu.Lock()
 	b := TerminalBeginning{Task: st.t.task, Stream: st.id, Client: st.rec.Client, User: user, Cols: st.cols, Rows: st.rows}
 	s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), recordingBeginWait)
-	r := s.recordings.BeginTerminal(ctx, b)
+	r := recordings.BeginTerminal(ctx, b)
 	cancel()
 	if r == nil {
 		return
