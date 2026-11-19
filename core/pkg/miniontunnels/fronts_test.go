@@ -422,38 +422,136 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
-// A stream's window grows while the minion fills it and the client keeps
-// up, to maxDownWindow and within the tunnel's maxTunnelExtra, and gives
-// what it grew back as it goes.
+// windowRig is a stream of a session whose round trip is rtt, on a clock
+// the test moves (s.now), its service locked: the state grow reads.
+func windowRig(t *testing.T, rtt time.Duration) (s *Service, st *stream, now *time.Time) {
+	t.Helper()
+	s = New(DefaultConfig(), &fakePorts{recs: map[uuid.UUID]*models.OperationalPort{}}, &fakeTasks{tasks: map[uuid.UUID]models.MinionTask{}},
+		nil, zap.NewNop())
+	session := uuid.New()
+	clock := time.Unix(1000, 0)
+	s.now = func() time.Time { return clock }
+	s.mu.Lock()
+	t.Cleanup(s.mu.Unlock)
+	if rtt > 0 {
+		s.rttOf(session).sample(rtt)
+	}
+	return s, &stream{t: &tunnel{session: session}, window: downWindow}, &clock
+}
+
+// A stream's window grows while the minion fills it, round trip after
+// round trip, and the client keeps up: to maxDownWindow and within the
+// tunnel's maxTunnelExtra, giving what it grew back as it goes. Not while
+// the client is behind, nor for a minion that sends less than growShare of
+// it, nor before a round trip passed, nor with none known.
 func TestWindowGrows(t *testing.T) {
-	tn := &tunnel{}
-	st := &stream{t: tn, window: downWindow, downNext: 1 << 20, ackedEnd: 1<<20 + downWindow/16}
-	if !st.grow() || st.window != 2*downWindow || tn.extra != downWindow || !st.ackDue {
-		t.Fatalf("held back by its window: %d, extra %d", st.window, tn.extra)
+	s, st, now := windowRig(t, time.Second)
+	// A round trip delivers the window's room.
+	full := func(share float64) {
+		*now = now.Add(time.Second)
+		st.downNext += uint64(share * float64(st.window))
+	}
+	if s.grow(st) {
+		t.Fatal("grown at its first look")
+	}
+	full(1)
+	if !s.grow(st) || st.window != 2*downWindow || st.t.extra != downWindow || !st.ackDue {
+		t.Fatalf("held back by its window: %d, extra %d", st.window, st.t.extra)
 	}
 	st.down = []byte{1}
-	if st.grow() {
+	full(1)
+	if s.grow(st) {
 		t.Error("grown with the client behind")
 	}
-	st.down, st.ackedEnd = nil, st.downNext+uint64(st.window)
-	if st.grow() {
+	st.down = nil
+	full(0.5)
+	if s.grow(st) {
 		t.Error("grown with room to spare")
 	}
-	st.ackedEnd = st.downNext
-	for st.grow() {
+	// Half a round trip is no look: the next, at a full one, takes both.
+	*now = now.Add(time.Second / 2)
+	st.downNext += uint64(st.window)
+	if s.grow(st) {
+		t.Error("grown before a round trip passed")
+	}
+	*now = now.Add(time.Second / 2)
+	if !s.grow(st) || st.window != 4*downWindow {
+		t.Errorf("a round trip of a full window: %d", st.window)
+	}
+	// A long quiet stretch: the window's room in it is no full one.
+	*now = now.Add(10 * time.Second)
+	st.downNext += uint64(st.window)
+	if s.grow(st) {
+		t.Error("grown on a window spread over ten round trips")
+	}
+	for full(1); s.grow(st); full(1) {
 	}
 	if st.window != maxDownWindow {
 		t.Errorf("grew to %d", st.window)
 	}
-	other := &stream{t: tn, window: downWindow, downNext: 10, ackedEnd: 10}
-	tn.extra = maxTunnelExtra
-	if other.grow() {
+	_, other, _ := windowRig(t, time.Second)
+	other.t = st.t
+	st.t.extra = maxTunnelExtra
+	other.downNext = 1
+	_ = s.grow(other)
+	*now = now.Add(time.Second)
+	other.downNext += uint64(other.window)
+	if s.grow(other) {
 		t.Error("grown past the tunnel's extra")
 	}
-	tn.extra = maxDownWindow - downWindow
+	st.t.extra = maxDownWindow - downWindow
 	st.shrink()
-	if st.window != downWindow || tn.extra != 0 {
-		t.Errorf("gave back: %d, extra %d", st.window, tn.extra)
+	if st.window != downWindow || st.t.extra != 0 {
+		t.Errorf("gave back: %d, extra %d", st.window, st.t.extra)
+	}
+	unknown, alone, at := windowRig(t, 0)
+	_ = unknown.grow(alone)
+	*at = at.Add(time.Second)
+	alone.downNext += uint64(alone.window)
+	if unknown.grow(alone) {
+		t.Error("grown with no round trip known")
+	}
+}
+
+// A steady flow its window holds back grows the window, as a desktop's
+// video did not: the minion sends as each of core's acks gives it room,
+// MaxTunnelData at a time; core acks a quarter window apart, as soon as it
+// has the bytes; each way takes half a 1.24 s round trip. The minion's
+// next never comes within an eighth of the end core's last ack gave (the
+// rule before), however full the window runs: what it delivers per round
+// trip says the window is full.
+func TestWindowGrowsUnderSteadyFlow(t *testing.T) {
+	const rtt = 1240 * time.Millisecond
+	s, st, now := windowRig(t, rtt)
+	st.acked(uint64(st.window)) // the open's room
+	type mark struct {
+		at  time.Time
+		end uint64
+	}
+	var acks, pieces []mark // core's acks on their way, the minion's bytes on theirs
+	limit, sent := st.ackedEnd, uint64(0)
+	for range 3000 { // 30 s, 10 ms apart
+		*now = now.Add(10 * time.Millisecond)
+		for len(acks) > 0 && !acks[0].at.After(*now) {
+			limit, acks = acks[0].end, acks[1:]
+		}
+		for sent < limit {
+			sent += min(limit-sent, protocol.MaxTunnelData)
+			pieces = append(pieces, mark{now.Add(rtt / 2), sent})
+		}
+		for len(pieces) > 0 && !pieces[0].at.After(*now) {
+			// Taken, and written to the client at once (writeClient).
+			st.downNext, pieces = pieces[0].end, pieces[1:]
+			st.roomGrew()
+			_ = s.grow(st)
+			if st.ackDue {
+				st.acked(*st.ackItem(*now).Room)
+				acks = append(acks, mark{now.Add(rtt / 2), st.ackedEnd})
+			}
+		}
+	}
+	if st.window != maxDownWindow {
+		t.Errorf("a full window for 30 s grew it to %d, not %d", st.window, maxDownWindow)
 	}
 }
 

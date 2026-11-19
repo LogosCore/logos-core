@@ -11,7 +11,7 @@ import (
 // not ack once the session's round trip has passed, as TCP does (RFC 6298),
 // never sooner than cfg.ResendAfter, and wakes the session then itself; and
 // a stream's window, the room core gives the minion, grows while the
-// minion fills it and the client keeps up.
+// minion fills it, round trip after round trip, and the client keeps up.
 
 const (
 	// maxResend bounds how long core waits for an ack before it sends
@@ -167,16 +167,43 @@ func (st *stream) dataDueAt(resend time.Duration) time.Time {
 	return st.upSentAt.Add(resend)
 }
 
-// grow doubles the stream's window when the minion sent up to what core's
-// acks let it and the client has taken all of it: the window, not the
-// client, holds the stream back (on a capped tunnel the cap does: no
-// growing there). Up to maxDownWindow, and the tunnel's maxTunnelExtra;
-// true when it grew (an ack says so).
-func (st *stream) grow() bool {
+// growShare is the share of its window a stream delivers per round trip
+// that says the window holds it back.
+const growShare = 0.75
+
+// grow doubles the stream's window when the window, not the client, held
+// the stream back over the last round trip: the minion delivered at least
+// growShare of the window per round trip (as TCP's receive-window
+// autotuning measures it), and the client has taken all of it (on a capped
+// tunnel the cap holds it back: no growing there). Up to maxDownWindow,
+// and the tunnel's maxTunnelExtra; true when it grew (an ack says so).
+// Each look covers a round trip at least, from the one before; none
+// before the session's round trip is known. Under s.mu.
+//
+// What the minion delivers says it, not how near its bytes come to the
+// end core's last ack gave: core acks a quarter window at a time, each ack
+// moving that end a full window past the minion's bytes, so in a steady
+// flow they never near it, however full the window runs.
+func (s *Service) grow(st *stream) bool {
+	r := s.rtt[st.t.session]
+	if r == nil || !r.have || r.srtt <= 0 {
+		return false
+	}
+	now := s.now()
+	if st.growAt.IsZero() {
+		st.growAt, st.growFrom = now, st.downNext
+		return false
+	}
+	took := now.Sub(st.growAt)
+	if took < r.srtt {
+		return false
+	}
+	delivered := st.downNext - st.growFrom
+	st.growAt, st.growFrom = now, st.downNext
 	switch {
 	case st.window >= maxDownWindow, len(st.down) > 0, st.downEOF, st.t.cap > 0:
 		return false
-	case st.downNext+uint64(st.window/8) < st.ackedEnd:
+	case float64(delivered)*float64(r.srtt) < growShare*float64(st.window)*float64(took):
 		return false
 	case st.t.extra+st.window > maxTunnelExtra:
 		return false

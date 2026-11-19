@@ -219,9 +219,12 @@ type stream struct {
 	// window is the room core gives the minion past its next: downWindow,
 	// grown while the minion fills it and the client keeps up (rtt.go).
 	// capHeld: an ack gave none for the tunnel's cap; another goes once
-	// the cap allows.
-	window  int
-	capHeld bool
+	// the cap allows. growAt and growFrom: the stretch grow watches, since
+	// when, from which of the minion's bytes (zero: none yet).
+	window   int
+	capHeld  bool
+	growAt   time.Time
+	growFrom uint64
 	// rttEnd and rttAt: a round trip being measured, the offset whose ack
 	// ends it and when its bytes went (zero: none).
 	rttEnd uint64
@@ -713,7 +716,7 @@ func (s *Service) writeClient(st *stream) {
 		// Room given back: said once it is worth an ack, or more of it
 		// once the window holds the stream back.
 		wake := st.roomGrew()
-		if len(st.down) == 0 && st.grow() {
+		if len(st.down) == 0 && s.grow(st) {
 			wake = true
 		}
 		session := st.t.session
