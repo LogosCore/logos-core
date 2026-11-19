@@ -337,7 +337,7 @@ guacd:
   # workstation name with each RDP desktop, so another guacd opens none).
   image:
     repository: ghcr.io/logoscore/logos-guacd
-    tag: "1.6.0-freerdp3.30.0-logos4"
+    tag: "1.6.0-freerdp3.30.0-logos5"
     pullPolicy: IfNotPresent
   port: 4822
   resources:

@@ -41,6 +41,9 @@ const (
 	IgnoreCert  = "ignore_cert"
 	Workstation = "workstation_name"
 	ClientName  = "client_name"
+	// SuspendFrameAcks: the graphics pipeline's frames without the server
+	// waiting for each one's acknowledgement (deploy/guacd, patch 0005).
+	SuspendFrameAcks = "suspend_frame_acks"
 	// RDP's and SSH's: the time zone the server is told.
 	Timezone = "timezone"
 	// VNC's.
@@ -103,6 +106,8 @@ func Fields(front string) []protocol.FieldSpec {
 					{Value: "linux", Label: "Linux", Description: "As FreeRDP's on Linux (xfreerdp) says."},
 					{Value: "none", Label: "Not said", Description: "guacd's own: no client does this but Guacamole."}}},
 			timezone(front),
+			{Key: SuspendFrameAcks, Type: protocol.FieldBool, Label: "Frames without acknowledgements", Default: false, Advanced: true,
+				Description: "The server sends its frames without waiting for this client to acknowledge each: over a slow link (a long round trip), the frames that answer your input wait less behind a video's. Not with the Speed quality, which leaves the frames' pipeline out."},
 			{Key: Console, Type: protocol.FieldBool, Label: "Console session", Default: false, Advanced: true,
 				Description: "The server's console (admin) session, as mstsc /admin opens it: on a server, one that needs no Remote Desktop licence."},
 			{Key: Program, Type: protocol.FieldString, Label: "Program", MaxLength: maxProgram, Advanced: true,
@@ -420,6 +425,11 @@ func (a settingArgs) rdp() {
 	a.params["os-major-type"], a.params["os-minor-type"] = osType[0], osType[1]
 	if a.on(Console) {
 		a.params["console"] = "true"
+	}
+	if a.on(SuspendFrameAcks) {
+		// Sent only when on: a guacd without the param (an older
+		// logos-guacd) opens the rest.
+		a.params["suspend-frame-acks"] = "true"
 	}
 	a.set("initial-program", a.str(Program))
 	a.set("remote-app", a.str(RemoteApp))

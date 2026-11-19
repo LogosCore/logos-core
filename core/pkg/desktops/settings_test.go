@@ -17,7 +17,7 @@ import (
 // front.
 func TestFields(t *testing.T) {
 	want := map[string]string{
-		protocol.FrontRDP:      "quality,keyboard,clipboard,view_only,screen,workstation_name,client_name,client_os,timezone,console,program,remote_app,security,ignore_cert",
+		protocol.FrontRDP:      "quality,keyboard,clipboard,view_only,screen,workstation_name,client_name,client_os,timezone,suspend_frame_acks,console,program,remote_app,security,ignore_cert",
 		protocol.FrontVNC:      "quality,clipboard,view_only,clipboard_encoding,cursor",
 		protocol.FrontSSH:      "command,color_scheme,font_size,clipboard,view_only,timezone,scrollback,keepalive,host_key",
 		protocol.FrontTelnet:   "color_scheme,font_size,clipboard,view_only,scrollback,username_prompt,password_prompt,login_success,login_failure",
@@ -93,10 +93,12 @@ func TestParamsChosen(t *testing.T) {
 	}{
 		{"rdp, every setting", protocol.FrontRDP, map[string]any{"quality": "speed", "keyboard": "de-de-qwertz", "clipboard": "out",
 			"view_only": true, "screen": "1366x768", "client_os": "linux", "console": true, "program": ` C:\tools\run.exe `, "remote_app": "||notepad",
-			"security": "nla", "ignore_cert": false, "workstation_name": "desktop-4f7q2kd", "client_name": "Laptop-07", "timezone": "Europe/Kyiv"},
+			"security": "nla", "ignore_cert": false, "workstation_name": "desktop-4f7q2kd", "client_name": "Laptop-07", "timezone": "Europe/Kyiv",
+			"suspend_frame_acks": true},
 			map[string]string{"disable-gfx": "true", "color-depth": "16", "server-layout": "de-de-qwertz", "disable-paste": "true",
 				"read-only": "true", "width": "1366", "height": "768", "dpi": "96", "os-major-type": "4", "os-minor-type": "7", "console": "true", "initial-program": `C:\tools\run.exe`, "remote-app": "||notepad",
-				"security": "nla", "ignore-cert": "false", "workstation-name": "DESKTOP-4F7Q2KD", "client-name": "LAPTOP-07", "timezone": "Europe/Kyiv"}},
+				"suspend-frame-acks": "true",
+				"security":           "nla", "ignore-cert": "false", "workstation-name": "DESKTOP-4F7Q2KD", "client-name": "LAPTOP-07", "timezone": "Europe/Kyiv"}},
 		{"rdp at its best, following the pane, reconnecting", protocol.FrontRDP, map[string]any{"quality": "best", "screen": "pane-reconnect",
 			"clipboard": "in", "client_os": "none"},
 			map[string]string{"enable-font-smoothing": "true", "enable-wallpaper": "true", "enable-theming": "true",

@@ -1,0 +1,88 @@
+diff --git a/src/protocols/rdp/settings.c b/src/protocols/rdp/settings.c
+index 88c08fa..d719419 100644
+--- a/src/protocols/rdp/settings.c
++++ b/src/protocols/rdp/settings.c
+@@ -103,6 +103,7 @@ const char* GUAC_RDP_CLIENT_ARGS[] = {
+     "disable-offscreen-caching",
+     "disable-glyph-caching",
+     "disable-gfx",
++    "suspend-frame-acks",
+     "preconnection-id",
+     "preconnection-blob",
+     "timezone",
+@@ -443,6 +444,13 @@ enum RDP_ARGS_IDX {
+      */
+     IDX_DISABLE_GFX,
+ 
++    /**
++     * "true" if the server should send the Graphics Pipeline's frames
++     * without waiting for the client's acknowledgement of each, "false" or
++     * blank if it waits for them.
++     */
++    IDX_SUSPEND_FRAME_ACKS,
++
+     /**
+      * The preconnection ID to send within the preconnection PDU when
+      * initiating an RDP connection, if any.
+@@ -1277,6 +1285,11 @@ guac_rdp_settings* guac_rdp_parse_args(guac_user* user,
+         !guac_user_parse_args_boolean(user, GUAC_RDP_CLIENT_ARGS, argv,
+                 IDX_DISABLE_GFX, 0);
+ 
++    /* Graphics Pipeline frames without waiting for their acknowledgements */
++    settings->suspend_frame_acks =
++        guac_user_parse_args_boolean(user, GUAC_RDP_CLIENT_ARGS, argv,
++                IDX_SUSPEND_FRAME_ACKS, 0);
++
+     /* Session color depth */
+     settings->color_depth =
+         guac_user_parse_args_int(user, GUAC_RDP_CLIENT_ARGS, argv,
+@@ -1595,6 +1608,20 @@ void guac_rdp_push_settings(guac_client* client,
+ 
+     }
+ 
++    /* logos: the Graphics Pipeline's frames without waiting for the client's
++     * acknowledgement of each: FreeRDP acks the first frame saying it will
++     * ack no more (MS-RDPEGFX's SUSPEND_FRAME_ACKNOWLEDGEMENT), and the
++     * server stops waiting for acks. Over a long round trip, its waiting for
++     * each holds back the frames that answer input. */
++#if FREERDP_VERSION_MAJOR >= 3
++    freerdp_settings_set_bool(rdp_settings, FreeRDP_GfxSuspendFrameAck,
++            guac_settings->suspend_frame_acks);
++#else
++    if (guac_settings->suspend_frame_acks)
++        guac_client_log(client, GUAC_LOG_WARNING, "Suspending frame "
++                "acknowledgements needs FreeRDP 3: the server waits for each.");
++#endif
++
+     /* Set individual flags - some FreeRDP versions overwrite flags set by guac_rdp_get_performance_flags() above */
+     freerdp_settings_set_bool(rdp_settings, FreeRDP_AllowFontSmoothing, guac_settings->font_smoothing_enabled);
+     freerdp_settings_set_bool(rdp_settings, FreeRDP_DisableWallpaper, !guac_settings->wallpaper_enabled);
+@@ -1876,6 +1903,11 @@ void guac_rdp_push_settings(guac_client* client,
+ 
+     }
+ 
++    /* logos: no setting for it in this FreeRDP's settings structure. */
++    if (guac_settings->suspend_frame_acks)
++        guac_client_log(client, GUAC_LOG_WARNING, "Suspending frame "
++                "acknowledgements needs FreeRDP 3: the server waits for each.");
++
+     /* Set individual flags - some FreeRDP versions overwrite flags set by guac_rdp_get_performance_flags() above */
+     rdp_settings->AllowFontSmoothing = guac_settings->font_smoothing_enabled;
+     rdp_settings->DisableWallpaper = !guac_settings->wallpaper_enabled;
+diff --git a/src/protocols/rdp/settings.h b/src/protocols/rdp/settings.h
+index 05cd60e..11e00ce 100644
+--- a/src/protocols/rdp/settings.h
++++ b/src/protocols/rdp/settings.h
+@@ -619,6 +619,12 @@ typedef struct guac_rdp_settings {
+      */
+     int enable_gfx;
+ 
++    /**
++     * Whether the server sends the Graphics Pipeline's frames without
++     * waiting for the client's acknowledgement of each.
++     */
++    int suspend_frame_acks;
++
+     /**
+      * Whether multi-touch support is enabled.
+      */

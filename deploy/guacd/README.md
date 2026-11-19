@@ -60,6 +60,16 @@ change marked `logos:`), each about what an RDP server learns of the client:
   one; and the login FreeRDP asks for once that user left fails, where
   guacd tried the server again without one, over a new connection.
 
+- `0005-rdp-suspend-frame-acks.patch`: RDP's `suspend-frame-acks`, the
+  Graphics Pipeline's frames without the server waiting for the client's
+  acknowledgement of each (FreeRDP 3's `FreeRDP_GfxSuspendFrameAck`: it acks
+  the first frame saying it will ack no more, MS-RDPEGFX's
+  `SUSPEND_FRAME_ACKNOWLEDGEMENT`). A server that waits for each sends its
+  next frames only as acks come back, a round trip later: over a slow link
+  the frames that answer input wait behind it. Core sends it when the
+  desktop's setting `suspend_frame_acks` is on, and nothing otherwise, so
+  an older guacd still opens the rest.
+
 The runtime image has the time zones too (`tzdata`, Apache's has none):
 FreeRDP reads `TZ`'s zone from `/usr/share/zoneinfo`.
 
@@ -77,7 +87,7 @@ official 1.6.0 image's libssh2, libtelnet, libvncclient and libwebsockets
 builds). `LOGOS_REVISION` is our build of them, one up for each change of
 the patches or the Dockerfile. The image is tagged
 `<guacamole-server>-freerdp<FreeRDP>-logos<revision>`:
-`ghcr.io/logoscore/logos-guacd:1.6.0-freerdp3.30.0-logos4`.
+`ghcr.io/logoscore/logos-guacd:1.6.0-freerdp3.30.0-logos5`.
 
 - **CI**: `.github/workflows/publish-guacd.yml` builds it (linux/amd64:
   FreeRDP takes too long under emulation for arm64), checks guacd starts and
