@@ -226,7 +226,7 @@ func (s *Session) expect(opcode string) (Instruction, error) {
 }
 
 // Read reads what guacd sends next, as it comes: its instructions' bytes,
-// which a message may cut anywhere (CutUTF8 keeps characters whole), within
+// which a read may cut anywhere (CutInstructions keeps them whole), within
 // ReadWait (past it, a net.Error that timed out). Not to be called while
 // another Read runs.
 func (s *Session) Read(p []byte) (int, error) {

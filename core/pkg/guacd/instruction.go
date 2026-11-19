@@ -2,14 +2,15 @@
 // contracts/minion-messages/tunnels.md, Desktops). Core opens a desktop's
 // session there (Open: select, args, size, audio, video, image, name,
 // connect, ready: no timezone, the operator's own, which its params say
-// instead), then relays it: guacd's bytes to the web app's
-// Guacamole client as they come, cut where UTF-8 allows (CutUTF8), and
-// the client's instructions to guacd, but for its tunnel's own (opcode "",
-// a ping: answered).
+// instead), then relays it: guacd's instructions to the web app's
+// Guacamole client as they come, whole ones to a message
+// (CutInstructions), and the client's instructions to guacd, but for its
+// tunnel's own (opcode "", a ping: answered).
 package guacd
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
@@ -184,18 +185,75 @@ func Read(r *bufio.Reader) (Instruction, error) {
 	}
 }
 
-// CutUTF8 splits b where a text message may end: whole is b but for a
-// character its end cuts in two, rest that character's first bytes, which
-// go with the next message.
-func CutUTF8(b []byte) (whole, rest []byte) {
-	// A character is at most 4 bytes: look back as far for its start.
-	for i := len(b) - 1; i >= 0 && i >= len(b)-utf8.UTFMax; i-- {
-		if utf8.RuneStart(b[i]) {
-			if utf8.FullRune(b[i:]) {
-				return b, nil
+// CutInstructions splits b where a message to the web app may end: whole
+// is b's whole instructions, rest the start of one not all come yet, which
+// goes with the next message; an error, b is not Guacamole's. The web
+// app's Guacamole tunnel parses its messages as one stream, and core sends
+// its own instructions between guacd's (a ping's answer, an error): one
+// that a message cut in two would reach it with core's inside, and its
+// parser fail ("Element terminator of instruction was not ";" nor ","."),
+// the session with it.
+func CutInstructions(b []byte) (whole, rest []byte, err error) {
+	end := 0
+	for end < len(b) {
+		n, err := instructionLen(b[end:])
+		if errors.Is(err, ErrIncomplete) {
+			break
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		end += n
+	}
+	return b[:end], b[end:], nil
+}
+
+// instructionLen is the length in bytes of the instruction b starts with:
+// ErrIncomplete when b ends inside it (a character's first bytes too),
+// another error when it is not Guacamole's.
+func instructionLen(b []byte) (int, error) {
+	off := 0
+	for elems := 1; ; elems++ {
+		if elems > MaxElements {
+			return 0, fmt.Errorf("more than %d elements", MaxElements)
+		}
+		dot := bytes.IndexByte(b[off:], '.')
+		if dot < 0 {
+			if len(b)-off > maxDigits {
+				return 0, errors.New("an element's length too long")
 			}
-			return b[:i], b[i:]
+			return 0, ErrIncomplete
+		}
+		n, err := length(string(b[off : off+dot]))
+		if err != nil {
+			return 0, err
+		}
+		off += dot + 1
+		// n characters, then a comma or a semicolon.
+		for range n {
+			if off >= len(b) {
+				return 0, ErrIncomplete
+			}
+			if b[off] < utf8.RuneSelf {
+				off++
+				continue
+			}
+			if !utf8.FullRune(b[off:]) {
+				return 0, ErrIncomplete
+			}
+			_, size := utf8.DecodeRune(b[off:])
+			off += size
+		}
+		if off == len(b) {
+			return 0, ErrIncomplete
+		}
+		switch b[off] {
+		case ';':
+			return off + 1, nil
+		case ',':
+			off++
+		default:
+			return 0, fmt.Errorf("%q after an element", b[off])
 		}
 	}
-	return b, nil
 }

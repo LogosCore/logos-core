@@ -84,8 +84,16 @@ func NewMinionDesktopController(ports DesktopPorts, tasks TerminalTasks, creds D
 }
 
 // desktopReadLimit bounds one of the web app's messages: an instruction
-// (a clipboard's blob is 8 KiB).
-const desktopReadLimit = 1 << 20
+// (a clipboard's blob is 8 KiB). desktopMaxInstruction bounds one of
+// guacd's, as the relay holds it whole: guacd's are some KiB (a blob's data
+// is 6048 bytes, in base64).
+const (
+	desktopReadLimit      = 1 << 20
+	desktopMaxInstruction = 1 << 20
+)
+
+// errNotGuacamole: guacd sent what is not Guacamole's.
+var errNotGuacamole = errors.New("guacd sent what is not Guacamole's")
 
 var (
 	// desktopWriteWait bounds a write to the web app: one that takes
@@ -254,9 +262,10 @@ func (dc *MinionDesktopController) Desktop(c *gin.Context) {
 	}
 	dc.logger.Info("A desktop opened", zap.String("task_id", id.String()), zap.String("front", front),
 		zap.String("user", username), zap.String("guacd_connection", sess.ID), zap.String("recording_id", rec.ID().String()))
-	end := relayDesktop(conn, sess, write, &wmu, rec)
+	end, why := relayDesktop(conn, sess, write, &wmu, rec)
 	rec.End(end)
-	dc.logger.Info("A desktop closed", zap.String("task_id", id.String()), zap.String("guacd_connection", sess.ID), zap.String("end", end))
+	dc.logger.Info("A desktop closed", zap.String("task_id", id.String()), zap.String("guacd_connection", sess.ID), zap.String("end", end),
+		zap.String("why", why))
 }
 
 // login is the credential a desktop task's args name, as guacd gets it;
@@ -354,49 +363,74 @@ func desktopParams(task uuid.UUID, front, host string, port int, settings map[st
 }
 
 // relayDesktop carries the session over the socket until either ends,
-// recording it (rec: nil, it is not): guacd's bytes to the web app as they
-// come, whole characters to a message; the web app's instructions to
-// guacd, but for the tunnel's own, a ping answered. It says which ended
-// it: the web app (models.RecordingEndClosed: it closed, went silent for
-// desktopReadWait, sent what is not Guacamole's, or took nothing for
-// desktopWriteWait) or guacd (...Desktop: it ended the session, took
-// nothing for guacd.WriteWait, or said nothing for guacd.ReadWait), and
-// returns once the session is closed. Where core ends it (silent, not
-// Guacamole's, guacd taking nothing or silent), the web app is told why
-// first (sayEnd): its Guacamole client ends a session on that word, as on
-// guacd's, not on its socket's close.
-func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error, wmu *sync.Mutex, rec *recordings.Recorder) string {
+// recording it (rec: nil, it is not): guacd's instructions to the web app
+// as they come, whole ones to a message (core's own go between them, and
+// the web app's tunnel parses its messages as one stream); the web app's
+// instructions to guacd, but for the tunnel's own, a ping answered. It
+// says which ended it: the web app (models.RecordingEndClosed: it closed,
+// went silent for desktopReadWait, sent what is not Guacamole's, or took
+// nothing for desktopWriteWait) or guacd (...Desktop: it ended the
+// session, took nothing for guacd.WriteWait, said nothing for
+// guacd.ReadWait, or sent what is not Guacamole's), and why, for core's
+// log, and returns once the session is closed. Where core ends it (silent,
+// not Guacamole's, guacd taking nothing or silent), the web app is told
+// why first (sayEnd): its Guacamole client ends a session on that word, as
+// on guacd's, not on its socket's close.
+func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error, wmu *sync.Mutex, rec *recordings.Recorder) (end, why string) {
 	out := make(chan struct{})
 	var guacdEnded atomic.Bool
+	// What ended the reader, read once out is closed: guacd's read, or the
+	// write to the web app that failed.
+	var guacdErr, lost error
 	go func() {
 		defer close(out)
 		buf := make([]byte, 64<<10)
 		pending := 0
-		var readErr error
 		for {
+			if pending == len(buf) {
+				// One instruction fills it: room for it, within reason.
+				if len(buf) >= desktopMaxInstruction {
+					guacdErr = fmt.Errorf("%w: an instruction past %d bytes", errNotGuacamole, desktopMaxInstruction)
+					break
+				}
+				grown := make([]byte, 2*len(buf))
+				copy(grown, buf)
+				buf = grown
+			}
 			n, err := sess.Read(buf[pending:])
 			if n > 0 {
 				rec.FromGuacd(buf[pending : pending+n])
-				whole, rest := guacd.CutUTF8(buf[:pending+n])
-				if len(whole) > 0 && write(whole) != nil {
-					// The web app takes nothing: it is gone, and so is
-					// the socket, which ends the read below.
-					_ = conn.Close()
-					return
+				whole, rest, cutErr := guacd.CutInstructions(buf[:pending+n])
+				if cutErr != nil {
+					guacdErr = fmt.Errorf("%w: %w", errNotGuacamole, cutErr)
+					break
+				}
+				if len(whole) > 0 {
+					if err := write(whole); err != nil {
+						// The web app takes nothing: it is gone, and so is
+						// the socket, which ends the read below.
+						lost = err
+						_ = conn.Close()
+						return
+					}
 				}
 				pending = copy(buf, rest)
 			}
 			if err != nil {
-				readErr = err
+				guacdErr = err
 				break
 			}
 		}
 		guacdEnded.Store(true)
-		if timedOut(readErr) {
+		switch {
+		case timedOut(guacdErr):
 			// guacd said nothing past guacd.ReadWait, not even its
 			// keep-alive: it is stuck, or unreachable.
 			sayEnd(conn, write, wmu, guacd.StatusUpstreamTimeout,
 				fmt.Sprintf("guacd said nothing for %s (it may be stuck): core ended the desktop", guacd.ReadWait))
+			return
+		case errors.Is(guacdErr, errNotGuacamole):
+			sayEnd(conn, write, wmu, guacd.StatusServerError, errNotGuacamole.Error()+": core ended the desktop")
 			return
 		}
 		// guacd ended the session: so does the socket.
@@ -404,12 +438,17 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 		_ = conn.WriteControl(gws.CloseMessage, gws.FormatCloseMessage(gws.CloseNormalClosure, ""), time.Now().Add(desktopWriteWait))
 		wmu.Unlock()
 	}()
+	// The web app's read that ended the session, if one did.
+	var webErr error
 	// guacd's socket closes before its reader is waited for: a guacd that
 	// says nothing more (stuck) would hold the reader, and the session,
-	// forever.
+	// forever. An end core did not say is told from what each side saw.
 	defer func() {
 		_ = sess.Close()
 		<-out
+		if why == "" {
+			why = relayEnd(end, webErr, guacdErr, lost)
+		}
 	}()
 	ended := func() string {
 		if guacdEnded.Load() {
@@ -422,12 +461,12 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 		_ = conn.SetReadDeadline(time.Now().Add(desktopReadWait))
 		kind, b, err := conn.ReadMessage()
 		if err != nil {
-			end := ended()
+			webErr, end = err, ended()
 			if end == models.RecordingEndClosed && timedOut(err) {
-				sayEnd(conn, write, wmu, guacd.StatusClientTimeout,
-					fmt.Sprintf("core heard nothing from the web app for %s: it ended the desktop", desktopReadWait))
+				why = fmt.Sprintf("core heard nothing from the web app for %s: it ended the desktop", desktopReadWait)
+				sayEnd(conn, write, wmu, guacd.StatusClientTimeout, why)
 			}
-			return end
+			return end, why
 		}
 		if kind != gws.TextMessage {
 			continue
@@ -435,8 +474,9 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 		ins, err := guacd.Parse(string(b))
 		if err != nil {
 			// Not Guacamole's: the session ends.
-			sayEnd(conn, write, wmu, guacd.StatusClientBadRequest, "the web app sent what is not Guacamole's: core ended the desktop")
-			return models.RecordingEndClosed
+			why = "the web app sent what is not Guacamole's: core ended the desktop"
+			sayEnd(conn, write, wmu, guacd.StatusClientBadRequest, why)
+			return models.RecordingEndClosed, why
 		}
 		var toGuacd []byte
 		for _, i := range ins {
@@ -458,10 +498,33 @@ func relayDesktop(conn *gws.Conn, sess *guacd.Session, write func([]byte) error,
 						fmt.Sprintf("guacd took none of the desktop's input for %s (it may be stuck): core ended the desktop", guacd.WriteWait)
 				}
 				sayEnd(conn, write, wmu, status, msg)
-				return models.RecordingEndDesktop
+				return models.RecordingEndDesktop, msg
 			}
 		}
 	}
+}
+
+// relayEnd is why a relay ended that core did not end itself, for its log:
+// guacd ended the session or went silent; core gave up on the web app (a
+// write to it failed: it took nothing for desktopWriteWait, or its socket
+// broke); or the web app's socket ended, as gorilla says it (the close
+// code the browser sent: 1005 its page closed it with no status, 1001 the
+// page went away; 1006 no close came, the connection dropped).
+func relayEnd(end string, webErr, guacdErr, lost error) string {
+	var closed *gws.CloseError
+	switch {
+	case end == models.RecordingEndDesktop && timedOut(guacdErr):
+		return fmt.Sprintf("guacd said nothing for %s", guacd.ReadWait)
+	case end == models.RecordingEndDesktop:
+		return fmt.Sprintf("guacd ended it: %v", guacdErr)
+	case lost != nil && !errors.As(webErr, &closed):
+		// The read failed as the reader closed the socket: the write's
+		// failure is the end.
+		return fmt.Sprintf("core gave up on the web app, a write to it failed: %v", lost)
+	case webErr != nil:
+		return fmt.Sprintf("the web app's socket ended: %v", webErr)
+	}
+	return ""
 }
 
 // sayEnd ends a desktop from core's side, saying why: an error instruction

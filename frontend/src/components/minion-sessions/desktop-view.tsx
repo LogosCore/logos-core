@@ -15,9 +15,11 @@ import {
   displayDPI,
   fitScale,
   followsPane,
+  instructionText,
   requiredLabel,
   requiredSecret,
   socketEndText,
+  statusCode,
   statusText,
   viewOnly,
   type DesktopSettings,
@@ -72,6 +74,18 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
     if (!frame) return
     const tunnel = new Guacamole.WebSocketTunnel(desktopURL(taskId))
     const client = new Guacamole.Client(tunnel)
+    // An instruction the client fails on ends the session: Guacamole's
+    // tunnel catches the error, closes the socket and keeps only its
+    // message. The console gets the instruction and the error whole.
+    const handle = tunnel.oninstruction
+    tunnel.oninstruction = (opcode, args) => {
+      try {
+        handle?.call(tunnel, opcode, args)
+      } catch (e) {
+        console.error(`desktop: the Guacamole client failed on ${instructionText(opcode, args)}`, e)
+        throw e
+      }
+    }
     clientRef.current = client
     const display = client.getDisplay()
     const element = display.getElement()
@@ -93,7 +107,8 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
     // session too, saying why where no word came first.
     tunnel.onerror = (status) => {
       const opened = tunnel.state !== Guacamole.Tunnel.State.CONNECTING
-      setError((said) => said ?? socketEndText(status.code, opened))
+      console.error(`desktop: the tunnel ended, status ${statusCode(status.code)}`, status.message ?? "")
+      setError((said) => said ?? socketEndText(status.code, opened, status.message))
     }
     tunnel.onstatechange = (state) => {
       if (state === Guacamole.Tunnel.State.CLOSED) client.disconnect()

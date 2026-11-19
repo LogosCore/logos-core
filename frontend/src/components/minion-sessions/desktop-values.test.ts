@@ -8,10 +8,12 @@ import {
   displayDPI,
   fitScale,
   followsPane,
+  instructionText,
   isDesktopFront,
   requiredLabel,
   requiredSecret,
   socketEndText,
+  statusCode,
   statusText,
   viewOnly,
 } from "./desktop-values"
@@ -70,18 +72,30 @@ describe("a desktop", () => {
     expect(statusText(0x0301)).toBe("The server refused the login")
     expect(statusText(0x0203, "Aborted. See logs.")).toBe("The connection to the server failed")
     expect(statusText(0x0303, "the desktop's login is gone: start the tunnel again")).toBe("the desktop's login is gone: start the tunnel again")
-    expect(statusText(0x0999)).toBe("The desktop ended (status 999)")
+    expect(statusText(0x0999)).toBe("The desktop ended (status 0x0999)")
+    expect(statusCode(0x0207)).toBe("0x0207")
   })
 
-  test("its socket's end, unsaid by guacd or core, for a person: the socket's, not the server's", () => {
+  test("its socket's end, unsaid by guacd or core, for a person: the socket's, not the server's, its status said", () => {
     // A socket that dropped (Guacamole's tunnel: UPSTREAM_NOT_FOUND), or
     // closed abnormally (SERVER_ERROR).
-    expect(socketEndText(0x0207, true)).toBe("The connection to core was lost")
-    expect(socketEndText(0x0200, true)).toBe("The connection to core was lost")
+    expect(socketEndText(0x0207, true)).toBe("The connection to core was lost (status 0x0207)")
+    expect(socketEndText(0x0200, true)).toBe("The connection to core was lost (status 0x0200)")
     // No word from core for the tunnel's receive timeout.
-    expect(socketEndText(0x0202, true)).toBe("Core stopped answering: the connection to it timed out")
+    expect(socketEndText(0x0202, true)).toBe("Core stopped answering: the connection to it timed out (status 0x0202)")
     // Before core's first word: the upgrade refused, or core not reached.
-    expect(socketEndText(0x0207, false)).toBe("Core could not be reached, or refused the desktop")
+    expect(socketEndText(0x0207, false)).toBe("Core could not be reached, or refused the desktop (status 0x0207)")
+    // The client in the page failed on what came: the tunnel's message.
+    expect(socketEndText(0x0200, true, "Failed to execute 'drawImage'")).toBe(
+      "The desktop's client in this page failed: Failed to execute 'drawImage' (status 0x0200)",
+    )
+    // A close's reason (a status code) says nothing more.
+    expect(socketEndText(0x0200, true, "512")).toBe("The connection to core was lost (status 0x0200)")
+  })
+
+  test("an instruction, for the console: long args cut", () => {
+    expect(instructionText("size", ["0", "1024", "768"])).toBe("size(0, 1024, 768)")
+    expect(instructionText("blob", ["3", "A".repeat(100)])).toBe(`blob(3, ${"A".repeat(80)}… (100 chars))`)
   })
 
   test("a login it asks for", () => {

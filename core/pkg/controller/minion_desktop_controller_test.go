@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	neturl "net/url"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -610,6 +611,149 @@ func TestDesktopGuacdTakesNothing(t *testing.T) {
 	}
 	if rec := ended(t, recs, task, 1)[0]; rec.End != models.RecordingEndDesktop || rec.State != models.RecordingStateSaved {
 		t.Errorf("recording %+v", rec)
+	}
+}
+
+// scriptGuacd is guacd for one session that, once ready (its first frame
+// sent), writes what the test gives it, each a write of its own, and takes
+// the web app's input.
+func scriptGuacd(t *testing.T) (string, chan<- string) {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writes := make(chan string)
+	t.Cleanup(func() {
+		close(writes)
+		_ = l.Close()
+	})
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = c.Close() }()
+		r := bufio.NewReader(c)
+		for {
+			ins, err := guacd.Read(r)
+			if err != nil {
+				return
+			}
+			switch ins.Opcode {
+			case "select":
+				_, _ = c.Write([]byte(guacd.Instruction{Opcode: "args", Args: rdpGuacdArgs}.Encode()))
+			case "connect":
+				_, _ = c.Write([]byte(guacd.Instruction{Opcode: "ready", Args: []string{"$rdp-1"}}.Encode() + "4.sync,3.100;"))
+				go func() { _, _ = io.Copy(io.Discard, r) }()
+				for w := range writes {
+					if _, err := c.Write([]byte(w)); err != nil {
+						return
+					}
+				}
+				return
+			}
+		}
+	}()
+	return l.Addr().String(), writes
+}
+
+// guacd's instructions reach the web app whole, each message of the
+// socket's holding whole instructions, however guacd's writes cut them:
+// core's own (a ping's answer) go between its messages, and the web app's
+// tunnel parses them all as one stream. One inside an instruction a
+// message cut in two broke its parser ("Element terminator of instruction
+// was not ";" nor ","."), and the session: with a video playing, as
+// guacd's blobs came cut, at any moment.
+func TestDesktopWholeInstructions(t *testing.T) {
+	addr, writes := scriptGuacd(t)
+	conn, _, _ := openDesktop(t, addr, testRecordings)
+	firstFrame(t, conn)
+	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	msgs := make(chan string, 16)
+	go func() {
+		defer close(msgs)
+		for {
+			_, b, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			msgs <- string(b)
+		}
+	}()
+	var got []string
+	// What the socket brings within a moment.
+	take := func() {
+		moment := time.After(200 * time.Millisecond)
+		for {
+			select {
+			case m, ok := <-msgs:
+				if !ok {
+					return
+				}
+				got = append(got, m)
+			case <-moment:
+				return
+			}
+		}
+	}
+	// guacd writes the first part of an instruction (a blob cut by its
+	// socket), the web app pings, then guacd writes the rest.
+	writes <- "4.blob,1.3,10.AAAAA"
+	take()
+	if err := conn.WriteMessage(gws.TextMessage, []byte(guacd.Instruction{Args: []string{"ping", "1732000000000"}}.Encode())); err != nil {
+		t.Fatal(err)
+	}
+	take()
+	writes <- "BBBBB;"
+	take()
+	for _, m := range got {
+		if _, rest, err := guacd.CutInstructions([]byte(m)); err != nil || len(rest) > 0 {
+			t.Errorf("a message not of whole instructions: %q", m)
+		}
+	}
+	all, err := guacd.Parse(strings.Join(got, ""))
+	if err != nil || len(all) != 2 || all[0].Opcode != "" || all[1].Opcode != "blob" || all[1].Args[1] != "AAAAABBBBB" {
+		t.Errorf("the web app reads %v (%v) from %q", all, err, got)
+	}
+}
+
+// guacd that sends what is not Guacamole's ends its desktop, the web app
+// told why, not left to fail on it.
+func TestDesktopGuacdNotGuacamole(t *testing.T) {
+	addr, writes := scriptGuacd(t)
+	conn, recs, task := openDesktop(t, addr, testRecordings)
+	firstFrame(t, conn)
+	writes <- "4.blob,1.3,2.AAX;"
+	if said, closed := endSaid(t, conn); said.Opcode == "" || said.Args[1] != "512" || !strings.Contains(said.Args[0], "not Guacamole's") ||
+		closed == nil || closed.Text != "512" {
+		t.Errorf("said %v, closed %v", said, closed)
+	}
+	if rec := ended(t, recs, task, 1)[0]; rec.End != models.RecordingEndDesktop || rec.State != models.RecordingStateSaved {
+		t.Errorf("recording %+v", rec)
+	}
+}
+
+// relayEnd says why a relay core did not end itself ended, for its log:
+// the web app's close as the browser sent it, core giving up on a web app
+// (unless its close came first), guacd's end or silence.
+func TestRelayEnd(t *testing.T) {
+	noStatus := &gws.CloseError{Code: gws.CloseNoStatusReceived}
+	timeout := &net.OpError{Op: "read", Err: os.ErrDeadlineExceeded}
+	for _, c := range []struct {
+		end                    string
+		webErr, guacdErr, lost error
+		want                   string
+	}{
+		{models.RecordingEndClosed, noStatus, nil, nil, "the web app's socket ended: websocket: close 1005 (no status)"},
+		{models.RecordingEndClosed, net.ErrClosed, nil, errors.New("i/o timeout"), "core gave up on the web app, a write to it failed: i/o timeout"},
+		{models.RecordingEndClosed, noStatus, nil, errors.New("broken pipe"), "the web app's socket ended: websocket: close 1005 (no status)"},
+		{models.RecordingEndDesktop, noStatus, io.EOF, nil, "guacd ended it: EOF"},
+		{models.RecordingEndDesktop, noStatus, timeout, nil, "guacd said nothing for 15s"},
+	} {
+		if got := relayEnd(c.end, c.webErr, c.guacdErr, c.lost); got != c.want {
+			t.Errorf("relayEnd(%s, %v, %v, %v) = %q, want %q", c.end, c.webErr, c.guacdErr, c.lost, got, c.want)
+		}
 	}
 }
 

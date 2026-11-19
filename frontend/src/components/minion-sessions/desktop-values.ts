@@ -129,7 +129,12 @@ export function statusText(code: number, message?: string | null): string {
   const said = message?.trim()
   // guacd's generic one says nothing of use.
   if (said && said !== "Aborted. See logs.") return known && said.length < 12 ? `${known}: ${said}` : said
-  return known ?? `The desktop ended (status ${code.toString(16)})`
+  return known ?? `The desktop ended (status ${statusCode(code)})`
+}
+
+/** A Guacamole status code as its protocol writes it: 0x0207. */
+export function statusCode(code: number): string {
+  return `0x${code.toString(16).padStart(4, "0")}`
 }
 
 /**
@@ -137,12 +142,25 @@ export function statusText(code: number, message?: string | null): string {
  * (theirs comes first, and is shown): Guacamole's tunnel says it in a
  * status of its own, about the socket (its close, or core silent past its
  * receive timeout), not about the desktop's server as guacd's do. opened:
- * core had answered (the tunnel's id), so it was reached.
+ * core had answered (the tunnel's id), so it was reached. message: the
+ * tunnel's own, where it says one: SERVER_ERROR with a message is the
+ * web app's client failing on what came (the tunnel catches the error,
+ * closes the socket and says only its message). Each ends with its
+ * status, so that the screen alone says which end it was.
  */
-export function socketEndText(code: number, opened: boolean): string {
-  if (!opened) return "Core could not be reached, or refused the desktop"
-  if (code === 0x0202) return "Core stopped answering: the connection to it timed out"
-  return "The connection to core was lost"
+export function socketEndText(code: number, opened: boolean, message?: string | null): string {
+  const status = `(status ${statusCode(code)})`
+  if (!opened) return `Core could not be reached, or refused the desktop ${status}`
+  if (code === 0x0202) return `Core stopped answering: the connection to it timed out ${status}`
+  const said = message?.trim()
+  if (code === 0x0200 && said && said !== String(code)) return `The desktop's client in this page failed: ${said} ${status}`
+  return `The connection to core was lost ${status}`
+}
+
+/** An instruction for the console: its opcode and args, a long one cut. */
+export function instructionText(opcode: string, args: readonly string[]): string {
+  const cut = args.map((a) => (a.length > 80 ? `${a.slice(0, 80)}… (${a.length} chars)` : a))
+  return `${opcode}(${cut.join(", ")})`
 }
 
 /** A connection param the server asks for, for a person. */

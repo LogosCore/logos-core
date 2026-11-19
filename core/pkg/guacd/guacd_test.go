@@ -71,23 +71,35 @@ func TestRead(t *testing.T) {
 	}
 }
 
-func TestCutUTF8(t *testing.T) {
-	eagle := []byte("🦅") // 4 bytes
-	for n := range 5 {
-		b := append([]byte("4.blob,"), eagle[:n]...)
-		whole, rest := CutUTF8(b)
-		if n == 0 || n == 4 {
-			if len(rest) != 0 || len(whole) != len(b) {
-				t.Errorf("%d bytes of a character: cut %q %q", n, whole, rest)
-			}
-			continue
-		}
-		if string(whole) != "4.blob," || len(rest) != n {
-			t.Errorf("%d bytes of a character: cut %q %q", n, whole, rest)
+// A message to the web app ends after a whole instruction: the rest, one
+// not all come yet (a character's first bytes too), waits for what comes
+// next; bytes that are not Guacamole's are an error.
+func TestCutInstructions(t *testing.T) {
+	eagle := "🦅" // 4 bytes, one character
+	sync := "4.sync,3.100;"
+	blob := "4.blob,1.3,2." + eagle + "A;"
+	for _, c := range []struct{ in, whole string }{
+		{"", ""},
+		{sync, sync},
+		{sync + blob, sync + blob},
+		{sync + "4.blob,1.3,10.AAAAA", sync},
+		{sync + "4.bl", sync},
+		{sync + "4", sync},
+		// A character cut in two is not counted whole.
+		{sync + blob[:len(blob)-4], sync},
+		{sync + blob[:len(blob)-2], sync},
+		// All its characters come, its terminator not yet.
+		{sync + blob[:len(blob)-1], sync},
+	} {
+		whole, rest, err := CutInstructions([]byte(c.in))
+		if err != nil || string(whole) != c.whole || string(whole)+string(rest) != c.in {
+			t.Errorf("%q: cut %q %q %v", c.in, whole, rest, err)
 		}
 	}
-	if whole, rest := CutUTF8(nil); len(whole)+len(rest) != 0 {
-		t.Error("nil")
+	for _, bad := range []string{"4.blob,1.3,2.AAX;", "x.sync;", "1234567.a;", "4.sync" + strings.Repeat(",1.a", MaxElements) + ";"} {
+		if _, _, err := CutInstructions([]byte(sync + bad)); err == nil {
+			t.Errorf("%q: cut", bad)
+		}
 	}
 }
 
