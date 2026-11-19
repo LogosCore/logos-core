@@ -11,6 +11,7 @@ import {
   isDesktopFront,
   requiredLabel,
   requiredSecret,
+  socketEndText,
   statusText,
   viewOnly,
 } from "./desktop-values"
@@ -70,6 +71,17 @@ describe("a desktop", () => {
     expect(statusText(0x0203, "Aborted. See logs.")).toBe("The connection to the server failed")
     expect(statusText(0x0303, "the desktop's login is gone: start the tunnel again")).toBe("the desktop's login is gone: start the tunnel again")
     expect(statusText(0x0999)).toBe("The desktop ended (status 999)")
+  })
+
+  test("its socket's end, unsaid by guacd or core, for a person: the socket's, not the server's", () => {
+    // A socket that dropped (Guacamole's tunnel: UPSTREAM_NOT_FOUND), or
+    // closed abnormally (SERVER_ERROR).
+    expect(socketEndText(0x0207, true)).toBe("The connection to core was lost")
+    expect(socketEndText(0x0200, true)).toBe("The connection to core was lost")
+    // No word from core for the tunnel's receive timeout.
+    expect(socketEndText(0x0202, true)).toBe("Core stopped answering: the connection to it timed out")
+    // Before core's first word: the upgrade refused, or core not reached.
+    expect(socketEndText(0x0207, false)).toBe("Core could not be reached, or refused the desktop")
   })
 
   test("a login it asks for", () => {

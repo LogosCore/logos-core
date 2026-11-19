@@ -369,21 +369,9 @@ func TestDesktopRefused(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-		var said []guacd.Instruction
-		var closed *gws.CloseError
-		for {
-			_, b, err := conn.ReadMessage()
-			if err != nil {
-				closed, _ = err.(*gws.CloseError)
-				break
-			}
-			ins, _ := guacd.Parse(string(b))
-			said = append(said, ins...)
-		}
+		said, closed := endSaid(t, conn)
 		_ = conn.Close()
-		i := slices.IndexFunc(said, func(i guacd.Instruction) bool { return i.Opcode == "error" })
-		if i < 0 || !strings.Contains(said[i].Args[0], want.text) || said[i].Args[1] != want.status || closed == nil || closed.Text != want.status {
+		if said.Opcode == "" || !strings.Contains(said.Args[0], want.text) || said.Args[1] != want.status || closed == nil || closed.Text != want.status {
 			t.Errorf("%v%s: said %v, closed %v", id, want.query, said, closed)
 		}
 	}
@@ -463,17 +451,34 @@ func openDesktop(t *testing.T, guacdAddr string, recs func(task, opID uuid.UUID)
 	return conn, rs, task
 }
 
-// A web app gone silent (a laptop asleep: no close, no ping) ends its
-// desktop after desktopReadWait, and its recording: not a socket and a
-// recording held open for as long as the network keeps them.
-func TestDesktopSilentWebApp(t *testing.T) {
-	wait := desktopReadWait
-	desktopReadWait = 300 * time.Millisecond
-	t.Cleanup(func() { desktopReadWait = wait })
-	addr, _ := oneGuacd(t)
-	conn, recs, task := openDesktop(t, addr, testRecordings)
+// endSaid reads a desktop's socket to its end: the error instruction it
+// said (none: no opcode), and its close (nil: the socket dropped, not
+// closed).
+func endSaid(t *testing.T, conn *gws.Conn) (guacd.Instruction, *gws.CloseError) {
+	t.Helper()
 	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	// The tunnel's id, then the session's first frame: it is relayed.
+	var text strings.Builder
+	for {
+		_, b, err := conn.ReadMessage()
+		if err != nil {
+			closed, _ := err.(*gws.CloseError)
+			said, _ := guacd.Parse(text.String())
+			for _, ins := range said {
+				if ins.Opcode == "error" && len(ins.Args) == 2 {
+					return ins, closed
+				}
+			}
+			return guacd.Instruction{}, closed
+		}
+		text.Write(b)
+	}
+}
+
+// firstFrame reads a desktop's socket up to guacd's first frame, relayed
+// (after the tunnel's id).
+func firstFrame(t *testing.T, conn *gws.Conn) {
+	t.Helper()
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	for got := ""; !strings.Contains(got, "4.sync,3.100;"); {
 		_, b, err := conn.ReadMessage()
 		if err != nil {
@@ -481,8 +486,110 @@ func TestDesktopSilentWebApp(t *testing.T) {
 		}
 		got += string(b)
 	}
+}
+
+// A web app gone silent (a laptop asleep: no close, no ping) ends its
+// desktop after desktopReadWait, and its recording: not a socket and a
+// recording held open for as long as the network keeps them. The web app
+// is told why (one that wakes shows it, not its last frame).
+func TestDesktopSilentWebApp(t *testing.T) {
+	wait := desktopReadWait
+	desktopReadWait = 300 * time.Millisecond
+	t.Cleanup(func() { desktopReadWait = wait })
+	addr, _ := oneGuacd(t)
+	conn, recs, task := openDesktop(t, addr, testRecordings)
+	firstFrame(t, conn)
 	// Then nothing from the web app.
+	if said, closed := endSaid(t, conn); said.Opcode == "" || said.Args[1] != "776" || !strings.Contains(said.Args[0], "heard nothing") ||
+		closed == nil || closed.Text != "776" {
+		t.Errorf("said %v, closed %v", said, closed)
+	}
 	if rec := ended(t, recs, task, 1)[0]; rec.End != models.RecordingEndClosed || rec.State != models.RecordingStateSaved {
+		t.Errorf("recording %+v", rec)
+	}
+}
+
+// A web app that sends what is not Guacamole's ends its desktop, and is
+// told why.
+func TestDesktopNotGuacamole(t *testing.T) {
+	addr, _ := oneGuacd(t)
+	conn, recs, task := openDesktop(t, addr, testRecordings)
+	firstFrame(t, conn)
+	if err := conn.WriteMessage(gws.TextMessage, []byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+	if said, closed := endSaid(t, conn); said.Opcode == "" || said.Args[1] != "768" || closed == nil || closed.Text != "768" {
+		t.Errorf("said %v, closed %v", said, closed)
+	}
+	if rec := ended(t, recs, task, 1)[0]; rec.End != models.RecordingEndClosed || rec.State != models.RecordingStateSaved {
+		t.Errorf("recording %+v", rec)
+	}
+}
+
+// stuckGuacd is guacd for one session that, once ready, takes nothing
+// more and says nothing (its RDP client stuck), its socket open.
+func stuckGuacd(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	t.Cleanup(func() {
+		close(stop)
+		_ = l.Close()
+	})
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = c.Close() }()
+		// Little taken in: core's writes back up soon.
+		_ = c.(*net.TCPConn).SetReadBuffer(4 << 10)
+		r := bufio.NewReader(c)
+		for {
+			ins, err := guacd.Read(r)
+			if err != nil {
+				return
+			}
+			switch ins.Opcode {
+			case "select":
+				_, _ = c.Write([]byte(guacd.Instruction{Opcode: "args", Args: rdpGuacdArgs}.Encode()))
+			case "connect":
+				_, _ = c.Write([]byte(guacd.Instruction{Opcode: "ready", Args: []string{"$rdp-1"}}.Encode() + "4.sync,3.100;"))
+				<-stop
+				return
+			}
+		}
+	}()
+	return l.Addr().String()
+}
+
+// A guacd that takes nothing more (stuck) ends its desktop once a write to
+// it fails, after guacd.WriteWait, and its recording: the web app is told
+// why, and the session does not wait on guacd's reader, which a guacd
+// that says nothing would hold forever.
+func TestDesktopGuacdTakesNothing(t *testing.T) {
+	writeWait, closeWait := guacd.WriteWait, guacd.CloseWait
+	guacd.WriteWait, guacd.CloseWait = 200*time.Millisecond, 200*time.Millisecond
+	t.Cleanup(func() { guacd.WriteWait, guacd.CloseWait = writeWait, closeWait })
+	conn, recs, task := openDesktop(t, stuckGuacd(t), testRecordings)
+	firstFrame(t, conn)
+	// The web app's input, until its socket takes no more.
+	input := []byte(strings.Repeat(guacd.Instruction{Opcode: "blob", Args: []string{"1", strings.Repeat("A", 60<<10)}}.Encode(), 16))
+	go func() {
+		for {
+			if err := conn.WriteMessage(gws.TextMessage, input); err != nil {
+				return
+			}
+		}
+	}()
+	if said, closed := endSaid(t, conn); said.Opcode == "" || said.Args[1] != "514" || !strings.Contains(said.Args[0], "guacd took none") ||
+		closed == nil || closed.Text != "514" {
+		t.Errorf("said %v, closed %v", said, closed)
+	}
+	if rec := ended(t, recs, task, 1)[0]; rec.End != models.RecordingEndDesktop || rec.State != models.RecordingStateSaved {
 		t.Errorf("recording %+v", rec)
 	}
 }

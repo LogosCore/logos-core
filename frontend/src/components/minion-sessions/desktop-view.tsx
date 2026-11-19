@@ -17,6 +17,7 @@ import {
   followsPane,
   requiredLabel,
   requiredSecret,
+  socketEndText,
   statusText,
   viewOnly,
   type DesktopSettings,
@@ -69,7 +70,8 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
   useEffect(() => {
     const frame = frameRef.current
     if (!frame) return
-    const client = new Guacamole.Client(new Guacamole.WebSocketTunnel(desktopURL(taskId)))
+    const tunnel = new Guacamole.WebSocketTunnel(desktopURL(taskId))
+    const client = new Guacamole.Client(tunnel)
     clientRef.current = client
     const display = client.getDisplay()
     const element = display.getElement()
@@ -85,6 +87,17 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
       }
     }
     client.onerror = (status) => setError(statusText(status.code, status.message))
+    // Guacamole's client ends a session on guacd's word (or core's) only:
+    // a socket that ended unsaid (the network's end, or core's) would leave
+    // the last frame on the screen, still. Its tunnel's close ends the
+    // session too, saying why where no word came first.
+    tunnel.onerror = (status) => {
+      const opened = tunnel.state !== Guacamole.Tunnel.State.CONNECTING
+      setError((said) => said ?? socketEndText(status.code, opened))
+    }
+    tunnel.onstatechange = (state) => {
+      if (state === Guacamole.Tunnel.State.CLOSED) client.disconnect()
+    }
     client.onrequired = (params) => setRequired(params)
     client.onclipboard = (stream, mimetype) => {
       if (!mimetype.startsWith("text/")) return
@@ -153,6 +166,8 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
       keyboard.onkeydown = null
       keyboard.onkeyup = null
       client.onstatechange = null
+      tunnel.onstatechange = null
+      tunnel.onerror = null
       if (started) client.disconnect()
       element.remove()
       clientRef.current = null

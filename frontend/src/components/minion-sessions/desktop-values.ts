@@ -132,6 +132,19 @@ export function statusText(code: number, message?: string | null): string {
   return known ?? `The desktop ended (status ${code.toString(16)})`
 }
 
+/**
+ * Why core's socket ended under a desktop with no word from guacd or core
+ * (theirs comes first, and is shown): Guacamole's tunnel says it in a
+ * status of its own, about the socket (its close, or core silent past its
+ * receive timeout), not about the desktop's server as guacd's do. opened:
+ * core had answered (the tunnel's id), so it was reached.
+ */
+export function socketEndText(code: number, opened: boolean): string {
+  if (!opened) return "Core could not be reached, or refused the desktop"
+  if (code === 0x0202) return "Core stopped answering: the connection to it timed out"
+  return "The connection to core was lost"
+}
+
 /** A connection param the server asks for, for a person. */
 export function requiredLabel(name: string): string {
   switch (name) {

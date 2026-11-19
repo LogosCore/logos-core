@@ -23,6 +23,7 @@ const (
 	StatusUpstreamUnavailable = 0x0208
 	StatusClientBadRequest    = 0x0300
 	StatusClientForbidden     = 0x0303
+	StatusClientTimeout       = 0x0308
 )
 
 // Error is a session that did not open: guacd's error instruction, or why
