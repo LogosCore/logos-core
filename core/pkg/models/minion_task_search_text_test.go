@@ -19,6 +19,8 @@ type taskLine struct {
 	// Connections the session's build's connections' names, in order.
 	ConnectionParams []string `json:"connectionParams"`
 	Connections      []string `json:"connections"`
+	// JSON are its structured params.
+	JSON []string `json:"json"`
 }
 
 func TestMinionTaskSearchText(t *testing.T) {
@@ -31,7 +33,7 @@ func TestMinionTaskSearchText(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range cases {
-		task := &MinionTask{Command: c.Command, LineRest: c.Rest, Args: c.Args}
+		task := &MinionTask{Command: c.Command, LineRest: c.Rest, Args: c.Args, LineJSON: c.JSON}
 		task.LineNames = MinionTaskLineNames(c.ConnectionParams, task.Args, c.Connections)
 		if got := MinionTaskSearchText(task); got != c.Line {
 			t.Errorf("%s:\n got %s\nwant %s", c.Why, got, c.Line)

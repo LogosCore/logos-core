@@ -111,5 +111,13 @@
     "connectionParams": ["conn"],
     "connections": ["ws", "https"],
     "line": "switch --conn=5"
+  },
+  {
+    "why": "a structured value as compact JSON in single quotes, its ' as \\u0027",
+    "command": "scan",
+    "rest": "",
+    "args": { "targets": { "hosts": [{ "name": "a b", "port": 22 }], "note": "it's" }, "timeout": "1m" },
+    "json": ["targets"],
+    "line": "scan --targets='{\"hosts\":[{\"name\":\"a b\",\"port\":22}],\"note\":\"it\\u0027s\"}' --timeout=1m"
   }
 ]

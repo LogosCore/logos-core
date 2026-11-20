@@ -17,6 +17,8 @@ interface TaskLine {
   connectionParams?: string[]
   /** The session's build's connections' names, in order. */
   connections?: string[]
+  /** Its structured params. */
+  json?: string[]
 }
 
 /** A value's keys sorted, at any depth: as core's JSON sends them. */
@@ -44,6 +46,7 @@ describe("a task's line, as core keeps it for the search", () => {
       const params: CommandParam[] = [
         ...(c.rest ? [{ key: c.rest, type: "string", label: c.rest, required: false, default: null }] : []),
         ...(c.connectionParams ?? []).map((key) => ({ key, type: "int", label: key, required: false, format: CONNECTION_FORMAT })),
+        ...(c.json ?? []).map((key) => ({ key, type: "structured", label: key, required: false })),
       ]
       const def: CommandDef | undefined = params.length > 0 ? { id: c.command, label: c.command, params } : undefined
       const connections: ConnectionChoice[] = (c.connections ?? []).map((name, i) => ({ place: i + 1, name, kind: "" }))

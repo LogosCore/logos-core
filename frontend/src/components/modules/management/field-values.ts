@@ -47,6 +47,9 @@ export type FieldType =
   // credentials, of the types accept names.
   | "credential"
   | "credential_list"
+  // A command's param: any JSON value but null, sent to the minion as its
+  // CBOR form (docs: contracts/minion-build, Structured values).
+  | "structured"
 
 // ---------------------------------------------------------------------------
 // Bytes
@@ -188,6 +191,8 @@ export type Draft =
   // credential (multiple false) and credential_list: the picked credentials'
   // ids, in order; none means not set.
   | { kind: "credentials"; ids: string[]; multiple: boolean }
+  // structured: the JSON as typed in the editor; blank means not set.
+  | { kind: "json"; text: string }
 
 /** One row of a string_map control. */
 export interface MapEntry {
@@ -253,6 +258,9 @@ export function initialDraft(
   if (type === "datetime") {
     return { kind: "text", text: typeof value === "string" ? rfc3339ToLocalInput(value) : "" }
   }
+  if (type === "structured") {
+    return { kind: "json", text: value === null || value === undefined ? "" : JSON.stringify(value, null, 2) }
+  }
   return { kind: "text", text: valueToText(value) }
 }
 
@@ -300,6 +308,14 @@ export function parseDraft(field: FieldDef, draft: Draft): ParseResult {
     case "credentials":
       if (draft.ids.length === 0) return { ok: true, value: null }
       return { ok: true, value: draft.multiple ? [...draft.ids] : draft.ids[0] }
+    case "json": {
+      if (draft.text.trim() === "") return { ok: true, value: null }
+      try {
+        return { ok: true, value: JSON.parse(draft.text) as unknown }
+      } catch (e) {
+        return { ok: false, error: `Not JSON: ${e instanceof Error ? e.message : String(e)}` }
+      }
+    }
     case "stream": {
       const name = draft.file?.name ?? draft.name.trim()
       return { ok: true, value: name === "" ? null : name }
@@ -455,6 +471,8 @@ export function validateValue(
       if (new Set(value).size !== value.length) return "A credential is picked twice"
       return null
     }
+    case "structured":
+      return structuredProblem(value)
     case "stream":
       if (typeof value !== "string" || value === "") return "Must be a file"
       return /[/\\\0]/.test(value) || new TextEncoder().encode(value).length > 255 ? "A file name, without a path" : null
@@ -493,6 +511,35 @@ export function validateValue(
     default:
       return null
   }
+}
+
+/** How deep a structured value nests, its top counted: core's limit (protocol.MaxStructuredDepth). */
+export const MAX_STRUCTURED_DEPTH = 12
+
+/**
+ * What core refuses in a structured value, as core says it, or null: a null
+ * anywhere in it (at .a[1]), or nesting past MAX_STRUCTURED_DEPTH. Its size
+ * (in CBOR) is core's to check.
+ */
+export function structuredProblem(value: unknown, at = "", depth = 1): string | null {
+  const where = (msg: string) => (at === "" ? msg : `at ${at}: ${msg}`)
+  if (value === null || value === undefined) return where("null is not taken: leave the value out")
+  if (Array.isArray(value)) {
+    if (depth > MAX_STRUCTURED_DEPTH) return where(`nested deeper than ${MAX_STRUCTURED_DEPTH}`)
+    for (const [i, item] of value.entries()) {
+      const p = structuredProblem(item, `${at}[${i}]`, depth + 1)
+      if (p) return p
+    }
+    return null
+  }
+  if (typeof value === "object") {
+    if (depth > MAX_STRUCTURED_DEPTH) return where(`nested deeper than ${MAX_STRUCTURED_DEPTH}`)
+    for (const [k, item] of Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+      const p = structuredProblem(item, `${at}.${k}`, depth + 1)
+      if (p) return p
+    }
+  }
+  return null
 }
 
 export function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -554,6 +601,7 @@ export function formatValue(type: string, value: unknown, unit?: string | null):
     return Number.isNaN(ms) ? value : formatDateTime(ms)
   }
   if (type === "bool" && typeof value === "boolean") return value ? "true" : "false"
+  if (type === "structured") return JSON.stringify(value)
   if (Array.isArray(value)) {
     return value.length === 0 ? "(empty)" : value.map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(", ")
   }

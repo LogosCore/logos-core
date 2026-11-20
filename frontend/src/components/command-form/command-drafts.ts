@@ -48,6 +48,15 @@ export function draftFromText(field: FieldDef, text: string): Draft {
       // Typed on a line: credential ids, comma-separated; the form shows
       // their names, and picks others.
       return { kind: "credentials", ids: parts(), multiple: field.type === "credential_list" }
+    case "structured": {
+      // JSON typed on a line: shown indented in the form's editor; text that
+      // is no JSON stays as typed, for the editor to mark.
+      try {
+        return { kind: "json", text: JSON.stringify(JSON.parse(text), null, 2) }
+      } catch {
+        return { kind: "json", text }
+      }
+    }
     case "datetime":
       // The form's field takes local time; text that is no time stays as typed.
       return { kind: "text", text: Number.isNaN(Date.parse(text)) ? text : rfc3339ToLocalInput(text) }

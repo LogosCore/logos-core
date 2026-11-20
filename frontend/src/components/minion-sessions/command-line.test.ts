@@ -264,3 +264,28 @@ describe("words in the form's order", () => {
     expect(valueCompletion("feedback off", cmds, conns)).toBeNull()
   })
 })
+
+describe("a structured param", () => {
+  const scan: CommandDef = {
+    id: "scan",
+    label: "Scan",
+    params: [
+      { key: "targets", type: "structured", label: "Targets", required: true },
+      { key: "timeout", type: "duration", label: "Timeout", required: false },
+    ],
+  }
+  const value = { hosts: [{ name: "a b", port: 22 }], note: "it's", deep: [[1.5, true]] }
+
+  test("goes on a line as JSON and is read back whole, a ' inside included", () => {
+    const line = lineOf("scan", { targets: value, timeout: "1m" }, scan)
+    expect(line).toBe(`scan --targets='{"hosts":[{"name":"a b","port":22}],"note":"it\\u0027s","deep":[[1.5,true]]}' --timeout=1m`)
+    expect(parseCommandLine(line, [scan])).toEqual({ ok: true, command: scan, args: { targets: value, timeout: "1m" } })
+  })
+
+  test("takes JSON typed bare or quoted, and says what it wants otherwise", () => {
+    expect(parseCommandLine(`scan '{"hosts": []}'`, [scan])).toMatchObject({ ok: true, args: { targets: { hosts: [] } } })
+    expect(parseCommandLine("scan [1,2]", [scan])).toMatchObject({ ok: true, args: { targets: [1, 2] } })
+    expect(parseCommandLine("scan {hosts", [scan])).toMatchObject({ ok: false, error: expect.stringContaining("targets: JSON") })
+    expect(usage({ ...scan, params: [{ ...scan.params[0], required: false, default: { a: 1 } }] })).toBe('scan [targets={"a":1}]')
+  })
+})

@@ -69,6 +69,10 @@ type MinionTask struct {
 	// connection param's connection by name (MinionTaskLineNames). Set when
 	// it is queued, from its session's build's connections.
 	LineNames map[string]string `bson:"line_names,omitempty" json:"-"`
+	// LineJSON are its structured params (protocol.FieldStructured): its line
+	// shows their values as JSON, which their stored args cannot tell from a
+	// string_map's or a list's. Set when it is queued.
+	LineJSON []string `bson:"line_json,omitempty" json:"-"`
 	// SearchText is its line as the console shows it: what the session's
 	// task list search reads (MinionTaskSearchText).
 	SearchText string `bson:"search_text,omitempty" json:"-"`

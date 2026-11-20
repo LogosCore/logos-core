@@ -595,6 +595,7 @@ func (r *minionTaskResolver) queue(ctx context.Context, s *models.MinionSession,
 		}
 	}
 	t.LineNames = r.lineNames(ctx, s, cmd.Params, t.Args)
+	t.LineJSON = lineJSON(cmd.Params, t.Args)
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		if tunnel {
 			r.tunnels.Close(ctx, taskID)

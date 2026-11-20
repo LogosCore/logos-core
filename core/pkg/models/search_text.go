@@ -47,7 +47,8 @@ func BuildSearchText(b *Build) string {
 // space or a quote in it (or none at all) quoted. Unlike a record's search
 // text it holds keys: the line shows them. A connection param holds the
 // place it keeps, where the console shows the connection's name: its
-// LineNames say what the line shows instead.
+// LineNames say what the line shows instead. A structured param (its key
+// in LineJSON) shows as its JSON (lineJSON).
 func MinionTaskSearchText(t *MinionTask) string {
 	args := jsonArgs(t.Args)
 	parts := []string{t.Command}
@@ -59,6 +60,10 @@ func MinionTaskSearchText(t *MinionTask) string {
 	}
 	for _, k := range slices.Sorted(maps.Keys(args)) {
 		if k == rest {
+			continue
+		}
+		if slices.Contains(t.LineJSON, k) {
+			parts = append(parts, "--"+k+"="+lineJSON(args[k]))
 			continue
 		}
 		shown, named := t.LineNames[k]
@@ -187,6 +192,19 @@ func jsString(v any) string {
 
 // lineQuote quotes a value as lineOf does: as JSON when it holds a space or
 // a quote, or is empty.
+// lineJSON is a structured value as the console's structuredText writes it
+// (frontend minion-sessions/command-line.ts: change them together): compact
+// JSON, keys in order, in single quotes, each ' in it written \u0027.
+func lineJSON(v any) string {
+	var b strings.Builder
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if enc.Encode(v) != nil {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(strings.TrimSuffix(b.String(), "\n"), "'", `\u0027`) + "'"
+}
+
 func lineQuote(s string) string {
 	if s != "" && !strings.ContainsFunc(s, func(r rune) bool { return unicode.IsSpace(r) || r == '"' || r == '\'' }) {
 		return s

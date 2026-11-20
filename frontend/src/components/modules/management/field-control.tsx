@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { LazyJsonEditor } from "@/components/ui/lazy-json-editor"
+import { cn } from "@/lib/utils"
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react"
 import { BuildFileControl } from "@/components/builds/build-file-control"
 import { CredentialFieldControl } from "@/components/findings/credential-field-control"
@@ -177,6 +179,24 @@ export function FieldControl({
           invalid={invalid}
           defaultText={defaultText}
         />
+      )
+
+    case "json":
+      return (
+        <div className="flex flex-col gap-1">
+          <LazyJsonEditor
+            value={draft.text}
+            onChange={(t) => onChange({ kind: "json", text: t })}
+            readOnly={disabled}
+            className={cn("h-48 rounded-md border", invalid && "border-destructive")}
+            aria-label={field.label || field.key}
+          />
+          {draft.text.trim() === "" && defaultText !== undefined && (
+            <span className="text-xs text-muted-foreground">
+              Empty: the default, <code className="font-mono">{defaultText}</code>
+            </span>
+          )}
+        </div>
       )
 
     case "text":

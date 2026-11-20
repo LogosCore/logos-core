@@ -117,8 +117,29 @@ function fits(param: CommandParam, text: string, connections: readonly Connectio
       return parseGoDuration(promptDuration(text)) !== null
     case "datetime":
       return !Number.isNaN(Date.parse(text))
+    case "structured":
+      return parseJson(text) !== undefined
   }
   return true
+}
+
+/** JSON text's value; undefined when it is not JSON. */
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * A structured value on a line: compact JSON in single quotes, each ' in it
+ * written \u0027 (JSON's own escape), so that words() reads it back whole.
+ * Core's search text writes it the same (models.lineJSON: change them
+ * together).
+ */
+export function structuredText(v: unknown): string {
+  return `'${JSON.stringify(v).replaceAll("'", "\\u0027")}'`
 }
 
 interface Word {
@@ -200,6 +221,10 @@ function convert(
     }
     case "duration":
       return { ok: true, value: promptDuration(text) }
+    case "structured": {
+      const v = parseJson(text)
+      return v === undefined ? { ok: false, error: `${param.key}: JSON, in quotes ('{"a": 1}')` } : { ok: true, value: v }
+    }
     case "string_list":
     case "enum_list":
       return { ok: true, value: text.split(",").map((s) => s.trim()).filter((s) => s !== "") }
@@ -390,7 +415,7 @@ export function parseCommandLine(
 export function usage(command: CommandDef): string {
   const parts = command.params.map((p) => {
     if (p.required && (p.default === null || p.default === undefined)) return `<${p.key}>`
-    const d = p.default === null || p.default === undefined ? "" : `=${String(p.default)}`
+    const d = p.default === null || p.default === undefined ? "" : `=${p.type === "structured" ? JSON.stringify(p.default) : String(p.default)}`
     return `[${p.key}${d}]`
   })
   return [command.id, ...parts].join(" ")
@@ -407,12 +432,15 @@ export function lineOf(
   connections: readonly ConnectionChoice[] = [],
 ): string {
   const parts = [command]
+  // A structured value as JSON (structuredText), quoted already.
+  const json = new Set(def?.params.filter((x) => x.type === "structured").map((x) => x.key))
   const entries = Object.entries(args ?? {}).map(([k, v]): [string, unknown] => {
     const p = def?.params.find((x) => x.key === k)
     return [k, p?.format === CONNECTION_FORMAT && connections.length > 0 ? connectionText(v, connections) : v]
   })
-  const quote = (s: string) => (/[\s"']/.test(s) || s === "" ? JSON.stringify(s) : s)
+  const plain = (s: string) => (/[\s"']/.test(s) || s === "" ? JSON.stringify(s) : s)
   const show = (v: unknown) => (Array.isArray(v) ? v.join(",") : typeof v === "object" && v !== null ? Object.entries(v).map(([k, x]) => `${k}=${String(x)}`).join(",") : String(v))
+  const valueText = (k: string, v: unknown) => (json.has(k) ? structuredText(v) : plain(show(v)))
   // The rest param's text first, as typed, where it is the first param (a
   // shell's command line, a path); else every value as an option, so a
   // word of it is never read as an optional param's value.
@@ -420,10 +448,10 @@ export function lineOf(
   const restText = rest && def!.params[0] === rest && args ? args[rest.key] : undefined
   if (rest && typeof restText === "string" && restText.trim() !== "" && !restText.trimStart().startsWith("--")) {
     parts.push(restText)
-    for (const [k, v] of entries) if (k !== rest.key) parts.push(`--${k}=${quote(show(v))}`)
+    for (const [k, v] of entries) if (k !== rest.key) parts.push(`--${k}=${valueText(k, v)}`)
     return parts.join(" ")
   }
-  for (const [k, v] of entries) parts.push(`--${k}=${quote(show(v))}`)
+  for (const [k, v] of entries) parts.push(`--${k}=${valueText(k, v)}`)
   return parts.join(" ")
 }
 

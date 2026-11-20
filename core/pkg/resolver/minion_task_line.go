@@ -36,6 +36,18 @@ func (r *minionTaskResolver) lineNames(ctx context.Context, s *models.MinionSess
 	return models.MinionTaskLineNames(keys, args, b.Connections.Names())
 }
 
+// lineJSON are the structured params a task's args hold
+// (models.MinionTask.LineJSON): its line shows them as JSON.
+func lineJSON(params []protocol.FieldSpec, args models.JSONMap) []string {
+	var keys []string
+	for _, p := range params {
+		if _, ok := args[p.Key]; ok && p.Type == protocol.FieldStructured {
+			keys = append(keys, p.Key)
+		}
+	}
+	return keys
+}
+
 // lineRest is the param a task's line shows bare, after its command
 // (models.MinionTask.LineRest), as the console's lineOf picks it
 // (frontend minion-sessions/command-line.ts: change them together). In the
