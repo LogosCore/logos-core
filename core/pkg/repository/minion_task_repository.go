@@ -74,6 +74,8 @@ type MinionTaskCursor struct {
 type MinionTaskFilter struct {
 	Search    string
 	Important bool
+	// Composite keeps a composite command's task and its subtasks alone.
+	Composite *uuid.UUID
 }
 
 // IMinionTaskRepository keeps the tasks operators give sessions
@@ -798,11 +800,19 @@ func (r *minionTaskRepository) ListBySession(ctx context.Context, sessionID uuid
 	if search := strings.TrimSpace(f.Search); search != "" {
 		filter["search_text"] = bson.M{"$regex": searchPattern(search), "$options": "i"}
 	}
+	var and bson.A
+	if f.Composite != nil {
+		// A composite task and its subtasks.
+		and = append(and, bson.M{"$or": bson.A{bson.M{"task_id": *f.Composite}, bson.M{"parent_id": *f.Composite}}})
+	}
 	if before != nil {
-		filter["$or"] = bson.A{
+		and = append(and, bson.M{"$or": bson.A{
 			bson.M{"queued_at": bson.M{"$lt": before.QueuedAt}},
 			bson.M{"queued_at": before.QueuedAt, "task_id": bson.M{"$lt": before.TaskID}},
-		}
+		}})
+	}
+	if len(and) > 0 {
+		filter["$and"] = and
 	}
 	var out []models.MinionTask
 	err := r.tasks.Find(ctx, filter).Sort("-queued_at", "-task_id").Limit(limit).All(&out)

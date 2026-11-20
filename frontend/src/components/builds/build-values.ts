@@ -120,6 +120,8 @@ export interface ErrorCode {
 /** A command a factory's minions can be built with. */
 export interface Command {
   id: string
+  /** Its number on the wire; 0 for a composite command with no op of its own. */
+  op: number
   label: string
   description: string | null
   /** The targets whose builds can have it. */
@@ -130,6 +132,14 @@ export interface Command {
   required: boolean
   /** The connection kinds it works over; empty: every kind. */
   kinds: string[]
+  /**
+   * A composite command (docs: contracts/task-outsourcing): its factory's
+   * code runs the commands it uses as its subtasks. Picking it picks them;
+   * one with no op of its own builds nothing, and a session has it once its
+   * build has every command it uses.
+   */
+  composite: boolean
+  uses: string[]
   /** What a task of the command takes, sorted. */
   params: FieldDef[]
 }
@@ -204,12 +214,15 @@ export function factoryKindsByName(
       })),
       commands: k.schema.commands.map((c) => ({
         id: c.id,
+        op: c.op,
         label: c.label,
         description: c.description ?? null,
         targets: c.targets,
         default: c.default,
         required: c.required,
         kinds: c.kinds,
+        composite: c.composite,
+        uses: c.uses,
         params: sorted(c.params),
       })),
       errorCodes: k.schema.errorCodes.map((e) => ({
@@ -265,22 +278,62 @@ export function targetCommands(kind: FactoryKind, target: Target | undefined): C
   return target ? kind.commands.filter((c) => c.targets.includes(target.id)) : []
 }
 
-/** What a new build of target starts with, and one naming none gets: its default and required commands. */
+/** What a new build of target starts with, and one naming none gets: its default and required commands, with what they use. */
 export function defaultCommands(kind: FactoryKind, target: Target | undefined): string[] {
-  return targetCommands(kind, target)
-    .filter((c) => c.default || c.required)
-    .map((c) => c.id)
+  return pickedCommands(
+    kind,
+    target,
+    targetCommands(kind, target)
+      .filter((c) => c.default || c.required)
+      .map((c) => c.id),
+  )
 }
 
 /**
  * The commands picked, as a build of target has them: the target's among
- * them, with its required ones, in the factory's order.
+ * them, with its required ones and what each composite among them uses (and
+ * what those use in turn), in the factory's order: core's PickCommands. A
+ * composite with no op of its own stays among the picks; core builds what
+ * it uses, and its sessions have it.
  */
 export function pickedCommands(kind: FactoryKind, target: Target | undefined, picked: Iterable<string>): string[] {
-  const on = new Set(picked)
-  return targetCommands(kind, target)
-    .filter((c) => c.required || on.has(c.id))
-    .map((c) => c.id)
+  const commands = targetCommands(kind, target)
+  const byId = new Map(commands.map((c) => [c.id, c]))
+  const on = new Set<string>()
+  const pick = (id: string) => {
+    const c = byId.get(id)
+    if (!c || on.has(id)) return
+    on.add(id)
+    for (const u of c.uses) pick(u)
+  }
+  for (const id of picked) pick(id)
+  for (const c of commands) if (c.required) pick(c.id)
+  return commands.filter((c) => on.has(c.id)).map((c) => c.id)
+}
+
+/**
+ * The commands picked composites use, each with the composites among picked
+ * that use it (in turn too), in their order: what stays picked while they
+ * are.
+ */
+export function usedBy(commands: readonly Command[], picked: readonly string[]): Map<string, string[]> {
+  const byId = new Map(commands.map((c) => [c.id, c]))
+  const out = new Map<string, string[]>()
+  for (const id of picked) {
+    const c = byId.get(id)
+    if (!c?.composite) continue
+    const seen = new Set<string>()
+    const walk = (uses: readonly string[]) => {
+      for (const u of uses) {
+        if (seen.has(u)) continue
+        seen.add(u)
+        out.set(u, [...(out.get(u) ?? []), c.id])
+        walk(byId.get(u)?.uses ?? [])
+      }
+    }
+    walk(c.uses)
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------

@@ -302,7 +302,7 @@ function ItemList({
         {items.map((item) => {
           const canMove = movable(item, side)
           const isMarked = canMove && marks.marked.has(item.id)
-          const note = [item.locked ? lockedNote : "", item.description ?? ""].filter(Boolean).join("\n")
+          const note = [item.locked ? (item.lockedNote ?? lockedNote) : "", item.description ?? ""].filter(Boolean).join("\n")
           const content = (
             <>
               {item.locked && <LockIcon aria-hidden className="size-3 shrink-0 self-center" />}

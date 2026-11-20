@@ -15,6 +15,8 @@ export function useConsoleCommands(sessionId: string) {
         result: c.result,
         action: c.action,
         kinds: c.kinds,
+        composite: c.composite,
+        uses: c.uses,
         fields: c.params,
         // In the form's order: the order words fill them in.
         params: [...c.params].sort(compareFormOrder).map((p) => ({

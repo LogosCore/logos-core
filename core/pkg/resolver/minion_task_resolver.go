@@ -33,14 +33,11 @@ import (
 // IMinionTaskResolver gives sessions' minions commands and reads what they
 // answered (models.MinionTask; pkg/minionsync delivers them).
 type IMinionTaskResolver interface {
-	MinionTasks(ctx context.Context, sessionID string, last *int, before, search *string, important *bool) (*model.MinionTaskPage, error)
+	MinionTasks(ctx context.Context, sessionID string, last *int, before, search *string, important *bool, composite *string) (*model.MinionTaskPage, error)
 	MinionTaskImportantCount(ctx context.Context, sessionID string) (int, error)
 	// Feedback is MinionTask.feedback: what its minion said of it.
 	Feedback(ctx context.Context, t *model.MinionTask) ([]*model.MinionFeedback, error)
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
-	// MinionSubtasks are a composite command's task's subtasks, in the order
-	// they were queued.
-	MinionSubtasks(ctx context.Context, taskID string) ([]*model.MinionTask, error)
 	// MinionDesktopSettings are the settings a desktop of front opens
 	// with (pkg/desktops).
 	MinionDesktopSettings(ctx context.Context, front string) ([]*model.ModuleField, error)
@@ -281,7 +278,8 @@ func (r *minionTaskResolver) SessionOf(ctx context.Context, sessionID string) (*
 	return r.session(ctx, sessionID, models.OperationRoleViewer)
 }
 
-func (r *minionTaskResolver) MinionTasks(ctx context.Context, sessionID string, last *int, before, search *string, important *bool) (*model.MinionTaskPage, error) {
+func (r *minionTaskResolver) MinionTasks(ctx context.Context, sessionID string, last *int, before, search *string, important *bool,
+	composite *string) (*model.MinionTaskPage, error) {
 	s, err := r.session(ctx, sessionID, models.OperationRoleViewer)
 	if err != nil {
 		return nil, err
@@ -299,6 +297,13 @@ func (r *minionTaskResolver) MinionTasks(ctx context.Context, sessionID string, 
 	filter := repository.MinionTaskFilter{Important: important != nil && *important}
 	if search != nil {
 		filter.Search = *search
+	}
+	if composite != nil && *composite != "" {
+		id, err := uuid.Parse(*composite)
+		if err != nil {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid composite task ID")
+		}
+		filter.Composite = &id
 	}
 	rows, err := r.tasks.ListBySession(ctx, s.SessionID, filter, cursor, int64(limit+1))
 	if err != nil {

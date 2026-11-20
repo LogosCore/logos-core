@@ -602,9 +602,10 @@ extend type Query {
   # A session's tasks, newest first, at most last (50 by default, 200 at
   # most), before a page's cursor. search matches a task's line as the
   # console shows it ("shell whoami", "--timeout=30s"; quoted, whole
-  # words), important keeps the ones marked important. Needs at least
-  # viewer.
-  minionTasks(sessionId: ID!, last: Int, before: String, search: String, important: Boolean): MinionTaskPage!
+  # words), important keeps the ones marked important, composite a
+  # composite command's task and its subtasks alone (docs:
+  # contracts/task-outsourcing). Needs at least viewer.
+  minionTasks(sessionId: ID!, last: Int, before: String, search: String, important: Boolean, composite: ID): MinionTaskPage!
     @hasPermission(permission: "operation:member")
 
   # An operation's files of a kind (screenshot: its screenshots' pictures;
@@ -630,9 +631,6 @@ extend type Query {
   # The commands a session's minion takes: its build's, with what a task of
   # each takes. Needs at least viewer.
   minionSessionCommands(sessionId: ID!): [BuildCommand!]!
-  # A composite command's task's subtasks, in the order they were queued:
-  # the tasks of its session it ran.
-  minionSubtasks(taskId: ID!): [MinionTask!]! @hasPermission(permission: "operation:member")
     @hasPermission(permission: "operation:member")
 
   # The settings a desktop of front (rdp, vnc, ssh or telnet) opens with in

@@ -4,6 +4,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   CopyIcon,
+  CornerLeftUpIcon,
   DownloadIcon,
   RotateCcwIcon,
   SearchIcon,
@@ -49,6 +50,8 @@ import { STAR, StateLabel, TaskTimes } from "./task-state"
 import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { useSessionConnectionChoices } from "./use-connection-choices"
 import { TaskAs } from "./task-as"
+import { CompositeView } from "./composite-view"
+import { subtaskText } from "./composite-values"
 
 // The right of a session's console: the task picked in the list, whole
 // (its command is the list's row): where it stands and who gave it, what can be done with it,
@@ -56,7 +59,10 @@ import { TaskAs } from "./task-as"
 // finds in it), and any data the command gave, in its result's
 // view (a dir_listing as a file browser) or as raw JSON. Output and data
 // download as the minion sent them. What the minion said of it as feedback
-// is a tab of its own, its counts in the tab's name.
+// is a tab of its own, its counts in the tab's name. A composite command's
+// task has a tab of what its factory's code decided (its status, its own op,
+// its subtasks), its status line beside its state; a subtask goes to its
+// composite task, shown with its subtasks.
 // The JSON tab shows the task as core keeps it, for debugging.
 
 const API_URL = import.meta.env.VITE_API_URL as string
@@ -108,6 +114,8 @@ export function TaskDetail({
   onOpenInFileBrowser,
   deleteCommands,
   findSignal,
+  onShowComposite,
+  showingComposite,
 }: {
   task: Task
   command?: CommandDef
@@ -152,6 +160,10 @@ export function TaskDetail({
   listCommands?: readonly MenuCommand[]
   /** Goes up when Ctrl+F is pressed in the console: the find bar opens. */
   findSignal: number
+  /** Shows a composite task with its subtasks in the list, pick picked there. */
+  onShowComposite?: (id: string, pick?: string) => void
+  /** The composite task the list shows with its subtasks now; "" for none. */
+  showingComposite?: string
 }) {
   const connections = useSessionConnectionChoices(t.sessionId)
   const held = useTaskWaiting(t.sessionId, { live: true })
@@ -196,6 +208,8 @@ export function TaskDetail({
   const recorded = isDesktop || (t.tunnel != null && !t.tunnel.reverse && t.tunnel.front === FRONT_TERMINAL)
   // A delegate task's: what it serves and carries.
   const isDelegate = t.delegate != null
+  // A composite command's: what its factory's code decided.
+  const isComposite = t.composite != null
   const hasData =
     (isFile && t.file != null) ||
     isUpload ||
@@ -220,14 +234,19 @@ export function TaskDetail({
     t.dataTruncated ? "Cut at 4 MiB with the output: the rest was dropped." : null,
   ].filter((n): n is string => n !== null)
 
-  const [tab, setTab] = useState<"output" | "data" | "feedback" | "recordings" | "json" | null>(null)
+  const [tab, setTab] = useState<"output" | "data" | "feedback" | "recordings" | "composite" | "json" | null>(null)
   // Data alone shows as data; with output, the output first. An upload
   // shows its progress first, whatever it prints, and a screenshot its
   // picture. Feedback and a desktop's or a terminal's recordings only when
   // asked.
+  // A composite task opens on what its factory's code decided, until it has
+  // output or data to show.
+  const compositeShown = isComposite && (tab === "composite" || (tab === null && t.outputSize === 0 && !hasData))
   const shown =
     tab === "json"
       ? "json"
+      : compositeShown
+        ? "composite"
       : tab === "recordings" && recorded
         ? "recordings"
       : tab === "feedback" && hasFeedback
@@ -274,6 +293,15 @@ export function TaskDetail({
               </span>
             </TabButton>
           )}
+          {isComposite && (
+            <TabButton
+              active={shown === "composite"}
+              onClick={() => setTab("composite")}
+              title="What its factory's code decided: its status, its own op, its subtasks"
+            >
+              Composite
+            </TabButton>
+          )}
           {hasFeedback && (
             <TabButton active={shown === "feedback"} onClick={() => setTab("feedback")} title={feedbackTitle}>
               <span className="inline-flex items-center gap-1.5">
@@ -288,6 +316,23 @@ export function TaskDetail({
         </div>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 border-l pl-2">
           <StateLabel t={t} held={held} />
+          {t.composite?.status && (
+            <span className="max-w-full min-w-0 truncate text-xs" title={t.composite.status}>
+              {t.composite.status}
+            </span>
+          )}
+          {t.parentId && (
+            <button
+              type="button"
+              disabled={!onShowComposite}
+              onClick={() => onShowComposite?.(t.parentId ?? "", t.parentId ?? undefined)}
+              title="A subtask of a composite task: show it, with its subtasks"
+              className="inline-flex max-w-full min-w-0 cursor-pointer items-baseline gap-1 text-xs text-violet-700 hover:underline disabled:cursor-default disabled:no-underline dark:text-violet-400"
+            >
+              <CornerLeftUpIcon className="size-3 shrink-0 self-center" aria-hidden />
+              <span className="truncate">subtask{subtaskText(t) ? `: ${subtaskText(t)}` : ""}</span>
+            </button>
+          )}
           <span className="text-xs text-muted-foreground" title={`Queued ${formatAbsolute(t.queuedAt)}`}>
             by {t.issuedBy === NO_ISSUER ? "core" : (t.issuedByName ?? "someone gone")}
           </span>
@@ -314,7 +359,7 @@ export function TaskDetail({
               <BracesIcon />
             </Button>
           )}
-          {shown === "recordings" || (shown === "data" && (isTunnel || isDelegate)) ? null : shown === "data" ? (
+          {shown === "recordings" || shown === "composite" || (shown === "data" && (isTunnel || isDelegate)) ? null : shown === "data" ? (
             <>
               <Button variant="ghost" size="icon-xs" title="Copy the data as JSON" aria-label="Copy the data" disabled={!data}
                 onClick={() => void copyToClipboard(JSON.stringify(data, null, 2), "data")}>
@@ -359,7 +404,8 @@ export function TaskDetail({
             </Button>
           )}
           {actions.canStop && (
-            <Button variant="ghost" size="icon-xs" title="Stop it" aria-label="Stop the task" disabled={actions.stopping} onClick={actions.stop}>
+            <Button variant="ghost" size="icon-xs" title={actions.stopTitle} aria-label={actions.stopLabel === "Stop" ? "Stop the task" : "Stop the task now"}
+              disabled={actions.stopping} onClick={actions.stop}>
               <SquareIcon />
             </Button>
           )}
@@ -368,7 +414,9 @@ export function TaskDetail({
       {t.err && <div className="border-b px-3 py-1 font-mono text-xs whitespace-pre-wrap text-red-600 dark:text-red-400">{t.err}</div>}
       {t.cancelReason && <div className="border-b px-3 py-1 text-xs text-muted-foreground">{t.cancelReason}</div>}
 
-      {shown === "recordings" ? (
+      {shown === "composite" ? (
+        <CompositeView task={t} command={command} showingSubtasks={showingComposite === t.id} onShowComposite={onShowComposite} />
+      ) : shown === "recordings" ? (
         <RecordingsView key={t.id} task={t} canDelete={canMark} />
       ) : shown === "feedback" ? (
         <TaskFeedbackView
@@ -384,7 +432,15 @@ export function TaskDetail({
           output={output}
           loading={outputQ.isLoading}
           running={!FINISHED.has(t.state)}
-          empty={t.state === "QUEUED" || t.state === "SENT" ? "No output yet." : FINISHED.has(t.state) ? "No output." : "Waiting for output…"}
+          empty={
+            t.state === "QUEUED" || t.state === "SENT"
+              ? "No output yet."
+              : FINISHED.has(t.state)
+                ? "No output."
+                : t.state === "COMPOSING"
+                  ? "No output yet: its factory's code runs it, in core (the Composite tab)."
+                  : "Waiting for output…"
+          }
           wrap={wrap}
           findSignal={findSignal}
           notes={[

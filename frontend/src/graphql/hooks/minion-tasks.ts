@@ -43,18 +43,21 @@ import {
 
 /**
  * What a session's task list is narrowed to: core's search of each task's
- * line as the console shows it, and the tasks marked important alone.
+ * line as the console shows it, the tasks marked important alone, and a
+ * composite command's task with its subtasks alone (composite, its id; ""
+ * for none).
  */
 export interface MinionTaskFilter {
   search: string
   important: boolean
+  composite: string
 }
 
-export const NO_TASK_FILTER: MinionTaskFilter = { search: "", important: false }
+export const NO_TASK_FILTER: MinionTaskFilter = { search: "", important: false, composite: "" }
 
 /** Whether a filter narrows the list at all (a blank search does not). */
 export function narrows(f: MinionTaskFilter): boolean {
-  return f.important || f.search.trim() !== ""
+  return f.important || f.search.trim() !== "" || f.composite !== ""
 }
 
 export const minionTaskKeys = {
@@ -62,7 +65,7 @@ export const minionTaskKeys = {
   /** Every list of a session's tasks, whatever narrows it. */
   session: (sessionId: string) => [...minionTaskKeys.all, "session", sessionId] as const,
   list: (sessionId: string, f: MinionTaskFilter) =>
-    [...minionTaskKeys.session(sessionId), { search: f.search.trim(), important: f.important }] as const,
+    [...minionTaskKeys.session(sessionId), { search: f.search.trim(), important: f.important, composite: f.composite }] as const,
   importantCount: (sessionId: string) => [...minionTaskKeys.all, "importantCount", sessionId] as const,
   commands: (sessionId: string) => [...minionTaskKeys.all, "commands", sessionId] as const,
   desktopSettings: (front: string) => [...minionTaskKeys.all, "desktopSettings", front] as const,
@@ -110,6 +113,7 @@ export function useMinionTasks(sessionId: string, filter: MinionTaskFilter = NO_
         before: pageParam,
         search: search || null,
         important: filter.important || null,
+        composite: filter.composite || null,
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.minionTasks.before ?? undefined,
@@ -321,11 +325,13 @@ export function useMinionDesktopSettings(front: string, enabled = true) {
 
 /**
  * Whether a task a narrowed list does not hold may belong in it now, so the
- * list is read again: one marked important, for a list of those; a new one
- * (rev 1), for a search, which reads its line. A task's line does not
+ * list is read again: one marked important, for a list of those; a
+ * composite task's new subtask, for a list of it and its subtasks; a new
+ * one (rev 1), for a search, which reads its line. A task's line does not
  * change, so a search that did not find it never will.
  */
 export function mayJoin(filter: MinionTaskFilter, task: MinionTaskFieldsFragment): boolean {
+  if (filter.composite && task.parentId !== filter.composite && task.id !== filter.composite) return false
   if (filter.important) return !!task.importantAt
   return task.rev === 1
 }

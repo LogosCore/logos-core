@@ -1,7 +1,8 @@
-import { BanIcon, CheckIcon, CircleDashedIcon, LoaderIcon, SendIcon, StarIcon, XIcon } from "lucide-react"
+import { BanIcon, CheckIcon, CircleDashedIcon, LoaderIcon, SendIcon, StarIcon, WorkflowIcon, XIcon } from "lucide-react"
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { clock, FINISHED, took, type Task } from "./task-actions"
+import { compositeStands, phaseWord } from "./composite-values"
 
 // Where a task stands, as the console's task list and the task it shows
 // draw it.
@@ -10,6 +11,8 @@ const STATE: Record<string, { icon: typeof CheckIcon; className: string; spin?: 
   QUEUED: { icon: CircleDashedIcon, className: "text-muted-foreground" },
   SENT: { icon: SendIcon, className: "text-muted-foreground" },
   RUNNING: { icon: LoaderIcon, className: "text-sky-600 dark:text-sky-400", spin: true },
+  // A composite command's task while its factory's code decides, in core.
+  COMPOSING: { icon: WorkflowIcon, className: "text-violet-600 dark:text-violet-400" },
   DONE: { icon: CheckIcon, className: "text-emerald-600 dark:text-emerald-400" },
   FAILED: { icon: XIcon, className: "text-red-600 dark:text-red-400" },
   CANCELLED: { icon: BanIcon, className: "text-muted-foreground" },
@@ -80,7 +83,11 @@ export function ImportantIcon({ t, className, held }: { t: Task; className?: str
  * waiting one that cannot reach its minion (held), why.
  */
 export function StateLabel({ t, held }: { t: Task; held?: string | null }) {
-  const stopping = t.cancelRequestedAt && !FINISHED.has(t.state)
+  // A composite task's stop shows in its phase (compositeStands while it
+  // composes, phaseWord while its own op is out); a cancel of its own op is
+  // core's.
+  const stopping = !t.composite && t.cancelRequestedAt && !FINISHED.has(t.state)
+  const phase = phaseWord(t)
   const muted = "text-muted-foreground"
   let text: React.ReactNode
   switch (t.state) {
@@ -100,7 +107,10 @@ export function StateLabel({ t, held }: { t: Task; held?: string | null }) {
       )
       break
     case "RUNNING":
-      text = <span>running</span>
+      text = <span>{t.composite ? "its own op runs" : "running"}</span>
+      break
+    case "COMPOSING":
+      text = <span>{compositeStands(t) ?? "composing"}</span>
       break
     case "DONE":
       text = <span>{t.exit != null ? `exit ${t.exit}` : "done"}</span>
@@ -116,6 +126,12 @@ export function StateLabel({ t, held }: { t: Task; held?: string | null }) {
       <span className={failedExit ? STATE.FAILED.className : s?.className}>{text}</span>
       {took(t) && <span className={muted}>· {took(t)}</span>}
       {stopping && <span className="text-amber-600 dark:text-amber-400">· stopping{t.cancelReason && " (core)"}</span>}
+      {phase && <span className="text-amber-600 dark:text-amber-400">· {phase}</span>}
+      {t.composite?.silentSince && !FINISHED.has(t.state) && (
+        <span className={HELD} title={`Core calls it again; 10 minutes without an answer fail the task. Since ${formatAbsolute(t.composite.silentSince)}`}>
+          · its factory does not answer, since {clock(t.composite.silentSince)}
+        </span>
+      )}
       {!stopping && t.cancelReason && (
         <span className={muted} title={t.cancelReason}>
           · stopped by core

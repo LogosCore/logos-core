@@ -12,8 +12,8 @@ const pages = (...tasks: MinionTaskFieldsFragment[]): InfiniteData<MinionTasksQu
 })
 
 const ALL = minionTaskKeys.list("s1", NO_TASK_FILTER)
-const IMPORTANT = minionTaskKeys.list("s1", { search: "", important: true })
-const SEARCH = minionTaskKeys.list("s1", { search: "whoami", important: false })
+const IMPORTANT = minionTaskKeys.list("s1", { search: "", important: true, composite: "" })
+const SEARCH = minionTaskKeys.list("s1", { search: "whoami", important: false, composite: "" })
 const COUNT = minionTaskKeys.importantCount("s1")
 
 // The session's lists as the console holds them: the whole one, the
@@ -67,6 +67,20 @@ describe("a session's lists, kept live", () => {
     expect(stale(qc, COUNT)).toBe(true)
   })
 
+  test("a composite task's list reads again for its new subtask, not for another new task", () => {
+    const qc = seeded()
+    const FAMILY = minionTaskKeys.list("s1", { search: "", important: false, composite: "p" })
+    qc.setQueryData(FAMILY, pages(task("p", 3)))
+    upsertMinionTask(qc, { ...task("x", 1), parentId: null })
+    expect(stale(qc, FAMILY)).toBe(false)
+    expect(ids(qc, ALL)).toEqual(["x", "b", "a"])
+    upsertMinionTask(qc, { ...task("s", 1), parentId: "p" })
+    expect(stale(qc, FAMILY)).toBe(true)
+    // Its composite task's update reaches it as any list's.
+    upsertMinionTask(qc, { ...task("p", 4), state: "COMPOSING" })
+    expect(qc.getQueryData<InfiniteData<MinionTasksQuery>>(FAMILY)!.pages[0].minionTasks.tasks[0].state).toBe("COMPOSING")
+  })
+
   test("an older copy changes nothing, its mark included", () => {
     const qc = seeded()
     upsertMinionTask(qc, task("b", 1))
@@ -76,13 +90,22 @@ describe("a session's lists, kept live", () => {
 })
 
 describe("mayJoin", () => {
-  const important: MinionTaskFilter = { search: "", important: true }
-  const search: MinionTaskFilter = { search: "x", important: false }
+  const important: MinionTaskFilter = { search: "", important: true, composite: "" }
+  const search: MinionTaskFilter = { search: "x", important: false, composite: "" }
   test("the important ones take a marked task; a search a new one", () => {
     expect(mayJoin(important, task("a", 5, "2026-11-13T10:00:00Z"))).toBe(true)
     expect(mayJoin(important, task("a", 1))).toBe(false)
     expect(mayJoin(search, task("a", 1))).toBe(true)
     expect(mayJoin(search, task("a", 2))).toBe(false)
-    expect(mayJoin({ search: "x", important: true }, task("a", 1))).toBe(false)
+    expect(mayJoin({ search: "x", important: true, composite: "" }, task("a", 1))).toBe(false)
+  })
+  test("a composite task's list takes its new subtasks, and it", () => {
+    const family: MinionTaskFilter = { search: "", important: false, composite: "p" }
+    const sub = (id: string, parentId: string | null, rev = 1) => ({ ...task(id, rev), parentId }) as MinionTaskFieldsFragment
+    expect(mayJoin(family, sub("s", "p"))).toBe(true)
+    expect(mayJoin(family, sub("s", "q"))).toBe(false)
+    expect(mayJoin(family, sub("s", null))).toBe(false)
+    expect(mayJoin(family, sub("p", null))).toBe(true)
+    expect(mayJoin(family, sub("s", "p", 2))).toBe(false)
   })
 })

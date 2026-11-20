@@ -13,6 +13,7 @@ import {
   useQueueMinionTask,
 } from "@/graphql/hooks/minion-tasks"
 import { useDebounced } from "@/hooks/use-debounced"
+import { useMinionTask } from "@/graphql/hooks/file-browser"
 import { fromWithin } from "@/lib/portal-events"
 import { CommandBar } from "./command-bar"
 import { useConsoleCommands } from "./console-commands"
@@ -40,9 +41,10 @@ import { PromptFxLayer } from "./prompt-fx-layer"
 // stays mounted. Where the session stands (live, late, lost) is its row's,
 // which the table scrolls to with the tab. The operator's prompt effect
 // (/fx) plays over the whole console (PromptFxLayer). The list can be
-// narrowed, by core, to a search of the tasks' lines and to the important
-// ones; running a command clears both, so the new task shows and is
-// followed. The command line's ↑ and ↓ go through every task all the same.
+// narrowed, by core, to a search of the tasks' lines, to the important
+// ones, and to a composite command's task with its subtasks; running a
+// command clears them, so the new task shows and is followed. The command
+// line's ↑ and ↓ go through every task all the same.
 
 export function SessionConsole({ sessionId }: { sessionId: string }) {
   const sessionQ = useMinionSession(sessionId)
@@ -54,9 +56,12 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   // moment after the typing stops (a cleared one at once).
   const [searchText, setSearchText] = useState("")
   const [important, setImportant] = useState(false)
+  // A composite command's task, shown with its subtasks alone: its id.
+  const [composite, setComposite] = useState("")
   const search = useDebounced(searchText, searchText.trim() === "" ? 0 : 250)
-  const filter = useMemo(() => ({ search, important }), [search, important])
-  const filterKey = `${important}:${search.trim()}`
+  const filter = useMemo(() => ({ search, important, composite }), [search, important, composite])
+  const keyOf = (f: { search: string; important: boolean; composite: string }) => `${f.important}:${f.composite}:${f.search.trim()}`
+  const filterKey = keyOf(filter)
   const allQ = useMinionTasks(sessionId)
   const tasksQ = useMinionTasks(sessionId, filter)
   const importantCount = useMinionTaskImportantCount(sessionId).data ?? 0
@@ -96,8 +101,28 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const ran = () => {
     setSearchText("")
     setImportant(false)
+    setComposite("")
     follow()
   }
+  // A composite task with its subtasks, the one asked for picked (the
+  // composite, or one of them) as a pick carried into that list is, while
+  // it holds it; "" goes back to every task, the pick carried likewise.
+  const showComposite = (id: string, pick?: string) => {
+    if (keyOf({ search, important, composite: id }) === filterKey) {
+      if (pick) setSelection(selectTask(tasks, pick))
+      return
+    }
+    setComposite(id)
+    if (pick) setPicked({ key: filterKey, sel: { pinned: pick, seen: null } })
+  }
+  // The composite task the list is narrowed to, as its line says it: read
+  // alone when the list's pages have not reached it (it is their oldest).
+  const listed = composite ? tasks.find((t) => t.id === composite) : undefined
+  const compositeQ = useMinionTask(composite && !listed ? composite : null)
+  const compositeTask = listed ?? compositeQ.data?.minionTask ?? undefined
+  const compositeLine = compositeTask
+    ? lineOf(compositeTask.command, compositeTask.args as Record<string, unknown> | null, byId.get(compositeTask.command), connections)
+    : null
   // A folder opened in a listing, with a list_dir command: the one picked
   // (an item's menu), else the listing's own when it is one (Up, a crumb),
   // else the session's first. The listing's own keeps its other args;
@@ -195,6 +220,9 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
               important={important}
               onImportant={setImportant}
               importantCount={importantCount}
+              compositeLine={composite ? (compositeLine ?? "a composite task") : null}
+              onAllTasks={() => showComposite("")}
+              onShowComposite={showComposite}
               filter={filter}
               stale={tasksQ.isPlaceholderData || searchText.trim() !== search.trim()}
               canMark={canWrite}
@@ -229,6 +257,8 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                   walkCommands={commandsFor(commands, "walk_dir")}
                   onOpenInFileBrowser={workspace ? (path) => workspace.openFileBrowser(sessionId, path) : undefined}
                   findSignal={findSignal}
+                  onShowComposite={showComposite}
+                  showingComposite={composite}
                 />
               ) : (
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">

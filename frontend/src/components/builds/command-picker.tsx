@@ -1,15 +1,16 @@
 import type { ReactNode } from "react"
 import { SettingsSection } from "@/components/ui/settings-rows"
 import { TransferList, type TransferItem } from "@/components/ui/transfer-list"
-import type { Command } from "@/components/builds/build-values"
+import { usedBy, type Command } from "@/components/builds/build-values"
 import { commandKindsNote } from "@/components/minion-sessions/command-kinds"
 
 /**
  * The build form's commands: what the minion will be able to do, and nothing
  * else. The target's commands to pick from, and the ones picked, in two lists
  * in the factory's order. A new build starts with the target's default and
- * required ones picked; the required ones cannot be taken out. onChange gets
- * the picks as they are: the form keeps them to the target's.
+ * required ones picked; the required ones cannot be taken out, nor the ones
+ * a composite command picked uses (picking it picks them). onChange gets the
+ * picks as they are: the form keeps them to the target's.
  */
 export function CommandPicker({
   id,
@@ -36,13 +37,16 @@ export function CommandPicker({
   /** More of the section, under the lists: how the commands run (tasks at once). */
   children?: ReactNode
 }) {
-  const items = commands.map(
-    (c): TransferItem => ({
+  const users = usedBy(commands, picked)
+  const items = commands.map((c): TransferItem => {
+    const by = users.get(c.id)
+    return {
       id: c.id,
       label: c.label,
       hint: c.id,
       description: [
         c.description,
+        compositeNote(c),
         c.params.length > 0 ? `Takes ${c.params.map((f) => f.key).join(", ")}.` : "",
         // Where it works, when not over every kind: a minion on another is
         // switched first.
@@ -50,16 +54,17 @@ export function CommandPicker({
       ]
         .filter(Boolean)
         .join("\n"),
-      locked: c.required,
-    }),
-  )
+      locked: c.required || by !== undefined,
+      lockedNote: c.required || !by ? undefined : `Used by ${by.join(", ")}: selected while ${by.length === 1 ? "it is" : "they are"}`,
+    }
+  })
   return (
     <SettingsSection id={id} title={title}>
       <div className="flex flex-col gap-3 py-3">
         <p className="text-sm text-muted-foreground">
           {commands.length === 0
             ? "This target has no commands."
-            : "The minion can do the selected commands and nothing else. The locked ones are built into every minion of the target."}
+            : "The minion can do the selected commands and nothing else. The locked ones are built into every minion of the target, or used by a composite command selected."}
         </p>
         {commands.length > 0 && (
           <TransferList
@@ -80,4 +85,13 @@ export function CommandPicker({
       {children}
     </SettingsSection>
   )
+}
+
+/** What a composite command does, in its tooltip: what it uses, and whether it builds anything itself. */
+function compositeNote(c: Command): string {
+  if (!c.composite) return ""
+  const uses = c.uses.join(", ")
+  return c.op === 0
+    ? `Composite, with no op of its own: its factory's code runs ${uses} as its subtasks. It builds nothing: a session has it once its build has ${uses}.`
+    : `Composite: its factory's code runs ${uses} as its subtasks, around its own op.`
 }

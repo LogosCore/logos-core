@@ -1,5 +1,19 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type KeyboardEvent } from "react"
-import { ArrowDownIcon, CopyIcon, RotateCcwIcon, SearchIcon, SquareIcon, StarIcon, StarOffIcon, TerminalIcon, XIcon } from "lucide-react"
+import {
+  ArrowDownIcon,
+  CopyIcon,
+  CornerDownRightIcon,
+  CornerLeftUpIcon,
+  ListTreeIcon,
+  RotateCcwIcon,
+  SearchIcon,
+  SquareIcon,
+  StarIcon,
+  StarOffIcon,
+  TerminalIcon,
+  WorkflowIcon,
+  XIcon,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -17,6 +31,7 @@ import { feedbackSummary } from "./feedback-values"
 import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { useSessionConnectionChoices } from "./use-connection-choices"
 import { TaskAs } from "./task-as"
+import { subtaskText } from "./composite-values"
 
 // The left of a session's console: its tasks, a row each, oldest at the
 // top and the newest at the bottom by the command line, under a heading
@@ -27,7 +42,9 @@ import { TaskAs } from "./task-as"
 // state's color. Older tasks load
 // at the top. Above them, a search of their lines and a switch to the
 // important ones alone, both core's (Ctrl+F in the list goes to the
-// search).
+// search). A composite command's task can be shown with its subtasks alone
+// (a chip says so, and goes back to every task); a subtask's row says what
+// its composite's factory named it.
 
 export function TaskList({
   tasks,
@@ -49,6 +66,9 @@ export function TaskList({
   important,
   onImportant,
   importantCount,
+  compositeLine,
+  onAllTasks,
+  onShowComposite,
   filter,
   stale,
   canMark,
@@ -80,6 +100,12 @@ export function TaskList({
   onImportant: (on: boolean) => void
   /** How many of the session's tasks are marked important. */
   importantCount: number
+  /** The composite task the list is narrowed to, with its subtasks, as its line says it; null for every task. */
+  compositeLine: string | null
+  /** Goes back to every task. */
+  onAllTasks: () => void
+  /** Shows a composite task with its subtasks, pick picked there. */
+  onShowComposite?: (id: string, pick?: string) => void
   /** What the tasks shown were read with. */
   filter: MinionTaskFilter
   /** The tasks shown are another filter's, until this one's come. */
@@ -187,6 +213,25 @@ export function TaskList({
           {importantCount > 0 && <span className="tabular-nums">{importantCount}</span>}
         </Button>
       </div>
+      {compositeLine !== null && (
+        <div className="flex items-baseline gap-1.5 border-b bg-muted/40 px-3 py-1 text-xs">
+          <WorkflowIcon className="size-3.5 shrink-0 self-center text-violet-600 dark:text-violet-400" aria-hidden />
+          <span className="shrink-0 text-muted-foreground">Composite</span>
+          <code className="min-w-0 flex-1 truncate font-mono" title={compositeLine}>
+            {compositeLine}
+          </code>
+          <span className="shrink-0 text-muted-foreground">and its subtasks</span>
+          <button
+            type="button"
+            onClick={onAllTasks}
+            title="Show every task again"
+            aria-label="Show every task again"
+            className="shrink-0 self-center rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+          >
+            <XIcon className="size-3.5" />
+          </button>
+        </div>
+      )}
       <div
         ref={list}
         role="listbox"
@@ -222,6 +267,7 @@ export function TaskList({
                 canWrite={canWrite}
                 canMark={canMark}
                 onUnmark={() => marks.toggle(t)}
+                onShowComposite={onShowComposite}
               />
             </Fragment>
           )
@@ -261,6 +307,7 @@ function TaskRow({
   canWrite,
   canMark,
   onUnmark,
+  onShowComposite,
 }: {
   task: Task
   command?: CommandDef
@@ -270,10 +317,15 @@ function TaskRow({
   canWrite: boolean
   canMark: boolean
   onUnmark: () => void
+  onShowComposite?: (id: string, pick?: string) => void
 }) {
   const connections = useSessionConnectionChoices(t.sessionId)
   const held = useTaskWaiting(t.sessionId)
   const line = lineOf(t.command, t.args as Record<string, unknown> | null, command, connections)
+  // A subtask's line as its composite's factory named it; a composite
+  // task's status line, on hover.
+  const sub = subtaskText(t)
+  const status = t.composite?.status
   return (
     <ContextMenu>
       <ContextMenuTrigger
@@ -285,7 +337,7 @@ function TaskRow({
             onClick={onSelect}
             // The menu shows the row it is for.
             onContextMenu={onSelect}
-            title={`${line}\n${t.issuedBy === "00000000-0000-0000-0000-000000000000" ? "core" : (t.issuedByName ?? "someone gone")} · queued ${formatAbsolute(t.queuedAt)}${t.importantAt ? `\nMarked important by ${markedBy(t)}` : ""}`}
+            title={`${line}${t.parentId ? `\nA subtask of a composite task${sub ? `: ${sub}` : ""}` : ""}${status ? `\n${status}` : ""}\n${t.issuedBy === "00000000-0000-0000-0000-000000000000" ? "core" : (t.issuedByName ?? "someone gone")} · queued ${formatAbsolute(t.queuedAt)}${t.importantAt ? `\nMarked important by ${markedBy(t)}` : ""}`}
             className={cn(
               "relative flex cursor-pointer items-baseline gap-2 px-3 py-1 text-xs select-none",
               selected ? "bg-muted before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-foreground" : "hover:bg-muted/50",
@@ -313,7 +365,11 @@ function TaskRow({
           <StateIcon t={t} held={held} className="self-center" />
         )}
         <span className="shrink-0 font-mono text-muted-foreground tabular-nums">{clock(t.queuedAt)}</span>
+        {t.parentId && (
+          <CornerDownRightIcon className="size-3 shrink-0 self-center text-violet-600 dark:text-violet-400" aria-label="a subtask" />
+        )}
         <code className="min-w-0 flex-1 truncate font-mono">{line}</code>
+        {sub && <span className="max-w-[40%] min-w-0 shrink truncate text-muted-foreground">{sub}</span>}
         <TaskAs as={t.as} />
         {t.feedbackErrors + t.feedbackWarnings > 0 && (
           <span className="self-center" title={`What the minion said of it: ${feedbackSummary(t.feedbackErrors, t.feedbackWarnings)}`}>
@@ -322,7 +378,7 @@ function TaskRow({
         )}
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <TaskMenu task={t} line={line} canWrite={canWrite} canMark={canMark} onQueued={onQueued} />
+        <TaskMenu task={t} line={line} canWrite={canWrite} canMark={canMark} onQueued={onQueued} onShowComposite={onShowComposite} />
       </ContextMenuContent>
     </ContextMenu>
   )
@@ -335,14 +391,18 @@ function TaskMenu({
   canWrite,
   canMark,
   onQueued,
+  onShowComposite,
 }: {
   task: Task
   line: string
   canWrite: boolean
   canMark: boolean
   onQueued: (t: Task) => void
+  onShowComposite?: (id: string, pick?: string) => void
 }) {
   const actions = useTaskActions(t, line, { canWrite, canMark, onQueued })
+  // A composite task's subtasks, and a subtask's composite task, in the list.
+  const parent = t.parentId
   return (
     <>
       <ContextMenuItem disabled={!actions.canMark || actions.marking} onClick={actions.toggleImportant}>
@@ -353,7 +413,7 @@ function TaskMenu({
       <ContextMenuSeparator />
       <ContextMenuItem disabled={!actions.canStop || actions.stopping} onClick={actions.stop}>
         <SquareIcon />
-        Stop
+        {actions.stopLabel}
       </ContextMenuItem>
       <ContextMenuItem disabled={!actions.canRunAgain || actions.runningAgain} onClick={actions.runAgain}>
         <RotateCcwIcon />
@@ -368,6 +428,19 @@ function TaskMenu({
         <CopyIcon />
         Copy output
       </ContextMenuItem>
+      {onShowComposite && (t.composite || parent) && <ContextMenuSeparator />}
+      {onShowComposite && t.composite && (
+        <ContextMenuItem onClick={() => onShowComposite(t.id, t.id)}>
+          <ListTreeIcon />
+          Show it with its subtasks
+        </ContextMenuItem>
+      )}
+      {onShowComposite && parent && (
+        <ContextMenuItem onClick={() => onShowComposite(parent, parent)}>
+          <CornerLeftUpIcon />
+          Show its composite task
+        </ContextMenuItem>
+      )}
     </>
   )
 }

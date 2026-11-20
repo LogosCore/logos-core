@@ -121,8 +121,8 @@ func (r *queryResolver) MinionTask(ctx context.Context, id string) (*model.Minio
 }
 
 // MinionTasks is the resolver for the minionTasks field.
-func (r *queryResolver) MinionTasks(ctx context.Context, sessionID string, last *int, before *string, search *string, important *bool) (*model.MinionTaskPage, error) {
-	return r.MinionTaskResolver.MinionTasks(ctx, sessionID, last, before, search, important)
+func (r *queryResolver) MinionTasks(ctx context.Context, sessionID string, last *int, before *string, search *string, important *bool, composite *string) (*model.MinionTaskPage, error) {
+	return r.MinionTaskResolver.MinionTasks(ctx, sessionID, last, before, search, important, composite)
 }
 
 // MinionFiles is the resolver for the minionFiles field.
@@ -143,11 +143,6 @@ func (r *queryResolver) MinionTunnelStreams(ctx context.Context, taskID string, 
 // MinionSessionCommands is the resolver for the minionSessionCommands field.
 func (r *queryResolver) MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error) {
 	return r.MinionTaskResolver.MinionSessionCommands(ctx, sessionID)
-}
-
-// MinionSubtasks is the resolver for the minionSubtasks field.
-func (r *queryResolver) MinionSubtasks(ctx context.Context, taskID string) ([]*model.MinionTask, error) {
-	return r.MinionTaskResolver.MinionSubtasks(ctx, taskID)
 }
 
 // MinionDesktopSettings is the resolver for the minionDesktopSettings field.

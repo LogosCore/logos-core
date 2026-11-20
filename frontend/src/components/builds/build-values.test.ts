@@ -23,9 +23,11 @@ import {
   sourceFromBuild,
   stageDuration,
   targetCommands,
+  usedBy,
   withKind,
   withTarget,
   type BuildForm,
+  type FactoryKind,
   onPlatform,
 } from "./build-values"
 
@@ -102,12 +104,14 @@ const schema: BuildSchemaFieldsFragment = {
       default: false,
       required: true,
       kinds: [],
+      composite: false,
+      uses: [],
       params: [field({ key: "jitter", type: "int", order: 2 }), field({ key: "interval", type: "duration", order: 1 })],
     },
-    { id: "hello", op: 2, label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, kinds: [], params: [] },
-    { id: "ls", op: 3, label: "List", description: null, targets: ["dummy", "service"], default: false, required: false, kinds: [], params: [] },
-    { id: "shell", op: 4, label: "Shell", description: null, targets: ["dummy"], default: true, required: false, kinds: [], params: [] },
-    { id: "stop", op: 5, label: "Stop the service", description: null, targets: ["service"], default: true, required: false, kinds: [], params: [] },
+    { id: "hello", op: 2, label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, kinds: [], composite: false, uses: [], params: [] },
+    { id: "ls", op: 3, label: "List", description: null, targets: ["dummy", "service"], default: false, required: false, kinds: [], composite: false, uses: [], params: [] },
+    { id: "shell", op: 4, label: "Shell", description: null, targets: ["dummy"], default: true, required: false, kinds: [], composite: false, uses: [], params: [] },
+    { id: "stop", op: 5, label: "Stop the service", description: null, targets: ["service"], default: true, required: false, kinds: [], composite: false, uses: [], params: [] },
   ],
 }
 
@@ -230,6 +234,31 @@ describe("commands", () => {
     const form = initialForm(kind, null, channels)
     form.commands = ["hello"]
     expect(evaluateForm(kind, form, channels).errors.commands).toBe("The dummy target requires sleep")
+  })
+
+  // archive uses ls and hello; bundle, with no op of its own, uses archive.
+  const composites: FactoryKind = {
+    ...kind,
+    commands: [
+      ...kind.commands,
+      { id: "archive", op: 40, label: "Archive", description: null, targets: ["dummy"], default: false, required: false, kinds: [], composite: true, uses: ["ls", "hello"], params: [] },
+      { id: "bundle", op: 0, label: "Bundle", description: null, targets: ["dummy"], default: false, required: false, kinds: [], composite: true, uses: ["archive"], params: [] },
+    ],
+  }
+
+  it("picked with what a composite among them uses, in turn too, as core picks them", () => {
+    expect(pickedCommands(composites, dummy, ["archive"])).toEqual(["sleep", "hello", "ls", "archive"])
+    expect(pickedCommands(composites, dummy, ["bundle"])).toEqual(["sleep", "hello", "ls", "archive", "bundle"])
+    expect(pickedCommands(composites, dummy, ["shell"])).toEqual(["sleep", "shell"])
+  })
+
+  it("used by the composites picked stay picked while they are", () => {
+    const used = usedBy(targetCommands(composites, dummy), ["bundle", "archive", "shell"])
+    expect(used.get("archive")).toEqual(["bundle"])
+    expect(used.get("ls")).toEqual(["bundle", "archive"])
+    expect(used.get("hello")).toEqual(["bundle", "archive"])
+    expect(used.has("shell")).toBe(false)
+    expect(usedBy(targetCommands(composites, dummy), ["shell", "ls"]).size).toBe(0)
   })
 })
 

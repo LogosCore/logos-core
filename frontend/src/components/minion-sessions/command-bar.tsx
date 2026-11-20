@@ -55,9 +55,18 @@ function KindsLine({ kinds, connKind }: { kinds?: readonly string[]; connKind?: 
   return <span className={cn("mt-1 block", note.blocked && "text-amber-700 dark:text-amber-400")}>{note.text}.</span>
 }
 
+/** A composite command's line in its form: what its factory's code runs as its subtasks. */
+function CompositeLine({ uses }: { uses?: readonly string[] }) {
+  if (!uses?.length) return null
+  return <span className="mt-1 block">Composite: its factory&apos;s code runs {uses.join(", ")} as its subtasks.</span>
+}
+
 /** A command as the console uses it: its params as the forms know them too. */
 export interface ConsoleCommand extends CommandDef {
   fields: readonly FieldDef[]
+  /** A composite command: the commands its subtasks run (docs: contracts/task-outsourcing). */
+  composite?: boolean
+  uses?: readonly string[]
   /** What its data is, one of core's results (dir_listing), if any. */
   result?: string | null
   /** What core can ask it to do, one of core's actions (list_dir), if any. */
@@ -447,6 +456,11 @@ export function CommandBar({
             >
               <code className="font-mono text-xs">{usage(c)}</code>
               <span className="truncate text-xs text-muted-foreground">{c.label}</span>
+              {c.composite && (
+                <span className="shrink-0 text-xs text-violet-700 dark:text-violet-400" title={`Its factory's code runs ${(c.uses ?? []).join(", ")} as its subtasks`}>
+                  composite
+                </span>
+              )}
               <KindsHint kinds={c.kinds} connKind={connKind} />
             </button>
           ))}
@@ -550,6 +564,7 @@ export function CommandBar({
               <>
                 <code className="font-mono text-xs">{usage(formCommand)}</code>
                 {formCommand.description && <span className="mt-1 block">{formCommand.description}</span>}
+                {formCommand.composite && <CompositeLine uses={formCommand.uses} />}
                 <KindsLine kinds={formCommand.kinds} connKind={connKind} />
               </>
             ) : (

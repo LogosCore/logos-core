@@ -244,6 +244,25 @@ func TestIntegrationCompositeRecord(t *testing.T) {
 	if _, err := repo.Subtask(ctx, uuid.New(), done); !IsNotFound(err) {
 		t.Fatalf("another task's subtask: %v", err)
 	}
+	// The session's list, narrowed to the composite task and its subtasks,
+	// a page at a time.
+	other := &models.MinionTask{TaskID: uuid.New(), SessionID: session, Command: "ls", Op: 1, State: models.MinionTaskQueued,
+		QueuedAt: time.Now().UTC()}
+	if err := repo.Insert(ctx, other); err != nil {
+		t.Fatal(err)
+	}
+	family, err := repo.ListBySession(ctx, session, MinionTaskFilter{Composite: &id}, nil, 10)
+	if err != nil || len(family) != 4 || family[3].TaskID != id {
+		t.Fatalf("the composite task and its subtasks: %d %v", len(family), err)
+	}
+	page, err := repo.ListBySession(ctx, session, MinionTaskFilter{Composite: &id}, &MinionTaskCursor{QueuedAt: family[1].QueuedAt,
+		TaskID: family[1].TaskID}, 10)
+	if err != nil || len(page) != 2 || page[1].TaskID != id {
+		t.Fatalf("its next page: %d %v", len(page), err)
+	}
+	if all, _ := repo.ListBySession(ctx, session, MinionTaskFilter{}, nil, 10); len(all) != 5 {
+		t.Fatalf("the whole list: %d", len(all))
+	}
 
 	// A finish takes a subtask's result: its parts and sizes.
 	ok := true

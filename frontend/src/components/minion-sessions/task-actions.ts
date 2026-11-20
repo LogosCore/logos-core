@@ -6,6 +6,7 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { formatInterval } from "./sessions-layout"
 import { formatTime } from "@/lib/date-format"
 import { formatAbsolute } from "@/lib/relative-time"
+import { stopsAtOnce } from "./composite-values"
 
 // What the console's task list and the task it shows share: a task's
 // times, and what can be done with it (task-state.tsx draws where it
@@ -60,11 +61,22 @@ export function useTaskActions(
   const queue = useQueueMinionTask()
   const important = useToggleImportant()
   const finished = FINISHED.has(t.state)
+  // A composite command's task stops again once stopped: the second stop
+  // ends it at once, its cleanup with it, as one in a closed session (docs:
+  // Task Outsourcing, Stopping). Its own op's cancel is core's.
+  const atOnce = stopsAtOnce(t)
   return {
     canMark,
     marking: important.pending,
     toggleImportant: () => important.toggle(t),
-    canStop: canWrite && !finished && !t.cancelRequestedAt,
+    canStop: canWrite && !finished && (t.composite != null || !t.cancelRequestedAt),
+    /** The stop's words: a composite task's second ends it at once. */
+    stopLabel: atOnce ? "Stop now" : "Stop",
+    stopTitle: atOnce
+      ? "Stop it now: what cleans up after the stop stops too"
+      : t.composite
+        ? "Stop it: what is under way stops, then its factory may clean up"
+        : "Stop it",
     stopping: cancel.isPending,
     // mutateAsync, not mutate's callbacks: a menu that ran it closes, and
     // callbacks do not run once the caller is gone.

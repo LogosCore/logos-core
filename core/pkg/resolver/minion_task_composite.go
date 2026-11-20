@@ -186,42 +186,6 @@ func refusal(err error) error {
 	return err
 }
 
-// MinionSubtasks are a composite task's subtasks, in the order they were
-// queued: the caller a viewer of its session's operation.
-func (r *minionTaskResolver) MinionSubtasks(ctx context.Context, taskID string) ([]*model.MinionTask, error) {
-	tid, err := uuid.Parse(taskID)
-	if err != nil {
-		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid task ID")
-	}
-	t, err := r.tasks.FindByTaskID(ctx, tid)
-	if err != nil {
-		if repository.IsNotFound(err) {
-			return nil, moduleGQLError(ctx, errCodeNotFound, "task not found")
-		}
-		return nil, err
-	}
-	if _, err := r.session(ctx, t.SessionID.String(), models.OperationRoleViewer); err != nil {
-		return nil, err
-	}
-	out := []*model.MinionTask{}
-	if t.Composite == nil {
-		return out, nil
-	}
-	subs, err := r.tasks.ListSubtasks(ctx, t.TaskID)
-	if err != nil {
-		return nil, fmt.Errorf("list the subtasks: %w", err)
-	}
-	names := r.names(ctx, subs)
-	for i := range subs {
-		m, err := r.toModel(ctx, &subs[i], names)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, m)
-	}
-	return out, nil
-}
-
 // compositeModel is a composite task's record as GraphQL: its subtasks
 // under way counted now.
 func (r *minionTaskResolver) compositeModel(ctx context.Context, t *models.MinionTask) *model.MinionComposite {

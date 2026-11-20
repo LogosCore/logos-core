@@ -170,6 +170,29 @@ export const MinionTaskFields = graphql(`
         down
       }
     }
+    parentId
+    subtaskAs
+    cleanup
+    resultOf
+    composite {
+      status
+      ownOp
+      ownArgs
+      ownEnd {
+        state
+        ok
+        exit
+        err
+        at
+      }
+      subtasksUnderWay
+      subtasksEnded
+      phase
+      timerAt
+      silentSince
+      stoppedAt
+      calls
+    }
   }
 `)
 
@@ -291,10 +314,11 @@ export const MinionFileStringsQuery = graphql(`
 `)
 
 // A session's tasks, a page at a time, as core searches them (each task's
-// line as the console shows it) and keeps the ones marked important.
+// line as the console shows it), keeps the ones marked important, and a
+// composite command's task with its subtasks alone.
 export const MinionTasksQuery = graphql(`
-  query MinionTasks($sessionId: ID!, $last: Int, $before: String, $search: String, $important: Boolean) {
-    minionTasks(sessionId: $sessionId, last: $last, before: $before, search: $search, important: $important) {
+  query MinionTasks($sessionId: ID!, $last: Int, $before: String, $search: String, $important: Boolean, $composite: ID) {
+    minionTasks(sessionId: $sessionId, last: $last, before: $before, search: $search, important: $important, composite: $composite) {
       tasks {
         ...MinionTaskFields
       }
@@ -328,6 +352,8 @@ export const MinionSessionCommandsQuery = graphql(`
       result
       action
       kinds
+      composite
+      uses
       params {
         ...ModuleFieldDefFields
       }

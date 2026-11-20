@@ -14,6 +14,8 @@ export interface TransferItem {
   description?: string | null
   /** Selected for good: it never leaves the selected list. */
   locked?: boolean
+  /** Why it is locked, in its tooltip: the list's lockedNote when unset. */
+  lockedNote?: string
 }
 
 export type Side = "available" | "selected"

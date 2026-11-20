@@ -47,6 +47,8 @@ export const BuildSchemaFields = graphql(`
       default
       required
       kinds
+      composite
+      uses
       params {
         ...ModuleFieldDefFields
       }
