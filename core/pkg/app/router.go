@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/logoscore/logos-core/core/pkg/composites"
 	"github.com/logoscore/logos-core/core/pkg/controller"
 	"github.com/logoscore/logos-core/core/pkg/middleware"
 	"github.com/logoscore/logos-core/core/pkg/responses"
@@ -31,6 +32,11 @@ func (a *App) NewRouter() *gin.Engine {
 
 	c := a.buildControllers()
 	res := a.buildResolvers()
+	// The task resolver queues composite tasks' subtasks and sends their own
+	// ops, with an operator's checks.
+	if q, ok := res.minionTasks.(composites.Queuer); ok && a.composites != nil {
+		a.composites.WithQueuer(q)
+	}
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
@@ -54,6 +60,14 @@ func (a *App) NewRouter() *gin.Engine {
 	// minion-build, Files).
 	factory.GET("/builds/:build/files/:file", c.build.FactoryFile)
 	factory.PUT("/builds/:build/artifact", c.build.FactoryArtifact)
+	// A composite task's, for its factory: what an end returned when it is
+	// larger than a call carries, the files its tasks got, and the files the
+	// factory puts for it; the links its calls carry, signed for the call
+	// (docs: Task Outsourcing, What travels, and how).
+	factory.GET("/tasks/:task/data", c.compose.Data)
+	factory.GET("/tasks/:task/out", c.compose.Out)
+	factory.GET("/tasks/:task/files/:file", c.compose.File)
+	factory.PUT("/tasks/:task/files", c.compose.PutFile)
 
 	v1 := r.Group("/api/v1")
 

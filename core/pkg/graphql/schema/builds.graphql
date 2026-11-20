@@ -130,6 +130,13 @@ type BuildCommand {
   serves: [BuildServe!]!
   # What a task of the command takes.
   params: [ModuleField!]!
+  # A composite command (docs: contracts/task-outsourcing): its factory's
+  # code runs its task, with subtasks of the commands it uses around its own
+  # op (op 0: none, its subtasks alone). Picking it in a build picks what it
+  # uses; one with no op builds nothing, and a session has it once its build
+  # has every command it uses.
+  composite: Boolean!
+  uses: [String!]!
 }
 
 # A channel kind a delegate command's minions serve: its connection schema

@@ -31,6 +31,7 @@ type controllers struct {
 	factory   controller.IFactoryLinkController
 	skill     *controller.SkillController
 	build     *controller.BuildController
+	compose   *controller.ComposeController
 	task      *controller.MinionTaskController
 	stream    *controller.MinionStreamController
 	terminal  *controller.MinionTerminalController
@@ -108,6 +109,7 @@ func (a *App) buildControllers() *controllers {
 		factory: controller.NewFactoryLinkController(a.moduleGate, a.factoryModule, a.factoryLinks),
 		skill:   controller.NewSkillController(a.skillService, a.logger),
 		build:   controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
+		compose: controller.NewComposeController(a.composeTransfers(), a.logger),
 		task:    controller.NewMinionTaskController(a.repos.MinionTask, a.minionFiles, a.repos.Operation, a.logger),
 		stream:  controller.NewMinionStreamController(a.minionStreams, a.repos.Operation, a.logger),
 		terminal: controller.NewMinionTerminalController(a.minionTunnels, a.repos.MinionTask, a.repos.Operation,
@@ -243,7 +245,7 @@ func (a *App) buildResolvers() *resolvers {
 			a.repos.MinionTask, a.minionSync, a.repos.MinionFeedback, a.repos.MinionIdentity, a.repos.MinionFolder, a.repos.ModuleRegistry),
 		minionTasks: resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
 			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync, a.minionSync, a.repos.MinionFeedback,
-			a.credentialRefs, a.minionTunnels, a.recordings),
+			a.credentialRefs, a.minionTunnels, a.recordings, a.taskComposites()),
 		minionTargets: resolver.NewMinionTargetResolver(a.minionTargets, a.repos.Build, a.repos.Operation),
 	}
 }
@@ -291,4 +293,22 @@ func (t terminalRecordings) BeginTerminal(ctx context.Context, b miniontunnels.T
 		return nil
 	}
 	return r
+}
+
+// taskComposites is the composite tasks' service for the task resolver: nil
+// when there is none (a test's app).
+func (a *App) taskComposites() resolver.TaskComposites {
+	if a.composites == nil {
+		return nil
+	}
+	return a.composites
+}
+
+// composeTransfers is the composite tasks' links for their controller: nil
+// when there is none.
+func (a *App) composeTransfers() controller.ComposeTransfers {
+	if a.composites == nil {
+		return nil
+	}
+	return a.composites
 }

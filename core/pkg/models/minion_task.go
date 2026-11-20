@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo/field"
 )
 
@@ -145,6 +146,174 @@ type MinionTask struct {
 	// its streams are not (core holds them in memory while it runs). Nil
 	// before, and for other tasks.
 	Tunnel *MinionTaskTunnel `bson:"tunnel,omitempty" json:"tunnel,omitempty"`
+
+	// Composite is a composite command's task's (docs: contracts/
+	// task-outsourcing): what its factory's code decided so far, and what
+	// core keeps for it between the calls. Nil for any other task.
+	Composite *MinionComposite `bson:"composite,omitempty" json:"composite,omitempty"`
+	// ParentID is the composite task a subtask runs for: it issued it, and
+	// hears of its end. Nil for any other task.
+	ParentID *uuid.UUID `bson:"parent_id,omitempty" json:"parent_id,omitempty"`
+	// SubtaskKey is the factory's own name for a subtask (never shown); SubtaskAs
+	// the line naming it in its view; Cleanup: a subtask a stopped composite
+	// runs to clean up, whose end calls the factory no more.
+	SubtaskKey string `bson:"subtask_key,omitempty" json:"-"`
+	SubtaskAs  string `bson:"subtask_as,omitempty" json:"subtask_as,omitempty"`
+	Cleanup    bool   `bson:"cleanup,omitempty" json:"cleanup,omitempty"`
+	// Heard: its composite task took its end (a subtask's).
+	Heard bool `bson:"heard,omitempty" json:"-"`
+	// ResultOf is the subtask whose result a composite command with no op of
+	// its own took as its own (its data, output and files).
+	ResultOf *uuid.UUID `bson:"result_of,omitempty" json:"result_of,omitempty"`
+}
+
+// MinionComposite is where a composite command's task stands (docs:
+// contracts/task-outsourcing): the factory's ctx and status, its own op,
+// the ends its factory has not heard of, the subtasks waiting in it, its
+// timer and the call out about it. Core keeps it all, so any factory
+// instance may answer, and a restart of core loses nothing.
+type MinionComposite struct {
+	// OwnOp is where its own op stands: protocol.OwnOpNotRun, OwnOpOut,
+	// OwnOpEnded; "" for a command with no op of its own.
+	OwnOp string `bson:"own_op,omitempty" json:"own_op,omitempty"`
+	// OwnArgs are the args its own op ran with, when a decision gave its own
+	// (the task's Args are the operator's); nil for the task's.
+	OwnArgs JSONMap `bson:"own_args,omitempty" json:"own_args,omitempty"`
+	// OwnEnd is how its own op ended: the task's own state, ok and err stay
+	// for the task's end.
+	OwnEnd *MinionComposeOwnEnd `bson:"own_end,omitempty" json:"own_end,omitempty"`
+	// Status is the line its factory's code shows on it while it runs.
+	Status string `bson:"status,omitempty" json:"status,omitempty"`
+	// Ctx is the factory's own bytes, as its decisions left them.
+	Ctx []byte `bson:"ctx,omitempty" json:"-"`
+	// Seq is the number of the latest call about it (from 1); Answered the
+	// latest whose answer core took.
+	Seq      int `bson:"seq" json:"seq"`
+	Answered int `bson:"answered" json:"answered"`
+	// Pending are the ends its factory has not heard of, in order: each goes
+	// in a call of its own, then the stopped call takes all that are left.
+	Pending []MinionComposeEnd `bson:"pending,omitempty" json:"-"`
+	// Waiting are subtasks its decisions asked for past those under way at
+	// once: queued, in order, as others end.
+	Waiting []MinionSubtask `bson:"waiting,omitempty" json:"-"`
+	// Subtasks counts those its decisions asked for, in all (protocol.MaxSubtasks).
+	Subtasks int `bson:"subtasks" json:"subtasks"`
+	// TimerAt is when the timer its latest decision set runs out; nil for none.
+	TimerAt *time.Time `bson:"timer_at,omitempty" json:"timer_at,omitempty"`
+	// Phase is what the task waits for: "" its factory's code; one of the
+	// Compose* phases after a finish or a stop.
+	Phase string `bson:"phase,omitempty" json:"phase,omitempty"`
+	// Finish is the finish its factory decided, applied once what was under
+	// way has ended.
+	Finish *MinionComposeFinish `bson:"finish,omitempty" json:"-"`
+	// StoppedAt: an operator stopped it, when; StoppedCallAt: the stopped
+	// call went, when (its answer waits a minute at most).
+	StoppedAt     *time.Time `bson:"stopped_at,omitempty" json:"stopped_at,omitempty"`
+	StoppedCallAt *time.Time `bson:"stopped_call_at,omitempty" json:"-"`
+	// CallAt is when the call out about it went (nil: none is out), and
+	// CallDeadline when core stops waiting for its answer. CallEvent is the
+	// latest call's event (Seq's): one sent again is the same.
+	CallAt       *time.Time `bson:"call_at,omitempty" json:"-"`
+	CallDeadline *time.Time `bson:"call_deadline,omitempty" json:"-"`
+	CallEvent    string     `bson:"call_event,omitempty" json:"-"`
+	// Cancel and SendOwn are what the latest decision asked of the task
+	// that core has not done yet: what it stops, and its own op to send (its
+	// subtasks are in Waiting). Kept with the decision, so a restart of core
+	// does them still, and once.
+	Cancel  *MinionComposeCancel `bson:"cancel,omitempty" json:"-"`
+	SendOwn *MinionOwnOpRun      `bson:"send_own,omitempty" json:"-"`
+	// SilentSince is since when its factory has not answered the call out
+	// (no instance took it, or none answered in time): ComposeNoAnswer of it
+	// fails the task.
+	SilentSince *time.Time `bson:"silent_since,omitempty" json:"silent_since,omitempty"`
+	// LeaseBy is the core process that makes its calls, until LeaseUntil.
+	LeaseBy    string     `bson:"lease_by,omitempty" json:"-"`
+	LeaseUntil *time.Time `bson:"lease_until,omitempty" json:"-"`
+	// WakeAt is when core looks at it next: its timer, the call's deadline,
+	// an end to take. Nil once it ended.
+	WakeAt *time.Time `bson:"wake_at,omitempty" json:"-"`
+}
+
+// Phases of a composite task past its factory's code (MinionComposite.Phase).
+const (
+	// ComposeFinishing: its factory finished it; what was under way ends
+	// first.
+	ComposeFinishing = "finishing"
+	// ComposeStopping: an operator stopped it; once what was under way has
+	// ended, its factory hears of it (the stopped call).
+	ComposeStopping = "stopping"
+	// ComposeCleanup: its factory answered the stopped call; it ends
+	// cancelled once the cleanup subtasks have.
+	ComposeCleanup = "cleanup"
+	// ComposeClosed: its session closed: core calls its factory no more.
+	ComposeClosed = "closed"
+)
+
+// MinionComposeOwnEnd is how a composite task's own op ended.
+type MinionComposeOwnEnd struct {
+	// State is a protocol.EndState.
+	State string     `bson:"state" json:"state"`
+	OK    bool       `bson:"ok" json:"ok"`
+	Exit  *int64     `bson:"exit,omitempty" json:"exit,omitempty"`
+	Err   string     `bson:"err,omitempty" json:"err,omitempty"`
+	At    time.Time  `bson:"at" json:"at"`
+	Seq   *uint64    `bson:"seq,omitempty" json:"-"`
+	Done  *time.Time `bson:"done,omitempty" json:"-"`
+}
+
+// MinionComposeEnd is an end its factory has not heard of: a subtask's
+// (TaskID), its own op's (OwnOp), or, with no TaskID, a subtask that never
+// became a task (refused, or dropped while it waited), told whole here.
+type MinionComposeEnd struct {
+	TaskID  *uuid.UUID `bson:"task_id,omitempty"`
+	OwnOp   bool       `bson:"own_op,omitempty"`
+	Command string     `bson:"command,omitempty"`
+	Args    JSONMap    `bson:"args,omitempty"`
+	Key     string     `bson:"key,omitempty"`
+	As      string     `bson:"as,omitempty"`
+	State   string     `bson:"state,omitempty"`
+	Err     string     `bson:"err,omitempty"`
+	At      time.Time  `bson:"at"`
+}
+
+// MinionSubtask is a subtask a decision asked for, waiting in its task. Its
+// task id is drawn when the decision is taken: queued twice (core stopped
+// between queueing it and taking it from here), it is one task still.
+type MinionSubtask struct {
+	TaskID  uuid.UUID `bson:"task_id"`
+	Command string    `bson:"command"`
+	Args    JSONMap   `bson:"args,omitempty"`
+	Key     string    `bson:"key,omitempty"`
+	As      string    `bson:"as,omitempty"`
+	// Cleanup: one the answer to the stopped call asked for.
+	Cleanup bool `bson:"cleanup,omitempty"`
+}
+
+// MinionComposeCancel is what a decision stops: its subtasks with one of
+// Keys, its own op (OwnOp).
+type MinionComposeCancel struct {
+	Keys  []string `bson:"keys,omitempty"`
+	OwnOp bool     `bson:"own_op,omitempty"`
+}
+
+// MinionOwnOpRun is a decision's own op to send: with Args, or the task's
+// own when nil.
+type MinionOwnOpRun struct {
+	Args JSONMap `bson:"args,omitempty"`
+}
+
+// MinionComposeFinish is a finish its factory decided, kept until what was
+// under way has ended.
+type MinionComposeFinish struct {
+	OK       bool      `bson:"ok"`
+	Message  string    `bson:"message,omitempty"`
+	Err      string    `bson:"err,omitempty"`
+	Out      []byte    `bson:"out,omitempty"`
+	OutFile  string    `bson:"out_file,omitempty"`
+	Data     []byte    `bson:"data,omitempty"`
+	DataFile string    `bson:"data_file,omitempty"`
+	ResultOf string    `bson:"result_of,omitempty"`
+	At       time.Time `bson:"at"`
 }
 
 // MinionTaskTunnel is a tunnel task's totals: how many streams it had (the
@@ -243,13 +412,40 @@ func (t MinionTask) MissingParts() int {
 
 // Minion task states.
 const (
-	MinionTaskQueued    = "QUEUED"
-	MinionTaskSent      = "SENT"
-	MinionTaskRunning   = "RUNNING"
+	MinionTaskQueued  = "QUEUED"
+	MinionTaskSent    = "SENT"
+	MinionTaskRunning = "RUNNING"
+	// MinionTaskComposing is a composite command's task while it waits in
+	// core for its factory's code: it never goes to the minion, and takes
+	// none of its room. Its own op, when a decision sends it, makes it
+	// QUEUED, then SENT and RUNNING as any task; its done part makes it
+	// COMPOSING again: the task ends at its factory's finish.
+	MinionTaskComposing = "COMPOSING"
 	MinionTaskDone      = "DONE"
 	MinionTaskFailed    = "FAILED"
 	MinionTaskCancelled = "CANCELLED"
 )
+
+// MinionTaskOpenStates are the states of a task that has not ended.
+var MinionTaskOpenStates = []string{MinionTaskQueued, MinionTaskSent, MinionTaskRunning, MinionTaskComposing}
+
+// OwnOpOut reports whether t is a composite task whose own op is out (sent,
+// or queued to go): its minion's parts and ends are the own op's.
+func (t MinionTask) OwnOpOut() bool {
+	return t.Composite != nil && t.Composite.OwnOp == string(protocol.OwnOpOut)
+}
+
+// OwnOpEnded reports whether t is a composite task whose own op ended: a
+// part its minion sends now is late.
+func (t MinionTask) OwnOpEnded() bool {
+	return t.Composite != nil && t.Composite.OwnOp == string(protocol.OwnOpEnded)
+}
+
+// Composing reports whether t is a composite command's task that has not
+// ended: its factory's code runs it.
+func (t MinionTask) Composing() bool {
+	return t.Composite != nil && !t.Finished()
+}
 
 // MaxMinionTaskOutput is the output and data core keeps of one task,
 // together: the rest is dropped (OutTruncated, DataTruncated).

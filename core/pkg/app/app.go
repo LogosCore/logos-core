@@ -16,6 +16,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/cache"
 	"github.com/logoscore/logos-core/core/pkg/channelendpoints"
 	"github.com/logoscore/logos-core/core/pkg/channellink"
+	"github.com/logoscore/logos-core/core/pkg/composites"
 	"github.com/logoscore/logos-core/core/pkg/controller"
 	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
 	"github.com/logoscore/logos-core/core/pkg/database"
@@ -181,6 +182,9 @@ type App struct {
 	minionSync *minionsync.Service
 	// stopTaskWatch stops minionSync's watch on task changes.
 	stopTaskWatch func()
+	// composites runs composite commands' tasks: their factories' code
+	// decides, over the control plane, what their subtasks are.
+	composites *composites.Service
 	// links are the channels' control links; minionTargets the targets of
 	// bind minions, which minionSync calls through them. stopTargets stops
 	// the calls' scheduler.
@@ -309,6 +313,17 @@ func NewApp() (*App, error) {
 	minionSync.WithTargetChecker(minionTargets, miniontargets.ProblemsText)
 	minionSync.WithChannelSchemas(endpoints)
 	minionSync.WithFactoryLinks(factoryLinks)
+	// Composite commands' tasks: their factories decide, over the same RPC
+	// client, which of the session's commands run as their subtasks; the
+	// task resolver queues those (NewRouter gives it the service).
+	compositeLinks, err := builds.NewLinks(e.JWTSecretKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize the composite tasks' links: %w", err)
+	}
+	compositeSvc := composites.New(composites.Config{MaxFileSize: e.MinionFileMaxSize}, repos.MinionTask, repos.MinionSession, repos.Build,
+		repos.ModuleRegistry, repos.ModuleRegistry, repos.User, rpcClient, compositeLinks, minionFiles, bus, l.Named("composites")).
+		WithNudger(minionSync)
+	minionSync.WithComposites(compositeSvc)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildLog, buildSvc.HandleLog)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
@@ -370,6 +385,7 @@ func NewApp() (*App, error) {
 		minionTunnels:   minionTunnels,
 		fileBrowser:     fileBrowser,
 		minionSync:      minionSync,
+		composites:      compositeSvc,
 		links:           links,
 		factoryLinks:    factoryLinks,
 		minionTargets:   minionTargets,
@@ -475,6 +491,7 @@ func (a *App) startLifecycle() {
 	a.minionStreams.Start()
 	a.recordings.Start()
 	a.minionTunnels.Start(context.Background())
+	a.composites.Start()
 	stopTasks, stopDelegates := a.minionSync.WatchTasks(), a.minionSync.WatchDelegates()
 	a.stopTaskWatch = func() { stopTasks(); stopDelegates() }
 	targetsCtx, stopTargets := context.WithCancel(context.Background())
@@ -492,9 +509,13 @@ func (a *App) stopLifecycle() {
 	if a.rpcServer != nil {
 		a.rpcServer.Stop()
 	}
-	// Build offers and cancels use the RPC client too.
+	// Build offers and cancels use the RPC client too, and composite
+	// tasks' calls.
 	if a.builds != nil {
 		a.builds.Stop()
+	}
+	if a.composites != nil {
+		a.composites.Stop()
 	}
 	if a.minionFiles != nil {
 		a.minionFiles.Stop()

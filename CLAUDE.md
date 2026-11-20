@@ -244,6 +244,7 @@ HTTP Request
 | `cache/` | Redis cache with noop fallback |
 | `environment/` | Viper-based config from `.env` |
 | `logger/` | Zap structured logging; use `logger.From(ctx)` in request-scoped code |
+| `composites/` | Composite commands' tasks (docs: contracts/task-outsourcing): one `factory.compose` call at a time per task over the RPC client, the task's record (ctx, ends not heard, waiting subtasks, timer, the call out) kept in its document (`models.MinionComposite`, state `COMPOSING` while it waits in core), subtasks and the own op queued through the task resolver's checks (`Queuer`), a reverse-call reply held for a decision (`Hold`), the factory's links under `/api/factory/tasks/` |
 
 ### GraphQL
 

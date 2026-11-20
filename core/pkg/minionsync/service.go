@@ -182,6 +182,26 @@ type Service struct {
 	// factories translate the layers of their builds' codecs that are their
 	// own (codecs.go); nil: such a build's messages do not open.
 	factories FactoryLinks
+	// composites runs composite commands' tasks; nil: no reply waits for a
+	// factory's decision.
+	composites Composites
+}
+
+// Composites is what a reply asks of the composite commands' tasks
+// (composites.Service): their factory's decisions about the ends a
+// message brought, and whether one is being decided.
+type Composites interface {
+	// Hold has the factory decide about tasks now, and says whether it did
+	// within d.
+	Hold(ctx context.Context, tasks []uuid.UUID, d time.Duration) bool
+	// Deciding: a call about one of the session's tasks is out.
+	Deciding(session uuid.UUID) bool
+}
+
+// WithComposites gives the service the composite commands' tasks.
+func (s *Service) WithComposites(c Composites) *Service {
+	s.composites = c
+	return s
 }
 
 func NewService(builds Builds, stagings repository.IMinionStagingRepository, sessions repository.IMinionSessionRepository,
@@ -790,6 +810,8 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 	var feedback []protocol.FeedbackItem
 	// The streams whose chunks this reply answers (streams.go).
 	answered := map[string]bool{}
+	// The composite tasks a result in it ended a subtask, or the own op, of.
+	var composed []uuid.UUID
 	for i, raw := range msg.Items {
 		var out []cbor.RawMessage
 		var err error
@@ -915,7 +937,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			}
 			// A call carries every resume the outbox has: the part's own
 			// goes with it there.
-			out, err = s.takeResult(ctx, session, raw, i, p != pathCall)
+			out, err = s.takeResult(ctx, session, raw, i, p != pathCall, &composed)
 		case protocol.ItemErr:
 			// The minion's word on an earlier item of core's (a cancel for a
 			// task it no longer has): noted, not answered.
@@ -954,6 +976,15 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 	if _, err := s.takeFeedback(ctx, session, feedback); err != nil {
 		return nil, err
 	}
+	// A reverse-call message that brings ends of composite tasks' subtasks
+	// and asks for tasks waits a moment for their factory's decisions: what
+	// they queue goes in this reply, as a minion that sends a result takes
+	// its next task in one round trip (docs: Task Outsourcing, Mechanics by
+	// connection kind). Past the wait, the reply says come back soon.
+	composePoll := false
+	if _, delegated := delegatedOf(ctx); p == pathSync && wantTasks && len(composed) > 0 && s.composites != nil && !delegated {
+		composePoll = !s.composites.Hold(ctx, composed, protocol.ComposeReplyHold)
+	}
 	if s.tasks != nil {
 		// After the answers, what the outbox has (cancels whenever core has
 		// them, tasks only when asked), in the room the answers leave.
@@ -991,6 +1022,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 		if err != nil {
 			return nil, err
 		}
+		o.composePolls = composePoll || (p == pathSync && s.composites != nil && s.composites.Deciding(session.SessionID))
 		items = append(items, o.items...)
 		left := d.room - o.used
 		if within, ok := o.pollWithin(); p == pathSync && ok {

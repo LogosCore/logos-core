@@ -456,7 +456,7 @@ func toBuildCommandModel(s protocol.BuildSchema, c protocol.BuildCommand) *model
 		ID: c.ID, Op: c.Op, Label: orKey(c.Label, c.ID), Description: strPtr(c.Description),
 		Targets: []string{}, Default: c.Default, Required: c.Required, Params: toBuildFieldModels(c.Params),
 		Result: strPtr(c.Result), Action: strPtr(c.Action), Kinds: append([]string{}, c.Kinds...),
-		Serves: []*model.BuildServe{},
+		Serves: []*model.BuildServe{}, Composite: c.Composite, Uses: append([]string{}, c.Uses...),
 	}
 	for _, sv := range c.Serves {
 		mc.Serves = append(mc.Serves, &model.BuildServe{ModuleName: sv.ModuleName, Versions: append([]int{}, sv.Versions...),

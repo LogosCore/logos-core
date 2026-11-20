@@ -27,6 +27,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/taskdata"
 	"github.com/logoscore/logos-golang-protocol/protocol"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // IMinionTaskResolver gives sessions' minions commands and reads what they
@@ -37,6 +38,9 @@ type IMinionTaskResolver interface {
 	// Feedback is MinionTask.feedback: what its minion said of it.
 	Feedback(ctx context.Context, t *model.MinionTask) ([]*model.MinionFeedback, error)
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
+	// MinionSubtasks are a composite command's task's subtasks, in the order
+	// they were queued.
+	MinionSubtasks(ctx context.Context, taskID string) ([]*model.MinionTask, error)
 	// MinionDesktopSettings are the settings a desktop of front opens
 	// with (pkg/desktops).
 	MinionDesktopSettings(ctx context.Context, front string) ([]*model.ModuleField, error)
@@ -155,6 +159,16 @@ type minionTaskResolver struct {
 	tunnels TaskTunnels
 	// recordings are the desktops'; nil, a task has none.
 	recordings TaskRecordings
+	// composites runs composite commands' tasks; nil, a composite command
+	// takes no task.
+	composites TaskComposites
+}
+
+// TaskComposites runs composite commands' tasks (composites.Service): one
+// queued starts, an operator's stop stops it.
+type TaskComposites interface {
+	Started(t *models.MinionTask)
+	StopTask(ctx context.Context, t *models.MinionTask) (*models.MinionTask, error)
 }
 
 // TaskTunnels opens a tunnel task's operational port and closes it, and
@@ -225,10 +239,10 @@ func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repo
 	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus,
 	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser, targets TaskTargets, connector TaskConnector,
 	limits MaxTasksSetter, feedback repository.IMinionFeedbackRepository, creds TaskCredentials, tunnels TaskTunnels,
-	recordings TaskRecordings) IMinionTaskResolver {
+	recordings TaskRecordings, composites TaskComposites) IMinionTaskResolver {
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
 		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser, targets: targets, connector: connector,
-		limits: limits, feedback: feedback, creds: creds, tunnels: tunnels, recordings: recordings}
+		limits: limits, feedback: feedback, creds: creds, tunnels: tunnels, recordings: recordings, composites: composites}
 }
 
 const (
@@ -324,11 +338,18 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 	if sc == nil {
 		return nil, nil, moduleGQLError(ctx, errCodeNotFound, fmt.Sprintf("no %q factory declares a build schema: its commands are not known", b.ModuleName))
 	}
+	// What its build has, and each composite command with no op of its own
+	// whose commands the build all has (docs: Task Outsourcing). A target
+	// the factory no longer declares: what the build has.
+	has := b.Commands
+	if t, ok := sc.Target(b.Target); ok {
+		has = sc.SessionCommands(t, b.Commands)
+	}
 	var out []protocol.BuildCommand
 	for _, c := range sc.Commands {
 		// help, connect and disconnect are core's own: a schema from before
 		// they were reserved does not shadow them.
-		if slices.Contains(b.Commands, c.ID) && !protocol.IsCoreCommand(c.ID) {
+		if slices.Contains(has, c.ID) && !protocol.IsCoreCommand(c.ID) {
 			switch {
 			case protocol.IsTunnelAction(c.Action):
 				c = tunnelCommand(sc.BuildSchema, c, b.Target, r.tunnels != nil && r.tunnels.Desktops())
@@ -432,28 +453,77 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	if command == protocol.CommandMaxTasks {
 		return r.runMaxTasks(ctx, s, uid, values, wire)
 	}
-	if err := overKind(ctx, s, commands[i]); err != nil {
+	if commands[i].Composite && r.composites == nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("%s is a composite command: core runs none here", command))
+	}
+	t, err := r.queue(ctx, s, commands[i], values, wire, queueing{by: uid, files: r.taskFile})
+	if err != nil {
+		return nil, err
+	}
+	if t.Composite != nil {
+		r.composites.Started(t)
+	}
+	r.publish(t)
+	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+}
+
+// queueing is how a task is queued: who issues it, how a file param's value
+// names its file, and, for one of a composite task's subtasks, its parent
+// and its place there.
+type queueing struct {
+	by    uuid.UUID
+	files fileLookup
+	// parent and sub: a subtask, which runs its command's op alone (a
+	// composite one's too), and takes no stream.
+	parent *models.MinionTask
+	sub    *models.MinionSubtask
+}
+
+// fileLookup finds the file a file param's value names, in an operation.
+type fileLookup func(ctx context.Context, operationID uuid.UUID, id string) (*models.MinionFile, error)
+
+// taskFile is an operator's task: its file param names one of the
+// operation's task files.
+func (r *minionTaskResolver) taskFile(ctx context.Context, operationID uuid.UUID, id string) (*models.MinionFile, error) {
+	if r.files == nil {
+		return nil, minionfiles.ErrNoTaskFile
+	}
+	return r.files.TaskFile(ctx, operationID, id)
+}
+
+// queue checks a task as an operator's (its command over the session's
+// connection kind, a target to reach it, its file, its credentials, its
+// tunnel's port) and keeps it, queued: a composite command's waits in core
+// (COMPOSING) for its factory's code. A check that fails is a GraphQL
+// error with the reason; the task is not published.
+func (r *minionTaskResolver) queue(ctx context.Context, s *models.MinionSession, cmd protocol.BuildCommand, values, wire map[string]any,
+	q queueing) (*models.MinionTask, error) {
+	if err := overKind(ctx, s, cmd); err != nil {
 		return nil, err
 	}
 	if err := r.reachable(ctx, s); err != nil {
 		return nil, err
 	}
-	upload, err := r.offerFile(ctx, s, commands[i].Params, wire)
+	upload, err := r.offerFile(ctx, s, cmd.Params, wire, q.files, q.sub != nil)
 	if err != nil {
 		return nil, err
 	}
-	credentialIDs, err := r.putCredentials(ctx, s.OperationID, commands[i].Params, wire)
+	credentialIDs, err := r.putCredentials(ctx, s.OperationID, cmd.Params, wire)
 	if err != nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
 	}
+	uid := q.by
 	taskID := uuid.New()
-	tunnel := protocol.IsTunnelAction(commands[i].Action)
+	if q.sub != nil {
+		taskID = q.sub.TaskID
+	}
+	tunnel := protocol.IsTunnelAction(cmd.Action)
 	if tunnel {
-		port, front, err := r.openTunnel(ctx, s, uid, taskID, commands[i], wire)
+		port, front, err := r.openTunnel(ctx, s, uid, taskID, cmd, wire)
 		if err != nil {
 			return nil, err
 		}
-		if commands[i].Action == protocol.ActionReverseTunnel {
+		if cmd.Action == protocol.ActionReverseTunnel {
 			// Where the minion listens, as core checked it (its port its
 			// own: no operational port).
 			values["bind"] = wire["bind"]
@@ -489,15 +559,15 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 		// And when core stops it: a command line that leaves stop_idle out
 		// runs by core's default for the action, as the form (which sends
 		// every field) does.
-		withDefault(values, commands[i].Params, protocol.ParamStopIdle)
+		withDefault(values, cmd.Params, protocol.ParamStopIdle)
 	}
-	if protocol.IsDelegateAction(commands[i].Action) {
+	if protocol.IsDelegateAction(cmd.Action) {
 		// When core stops it, as for a tunnel.
-		withDefault(values, commands[i].Params, protocol.ParamStopIdle)
+		withDefault(values, cmd.Params, protocol.ParamStopIdle)
 	}
 	// On the wire the args go by their params' numbers.
 	var wireBytes []byte
-	if numbered := protocol.WireArgs(commands[i].Params, wire); len(numbered) > 0 {
+	if numbered := protocol.WireArgs(cmd.Params, wire); len(numbered) > 0 {
 		if wireBytes, err = protocol.MarshalCBOR(numbered); err != nil {
 			if tunnel {
 				r.tunnels.Close(ctx, taskID)
@@ -505,18 +575,32 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 			return nil, fmt.Errorf("encode the args: %w", err)
 		}
 	}
-	t := &models.MinionTask{TaskID: taskID, OperationID: s.OperationID, SessionID: s.SessionID, Command: command,
-		Op: commands[i].Op, Args: values, CredentialIDs: credentialIDs, WireArgs: wireBytes, Result: commands[i].Result, Action: commands[i].Action,
-		IssuedBy: uid, State: models.MinionTaskQueued, QueuedAt: time.Now().UTC(), Upload: upload, LineRest: lineRest(commands[i].Params)}
-	t.LineNames = r.lineNames(ctx, s, commands[i].Params, t.Args)
+	t := &models.MinionTask{TaskID: taskID, OperationID: s.OperationID, SessionID: s.SessionID, Command: cmd.ID,
+		Op: cmd.Op, Args: values, CredentialIDs: credentialIDs, WireArgs: wireBytes, Result: cmd.Result, Action: cmd.Action,
+		IssuedBy: uid, State: models.MinionTaskQueued, QueuedAt: time.Now().UTC(), Upload: upload, LineRest: lineRest(cmd.Params)}
+	switch {
+	case q.sub != nil:
+		t.ParentID, t.SubtaskKey, t.SubtaskAs, t.Cleanup = &q.parent.TaskID, q.sub.Key, q.sub.As, q.sub.Cleanup
+	case cmd.Composite:
+		// Its factory's code runs it: it waits in core, and its own op goes
+		// to the minion when a decision says.
+		t.State, t.Composite = models.MinionTaskComposing, &models.MinionComposite{}
+		if cmd.HasOp() {
+			t.Composite.OwnOp = string(protocol.OwnOpNotRun)
+		}
+	}
+	t.LineNames = r.lineNames(ctx, s, cmd.Params, t.Args)
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		if tunnel {
 			r.tunnels.Close(ctx, taskID)
 		}
+		if q.sub != nil && mongo.IsDuplicateKeyError(err) {
+			// Queued before: core stopped before it took it from the waiting.
+			return r.tasks.FindByTaskID(ctx, taskID)
+		}
 		return nil, fmt.Errorf("queue the task: %w", err)
 	}
-	r.publish(t)
-	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+	return t, nil
 }
 
 // desktopParam: one of the desktop fronts' own params (their login),
@@ -893,12 +977,20 @@ func (r *minionTaskResolver) reachable(ctx context.Context, s *models.MinionSess
 // file's name, size and SHA-256), checked against the param's accept and
 // max_size; the upload it records. Nil for a command without a file param,
 // or a task not given one.
-func (r *minionTaskResolver) offerFile(ctx context.Context, s *models.MinionSession, params []protocol.FieldSpec, wire map[string]any) (*models.MinionTaskUpload, error) {
+func (r *minionTaskResolver) offerFile(ctx context.Context, s *models.MinionSession, params []protocol.FieldSpec, wire map[string]any,
+	lookup fileLookup, subtask bool) (*models.MinionTaskUpload, error) {
 	i := slices.IndexFunc(params, func(p protocol.FieldSpec) bool { return p.Type == protocol.FieldFile || p.Type == protocol.FieldStream })
 	if i < 0 {
 		return nil, nil
 	}
 	p := params[i]
+	if subtask && p.Type == protocol.FieldStream {
+		// A stream is fed by its uploader, for the task it was opened for.
+		if _, given := wire[p.Key]; given {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, p.Key+": a stream param takes nothing in a subtask")
+		}
+		return nil, nil
+	}
 	id, ok := wire[p.Key].(string)
 	if p.Type == protocol.FieldStream && !ok {
 		// A stream without a name (uploaded with curl, which says none):
@@ -919,10 +1011,10 @@ func (r *minionTaskResolver) offerFile(ctx context.Context, s *models.MinionSess
 		wire[p.Key] = protocol.FileOffer{Xfer: xfer[:], Name: id, Stream: true}
 		return &models.MinionTaskUpload{Name: id, Xfer: xfer[:], Stream: true, IdleSince: &now}, nil
 	}
-	if r.files == nil {
+	if r.files == nil || lookup == nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, p.Key+": core keeps no task files")
 	}
-	f, err := r.files.TaskFile(ctx, s.OperationID, id)
+	f, err := lookup(ctx, s.OperationID, id)
 	if errors.Is(err, minionfiles.ErrNoTaskFile) {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, p.Key+": "+err.Error())
 	}
@@ -1003,6 +1095,15 @@ func (r *minionTaskResolver) CancelMinionTask(ctx context.Context, id string) (*
 	}
 	if protocol.IsCoreCommand(t.Command) && !t.Finished() {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("core runs %s itself: it ends on its own", t.Command))
+	}
+	if t.Composing() && r.composites != nil {
+		// Its factory hears of it, and may clean up (docs: Task
+		// Outsourcing, Stopping); a second stop ends it at once.
+		after, err := r.composites.StopTask(ctx, t)
+		if err != nil {
+			return nil, fmt.Errorf("stop the task: %w", err)
+		}
+		return r.toModel(ctx, after, r.names(ctx, []models.MinionTask{*after}))
 	}
 	if t, err = r.tasks.RequestCancel(ctx, tid, time.Now().UTC()); err != nil {
 		return nil, fmt.Errorf("cancel the task: %w", err)
@@ -1297,7 +1398,7 @@ func (r *minionTaskResolver) names(ctx context.Context, tasks []models.MinionTas
 
 // toModel is a task as GraphQL; its output and data are read when asked
 // for (Output, Data).
-func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, names map[uuid.UUID]string) (*model.MinionTask, error) {
+func (r *minionTaskResolver) toModel(ctx context.Context, t *models.MinionTask, names map[uuid.UUID]string) (*model.MinionTask, error) {
 	m := &model.MinionTask{
 		ID: t.TaskID.String(), Rev: int(t.Rev), SessionID: t.SessionID.String(), OperationID: t.OperationID.String(), Command: t.Command,
 		IssuedBy: t.IssuedBy.String(), State: t.State, QueuedAt: t.QueuedAt.UTC().Format(time.RFC3339Nano),
@@ -1336,6 +1437,17 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 			h := hex.EncodeToString(st.SHA256)
 			m.Stream.Sha256 = &h
 		}
+	}
+	if t.ParentID != nil {
+		parent := t.ParentID.String()
+		m.ParentID, m.SubtaskAs, m.Cleanup = &parent, strPtr(t.SubtaskAs), t.Cleanup
+	}
+	if t.ResultOf != nil {
+		of := t.ResultOf.String()
+		m.ResultOf = &of
+	}
+	if c := t.Composite; c != nil {
+		m.Composite = r.compositeModel(ctx, t)
 	}
 	if up := t.Upload; up != nil {
 		m.Upload = &model.MinionTaskUpload{FileID: up.FileID.String(), Name: up.Name, Size: int(up.Size),

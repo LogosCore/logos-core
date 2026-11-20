@@ -52,12 +52,12 @@ func bobSchema() protocol.BuildSchema {
 			{ID: "dummy-lite", Format: "json", Platforms: []string{"any/any"}},
 		},
 		Commands: []protocol.BuildCommand{
-			{ID: "sleep", Required: true},
-			{ID: "exit", Required: true},
-			{ID: "hello", Default: true},
-			{ID: "ls", Default: true},
-			{ID: "download"},
-			{ID: "shell", Targets: []string{"dummy"}},
+			{ID: "sleep", Op: 1, Required: true},
+			{ID: "exit", Op: 2, Required: true},
+			{ID: "hello", Op: 3, Default: true},
+			{ID: "ls", Op: 4, Default: true},
+			{ID: "download", Op: 5},
+			{ID: "shell", Op: 6, Targets: []string{"dummy"}},
 		},
 	}
 }

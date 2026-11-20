@@ -143,6 +143,8 @@ type BuildCommand struct {
 	Kinds       []string       `json:"kinds"`
 	Serves      []*BuildServe  `json:"serves"`
 	Params      []*ModuleField `json:"params"`
+	Composite   bool           `json:"composite"`
+	Uses        []string       `json:"uses"`
 }
 
 type BuildConnection struct {
@@ -687,6 +689,28 @@ type Minion struct {
 	CreatedAt   string       `json:"createdAt"`
 }
 
+type MinionComposeOwnEnd struct {
+	State string  `json:"state"`
+	Ok    bool    `json:"ok"`
+	Exit  *int    `json:"exit,omitempty"`
+	Err   *string `json:"err,omitempty"`
+	At    string  `json:"at"`
+}
+
+type MinionComposite struct {
+	Status           *string              `json:"status,omitempty"`
+	OwnOp            *string              `json:"ownOp,omitempty"`
+	OwnArgs          any                  `json:"ownArgs,omitempty"`
+	OwnEnd           *MinionComposeOwnEnd `json:"ownEnd,omitempty"`
+	SubtasksUnderWay int                  `json:"subtasksUnderWay"`
+	SubtasksEnded    int                  `json:"subtasksEnded"`
+	Phase            *string              `json:"phase,omitempty"`
+	TimerAt          *string              `json:"timerAt,omitempty"`
+	SilentSince      *string              `json:"silentSince,omitempty"`
+	StoppedAt        *string              `json:"stoppedAt,omitempty"`
+	Calls            int                  `json:"calls"`
+}
+
 type MinionConnChange struct {
 	At     string  `json:"at"`
 	From   *int    `json:"from,omitempty"`
@@ -1180,6 +1204,11 @@ type MinionTask struct {
 	Upload            *MinionTaskUpload `json:"upload,omitempty"`
 	Stream            *MinionTaskStream `json:"stream,omitempty"`
 	Document          string            `json:"document"`
+	Composite         *MinionComposite  `json:"composite,omitempty"`
+	ParentID          *string           `json:"parentId,omitempty"`
+	SubtaskAs         *string           `json:"subtaskAs,omitempty"`
+	Cleanup           bool              `json:"cleanup"`
+	ResultOf          *string           `json:"resultOf,omitempty"`
 	Delegate          *MinionDelegate   `json:"delegate,omitempty"`
 }
 

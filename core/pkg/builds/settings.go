@@ -215,11 +215,13 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 
 // commandsFor resolves a build's commands for target t: the ones picked, or
 // the target's defaults when none are named (nil), with its required ones
-// always, in the schema's order. Each one picked must be a command of t,
-// picked once.
+// always, and what each composite among them uses, in the schema's order
+// (protocol.BuildSchema.PickCommands). A composite with no op of its own
+// builds nothing: a session of the build has it once it has what it uses.
+// Each one picked must be a command of t, picked once.
 func commandsFor(schema protocol.BuildSchema, t protocol.BuildTarget, picked []string, out problems) []string {
 	if picked == nil {
-		return schema.DefaultCommands(t)
+		return schema.PickCommands(t, schema.DefaultCommands(t))
 	}
 	seen := make(map[string]bool, len(picked))
 	for i, id := range picked {
@@ -235,13 +237,7 @@ func commandsFor(schema protocol.BuildSchema, t protocol.BuildTarget, picked []s
 		}
 		seen[id] = true
 	}
-	commands := []string{}
-	for _, c := range schema.TargetCommands(t) {
-		if c.Required || seen[c.ID] {
-			commands = append(commands, c.ID)
-		}
-	}
-	return commands
+	return schema.PickCommands(t, picked)
 }
 
 // checkValues checks values against fields: no undeclared keys, every value

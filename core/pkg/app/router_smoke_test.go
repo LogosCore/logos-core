@@ -51,6 +51,9 @@ func TestRouteTable(t *testing.T) {
 		"GET /api/channel/link",
 		"GET /api/factory/builds/:build/files/:file",
 		"GET /api/factory/link",
+		"GET /api/factory/tasks/:task/data",
+		"GET /api/factory/tasks/:task/files/:file",
+		"GET /api/factory/tasks/:task/out",
 		"GET /api/v1/",
 		"GET /api/v1/builds/:id/artifact",
 		"GET /api/v1/graphql/ws",
@@ -99,6 +102,7 @@ func TestRouteTable(t *testing.T) {
 		"POST /api/v1/wiki/transfer/exports",
 		"POST /api/v1/wiki/transfer/imports",
 		"PUT /api/factory/builds/:build/artifact",
+		"PUT /api/factory/tasks/:task/files",
 		"PUT /api/v1/minion-streams/:id",
 	}
 	got := routeTable(t)
@@ -190,6 +194,12 @@ func TestRouteAuthTiers(t *testing.T) {
 		// build ends there first.
 		"GET /api/factory/builds/:build/files/:file": 404,
 		"PUT /api/factory/builds/:build/artifact":    404,
+		// A composite task's links, the same: a path naming no task ends
+		// there first.
+		"GET /api/factory/tasks/:task/data":        404,
+		"GET /api/factory/tasks/:task/out":         404,
+		"GET /api/factory/tasks/:task/files/:file": 404,
+		"PUT /api/factory/tasks/:task/files":       404,
 	}
 
 	r := testRouter(t).NewRouter()

@@ -26,6 +26,13 @@ type MinionFile struct {
 	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
 	SessionID   uuid.UUID `bson:"session_id" json:"session_id"`
 	TaskID      uuid.UUID `bson:"task_id" json:"task_id"`
+	// ForTask is the composite task a task file was put for, by its
+	// factory (docs: contracts/task-outsourcing, Files): kept while that
+	// task, or a subtask that names it, has not ended.
+	ForTask uuid.UUID `bson:"for_task,omitempty" json:"for_task,omitempty"`
+	// AlsoTasks are tasks that took this file as theirs too: a composite
+	// task whose finish took the result of the subtask that got it.
+	AlsoTasks []uuid.UUID `bson:"also_tasks,omitempty" json:"also_tasks,omitempty"`
 	// Xfer is the transfer's id, the minion's: unique in its session.
 	Xfer []byte `bson:"xfer" json:"-"`
 	// Name is the file's as the minion has it: a path on its host, or a

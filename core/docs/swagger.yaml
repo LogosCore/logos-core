@@ -193,6 +193,26 @@ definitions:
     - WikiTransferRunning
     - WikiTransferDone
     - WikiTransferFailed
+  protocol.BuildFile:
+    properties:
+      id:
+        type: string
+      media_type:
+        type: string
+      name:
+        type: string
+      sha256:
+        description: lowercase hex
+        type: string
+      size:
+        type: integer
+      url:
+        description: |-
+          URL is where the factory GETs the file: a link (IsLink), core's own
+          signed path valid until a minute past the build's deadline. Set in a
+          factory.build request only.
+        type: string
+    type: object
   requests.EnrollRequest:
     properties:
       password:
@@ -702,6 +722,179 @@ paths:
           schema:
             $ref: '#/definitions/responses.ErrorResponse'
       summary: Factory link (data plane)
+      tags:
+      - Factories
+  /factory/tasks/{task}/data:
+    get:
+      parameters:
+      - description: Task ID
+        in: path
+        name: task
+        required: true
+        type: string
+      - description: The link's expiry, Unix seconds
+        in: query
+        name: expires
+        required: true
+        type: integer
+      - description: The link's signature
+        in: query
+        name: sig
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: not a link of core's, or expired
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: A task's data, for a composite task's factory
+      tags:
+      - Factories
+  /factory/tasks/{task}/files:
+    put:
+      consumes:
+      - application/octet-stream
+      parameters:
+      - description: Task ID
+        in: path
+        name: task
+        required: true
+        type: string
+      - description: The file's name
+        in: header
+        name: Logos-File-Name
+        required: true
+        type: string
+      - description: The link's expiry, Unix seconds
+        in: query
+        name: expires
+        required: true
+        type: integer
+      - description: The link's signature
+        in: query
+        name: sig
+        required: true
+        type: string
+      - description: The file
+        format: binary
+        in: body
+        name: request
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/protocol.BuildFile'
+        "400":
+          description: no file name
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: not a link of core's, or expired
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "409":
+          description: the task does not run
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "411":
+          description: Length Required
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: A file a composite task's factory puts for it
+      tags:
+      - Factories
+  /factory/tasks/{task}/files/{file}:
+    get:
+      parameters:
+      - description: Task ID
+        in: path
+        name: task
+        required: true
+        type: string
+      - description: File ID
+        in: path
+        name: file
+        required: true
+        type: string
+      - description: The link's expiry, Unix seconds
+        in: query
+        name: expires
+        required: true
+        type: integer
+      - description: The link's signature
+        in: query
+        name: sig
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: not a link of core's, or expired
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: A task's file, for a composite task's factory
+      tags:
+      - Factories
+  /factory/tasks/{task}/out:
+    get:
+      parameters:
+      - description: Task ID
+        in: path
+        name: task
+        required: true
+        type: string
+      - description: The link's expiry, Unix seconds
+        in: query
+        name: expires
+        required: true
+        type: integer
+      - description: The link's signature
+        in: query
+        name: sig
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: not a link of core's, or expired
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: A task's output, for a composite task's factory
       tags:
       - Factories
   /graphql:

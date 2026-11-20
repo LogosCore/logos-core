@@ -388,7 +388,7 @@ func (s *Service) carriedRun(ctx context.Context, c *Conn) bool {
 		switch {
 		case err != nil && !repository.IsNotFound(err):
 			return true // not known now: kept as running
-		case err == nil && !task.Finished() && task.State != models.MinionTaskQueued:
+		case err == nil && !task.Finished() && task.State != models.MinionTaskQueued && task.State != models.MinionTaskComposing:
 			return true
 		}
 		c.mu.Lock()

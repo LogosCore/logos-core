@@ -242,6 +242,8 @@ type IMinionTaskRepository interface {
 	UploadReceived(ctx context.Context, taskID uuid.UUID, gen, off, n int64, hashState, sha256 []byte, at time.Time) (bool, error)
 	// UploadDetach lets go of generation gen's uploader.
 	UploadDetach(ctx context.Context, taskID uuid.UUID, gen int64, at time.Time) error
+
+	IMinionCompositeRepository
 }
 
 type minionTaskRepository struct {
@@ -265,6 +267,10 @@ func NewMinionTaskRepository(db database.Database) IMinionTaskRepository {
 		{Key: []string{"upload.file_id"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 		{Key: []string{"credential_ids"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 		{Key: []string{"session_id", "stream.xfer"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
+		// A composite task's subtasks, in the order they were queued; the
+		// composite tasks core looks at next.
+		{Key: []string{"parent_id", "queued_at"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
+		{Key: []string{"composite.wake_at"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 	})
 	db.EnsureIndexes(context.Background(), minionTaskPartCollection, []opts.IndexModel{
 		{Key: []string{"task_id", "seq"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
@@ -338,14 +344,14 @@ func (r *minionTaskRepository) Document(ctx context.Context, taskID uuid.UUID) (
 func (r *minionTaskRepository) OpenWithAction(ctx context.Context, sessionID uuid.UUID, action string) ([]models.MinionTask, error) {
 	var out []models.MinionTask
 	err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "action": action,
-		"state": bson.M{"$in": bson.A{models.MinionTaskQueued, models.MinionTaskSent, models.MinionTaskRunning}}}).All(&out)
+		"state": bson.M{"$in": openStatesA()}}).All(&out)
 	return out, err
 }
 
 func (r *minionTaskRepository) OpenOfCommand(ctx context.Context, sessionID uuid.UUID, command string) ([]models.MinionTask, error) {
 	var out []models.MinionTask
 	err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "command": command,
-		"state": bson.M{"$in": bson.A{models.MinionTaskQueued, models.MinionTaskSent, models.MinionTaskRunning}}}).Sort("queued_at").All(&out)
+		"state": bson.M{"$in": openStatesA()}}).Sort("queued_at").All(&out)
 	return out, err
 }
 
@@ -472,8 +478,13 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 		return nil, false, err
 	}
 	// After its end a task takes only the parts it lacks before its done
-	// part, late; the done part is the last.
-	late := t.Finished()
+	// part, late; the done part is the last. A composite task's parts are
+	// its own op's: they end with it, and the task waits on in core.
+	late := t.Finished() || t.OwnOpEnded()
+	if t.Composite != nil && !late && !t.OwnOpOut() {
+		// Its own op never went out: its minion has none of it.
+		return &t, false, ErrMinionTaskEnded
+	}
 	if late && (t.DoneSeq == nil || res.Seq >= *t.DoneSeq) {
 		return &t, false, ErrMinionTaskEnded
 	}
@@ -590,6 +601,25 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 		}
 	}
 	update := bson.M{"$inc": inc}
+	if res.Done && !late && t.OwnOpOut() {
+		// A composite task's own op ended, not the task: its factory hears
+		// of it, and decides what follows (docs: contracts/task-outsourcing).
+		state := protocol.EndDone
+		if (res.OK == nil || !*res.OK) && t.CancelRequestedAt != nil {
+			state = protocol.EndCancelled
+		}
+		seq := res.Seq
+		end := models.MinionComposeOwnEnd{State: string(state), OK: res.OK != nil && *res.OK, Exit: res.Exit, Err: res.Err, At: res.At,
+			Seq: &seq, Done: &res.At}
+		ended := ownOpEnded(end, res.At, t.TaskID)
+		for _, k := range []string{"done_at", "ok", "exit", "err"} {
+			delete(set, k)
+		}
+		for k, v := range ended["$set"].(bson.M) {
+			set[k] = v
+		}
+		update["$unset"], update["$push"] = ended["$unset"], ended["$push"]
+	}
 	if len(set) > 0 {
 		update["$set"] = set
 	}
@@ -616,7 +646,7 @@ func (r *minionTaskRepository) RequestCancelWhy(ctx context.Context, taskID uuid
 	for k, v := range asked {
 		cancelled[k] = v
 	}
-	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "state": models.MinionTaskQueued}).Apply(qmgo.Change{
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "state": models.MinionTaskQueued, "composite": bson.M{"$exists": false}}).Apply(qmgo.Change{
 		Update:    bson.M{"$set": cancelled, "$inc": bumpRev},
 		ReturnNew: true,
 	}, &after)
@@ -624,6 +654,12 @@ func (r *minionTaskRepository) RequestCancelWhy(ctx context.Context, taskID uuid
 		return &after, nil
 	}
 	if !IsNotFound(err) {
+		return nil, err
+	}
+	// A composite task's own op never sent: the op ends, not the task.
+	if t, err := r.EndOwnOp(ctx, taskID, models.MinionComposeOwnEnd{State: string(protocol.EndCancelled), At: at}); err == nil {
+		return t, nil
+	} else if !IsNotFound(err) {
 		return nil, err
 	}
 	// Sent and not over: the minion is told.
@@ -664,14 +700,19 @@ func (r *minionTaskRepository) CancelsToSend(ctx context.Context, sessionID uuid
 		if t.AckedAt == nil && t.CancelSends >= models.MinionCancelGiveUp {
 			// Never acked, cancelled again and again: it most likely never
 			// reached the minion.
-			err := r.tasks.UpdateOne(ctx, bson.M{"task_id": t.TaskID, "state": models.MinionTaskSent, "acked_at": bson.M{"$exists": false}},
-				bson.M{"$set": bson.M{"state": models.MinionTaskCancelled, "done_at": at}, "$inc": bumpRev})
+			filter := bson.M{"task_id": t.TaskID, "state": models.MinionTaskSent, "acked_at": bson.M{"$exists": false}}
+			update := bson.M{"$set": bson.M{"state": models.MinionTaskCancelled, "done_at": at}, "$inc": bumpRev}
+			if t.OwnOpOut() {
+				// A composite task's own op: the op ends, not the task.
+				update = ownOpEnded(models.MinionComposeOwnEnd{State: string(protocol.EndCancelled), At: at}, at, t.TaskID)
+			}
+			var after models.MinionTask
+			err := r.tasks.Find(ctx, filter).Apply(qmgo.Change{Update: update, ReturnNew: true}, &after)
 			if err != nil && !IsNotFound(err) {
 				return nil, nil, err
 			}
 			if err == nil {
-				t.State, t.DoneAt = models.MinionTaskCancelled, &at
-				gaveUp = append(gaveUp, t)
+				gaveUp = append(gaveUp, after)
 			}
 			continue
 		}
@@ -691,7 +732,26 @@ func (r *minionTaskRepository) CancelsToSend(ctx context.Context, sessionID uuid
 
 func (r *minionTaskRepository) EndUnknown(ctx context.Context, sessionID, taskID uuid.UUID, why string, at time.Time) (*models.MinionTask, error) {
 	var after models.MinionTask
-	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID, "state": bson.M{"$in": openStates}}).Apply(qmgo.Change{
+	// A composite task's own op: the op ends, not the task.
+	var t models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID, "state": bson.M{"$in": openStates},
+		"composite.own_op": string(protocol.OwnOpOut)}).One(&t)
+	switch {
+	case err == nil:
+		state := protocol.EndFailed
+		if t.CancelRequestedAt != nil {
+			state = protocol.EndCancelled
+		}
+		err = r.tasks.Find(ctx, bson.M{"task_id": taskID, "state": t.State, "composite.own_op": string(protocol.OwnOpOut)}).Apply(qmgo.Change{
+			Update: ownOpEnded(models.MinionComposeOwnEnd{State: string(state), Err: why, At: at}, at, taskID), ReturnNew: true}, &after)
+		if err != nil {
+			return nil, err
+		}
+		return &after, nil
+	case !IsNotFound(err):
+		return nil, err
+	}
+	err = r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID, "state": bson.M{"$in": openStates}}).Apply(qmgo.Change{
 		Update: []bson.M{{"$set": bson.M{
 			"state": bson.M{"$cond": bson.A{bson.M{"$gt": bson.A{"$cancel_requested_at", nil}},
 				models.MinionTaskCancelled, models.MinionTaskFailed}},
@@ -708,11 +768,21 @@ func (r *minionTaskRepository) EndUnknown(ctx context.Context, sessionID, taskID
 
 func (r *minionTaskRepository) FailUndelivered(ctx context.Context, sessionID, taskID uuid.UUID, why string, at time.Time) (*models.MinionTask, error) {
 	var after models.MinionTask
-	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID, "acked_at": nil,
-		"state": bson.M{"$in": bson.A{models.MinionTaskQueued, models.MinionTaskSent}}}).Apply(qmgo.Change{
+	filter := bson.M{"task_id": taskID, "session_id": sessionID, "acked_at": nil,
+		"state": bson.M{"$in": bson.A{models.MinionTaskQueued, models.MinionTaskSent}}, "composite": bson.M{"$exists": false}}
+	err := r.tasks.Find(ctx, filter).Apply(qmgo.Change{
 		Update:    bson.M{"$set": bson.M{"state": models.MinionTaskFailed, "done_at": at, "ok": false, "err": why}, "$inc": bumpRev},
 		ReturnNew: true,
 	}, &after)
+	if IsNotFound(err) {
+		// A composite task's own op: the op ends, not the task.
+		delete(filter, "composite")
+		filter["composite.own_op"] = string(protocol.OwnOpOut)
+		err = r.tasks.Find(ctx, filter).Apply(qmgo.Change{
+			Update:    ownOpEnded(models.MinionComposeOwnEnd{State: string(protocol.EndFailed), Err: why, At: at}, at, taskID),
+			ReturnNew: true,
+		}, &after)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -898,8 +968,7 @@ func (r *minionTaskRepository) UploadFileUse(ctx context.Context, fileID uuid.UU
 	if err != nil || named == 0 {
 		return false, false, err
 	}
-	open, err := r.tasks.Find(ctx, bson.M{"upload.file_id": fileID, "state": bson.M{"$in": bson.A{
-		models.MinionTaskQueued, models.MinionTaskSent, models.MinionTaskRunning}}}).Count()
+	open, err := r.tasks.Find(ctx, bson.M{"upload.file_id": fileID, "state": bson.M{"$in": openStatesA()}}).Count()
 	return open > 0, true, err
 }
 
@@ -947,7 +1016,7 @@ var openStates = bson.A{models.MinionTaskSent, models.MinionTaskRunning}
 func (r *minionTaskRepository) StreamAnnounce(ctx context.Context, sessionID, taskID uuid.UUID, st models.MinionTaskStream) (*models.MinionTask, error) {
 	var after models.MinionTask
 	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID, "result": protocol.ResultFileStream,
-		"state":  bson.M{"$in": bson.A{models.MinionTaskQueued, models.MinionTaskSent, models.MinionTaskRunning}},
+		"state":  bson.M{"$in": openStatesA()},
 		"stream": bson.M{"$exists": false}}).Apply(qmgo.Change{
 		Update: bson.M{"$set": bson.M{"stream": st}, "$inc": bumpRev}, ReturnNew: true,
 	}, &after)

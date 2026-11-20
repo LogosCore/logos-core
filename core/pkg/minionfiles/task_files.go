@@ -31,6 +31,17 @@ var ErrNoTaskFile = errors.New("no such task file in this operation: upload it a
 // PutTaskFile keeps a file an operator uploads, streamed from body, of at
 // most MaxSize bytes.
 func (s *Service) PutTaskFile(ctx context.Context, operationID, by uuid.UUID, name string, body io.Reader) (*models.MinionFile, error) {
+	return s.putTaskFile(ctx, operationID, by, uuid.Nil, name, body)
+}
+
+// PutFactoryFile keeps a file a composite task's factory puts for it (docs:
+// contracts/task-outsourcing, Files): a task file of the task's operation,
+// kept while the task, or a subtask that names it, has not ended.
+func (s *Service) PutFactoryFile(ctx context.Context, operationID, forTask, by uuid.UUID, name string, body io.Reader) (*models.MinionFile, error) {
+	return s.putTaskFile(ctx, operationID, by, forTask, name, body)
+}
+
+func (s *Service) putTaskFile(ctx context.Context, operationID, by, forTask uuid.UUID, name string, body io.Reader) (*models.MinionFile, error) {
 	id := uuid.New()
 	sum := sha256.New()
 	head := &prefix{max: sniffLen}
@@ -49,7 +60,7 @@ func (s *Service) PutTaskFile(ctx context.Context, operationID, by uuid.UUID, na
 	xfer := make([]byte, 16)
 	_, _ = rand.Read(xfer)
 	now := s.now()
-	f := &models.MinionFile{FileID: id, Kind: models.MinionFileKindTask, UploadedBy: by, OperationID: operationID, Xfer: xfer,
+	f := &models.MinionFile{FileID: id, Kind: models.MinionFileKindTask, UploadedBy: by, OperationID: operationID, ForTask: forTask, Xfer: xfer,
 		Name: name, Total: size, Received: size, SHA256: sum.Sum(nil), ContentType: mimetype.Detect(head.b).String(),
 		State: models.MinionFileComplete, LastChunkAt: now, DoneAt: &now}
 	if err := s.files.Insert(ctx, f); err != nil {
@@ -118,6 +129,17 @@ func (s *Service) release(ctx context.Context, f models.MinionFile) error {
 	if err != nil {
 		return err
 	}
+	if f.ForTask != uuid.Nil {
+		// Put for a composite task: kept while it runs.
+		t, err := s.tasks.FindByTaskID(ctx, f.ForTask)
+		switch {
+		case err == nil:
+			open = open || !t.Finished()
+		case !repository.IsNotFound(err):
+			return err
+		}
+		named = true
+	}
 	if open || (!named && f.CreateAt.After(s.now().Add(-s.cfg.IdleAfter))) {
 		return nil
 	}
@@ -145,4 +167,29 @@ func (s *Service) sweepTaskFiles(ctx context.Context) {
 			s.logger.Error("minion files: release a task file", zap.String("file_id", f.FileID.String()), zap.Error(err))
 		}
 	}
+}
+
+// DropTaskFile drops a task file now, bytes and all: one a composite task's
+// finish took as its output or data.
+func (s *Service) DropTaskFile(ctx context.Context, fileID uuid.UUID) error {
+	f, err := s.files.FindByID(ctx, fileID)
+	if repository.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if f.Kind != models.MinionFileKindTask {
+		return nil
+	}
+	if err := s.store.Delete(ctx, objectKey(f.FileID)); err != nil {
+		return fmt.Errorf("drop the task file's bytes: %w", err)
+	}
+	return s.files.Delete(ctx, f.FileID)
+}
+
+// TakeFiles makes the files task from got to's as well: a composite task
+// whose finish takes the result of its subtask from.
+func (s *Service) TakeFiles(ctx context.Context, from, to uuid.UUID) error {
+	return s.files.AlsoForTask(ctx, from, to)
 }

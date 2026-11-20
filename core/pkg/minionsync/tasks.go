@@ -74,8 +74,11 @@ func (s *Service) takeAck(ctx context.Context, session *models.MinionSession, ra
 
 // takeResult keeps one part of a task's output. A part that says where
 // the minion stands is answered with its resume when resume is set (a call
-// carries the outbox's resumes instead).
-func (s *Service) takeResult(ctx context.Context, session *models.MinionSession, raw cbor.RawMessage, i int, resume bool) ([]cbor.RawMessage, error) {
+// carries the outbox's resumes instead). A part that ends a composite
+// task's subtask, or its own op, adds the composite task to composed: its
+// factory decides what follows.
+func (s *Service) takeResult(ctx context.Context, session *models.MinionSession, raw cbor.RawMessage, i int, resume bool,
+	composed *[]uuid.UUID) ([]cbor.RawMessage, error) {
 	var res protocol.ResultItem
 	if protocol.UnmarshalCBOR(raw, &res) != nil {
 		return errItem(protocol.ErrItemBadMessage, "the result does not read", i)
@@ -137,10 +140,21 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 			s.endUpload(ctx, task, res)
 			s.endScreenshot(ctx, task, res)
 			// The file browser takes what it says of its machine's files,
-			// after this exchange (a listing may be large).
+			// after this exchange (a listing may be large). A composite
+			// task's own op, as the task it is to its minion.
 			if s.fileBrowser != nil {
 				ended := *task
+				if oe := ownEnd(task); oe != nil && oe.OK {
+					ended.State, ended.DoneAt = models.MinionTaskDone, &oe.At
+				}
 				go s.fileBrowser.TaskEnded(context.WithoutCancel(ctx), &ended)
+			}
+			switch {
+			case composed == nil:
+			case task.ParentID != nil && task.Finished():
+				*composed = append(*composed, *task.ParentID)
+			case task.OwnOpEnded():
+				*composed = append(*composed, task.TaskID)
 			}
 		}
 	}
@@ -152,6 +166,15 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 		return resumeItem(task.TaskID, res.Ctx)
 	}
 	return nil, nil
+}
+
+// ownEnd is how a composite task's own op ended, nil for another task or one
+// still out.
+func ownEnd(t *models.MinionTask) *models.MinionComposeOwnEnd {
+	if !t.OwnOpEnded() {
+		return nil
+	}
+	return t.Composite.OwnEnd
 }
 
 // resumeItem is a resume of the task from ctx.

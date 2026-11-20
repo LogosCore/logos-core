@@ -24,8 +24,11 @@ type IMinionFileRepository interface {
 	FindByID(ctx context.Context, fileID uuid.UUID) (*models.MinionFile, error)
 	// FindByXfer is a session's transfer by its id.
 	FindByXfer(ctx context.Context, sessionID uuid.UUID, xfer []byte) (*models.MinionFile, error)
-	// FindByTask is a task's file, its latest when there were several.
+	// FindByTask is a task's file, its latest when there were several: one
+	// it got, or one it took as its own (AlsoTasks).
 	FindByTask(ctx context.Context, taskID uuid.UUID) (*models.MinionFile, error)
+	// AlsoForTask makes the files task from got to's as well.
+	AlsoForTask(ctx context.Context, from, to uuid.UUID) error
 	// Advance takes n bytes from off for a file receiving them, when off is
 	// how far it got: IsNotFound when it is not (a chunk sent again, or one
 	// raced). It returns the file after.
@@ -58,6 +61,7 @@ func NewMinionFileRepository(db database.Database) IMinionFileRepository {
 		{Key: []string{"file_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"session_id", "xfer"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"task_id", "-createAt"}},
+		{Key: []string{"also_tasks"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 		{Key: []string{"state", "last_chunk_at"}},
 		{Key: []string{"operation_id"}},
 		{Key: []string{"kind", "createAt"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
@@ -90,10 +94,16 @@ func (r *minionFileRepository) FindByXfer(ctx context.Context, sessionID uuid.UU
 
 func (r *minionFileRepository) FindByTask(ctx context.Context, taskID uuid.UUID) (*models.MinionFile, error) {
 	var f models.MinionFile
-	if err := r.coll.Find(ctx, bson.M{"task_id": taskID}).Sort("-createAt").Limit(1).One(&f); err != nil {
+	if err := r.coll.Find(ctx, bson.M{"$or": bson.A{bson.M{"task_id": taskID}, bson.M{"also_tasks": taskID}}}).
+		Sort("-createAt").Limit(1).One(&f); err != nil {
 		return nil, err
 	}
 	return &f, nil
+}
+
+func (r *minionFileRepository) AlsoForTask(ctx context.Context, from, to uuid.UUID) error {
+	_, err := r.coll.UpdateAll(ctx, bson.M{"task_id": from}, bson.M{"$addToSet": bson.M{"also_tasks": to}})
+	return err
 }
 
 func (r *minionFileRepository) apply(ctx context.Context, filter, update bson.M) (*models.MinionFile, error) {

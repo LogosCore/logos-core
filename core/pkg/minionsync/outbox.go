@@ -96,6 +96,10 @@ type outcome struct {
 	// (a step, the rest of a frame, a frame): a minion that polls comes
 	// back soon.
 	delegatePolls bool
+	// composePolls: a factory decides about a composite task of the
+	// session's: what its decision queues goes soon (docs: Task
+	// Outsourcing, Mechanics by connection kind).
+	composePolls bool
 	// used is how many bytes the items took.
 	used int
 }
@@ -104,9 +108,9 @@ type outcome struct {
 // all: the sooner of its streams' and its tunnels'.
 func (o outcome) pollWithin() (time.Duration, bool) {
 	switch {
-	case o.delegatePolls && o.tunnelPolls:
+	case (o.delegatePolls || o.composePolls) && o.tunnelPolls:
 		return min(pollSoon, o.tunnelPoll), true
-	case o.delegatePolls:
+	case o.delegatePolls || o.composePolls:
 		return pollSoon, true
 	case o.soon && o.tunnelPolls:
 		return min(pollSoon, o.tunnelPoll), true

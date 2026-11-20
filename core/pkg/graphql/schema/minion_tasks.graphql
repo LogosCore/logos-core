@@ -117,6 +117,63 @@ type MinionTask {
   # Ids read as UUIDs, times as RFC 3339, wire_args decoded from CBOR
   # ({"$cbor": ...}), other bytes as {"$binary": base64}.
   document: String!
+  # A composite command's task (docs: contracts/task-outsourcing): what its
+  # factory's code decided so far. Its state is COMPOSING while it waits in
+  # core for that code (its own op, when out, makes it QUEUED, SENT and
+  # RUNNING as any task). Null for any other task.
+  composite: MinionComposite
+  # The composite task a subtask runs for: it issued it, and hears of its
+  # end; null for any other task. subtaskAs is its line, as its composite's
+  # factory named it; cleanup: one a stopped composite task runs to clean up.
+  parentId: ID
+  subtaskAs: String
+  cleanup: Boolean!
+  # The subtask whose result a composite command with no op of its own took
+  # as its own (its data, output and files); null for any other task.
+  resultOf: ID
+}
+
+# Where a composite command's task stands (docs: contracts/task-outsourcing).
+type MinionComposite {
+  # The line its factory's code shows on it while it runs; at its end, the
+  # finish's message or err.
+  status: String
+  # Its own op: not_run, out, ended; null for a command with no op of its
+  # own. ownArgs are the args it ran with when a decision gave its own (the
+  # task's args are the operator's); ownEnd how it ended.
+  ownOp: String
+  ownArgs: JSON
+  ownEnd: MinionComposeOwnEnd
+  # Its subtasks not ended yet (queued, sent, running, or waiting in the
+  # task), and those ended.
+  subtasksUnderWay: Int!
+  subtasksEnded: Int!
+  # What it waits for past its factory's code: finishing (what was under way
+  # ends, then it does as its factory finished it), stopping (an operator
+  # stopped it), cleanup (its factory's cleanup subtasks), closed (its
+  # session closed: core calls its factory no more); null while its code
+  # runs it.
+  phase: String
+  # When the timer its latest decision set runs out; null for none.
+  timerAt: String
+  # Since when its factory has not answered: core ends the task failed after
+  # 10 minutes of it. Null while it answers.
+  silentSince: String
+  # When an operator stopped it.
+  stoppedAt: String
+  # The calls core made about it.
+  calls: Int!
+}
+
+# How a composite task's own op ended.
+type MinionComposeOwnEnd {
+  # done (its minion sent its last part, ok says how it went), failed (core
+  # ended it), cancelled, or refused (it failed core's checks and never ran).
+  state: String!
+  ok: Boolean!
+  exit: Int
+  err: String
+  at: String!
 }
 
 # A file a minion sends core for a download_file task, or a screenshot
@@ -573,6 +630,9 @@ extend type Query {
   # The commands a session's minion takes: its build's, with what a task of
   # each takes. Needs at least viewer.
   minionSessionCommands(sessionId: ID!): [BuildCommand!]!
+  # A composite command's task's subtasks, in the order they were queued:
+  # the tasks of its session it ran.
+  minionSubtasks(taskId: ID!): [MinionTask!]! @hasPermission(permission: "operation:member")
     @hasPermission(permission: "operation:member")
 
   # The settings a desktop of front (rdp, vnc, ssh or telnet) opens with in

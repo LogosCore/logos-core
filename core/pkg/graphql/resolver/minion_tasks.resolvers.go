@@ -145,6 +145,11 @@ func (r *queryResolver) MinionSessionCommands(ctx context.Context, sessionID str
 	return r.MinionTaskResolver.MinionSessionCommands(ctx, sessionID)
 }
 
+// MinionSubtasks is the resolver for the minionSubtasks field.
+func (r *queryResolver) MinionSubtasks(ctx context.Context, taskID string) ([]*model.MinionTask, error) {
+	return r.MinionTaskResolver.MinionSubtasks(ctx, taskID)
+}
+
 // MinionDesktopSettings is the resolver for the minionDesktopSettings field.
 func (r *queryResolver) MinionDesktopSettings(ctx context.Context, front string) ([]*model.ModuleField, error) {
 	return r.MinionTaskResolver.MinionDesktopSettings(ctx, front)
