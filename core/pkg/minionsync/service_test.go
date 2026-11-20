@@ -151,6 +151,18 @@ func (f *fakeSessions) SetHello(_ context.Context, id uuid.UUID, h models.Minion
 	return nil
 }
 
+func (f *fakeSessions) SetConnections(_ context.Context, id uuid.UUID, conns []models.MinionSessionConnSpec) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.rows {
+		if f.rows[i].SessionID == id {
+			f.rows[i].Connections, f.rows[i].ConnCount = conns, len(conns)
+			return nil
+		}
+	}
+	return repository.ErrNotFound
+}
+
 func (f *fakeSessions) SetConn(_ context.Context, id uuid.UUID, conn models.MinionSessionConn, change *models.MinionSessionConnChange) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -127,6 +127,20 @@ func NewMinionSessionResolver(sessions repository.IMinionSessionRepository, oper
 
 func (r *minionSessionResolver) Connections(ctx context.Context, s *model.MinionSession) ([]*model.MinionConnection, error) {
 	out := []*model.MinionConnection{}
+	// The minion's own connections when its hello said them, else its
+	// build's.
+	if sid, err := uuid.Parse(s.ID); err == nil && r.sessions != nil {
+		if sess, err := r.sessions.FindBySessionID(ctx, sid); err == nil && sess.Connections != nil {
+			for i, c := range sess.Connections {
+				params := map[string]any{}
+				for k, v := range c.Params {
+					params[k] = v
+				}
+				out = append(out, &model.MinionConnection{Place: i + 1, Name: c.Name, ModuleName: c.Channel, Kind: c.Kind, Params: params})
+			}
+			return out, nil
+		}
+	}
 	if r.builds == nil {
 		return out, nil
 	}

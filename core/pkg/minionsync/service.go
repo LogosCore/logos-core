@@ -97,6 +97,10 @@ type sender struct {
 	// call or connection brought it (0: the hello says): a minion a
 	// channel acts as knows no build, and says none.
 	place int
+	// carrier and module are the kind of connection the message came
+	// through and the channel module that brought it: what a hello with
+	// connections of its own that names none is matched by.
+	carrier, module string
 }
 
 // seal is a message core sends under id, sealed with the sender's keys.
@@ -254,10 +258,11 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 		}
 		from.place = via.placeOf()
 	}
+	from.carrier, from.module = carrierKind(via), ChannelOf(ctx)
 	if from.place == 0 && from.build != nil {
 		// A hello that names no connection came through the one that
 		// carried it, when only one of the build's fits.
-		from.place = carrierPlace(from.build, carrierKind(via), ChannelOf(ctx))
+		from.place = carrierPlace(from.build, nil, from.carrier, from.module)
 	}
 	plain, err := s.readMessage(ctx, from, sentUnder, frame)
 	if err != nil {
@@ -561,6 +566,9 @@ func (s *Service) underStaging(ctx context.Context, from *sender, peer string, m
 // that id (its reply lost on the way) gets the same hello_response.
 func (s *Service) openSession(ctx context.Context, from *sender, peer string, raw cbor.RawMessage) ([]cbor.RawMessage, error) {
 	hello, err := readHello(raw)
+	if err == nil {
+		err = s.checkConns(ctx, hello)
+	}
 	if err != nil {
 		return errItem(protocol.ErrItemBadMessage, err.Error(), 0)
 	}
@@ -634,12 +642,13 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.AddrStrings()),
 		MaxTasks: models.MaxTasksOf(hello), MaxTasksSettable: b.MaxTasks != nil, CreatedAt: now, PurgeAt: &purge,
 	}
-	place := connPlace(hello.Conn)
-	if place == 0 {
-		place = from.place
-	}
-	conn := connOf(b, place)
-	session.Conn, session.ConnKind, session.ConnName, session.ConnCount = conn.Place, conn.Kind, conn.Name, len(b.Connections.Items)
+	// The minion's own connections when its hello says them, else the
+	// build's.
+	own := models.ConnSpecsFrom(hello)
+	place := helloPlace(hello, from, own)
+	conn := connOf(b, own, place)
+	session.Connections = own
+	session.Conn, session.ConnKind, session.ConnName, session.ConnCount = conn.Place, conn.Kind, conn.Name, len(connsOf(b, own))
 	session.ConnMaxMessage = conn.MaxMessage
 	session.Compression, session.Envelope, session.Codec = b.Compression, b.Envelope, b.Codec
 	if peer != "" {
@@ -717,14 +726,21 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	if err != nil {
 		return nil, false, fmt.Errorf("claim the session: %w", err)
 	}
-	// The connection the claim came through: the one it names, else the
-	// one that carried it when only one of the build's fits.
-	c := connPlace(hello.Conn)
-	if c == 0 {
-		c = from.place
+	// The minion's own connections: the claim's when it says them (they
+	// replace the session's), else the ones the session kept, else the
+	// build's.
+	own := sess.Connections
+	if said := models.ConnSpecsFrom(hello); said != nil {
+		own = said
+		if err := s.sessions.SetConnections(ctx, sid, own); err != nil {
+			return nil, false, fmt.Errorf("claim the session: %w", err)
+		}
 	}
+	// The connection the claim came through: the one it names, else the
+	// one that carried it when only one fits.
+	c := helloPlace(hello, from, own)
 	if c > 0 {
-		conn := connOf(b, c)
+		conn := connOf(b, own, c)
 		if err := s.sessions.SetConn(ctx, sid, conn, nil); err != nil {
 			return nil, false, fmt.Errorf("claim the session: %w", err)
 		}
@@ -818,9 +834,21 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 		switch protocol.ItemType(raw) {
 		case protocol.ItemHello:
 			var hello protocol.HelloItem
-			if hello, err = readHello(raw); err != nil {
+			if hello, err = readHello(raw); err == nil {
+				err = s.checkConns(ctx, hello)
+			}
+			if err != nil {
 				out, err = errItem(protocol.ErrItemBadMessage, err.Error(), i)
 				break
+			}
+			// Connections it says replace the ones the session kept; a
+			// rehello without keeps them.
+			replaced := false
+			if own := models.ConnSpecsFrom(hello); own != nil {
+				if err = s.sessions.SetConnections(ctx, session.SessionID, own); err != nil {
+					return nil, fmt.Errorf("rehello: %w", err)
+				}
+				session.Connections, session.ConnCount, replaced = own, len(own), true
 			}
 			// An operator's pick stays while the host still has it.
 			address, picked := models.DefaultAddress(hello.AddrStrings()), false
@@ -847,7 +875,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			if c == 0 && p != pathCall {
 				c = s.carrierPlaceOf(ctx, session, via)
 			}
-			if c > 0 && c != session.Conn {
+			if c > 0 && (c != session.Conn || replaced) {
 				conn := s.sessionConn(ctx, session, c)
 				if err = s.sessions.SetConn(ctx, session.SessionID, conn, nil); err != nil {
 					return nil, fmt.Errorf("rehello: %w", err)
@@ -1066,28 +1094,91 @@ func readConnUpdate(raw cbor.RawMessage) (protocol.ConnUpdateItem, error) {
 	return u, u.Validate()
 }
 
-// connOf is the connection at place in b's connections: its kind and
-// name, empty when b has no such one (nil: the build is gone).
-func connOf(b *models.Build, place int) models.MinionSessionConn {
+// connEntry is one of a minion's connections as core matches messages to
+// it: a build's, or one its hello said.
+type connEntry struct {
+	kind, name, module string
+	maxMessage         int
+}
+
+// connsOf are a minion's connections: own, the ones its hello said, when
+// there are any, else b's (nil: the build is gone, none).
+func connsOf(b *models.Build, own []models.MinionSessionConnSpec) []connEntry {
+	if own != nil {
+		out := make([]connEntry, len(own))
+		for i, c := range own {
+			out[i] = connEntry{kind: c.Kind, name: c.Name, module: c.Channel, maxMessage: c.MaxMessage}
+		}
+		return out
+	}
+	if b == nil {
+		return nil
+	}
+	out := make([]connEntry, len(b.Connections.Items))
+	for i := range b.Connections.Items {
+		bc := &b.Connections.Items[i]
+		out[i] = connEntry{kind: bc.ConnectionKind(), name: bc.Endpoint.Name, module: bc.Endpoint.Channel.ModuleName, maxMessage: bc.MaxMessage}
+	}
+	return out
+}
+
+// connOf is the connection at place in the minion's connections (connsOf):
+// its kind and name, empty when there is no such one.
+func connOf(b *models.Build, own []models.MinionSessionConnSpec, place int) models.MinionSessionConn {
 	c := models.MinionSessionConn{Place: place}
-	if b != nil && place >= 1 && place <= len(b.Connections.Items) {
-		bc := b.Connections.Items[place-1]
-		c.Kind, c.Name, c.MaxMessage = bc.ConnectionKind(), bc.Endpoint.Name, bc.MaxMessage
+	if conns := connsOf(b, own); place >= 1 && place <= len(conns) {
+		e := conns[place-1]
+		c.Kind, c.Name, c.MaxMessage = e.kind, e.name, e.maxMessage
 	}
 	return c
+}
+
+// helloPlace is the connection a hello came through: the one it names,
+// else, with connections of its own, the one of them the carrier fits,
+// else the build's from found (from.place).
+func helloPlace(hello protocol.HelloItem, from *sender, own []models.MinionSessionConnSpec) int {
+	if c := connPlace(hello.Conn); c > 0 {
+		return c
+	}
+	if own != nil {
+		return carrierPlace(nil, own, from.carrier, from.module)
+	}
+	return from.place
+}
+
+// checkConns refuses a hello whose own connections name a channel core
+// does not know, or a kind that channel does not carry. Without the
+// channels' schemas only their shape is checked (Validate).
+func (s *Service) checkConns(ctx context.Context, hello protocol.HelloItem) error {
+	if s.channels == nil {
+		return nil
+	}
+	for i, c := range hello.Connections {
+		schema, err := s.channels.Schema(ctx, c.Channel)
+		if err != nil || schema == nil {
+			return fmt.Errorf("hello: connection %d: channel %q is not one core knows", i+1, c.Channel)
+		}
+		if _, ok := schema.Kinds[c.Kind]; !ok {
+			return fmt.Errorf("hello: connection %d: channel %q does not carry %s", i+1, c.Channel, c.Kind)
+		}
+	}
+	return nil
 }
 
 // sessionConn is the session's connection at place, from its build; a build
 // that cannot be read leaves its kind and name empty.
 func (s *Service) sessionConn(ctx context.Context, session *models.MinionSession, place int) models.MinionSessionConn {
+	if session.Connections != nil {
+		return connOf(nil, session.Connections, place)
+	}
 	b, err := s.builds.FindByBuildID(ctx, session.BuildID)
 	if err != nil {
 		if !repository.IsNotFound(err) {
 			s.logger.Warn("read the session's build for its connection", zap.String("session_id", session.SessionID.String()), zap.Error(err))
 		}
-		return connOf(nil, place)
+		return connOf(nil, nil, place)
 	}
-	return connOf(b, place)
+	return connOf(b, nil, place)
 }
 
 // carrierKind is the kind of connection a message came through: a socket's,
@@ -1099,19 +1190,19 @@ func carrierKind(via *Conn) string {
 	return protocol.KindReverseCall
 }
 
-// carrierPlace is the build connection a message of b's minion came
-// through, as far as core can tell without the minion saying: b's only
-// connection, else its only one of kind through the channel module ("":
-// any); 0 when none or more fit, and the minion has to say.
-func carrierPlace(b *models.Build, kind, module string) int {
-	items := b.Connections.Items
+// carrierPlace is the connection a message of b's minion came through,
+// among its connections (connsOf: own, else b's), as far as core can tell
+// without the minion saying: its only connection, else its only one of
+// kind through the channel module ("": any); 0 when none or more fit, and
+// the minion has to say.
+func carrierPlace(b *models.Build, own []models.MinionSessionConnSpec, kind, module string) int {
+	items := connsOf(b, own)
 	if len(items) == 1 {
 		return 1
 	}
 	place := 0
-	for i := range items {
-		c := &items[i]
-		if c.ConnectionKind() != kind || (module != "" && c.Endpoint.Channel.ModuleName != module) {
+	for i, c := range items {
+		if c.kind != kind || (module != "" && c.module != module) {
 			continue
 		}
 		if place != 0 {
@@ -1125,6 +1216,9 @@ func carrierPlace(b *models.Build, kind, module string) int {
 // carrierPlaceOf is carrierPlace for a message of session's minion that
 // came over via, or through the sync call.
 func (s *Service) carrierPlaceOf(ctx context.Context, session *models.MinionSession, via *Conn) int {
+	if session.Connections != nil {
+		return carrierPlace(nil, session.Connections, carrierKind(via), ChannelOf(ctx))
+	}
 	if via != nil && via.placeOf() > 0 {
 		return via.placeOf()
 	}
@@ -1132,7 +1226,7 @@ func (s *Service) carrierPlaceOf(ctx context.Context, session *models.MinionSess
 	if err != nil {
 		return 0
 	}
-	return carrierPlace(b, carrierKind(via), ChannelOf(ctx))
+	return carrierPlace(b, nil, carrierKind(via), ChannelOf(ctx))
 }
 
 // connPlace is a connection's place as core keeps it: 0 (not said) for one

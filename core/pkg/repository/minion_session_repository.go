@@ -50,6 +50,9 @@ type IMinionSessionRepository interface {
 	// reported, first in the session's ConnChanges (capped at
 	// MaxSessionConnChanges).
 	SetConn(ctx context.Context, sessionID uuid.UUID, conn models.MinionSessionConn, change *models.MinionSessionConnChange) error
+	// SetConnections keeps the minion's own connections, as a hello said
+	// them, with how many there are (ConnCount).
+	SetConnections(ctx context.Context, sessionID uuid.UUID, conns []models.MinionSessionConnSpec) error
 	// SetAddress sets the address the session shows, one of its hello's;
 	// IsNotFound when the session has no such address.
 	SetAddress(ctx context.Context, sessionID uuid.UUID, address string, picked bool) error
@@ -335,6 +338,11 @@ func (r *minionSessionRepository) SetConn(ctx context.Context, sessionID uuid.UU
 		}}
 	}
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(update))
+}
+
+func (r *minionSessionRepository) SetConnections(ctx context.Context, sessionID uuid.UUID, conns []models.MinionSessionConnSpec) error {
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
+		withRev(bson.M{"$set": bson.M{"connections": conns, "conn_count": len(conns)}}))
 }
 
 func (r *minionSessionRepository) SetAddress(ctx context.Context, sessionID uuid.UUID, address string, picked bool) error {

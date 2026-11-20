@@ -93,11 +93,11 @@ func TestHelloTakesItsCarrier(t *testing.T) {
 		t.Fatalf("a sync hello's conn %d %q", s.Conn, s.ConnKind)
 	}
 	// More than one fits (no channel said): the minion has to say.
-	if p := carrierPlace(r.build, protocol.KindReversePersistent, ""); p != 0 {
+	if p := carrierPlace(r.build, nil, protocol.KindReversePersistent, ""); p != 0 {
 		t.Fatalf("an unclear carrier: %d", p)
 	}
 	one := &models.Build{Connections: models.BuildConnections{Items: []protocol.BuildConnection{small}}}
-	if p := carrierPlace(one, protocol.KindReverseCall, "other"); p != 1 {
+	if p := carrierPlace(one, nil, protocol.KindReverseCall, "other"); p != 1 {
 		t.Fatalf("a build's only connection: %d", p)
 	}
 }

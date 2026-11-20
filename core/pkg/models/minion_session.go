@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/netip"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -101,6 +102,10 @@ type MinionSession struct {
 	ConnKind  string `bson:"conn_kind,omitempty" json:"conn_kind,omitempty"`
 	ConnName  string `bson:"conn_name,omitempty" json:"conn_name,omitempty"`
 	ConnCount int    `bson:"conn_count,omitempty" json:"conn_count,omitempty"`
+	// Connections are the minion's own connections, as its hello said them
+	// (docs: Sessions, Connections): Conn and ConnChanges are places in
+	// them, in place of the build's. Nil: the build's.
+	Connections []MinionSessionConnSpec `bson:"connections,omitempty" json:"connections,omitempty"`
 	// MaxTasks is how many tasks the minion runs at once, as it last said
 	// (its hello's, or a max_tasks of its); nil when it never said.
 	// MaxTasksSettable: its build's factory declares max_tasks (the build
@@ -210,6 +215,54 @@ const (
 	MaxSessionReplacedKeys = 4
 	MaxSessionConnChanges  = 32
 )
+
+// MinionSessionConnSpec is one of the connections a minion's hello said: a
+// build's connection in the form core keeps, params and values by their
+// fields' numbers (as text).
+type MinionSessionConnSpec struct {
+	Channel      string         `bson:"channel" json:"channel"`
+	Kind         string         `bson:"kind" json:"kind"`
+	Name         string         `bson:"name" json:"name"`
+	Version      uint64         `bson:"version,omitempty" json:"version,omitempty"`
+	Params       map[string]any `bson:"params,omitempty" json:"params,omitempty"`
+	Values       map[string]any `bson:"values,omitempty" json:"values,omitempty"`
+	FailoverAuto *bool          `bson:"failover_auto,omitempty" json:"failover_auto,omitempty"`
+	FailAfter    uint64         `bson:"fail_after,omitempty" json:"fail_after,omitempty"`
+	MaxMessage   int            `bson:"max_message,omitempty" json:"max_message,omitempty"`
+}
+
+// ConnSpecsFrom are a hello's own connections as core keeps them; nil when
+// it says none. One without a name is "<channel>-<place>", as a build's.
+func ConnSpecsFrom(h protocol.HelloItem) []MinionSessionConnSpec {
+	if len(h.Connections) == 0 {
+		return nil
+	}
+	out := make([]MinionSessionConnSpec, len(h.Connections))
+	for i, c := range h.Connections {
+		name := c.Name
+		if name == "" {
+			name = fmt.Sprintf("%s-%d", c.Channel, i+1)
+		}
+		spec := MinionSessionConnSpec{Channel: c.Channel, Kind: c.Kind, Name: name, Version: c.Version,
+			Params: numbered(c.Params), Values: numbered(c.Values), MaxMessage: int(c.MaxMessage)} //nolint:gosec // within the protocol's limit
+		if c.Failover != nil {
+			spec.FailoverAuto, spec.FailAfter = c.Failover.Auto, c.Failover.FailAfter
+		}
+		out[i] = spec
+	}
+	return out
+}
+
+func numbered(m map[uint64]any) map[string]any {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[strconv.FormatUint(k, 10)] = v
+	}
+	return out
+}
 
 // MinionSessionConn is the connection a minion uses: its place in the
 // build's connections, its kind and its name.
