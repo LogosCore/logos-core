@@ -304,6 +304,7 @@ export const MinionSessionConnectionsQuery = graphql(`
         moduleName
         kind
         params
+        values
       }
     }
   }

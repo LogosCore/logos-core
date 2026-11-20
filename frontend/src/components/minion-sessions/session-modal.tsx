@@ -30,6 +30,7 @@ import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { formatAgo, formatAgoExact, formatInterval, lateness } from "./sessions-layout"
 import { ConnectionsCard } from "./session-connections"
+import { ConnectionDetailCards } from "./session-connection-details"
 import { MaxTasksValue } from "./max-tasks"
 import { FeedbackCounts } from "./feedback-parts"
 import { FeedbackView } from "./feedback-view"
@@ -158,6 +159,7 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
         <RecordModalBody>
           <CardColumns className="p-4">
             <ConnectionsCard s={s} />
+            <ConnectionDetailCards s={s} />
             <PeersCard s={s} />
             {s.connChanges.length > 0 && <ConnectionChangesCard s={s} />}
           </CardColumns>

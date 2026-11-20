@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
@@ -644,7 +645,7 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 	}
 	// The minion's own connections when its hello says them, else the
 	// build's.
-	own := models.ConnSpecsFrom(hello)
+	own := s.ownConns(ctx, hello)
 	place := helloPlace(hello, from, own)
 	conn := connOf(b, own, place)
 	session.Connections = own
@@ -730,7 +731,7 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	// replace the session's), else the ones the session kept, else the
 	// build's.
 	own := sess.Connections
-	if said := models.ConnSpecsFrom(hello); said != nil {
+	if said := s.ownConns(ctx, hello); said != nil {
 		own = said
 		if err := s.sessions.SetConnections(ctx, sid, own); err != nil {
 			return nil, false, fmt.Errorf("claim the session: %w", err)
@@ -844,7 +845,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			// Connections it says replace the ones the session kept; a
 			// rehello without keeps them.
 			replaced := false
-			if own := models.ConnSpecsFrom(hello); own != nil {
+			if own := s.ownConns(ctx, hello); own != nil {
 				if err = s.sessions.SetConnections(ctx, session.SessionID, own); err != nil {
 					return nil, fmt.Errorf("rehello: %w", err)
 				}
@@ -1144,6 +1145,37 @@ func helloPlace(hello protocol.HelloItem, from *sender, own []models.MinionSessi
 		return carrierPlace(nil, own, from.carrier, from.module)
 	}
 	return from.place
+}
+
+// ownConns are the hello's own connections as core keeps them, their
+// params named by the channel's fields (a param its schema does not number
+// keeps its number); nil when it says none.
+func (s *Service) ownConns(ctx context.Context, hello protocol.HelloItem) []models.MinionSessionConnSpec {
+	own := models.ConnSpecsFrom(hello)
+	if s.channels == nil {
+		return own
+	}
+	for i := range own {
+		schema, err := s.channels.Schema(ctx, own[i].Channel)
+		if err != nil || schema == nil || len(own[i].Params) == 0 {
+			continue
+		}
+		keys := map[string]string{}
+		for _, f := range schema.Kinds[own[i].Kind].Fields {
+			if f.Num != 0 {
+				keys[strconv.Itoa(f.Num)] = f.Key
+			}
+		}
+		named := make(map[string]any, len(own[i].Params))
+		for k, v := range own[i].Params {
+			if key, ok := keys[k]; ok {
+				k = key
+			}
+			named[k] = v
+		}
+		own[i].Params = named
+	}
+	return own
 }
 
 // checkConns refuses a hello whose own connections name a channel core

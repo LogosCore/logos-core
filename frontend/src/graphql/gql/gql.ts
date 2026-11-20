@@ -129,7 +129,7 @@ type Documents = {
     "\n  mutation SetMinionSessionMaxTasks($id: ID!, $max: Int!) {\n    setMinionSessionMaxTasks(id: $id, max: $max) {\n      ...MinionSessionFields\n    }\n  }\n": typeof types.SetMinionSessionMaxTasksDocument,
     "\n  query MinionSessionRunningTasks($id: ID!) {\n    minionSession(id: $id) {\n      id\n      runningTasks\n      runningTunnels\n    }\n  }\n": typeof types.MinionSessionRunningTasksDocument,
     "\n  query MinionSession($id: ID!) {\n    minionSession(id: $id) {\n      ...MinionSessionFields\n    }\n  }\n": typeof types.MinionSessionDocument,
-    "\n  query MinionSessionConnections($id: ID!) {\n    minionSession(id: $id) {\n      id\n      connections {\n        place\n        name\n        moduleName\n        kind\n        params\n      }\n    }\n  }\n": typeof types.MinionSessionConnectionsDocument,
+    "\n  query MinionSessionConnections($id: ID!) {\n    minionSession(id: $id) {\n      id\n      connections {\n        place\n        name\n        moduleName\n        kind\n        params\n        values\n      }\n    }\n  }\n": typeof types.MinionSessionConnectionsDocument,
     "\n  mutation SetMinionSessionArchived($id: ID!, $archived: Boolean!) {\n    setMinionSessionArchived(id: $id, archived: $archived) {\n      ...MinionSessionFields\n    }\n  }\n": typeof types.SetMinionSessionArchivedDocument,
     "\n  mutation SetMinionSessionsArchived(\n    $operationId: ID!\n    $ids: [ID!]\n    $matching: MinionSessionMatchInput\n    $archived: Boolean!\n  ) {\n    setMinionSessionsArchived(operationId: $operationId, ids: $ids, matching: $matching, archived: $archived)\n  }\n": typeof types.SetMinionSessionsArchivedDocument,
     "\n  mutation SetMinionSessionDescription($id: ID!, $description: String!) {\n    setMinionSessionDescription(id: $id, description: $description) {\n      ...MinionSessionFields\n    }\n  }\n": typeof types.SetMinionSessionDescriptionDocument,
@@ -420,7 +420,7 @@ const documents: Documents = {
     "\n  mutation SetMinionSessionMaxTasks($id: ID!, $max: Int!) {\n    setMinionSessionMaxTasks(id: $id, max: $max) {\n      ...MinionSessionFields\n    }\n  }\n": types.SetMinionSessionMaxTasksDocument,
     "\n  query MinionSessionRunningTasks($id: ID!) {\n    minionSession(id: $id) {\n      id\n      runningTasks\n      runningTunnels\n    }\n  }\n": types.MinionSessionRunningTasksDocument,
     "\n  query MinionSession($id: ID!) {\n    minionSession(id: $id) {\n      ...MinionSessionFields\n    }\n  }\n": types.MinionSessionDocument,
-    "\n  query MinionSessionConnections($id: ID!) {\n    minionSession(id: $id) {\n      id\n      connections {\n        place\n        name\n        moduleName\n        kind\n        params\n      }\n    }\n  }\n": types.MinionSessionConnectionsDocument,
+    "\n  query MinionSessionConnections($id: ID!) {\n    minionSession(id: $id) {\n      id\n      connections {\n        place\n        name\n        moduleName\n        kind\n        params\n        values\n      }\n    }\n  }\n": types.MinionSessionConnectionsDocument,
     "\n  mutation SetMinionSessionArchived($id: ID!, $archived: Boolean!) {\n    setMinionSessionArchived(id: $id, archived: $archived) {\n      ...MinionSessionFields\n    }\n  }\n": types.SetMinionSessionArchivedDocument,
     "\n  mutation SetMinionSessionsArchived(\n    $operationId: ID!\n    $ids: [ID!]\n    $matching: MinionSessionMatchInput\n    $archived: Boolean!\n  ) {\n    setMinionSessionsArchived(operationId: $operationId, ids: $ids, matching: $matching, archived: $archived)\n  }\n": types.SetMinionSessionsArchivedDocument,
     "\n  mutation SetMinionSessionDescription($id: ID!, $description: String!) {\n    setMinionSessionDescription(id: $id, description: $description) {\n      ...MinionSessionFields\n    }\n  }\n": types.SetMinionSessionDescriptionDocument,
@@ -1056,7 +1056,7 @@ export function graphql(source: "\n  query MinionSession($id: ID!) {\n    minion
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query MinionSessionConnections($id: ID!) {\n    minionSession(id: $id) {\n      id\n      connections {\n        place\n        name\n        moduleName\n        kind\n        params\n      }\n    }\n  }\n"): typeof import('./graphql').MinionSessionConnectionsDocument;
+export function graphql(source: "\n  query MinionSessionConnections($id: ID!) {\n    minionSession(id: $id) {\n      id\n      connections {\n        place\n        name\n        moduleName\n        kind\n        params\n        values\n      }\n    }\n  }\n"): typeof import('./graphql').MinionSessionConnectionsDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

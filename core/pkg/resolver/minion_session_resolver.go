@@ -136,7 +136,12 @@ func (r *minionSessionResolver) Connections(ctx context.Context, s *model.Minion
 				for k, v := range c.Params {
 					params[k] = v
 				}
-				out = append(out, &model.MinionConnection{Place: i + 1, Name: c.Name, ModuleName: c.Channel, Kind: c.Kind, Params: params})
+				values := map[string]any{}
+				for k, v := range c.Values {
+					values[k] = v
+				}
+				out = append(out, &model.MinionConnection{Place: i + 1, Name: c.Name, ModuleName: c.Channel, Kind: c.Kind, Params: params,
+					Values: values})
 			}
 			return out, nil
 		}
@@ -160,8 +165,12 @@ func (r *minionSessionResolver) Connections(ctx context.Context, s *model.Minion
 		for k, v := range c.Endpoint.Params {
 			params[k] = v
 		}
+		values := map[string]any{}
+		for k, v := range c.Values {
+			values[k] = v
+		}
 		out = append(out, &model.MinionConnection{Place: i + 1, Name: c.Endpoint.Name, ModuleName: c.Endpoint.Channel.ModuleName,
-			Kind: c.ConnectionKind(), Params: params})
+			Kind: c.ConnectionKind(), Params: params, Values: values})
 	}
 	return out, nil
 }

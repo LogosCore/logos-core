@@ -724,6 +724,7 @@ type MinionConnection struct {
 	ModuleName string `json:"moduleName"`
 	Kind       string `json:"kind"`
 	Params     any    `json:"params"`
+	Values     any    `json:"values"`
 }
 
 type MinionDelegate struct {

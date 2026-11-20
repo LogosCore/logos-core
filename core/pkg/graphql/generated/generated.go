@@ -724,6 +724,7 @@ type ComplexityRoot struct {
 		Name       func(childComplexity int) int
 		Params     func(childComplexity int) int
 		Place      func(childComplexity int) int
+		Values     func(childComplexity int) int
 	}
 
 	MinionDelegate struct {
@@ -5518,6 +5519,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionConnection.Place(childComplexity), true
+	case "MinionConnection.values":
+		if e.ComplexityRoot.MinionConnection.Values == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionConnection.Values(childComplexity), true
 
 	case "MinionDelegate.carried":
 		if e.ComplexityRoot.MinionDelegate.Carried == nil {
@@ -16294,8 +16301,9 @@ type MinionFeedbackPage {
 
 # One of a session's build's connections.
 type MinionConnection {
-  # Its place in the build's connections, from 1: what a hello, a
-  # conn_update and switch_connection name it by.
+  # Its place in the minion's connections, from 1 (its hello's own when
+  # it said them, else the build's): what a hello, a conn_update and
+  # switch_connection name it by.
   place: Int!
   # What the minion calls it (the endpoint export's name).
   name: String!
@@ -16303,8 +16311,12 @@ type MinionConnection {
   moduleName: String!
   # The connection kind, e.g. "reverse-call".
   kind: String!
-  # The channel's settings as the build gave them (the export's params).
+  # The channel's settings: as the build gave them (the export's params),
+  # or as the minion's hello said them (named by the channel's fields).
   params: JSON!
+  # The factory's connection parameter values: the build's (by key), or
+  # the hello's (by number).
+  values: JSON!
 }
 
 # A move to another connection a minion reported.
@@ -39175,6 +39187,35 @@ func (ec *executionContext) fieldContext_MinionConnection_params(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionConnection_values(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionConnection_values,
+		func(ctx context.Context) (any, error) {
+			return obj.Values, nil
+		},
+		nil,
+		ec.marshalNJSON2interface,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionConnection_values(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionDelegate_serves(ctx context.Context, field graphql.CollectedField, obj *model.MinionDelegate) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -43732,6 +43773,8 @@ func (ec *executionContext) fieldContext_MinionSession_connections(_ context.Con
 				return ec.fieldContext_MinionConnection_kind(ctx, field)
 			case "params":
 				return ec.fieldContext_MinionConnection_params(ctx, field)
+			case "values":
+				return ec.fieldContext_MinionConnection_values(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionConnection", field.Name)
 		},
@@ -99981,6 +100024,11 @@ func (ec *executionContext) _MinionConnection(ctx context.Context, sel ast.Selec
 			}
 		case "params":
 			out.Values[i] = ec._MinionConnection_params(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "values":
+			out.Values[i] = ec._MinionConnection_values(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

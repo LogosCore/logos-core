@@ -941,6 +941,7 @@ export type MinionConnection = {
   name: Scalars['String']['output'];
   params: Scalars['JSON']['output'];
   place: Scalars['Int']['output'];
+  values: Scalars['JSON']['output'];
 };
 
 export type MinionDelegate = {
@@ -4971,7 +4972,7 @@ export type MinionSessionConnectionsQueryVariables = Exact<{
 }>;
 
 
-export type MinionSessionConnectionsQuery = { minionSession?: { id: string, connections: Array<{ place: number, name: string, moduleName: string, kind: string, params: unknown }> } | null };
+export type MinionSessionConnectionsQuery = { minionSession?: { id: string, connections: Array<{ place: number, name: string, moduleName: string, kind: string, params: unknown, values: unknown }> } | null };
 
 export type SetMinionSessionArchivedMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -11286,6 +11287,7 @@ export const MinionSessionConnectionsDocument = new TypedDocumentString(`
       moduleName
       kind
       params
+      values
     }
   }
 }
