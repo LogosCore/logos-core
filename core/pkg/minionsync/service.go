@@ -900,6 +900,12 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				break
 			}
 			to := connPlace(u.Conn)
+			// A place past the minion's connections (its own, else the
+			// build's) is refused: nothing is recorded.
+			if session.ConnCount > 0 && to > session.ConnCount {
+				out, err = errItem(protocol.ErrItemBadMessage, fmt.Sprintf("conn_update: conn %d is past the minion's %d connections", to, session.ConnCount), i)
+				break
+			}
 			change := &models.MinionSessionConnChange{At: s.now(), From: session.Conn, To: to, Reason: u.Reason}
 			conn := s.sessionConn(ctx, session, to)
 			if err = s.sessions.SetConn(ctx, session.SessionID, conn, change); err != nil {

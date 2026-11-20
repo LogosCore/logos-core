@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -131,13 +132,34 @@ func (r *minionSessionResolver) Connections(ctx context.Context, s *model.Minion
 	// build's.
 	if sid, err := uuid.Parse(s.ID); err == nil && r.sessions != nil {
 		if sess, err := r.sessions.FindBySessionID(ctx, sid); err == nil && sess.Connections != nil {
+			// The factory's values come by number: named by its build
+			// schema's fields for the channel and kind, where it has them.
+			var factory *models.ModuleBuildSchema
+			if r.schemas != nil {
+				if all, err := r.schemas.LatestBuildSchemas(ctx); err == nil {
+					factory = all[sess.ModuleName]
+				}
+			}
 			for i, c := range sess.Connections {
 				params := map[string]any{}
 				for k, v := range c.Params {
 					params[k] = v
 				}
+				names := map[string]string{}
+				if factory != nil {
+					if ch, ok := factory.Channel(c.Channel); ok {
+						for _, f := range ch.KindFields(c.Kind) {
+							if f.Num != 0 {
+								names[strconv.Itoa(f.Num)] = f.Key
+							}
+						}
+					}
+				}
 				values := map[string]any{}
 				for k, v := range c.Values {
+					if key, ok := names[k]; ok {
+						k = key
+					}
 					values[k] = v
 				}
 				out = append(out, &model.MinionConnection{Place: i + 1, Name: c.Name, ModuleName: c.Channel, Kind: c.Kind, Params: params,

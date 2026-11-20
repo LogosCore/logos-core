@@ -63,6 +63,13 @@ func TestHelloOwnConnections(t *testing.T) {
 	if s = r.sessionRow(t, sid); s.Conn != 2 || s.ConnName != "dns-2" {
 		t.Fatalf("after a conn_update: conn %d %q", s.Conn, s.ConnName)
 	}
+	// A conn_update past them is refused, and nothing is recorded.
+	if code := errCodeIn(t, r.openUnder(t, sid, r.keys, r.say(t, ctx, c, sid, protocol.ConnUpdateItem{T: protocol.ItemConnUpdate, Conn: 3}))); code != protocol.ErrItemBadMessage {
+		t.Fatalf("a conn_update past the list: err %d", code)
+	}
+	if s = r.sessionRow(t, sid); s.Conn != 2 || len(s.ConnChanges) != 1 {
+		t.Fatalf("after a refused conn_update: conn %d, changes %d", s.Conn, len(s.ConnChanges))
+	}
 	// One with connections replaces them.
 	re = hello("ws01")
 	re.Conn = 1
