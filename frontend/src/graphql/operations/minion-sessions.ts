@@ -70,6 +70,7 @@ export const MinionSessionFields = graphql(`
     }
     viaSince
     version
+    roundtripTime
     x
     createdAt
     lastSeenAt

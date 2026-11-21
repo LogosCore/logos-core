@@ -28,7 +28,7 @@ import { whenIdle } from "@/lib/preloadable"
 import type { RecordModal as RecordModalTarget, SessionTab } from "@/lib/record-modals"
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
-import { formatAgo, formatAgoExact, formatInterval, lateness } from "./sessions-layout"
+import { formatAgo, formatAgoExact, formatInterval, formatRoundtrip, lateness } from "./sessions-layout"
 import { ConnectionsCard } from "./session-connections"
 import { ConnectionDetailCards } from "./session-connection-details"
 import { MaxTasksValue } from "./max-tasks"
@@ -288,6 +288,7 @@ function SessionCard({ s }: { s: Session }) {
           <span className="text-muted-foreground">no schedule said</span>
         )}
       </LabelRow>
+      {s.roundtripTime != null && <LabelRow label="Round trip">{formatRoundtrip(s.roundtripTime)}</LabelRow>}
       {s.lateAt && (
         <LabelRow label="Late at">
           <When at={s.lateAt} now={now} />

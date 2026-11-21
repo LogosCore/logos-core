@@ -819,7 +819,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		BuildDescription: s.BuildDescription, Description: s.Description, ModuleName: s.ModuleName, Target: s.Target, Platform: s.Platform,
 		Staged: s.Staged, Pid: int(h.PID), Os: h.OS, Arch: h.Arch, Host: strPtr(h.Host), User: strPtr(h.User),
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), MachineID: strPtr(h.MachineID), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),
-		Version: strPtr(h.Version), Address: strPtr(s.Address), AddressPicked: s.AddressPicked,
+		Version: strPtr(h.Version), RoundtripTime: h.RoundtripTime, Address: strPtr(s.Address), AddressPicked: s.AddressPicked,
 		PeerAddress: strPtr(s.PeerAddress), Peers: toSessionPeerModels(s.Peers),
 		Persisted: s.Persisted, RestartCount: int(s.RestartCount), Restarts: toSessionRestartModels(s.Restarts),
 		LateAt: timePtr(s.LateAt), LostAt: timePtr(s.LostAt), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),

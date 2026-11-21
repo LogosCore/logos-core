@@ -918,6 +918,7 @@ type ComplexityRoot struct {
 		RestartCount     func(childComplexity int) int
 		Restarts         func(childComplexity int) int
 		Rev              func(childComplexity int) int
+		RoundtripTime    func(childComplexity int) int
 		RunningTasks     func(childComplexity int) int
 		RunningTunnels   func(childComplexity int) int
 		SleepInterval    func(childComplexity int) int
@@ -6413,6 +6414,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.Rev(childComplexity), true
+	case "MinionSession.roundtripTime":
+		if e.ComplexityRoot.MinionSession.RoundtripTime == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.RoundtripTime(childComplexity), true
 	case "MinionSession.runningTasks":
 		if e.ComplexityRoot.MinionSession.RunningTasks == nil {
 			break
@@ -16165,6 +16172,11 @@ type MinionSession {
   # most 32.
   peers: [MinionSessionPeer!]!
   version: String
+  # The round trip the minion last said in a hello (roundtrip_time): from
+  # sending a message to core to the reply that answers it, in
+  # milliseconds. null when no hello said one (a minion that does not
+  # measure it, a bind-call page).
+  roundtripTime: Int
   # The factory's own fields.
   x: JSON
   createdAt: String!
@@ -39700,6 +39712,8 @@ func (ec *executionContext) fieldContext_MinionDelegateConnection_session(_ cont
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -43165,6 +43179,35 @@ func (ec *executionContext) fieldContext_MinionSession_version(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_roundtripTime(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_roundtripTime,
+		func(ctx context.Context) (any, error) {
+			return obj.RoundtripTime, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_roundtripTime(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_x(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -44504,6 +44547,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -44775,6 +44820,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -45945,6 +45992,8 @@ func (ec *executionContext) fieldContext_MinionSessionVia_session(_ context.Cont
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -47014,6 +47063,8 @@ func (ec *executionContext) fieldContext_MinionTarget_session(_ context.Context,
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -47198,6 +47249,8 @@ func (ec *executionContext) fieldContext_MinionTarget_delegate(_ context.Context
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -61650,6 +61703,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -61894,6 +61949,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -62079,6 +62136,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -62323,6 +62382,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -62508,6 +62569,8 @@ func (ec *executionContext) fieldContext_Mutation_markMinionFeedbackRead(ctx con
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -62693,6 +62756,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMaxTasks(ctx c
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -73759,6 +73824,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
 			case "x":
 				return ec.fieldContext_MinionSession_x(ctx, field)
 			case "createdAt":
@@ -101217,6 +101284,8 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			}
 		case "version":
 			out.Values[i] = ec._MinionSession_version(ctx, field, obj)
+		case "roundtripTime":
+			out.Values[i] = ec._MinionSession_roundtripTime(ctx, field, obj)
 		case "x":
 			out.Values[i] = ec._MinionSession_x(ctx, field, obj)
 		case "createdAt":

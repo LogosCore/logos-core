@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/netip"
 	"slices"
 	"strconv"
@@ -401,6 +402,18 @@ type MinionHello struct {
 	Version   string         `bson:"version,omitempty" json:"version,omitempty"`
 	MachineID string         `bson:"machine_id,omitempty" json:"machine_id,omitempty"` // "<source>:<value>" (protocol.MachineID), by the source's name; empty when the minion said none
 	X         map[string]any `bson:"x,omitempty" json:"x,omitempty"`
+	// RoundtripTime is the round trip the minion last said (a hello's
+	// roundtrip_time), in milliseconds; nil when no hello said one.
+	RoundtripTime *int `bson:"roundtrip_time,omitempty" json:"roundtrip_time,omitempty"`
+}
+
+// KeepingRoundtrip is h with was's round trip when h says none: a rehello
+// that says it replaces it, one without keeps the last.
+func (h MinionHello) KeepingRoundtrip(was MinionHello) MinionHello {
+	if h.RoundtripTime == nil {
+		h.RoundtripTime = was.RoundtripTime
+	}
+	return h
 }
 
 // RehelloTries is how many messages carry an operator's rehello before core
@@ -497,7 +510,18 @@ func MinionHelloFrom(h protocol.HelloItem) MinionHello {
 	return MinionHello{
 		PID: h.PID, OS: h.OS, Arch: h.Arch, Host: h.Host, User: h.User, Domain: h.Domain, Proc: ProcessName(h.Proc),
 		Integrity: protocol.IntegrityName(h.Integrity), Addrs: h.AddrStrings(), Version: h.Version, MachineID: h.MachineID(), X: h.X,
+		RoundtripTime: roundtripOf(h),
 	}
+}
+
+// roundtripOf is a hello's round trip in milliseconds, as a session keeps
+// it; nil when it says none.
+func roundtripOf(h protocol.HelloItem) *int {
+	if h.RoundtripTime == nil {
+		return nil
+	}
+	ms := int(min(*h.RoundtripTime, math.MaxInt32))
+	return &ms
 }
 
 // DefaultAddress is core's guess at which of a host's addresses is its real

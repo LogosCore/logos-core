@@ -28,7 +28,7 @@ import { useRecordModals } from "@/hooks/use-record-modals"
 import { useNow } from "@/hooks/use-now"
 import { FEEDBACK_TONE, feedbackSummary } from "./feedback-values"
 import { ELEVATED, identityLabel, identityUser, shortUser } from "./identity-values"
-import { formatAgo, formatAgoExact, formatInterval, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
+import { formatAgo, formatAgoExact, formatInterval, formatRoundtrip, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
 // How each Sessions column shows a session: one line each, the full value on
 // hover where a cell may cut it. The cells that count time (Last seen, an
@@ -145,6 +145,7 @@ function LastSeen({ s }: { s: MinionSessionFieldsFragment }) {
         s.connected ? "Connected: a connection to the minion is open, and core sends to it at once" : state && scheduleNote(s, state, now),
         s.lastSeenAt &&
           `Last seen ${formatAbsolute(s.lastSeenAt)} (${formatAgoExact(now - Date.parse(s.lastSeenAt))})`,
+        s.roundtripTime != null && `Round trip ${formatRoundtrip(s.roundtripTime)}, as the minion last said`,
         ...connNote(s, now),
         viaNote(s.via, s.viaSince),
         `Opened ${formatAbsolute(s.createdAt)}`,

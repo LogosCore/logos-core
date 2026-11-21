@@ -18,6 +18,7 @@ import {
   addressMatcher,
   formatAgo,
   formatAgoExact,
+  formatRoundtrip,
   isClockFilter,
   lateness,
   shownAddress,
@@ -140,6 +141,16 @@ describe("formatAgo", () => {
     expect(formatAgoExact(245_000)).toBe("4m 05s ago")
     expect(formatAgoExact(3 * 3600_000 + 12 * 60_000 + 9_000)).toBe("3h 12m 09s ago")
     expect(formatAgoExact(2 * 86400_000 + 3 * 3600_000)).toBe("2d 3h ago")
+  })
+})
+
+describe("formatRoundtrip", () => {
+  test("milliseconds under a second, then seconds; 0 is under one", () => {
+    expect(formatRoundtrip(0)).toBe("under 1 ms")
+    expect(formatRoundtrip(142)).toBe("142 ms")
+    expect(formatRoundtrip(999)).toBe("999 ms")
+    expect(formatRoundtrip(1_400)).toBe("1.4 s")
+    expect(formatRoundtrip(12_345)).toBe("12.3 s")
   })
 })
 

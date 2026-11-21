@@ -902,6 +902,7 @@ type MinionSession struct {
 	PeerAddress      *string                 `json:"peerAddress,omitempty"`
 	Peers            []*MinionSessionPeer    `json:"peers"`
 	Version          *string                 `json:"version,omitempty"`
+	RoundtripTime    *int                    `json:"roundtripTime,omitempty"`
 	X                any                     `json:"x,omitempty"`
 	CreatedAt        string                  `json:"createdAt"`
 	Archived         bool                    `json:"archived"`

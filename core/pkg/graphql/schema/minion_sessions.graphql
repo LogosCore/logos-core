@@ -75,6 +75,11 @@ type MinionSession {
   # most 32.
   peers: [MinionSessionPeer!]!
   version: String
+  # The round trip the minion last said in a hello (roundtrip_time): from
+  # sending a message to core to the reply that answers it, in
+  # milliseconds. null when no hello said one (a minion that does not
+  # measure it, a bind-call page).
+  roundtripTime: Int
   # The factory's own fields.
   x: JSON
   createdAt: String!

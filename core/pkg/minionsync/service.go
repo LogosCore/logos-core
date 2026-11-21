@@ -717,7 +717,7 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	}
 	err = s.sessions.Claim(ctx, sid, repository.MinionSessionClaim{
 		At: now, BuildID: b.BuildID, BuildDescription: b.Description, ModuleName: b.ModuleName, Target: b.Target,
-		Platform: b.Platform, Staged: from.staging != nil, Crypto: from.crypto, Hello: models.MinionHelloFrom(hello),
+		Platform: b.Platform, Staged: from.staging != nil, Crypto: from.crypto, Hello: models.MinionHelloFrom(hello).KeepingRoundtrip(sess.Hello),
 		Address: address, AddressPicked: picked, Sleep: sleepOf(hello), MaxTasks: models.MaxTasksOf(hello),
 		MaxTasksSettable: b.MaxTasks != nil, Compression: b.Compression, Envelope: b.Envelope, Codec: b.Codec,
 	})
@@ -762,7 +762,7 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	}
 	// Its hello answers an operator's rehello (the claim forgot the ask).
 	was := sess.Hello
-	sess.Hello, sess.RehelloAt = models.MinionHelloFrom(hello), nil
+	sess.Hello, sess.RehelloAt = models.MinionHelloFrom(hello).KeepingRoundtrip(was), nil
 	s.rehelloAnswered(ctx, sess, was, true)
 	items, err = helloResponse(sid)
 	return items, err == nil, err
@@ -860,11 +860,12 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			if session.AddressPicked && slices.Contains(hello.AddrStrings(), session.Address) {
 				address, picked = session.Address, true
 			}
-			was := session.Hello
-			if err = s.sessions.SetHello(ctx, session.SessionID, models.MinionHelloFrom(hello), address, picked); err != nil {
+			// A round trip it does not say keeps the last one said.
+			was, kept := session.Hello, models.MinionHelloFrom(hello).KeepingRoundtrip(session.Hello)
+			if err = s.sessions.SetHello(ctx, session.SessionID, kept, address, picked); err != nil {
 				return nil, fmt.Errorf("rehello: %w", err)
 			}
-			session.Hello = models.MinionHelloFrom(hello)
+			session.Hello = kept
 			s.processIdentity(ctx, session, &was)
 			// The limit of tasks it says now (the operator's goes again
 			// while it says another: the outbox).

@@ -515,6 +515,13 @@ export function formatAgoExact(diffMs: number): string {
   return `${Math.floor(s / 86400)}d ${Math.floor(s / 3600) % 24}h ago`
 }
 
+/** A round trip the minion said: "under 1 ms", "142 ms", "1.4 s". */
+export function formatRoundtrip(ms: number): string {
+  if (ms < 1) return "under 1 ms"
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  return `${(ms / 1000).toFixed(1)} s`
+}
+
 /** Milliseconds as the schedule says them: "800ms", "60s", "5m", "1h 30m". */
 export function formatInterval(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`
