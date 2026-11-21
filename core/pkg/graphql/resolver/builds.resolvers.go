@@ -33,6 +33,11 @@ func (r *mutationResolver) CancelBuild(ctx context.Context, id string) (*model.B
 	return r.BuildResolver.CancelBuild(ctx, id)
 }
 
+// UpdateBuildDescription is the resolver for the updateBuildDescription field.
+func (r *mutationResolver) UpdateBuildDescription(ctx context.Context, id string, description string) (*model.Build, error) {
+	return r.BuildResolver.UpdateBuildDescription(ctx, id, description)
+}
+
 // DeleteBuildArtifact is the resolver for the deleteBuildArtifact field.
 func (r *mutationResolver) DeleteBuildArtifact(ctx context.Context, id string) (*model.Build, error) {
 	return r.BuildResolver.DeleteBuildArtifact(ctx, id)

@@ -265,6 +265,14 @@ export const DeleteBuildsMutation = graphql(`
   }
 `)
 
+export const UpdateBuildDescriptionMutation = graphql(`
+  mutation UpdateBuildDescription($id: ID!, $description: String!) {
+    updateBuildDescription(id: $id, description: $description) {
+      ...BuildFields
+    }
+  }
+`)
+
 export const DeleteBuildArtifactMutation = graphql(`
   mutation DeleteBuildArtifact($id: ID!) {
     deleteBuildArtifact(id: $id) {

@@ -1555,6 +1555,7 @@ type ComplexityRoot struct {
 		TransferSkill                 func(childComplexity int, name string, userID string) int
 		UnblockModule                 func(childComplexity int, instance string) int
 		UpdateAgentKey                func(childComplexity int, id string, input model.UpdateAgentKeyInput) int
+		UpdateBuildDescription        func(childComplexity int, id string, description string) int
 		UpdateChannelEndpoint         func(childComplexity int, id string, input model.ChannelEndpointInput, expectedRevision int) int
 		UpdateCredential              func(childComplexity int, id string, input model.UpdateCredentialInput) int
 		UpdateCredentialComment       func(childComplexity int, credentialID string, commentID string, text string) int
@@ -2399,6 +2400,7 @@ type MutationResolver interface {
 	DeleteBuildFile(ctx context.Context, id string) (bool, error)
 	CreateBuild(ctx context.Context, operationID string, input model.BuildInput) (*model.Build, error)
 	CancelBuild(ctx context.Context, id string) (*model.Build, error)
+	UpdateBuildDescription(ctx context.Context, id string, description string) (*model.Build, error)
 	DeleteBuildArtifact(ctx context.Context, id string) (*model.Build, error)
 	DeleteBuild(ctx context.Context, id string) (bool, error)
 	DeleteBuilds(ctx context.Context, operationID string, ids []string, matching *model.BuildMatchInput) (int, error)
@@ -9924,6 +9926,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateAgentKey(childComplexity, args["id"].(string), args["input"].(model.UpdateAgentKeyInput)), true
+	case "Mutation.updateBuildDescription":
+		if e.ComplexityRoot.Mutation.UpdateBuildDescription == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateBuildDescription_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateBuildDescription(childComplexity, args["id"].(string), args["description"].(string)), true
 	case "Mutation.updateChannelEndpoint":
 		if e.ComplexityRoot.Mutation.UpdateChannelEndpoint == nil {
 			break
@@ -14559,6 +14572,11 @@ extend type Mutation {
 
   # Stops a queued or running build.
   cancelBuild(id: ID!): Build!
+    @hasPermission(permission: "operation:member")
+
+  # Changes what a build is for (Build.description), whatever its state.
+  # Needs at least operator; agent API keys are rejected.
+  updateBuildDescription(id: ID!, description: String!): Build!
     @hasPermission(permission: "operation:member")
 
   # Removes a finished build's artifact bytes; the build stays.
@@ -21515,6 +21533,22 @@ func (ec *executionContext) field_Mutation_updateAgentKey_args(ctx context.Conte
 		return nil, err
 	}
 	args["input"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateBuildDescription_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "description", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["description"] = arg1
 	return args, nil
 }
 
@@ -59126,6 +59160,139 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_cancelBuild_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateBuildDescription(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_updateBuildDescription,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateBuildDescription(ctx, fc.Args["id"].(string), fc.Args["description"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.Build
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.Build
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNBuild2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuild,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_updateBuildDescription(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Build_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_Build_operationId(ctx, field)
+			case "description":
+				return ec.fieldContext_Build_description(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_Build_moduleName(ctx, field)
+			case "target":
+				return ec.fieldContext_Build_target(ctx, field)
+			case "platform":
+				return ec.fieldContext_Build_platform(ctx, field)
+			case "schemaVersion":
+				return ec.fieldContext_Build_schemaVersion(ctx, field)
+			case "values":
+				return ec.fieldContext_Build_values(ctx, field)
+			case "commands":
+				return ec.fieldContext_Build_commands(ctx, field)
+			case "connections":
+				return ec.fieldContext_Build_connections(ctx, field)
+			case "connectionDescriptions":
+				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "failover":
+				return ec.fieldContext_Build_failover(ctx, field)
+			case "maxTasks":
+				return ec.fieldContext_Build_maxTasks(ctx, field)
+			case "compression":
+				return ec.fieldContext_Build_compression(ctx, field)
+			case "errorCodes":
+				return ec.fieldContext_Build_errorCodes(ctx, field)
+			case "uniqueErrorCodes":
+				return ec.fieldContext_Build_uniqueErrorCodes(ctx, field)
+			case "crypto":
+				return ec.fieldContext_Build_crypto(ctx, field)
+			case "envelope":
+				return ec.fieldContext_Build_envelope(ctx, field)
+			case "codec":
+				return ec.fieldContext_Build_codec(ctx, field)
+			case "persistedSession":
+				return ec.fieldContext_Build_persistedSession(ctx, field)
+			case "state":
+				return ec.fieldContext_Build_state(ctx, field)
+			case "instance":
+				return ec.fieldContext_Build_instance(ctx, field)
+			case "factoryVersion":
+				return ec.fieldContext_Build_factoryVersion(ctx, field)
+			case "request":
+				return ec.fieldContext_Build_request(ctx, field)
+			case "stages":
+				return ec.fieldContext_Build_stages(ctx, field)
+			case "artifact":
+				return ec.fieldContext_Build_artifact(ctx, field)
+			case "warnings":
+				return ec.fieldContext_Build_warnings(ctx, field)
+			case "log":
+				return ec.fieldContext_Build_log(ctx, field)
+			case "error":
+				return ec.fieldContext_Build_error(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_Build_createdBy(ctx, field)
+			case "cancelledBy":
+				return ec.fieldContext_Build_cancelledBy(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Build_createdAt(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_Build_startedAt(ctx, field)
+			case "finishedAt":
+				return ec.fieldContext_Build_finishedAt(ctx, field)
+			case "deadline":
+				return ec.fieldContext_Build_deadline(ctx, field)
+			case "bindConnections":
+				return ec.fieldContext_Build_bindConnections(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Build", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateBuildDescription_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -105186,6 +105353,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "cancelBuild":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_cancelBuild(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateBuildDescription":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateBuildDescription(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

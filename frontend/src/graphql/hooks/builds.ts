@@ -11,6 +11,7 @@ import {
   CreateBuildDocument,
   CancelBuildDocument,
   DeleteBuildArtifactDocument,
+  UpdateBuildDescriptionDocument,
   DeleteBuildDocument,
   DeleteBuildsDocument,
   type CreateBuildMutationVariables,
@@ -207,6 +208,14 @@ export function useDeleteBuilds() {
   return useMutation({
     mutationFn: (vars: DeleteBuildsMutationVariables) => graphqlClient(DeleteBuildsDocument, vars),
     onSettled: invalidate,
+  })
+}
+
+export function useUpdateBuildDescription() {
+  const invalidate = useInvalidateBuilds()
+  return useMutation({
+    mutationFn: (v: { id: string; description: string }) => graphqlClient(UpdateBuildDescriptionDocument, v),
+    onSuccess: invalidate,
   })
 }
 

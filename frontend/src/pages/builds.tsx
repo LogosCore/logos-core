@@ -19,6 +19,7 @@ import { GettingStartedPanel } from "@/components/onboarding/getting-started-pan
 import { useCanBuild } from "@/components/builds/build-access"
 import { BuildsTable } from "@/components/builds/builds-table"
 import { DeleteBuildDialog, type DeletableBuild } from "@/components/builds/delete-build-dialog"
+import { EditDescriptionDialog, type DescribedBuild } from "@/components/builds/edit-description-dialog"
 import { DeleteBuildsBar } from "@/components/builds/delete-builds-bar"
 import {
   emptySelection,
@@ -51,6 +52,7 @@ export function BuildsPage() {
 function BuildsPageInner({ operationId }: { operationId: string }) {
   const modals = useRecordModals()
   const [deleting, setDeleting] = useState<DeletableBuild | null>(null)
+  const [editing, setEditing] = useState<DescribedBuild | null>(null)
   const { canWrite } = useCanBuild(operationId)
   const kindsQuery = useFactoryKinds()
   const kinds = useMemo(() => [...factoryKindsByName(kindsQuery.data?.factoryKinds ?? []).values()], [kindsQuery.data])
@@ -153,6 +155,7 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
           hasNextPage={hasNextPage}
           fetchNextPage={fetchNextPage}
           canWrite={canWrite}
+          onEditDescription={setEditing}
           onDelete={setDeleting}
           selection={{
             selecting,
@@ -182,6 +185,7 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
         />
       )}
       <DeleteBuildDialog build={deleting} onClose={() => setDeleting(null)} />
+      <EditDescriptionDialog build={editing} onClose={() => setEditing(null)} />
     </div>
   )
 }

@@ -43,6 +43,7 @@ type BuildManager interface {
 	CreateBuild(ctx context.Context, op uuid.UUID, in builds.BuildInput) (*models.Build, error)
 	CancelBuild(ctx context.Context, id string, actor models.ModuleActor) (*models.Build, error)
 	DeleteArtifact(ctx context.Context, id string) (*models.Build, error)
+	SetDescription(ctx context.Context, id, description string) (*models.Build, error)
 	DeleteBuild(ctx context.Context, id string, actor models.ModuleActor) error
 	DeleteBuilds(ctx context.Context, op uuid.UUID, ids []string, filter *repository.BuildFilter, actor models.ModuleActor) (int, error)
 	Minions(ctx context.Context, op uuid.UUID) ([]models.Minion, error)
@@ -62,6 +63,7 @@ type IBuildResolver interface {
 	DeleteBuild(ctx context.Context, id string) (bool, error)
 	DeleteBuilds(ctx context.Context, operationID string, ids []string, matching *model.BuildMatchInput) (int, error)
 	DeleteBuildArtifact(ctx context.Context, id string) (*model.Build, error)
+	UpdateBuildDescription(ctx context.Context, id string, description string) (*model.Build, error)
 	Minions(ctx context.Context, operationID string) ([]*model.Minion, error)
 }
 
@@ -286,6 +288,10 @@ func (r *buildResolver) CancelBuild(ctx context.Context, id string) (*model.Buil
 
 func (r *buildResolver) DeleteBuildArtifact(ctx context.Context, id string) (*model.Build, error) {
 	return r.changeBuild(ctx, id, func() (*models.Build, error) { return r.builds.DeleteArtifact(ctx, id) })
+}
+
+func (r *buildResolver) UpdateBuildDescription(ctx context.Context, id string, description string) (*model.Build, error) {
+	return r.changeBuild(ctx, id, func() (*models.Build, error) { return r.builds.SetDescription(ctx, id, description) })
 }
 
 func (r *buildResolver) DeleteBuild(ctx context.Context, id string) (bool, error) {

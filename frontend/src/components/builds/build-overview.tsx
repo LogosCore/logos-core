@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react"
-import { CopyIcon, Trash2Icon } from "lucide-react"
+import { CopyIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CardColumns } from "@/components/ui/card-columns"
 import { IdRows, InfoCard, LabelRow, NoteRow } from "@/components/ui/info-card"
@@ -24,8 +24,9 @@ import { ErrorCodes } from "@/components/builds/error-codes"
 /**
  * The build modal's Overview tab: what the JSON tab holds, for reading, in
  * cards each as tall as it needs, as a factory's page has them. What went
- * wrong first, then the build's summary (its description and state are the
- * modal's header) and the values it was given side by side, its artifact
+ * wrong first, then the build's summary (its description whole, first: the
+ * modal's header has its first line, cut to fit) and the values it was
+ * given side by side, its artifact
  * under the summary. Its connections and what the minion can do have tabs
  * of their own. Values equal to their default are dimmed, so the ones
  * somebody chose stand out. Last, the factory's error codes, when it
@@ -35,10 +36,12 @@ import { ErrorCodes } from "@/components/builds/error-codes"
 export function BuildOverview({
   build: b,
   canWrite,
+  onEditDescription,
   onDeleteArtifact,
 }: {
   build: BuildRecord
   canWrite: boolean
+  onEditDescription: () => void
   onDeleteArtifact: () => void
 }) {
   const kinds = useFactoryKinds()
@@ -59,12 +62,29 @@ export function BuildOverview({
       <BuildNotices build={b} />
       <CardColumns>
         <InfoCard title="Summary">
-          {/* The header shows the description's first line: here, one longer. */}
-          {b.description?.includes("\n") && (
-            <LabelRow label="Description">
-              <span className="whitespace-pre-line">{b.description}</span>
-            </LabelRow>
-          )}
+          {/* Whole: the header cuts its first line to fit. None on a build made before builds had one. */}
+          <LabelRow label="Description">
+            <span className="flex min-w-0 items-start gap-1">
+              {b.description ? (
+                <span className="min-w-0 break-words whitespace-pre-line">{b.description}</span>
+              ) : (
+                <span className="text-muted-foreground">None</span>
+              )}
+              {canWrite && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="shrink-0"
+                  title="Edit description"
+                  aria-label="Edit the description"
+                  onClick={onEditDescription}
+                >
+                  <PencilIcon />
+                </Button>
+              )}
+            </span>
+          </LabelRow>
           <LabelRow label="Factory">
             {/* KindName keeps the name on the text's baseline, with what follows. */}
             <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />

@@ -363,6 +363,26 @@ func (s *Service) OpenArtifact(ctx context.Context, id string) (io.ReadCloser, *
 
 // DeleteArtifact removes a finished build's artifact bytes; the build record
 // stays.
+// SetDescription changes what a build is for, whatever its state: the
+// operators' note, core's own; nothing of it went to the factory.
+func (s *Service) SetDescription(ctx context.Context, id, description string) (*models.Build, error) {
+	b, err := s.Build(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	description = strings.TrimSpace(description)
+	switch {
+	case description == "":
+		return nil, invalid("a description is required")
+	case utf8.RuneCountInString(description) > MaxDescriptionLength:
+		return nil, invalid("the description is longer than %d characters", MaxDescriptionLength)
+	}
+	if err := s.repos.Builds.SetDescription(ctx, b.BuildID, description); err != nil {
+		return nil, fmt.Errorf("set description: %w", err)
+	}
+	return s.build(ctx, b.BuildID)
+}
+
 func (s *Service) DeleteArtifact(ctx context.Context, id string) (*models.Build, error) {
 	b, err := s.Build(ctx, id)
 	if err != nil {

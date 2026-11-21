@@ -93,6 +93,15 @@ type fakeBuilds struct {
 	rows map[uuid.UUID]*models.Build
 }
 
+func (f *fakeBuilds) SetDescription(_ context.Context, id uuid.UUID, description string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if b, ok := f.rows[id]; ok {
+		b.Description = description
+	}
+	return nil
+}
+
 func (f *fakeBuilds) SetCredentialRevs(_ context.Context, id uuid.UUID, revs map[string]int64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

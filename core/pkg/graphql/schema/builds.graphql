@@ -533,6 +533,11 @@ extend type Mutation {
   cancelBuild(id: ID!): Build!
     @hasPermission(permission: "operation:member")
 
+  # Changes what a build is for (Build.description), whatever its state.
+  # Needs at least operator; agent API keys are rejected.
+  updateBuildDescription(id: ID!, description: String!): Build!
+    @hasPermission(permission: "operation:member")
+
   # Removes a finished build's artifact bytes; the build stays.
   deleteBuildArtifact(id: ID!): Build!
     @hasPermission(permission: "operation:member")

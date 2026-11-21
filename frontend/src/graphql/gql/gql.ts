@@ -46,6 +46,7 @@ type Documents = {
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.CancelBuildDocument,
     "\n  mutation DeleteBuild($id: ID!) {\n    deleteBuild(id: $id)\n  }\n": typeof types.DeleteBuildDocument,
     "\n  mutation DeleteBuilds($operationId: ID!, $ids: [ID!], $matching: BuildMatchInput) {\n    deleteBuilds(operationId: $operationId, ids: $ids, matching: $matching)\n  }\n": typeof types.DeleteBuildsDocument,
+    "\n  mutation UpdateBuildDescription($id: ID!, $description: String!) {\n    updateBuildDescription(id: $id, description: $description) {\n      ...BuildFields\n    }\n  }\n": typeof types.UpdateBuildDescriptionDocument,
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.DeleteBuildArtifactDocument,
     "\n  fragment ChannelEndpointFields on ChannelEndpoint {\n    id\n    operationId\n    name\n    slug\n    description\n    moduleName\n    kind\n    schemaVersion\n    schemaChanged\n    values\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": typeof types.ChannelEndpointFieldsFragmentDoc,
     "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      icon\n      iconLight\n      schema {\n        version\n        kinds {\n          kind\n          fields {\n            ...ModuleFieldDefFields\n          }\n        }\n      }\n    }\n  }\n": typeof types.ChannelKindsDocument,
@@ -337,6 +338,7 @@ const documents: Documents = {
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.CancelBuildDocument,
     "\n  mutation DeleteBuild($id: ID!) {\n    deleteBuild(id: $id)\n  }\n": types.DeleteBuildDocument,
     "\n  mutation DeleteBuilds($operationId: ID!, $ids: [ID!], $matching: BuildMatchInput) {\n    deleteBuilds(operationId: $operationId, ids: $ids, matching: $matching)\n  }\n": types.DeleteBuildsDocument,
+    "\n  mutation UpdateBuildDescription($id: ID!, $description: String!) {\n    updateBuildDescription(id: $id, description: $description) {\n      ...BuildFields\n    }\n  }\n": types.UpdateBuildDescriptionDocument,
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.DeleteBuildArtifactDocument,
     "\n  fragment ChannelEndpointFields on ChannelEndpoint {\n    id\n    operationId\n    name\n    slug\n    description\n    moduleName\n    kind\n    schemaVersion\n    schemaChanged\n    values\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": types.ChannelEndpointFieldsFragmentDoc,
     "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      icon\n      iconLight\n      schema {\n        version\n        kinds {\n          kind\n          fields {\n            ...ModuleFieldDefFields\n          }\n        }\n      }\n    }\n  }\n": types.ChannelKindsDocument,
@@ -721,6 +723,10 @@ export function graphql(source: "\n  mutation DeleteBuild($id: ID!) {\n    delet
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation DeleteBuilds($operationId: ID!, $ids: [ID!], $matching: BuildMatchInput) {\n    deleteBuilds(operationId: $operationId, ids: $ids, matching: $matching)\n  }\n"): typeof import('./graphql').DeleteBuildsDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation UpdateBuildDescription($id: ID!, $description: String!) {\n    updateBuildDescription(id: $id, description: $description) {\n      ...BuildFields\n    }\n  }\n"): typeof import('./graphql').UpdateBuildDescriptionDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

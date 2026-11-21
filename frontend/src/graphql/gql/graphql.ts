@@ -1899,6 +1899,7 @@ export type Mutation = {
   transferSkill: Skill;
   unblockModule: Module;
   updateAgentKey: AgentKey;
+  updateBuildDescription: Build;
   updateChannelEndpoint: ChannelEndpoint;
   updateCredential: Credential;
   updateCredentialComment: Credential;
@@ -2468,6 +2469,12 @@ export type MutationUnblockModuleArgs = {
 export type MutationUpdateAgentKeyArgs = {
   id: Scalars['ID']['input'];
   input: UpdateAgentKeyInput;
+};
+
+
+export type MutationUpdateBuildDescriptionArgs = {
+  description: Scalars['String']['input'];
+  id: Scalars['ID']['input'];
 };
 
 
@@ -4384,6 +4391,14 @@ export type DeleteBuildsMutationVariables = Exact<{
 
 
 export type DeleteBuildsMutation = { deleteBuilds: number };
+
+export type UpdateBuildDescriptionMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+  description: Scalars['String']['input'];
+}>;
+
+
+export type UpdateBuildDescriptionMutation = { updateBuildDescription: { id: string, operationId: string, persistedSession?: string | null, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type DeleteBuildArtifactMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -8444,6 +8459,53 @@ export const DeleteBuildsDocument = new TypedDocumentString(`
   deleteBuilds(operationId: $operationId, ids: $ids, matching: $matching)
 }
     `) as unknown as TypedDocumentString<DeleteBuildsMutation, DeleteBuildsMutationVariables>;
+export const UpdateBuildDescriptionDocument = new TypedDocumentString(`
+    mutation UpdateBuildDescription($id: ID!, $description: String!) {
+  updateBuildDescription(id: $id, description: $description) {
+    ...BuildFields
+  }
+}
+    fragment BuildFields on Build {
+  id
+  operationId
+  persistedSession
+  description
+  moduleName
+  target
+  platform
+  schemaVersion
+  state
+  factoryVersion
+  stages {
+    id
+    label
+    core
+    state
+    message
+    startedAt
+    finishedAt
+  }
+  artifact {
+    filename
+    size
+    sha256
+    mediaType
+    deleted
+  }
+  error {
+    code
+    message
+  }
+  createdBy {
+    type
+    id
+    name
+  }
+  createdAt
+  startedAt
+  finishedAt
+  deadline
+}`) as unknown as TypedDocumentString<UpdateBuildDescriptionMutation, UpdateBuildDescriptionMutationVariables>;
 export const DeleteBuildArtifactDocument = new TypedDocumentString(`
     mutation DeleteBuildArtifact($id: ID!) {
   deleteBuildArtifact(id: $id) {

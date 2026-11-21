@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { DownloadIcon, ExternalLinkIcon, ListChecksIcon, PinIcon, RotateCcwIcon, Trash2Icon } from "lucide-react"
+import { DownloadIcon, ExternalLinkIcon, ListChecksIcon, PencilIcon, PinIcon, RotateCcwIcon, Trash2Icon } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
 import { ContextMenuRow } from "@/components/ui/context-menu-row"
@@ -38,7 +38,8 @@ export interface BuildsTableSelection {
 /**
  * An operation's builds, newest first. A row opens the build; its menu
  * (right-click, or ⋯) also downloads the artifact and starts a new build from
- * the same settings, as the build's page does, and deletes the build. Select
+ * the same settings, as the build's page does, edits its description and
+ * deletes the build. Select
  * there starts picking rows for bulk actions (selection, the page's).
  */
 export function BuildsTable({
@@ -49,6 +50,7 @@ export function BuildsTable({
   hasNextPage,
   fetchNextPage,
   canWrite,
+  onEditDescription,
   onDelete,
   selection,
   emptyState,
@@ -60,6 +62,7 @@ export function BuildsTable({
   hasNextPage: boolean
   fetchNextPage: () => void
   canWrite: boolean
+  onEditDescription: (build: BuildFieldsFragment) => void
   onDelete: (build: BuildFieldsFragment) => void
   selection: BuildsTableSelection
   emptyState: ReactNode
@@ -138,6 +141,12 @@ export function BuildsTable({
                   <ContextMenuItem onClick={() => again(b)}>
                     <RotateCcwIcon className="size-4" />
                     Build again
+                  </ContextMenuItem>
+                )}
+                {canWrite && (
+                  <ContextMenuItem onClick={() => onEditDescription(b)}>
+                    <PencilIcon className="size-4" />
+                    Edit description…
                   </ContextMenuItem>
                 )}
                 {canWrite && (

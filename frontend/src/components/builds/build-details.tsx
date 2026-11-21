@@ -3,6 +3,7 @@ import {
   CrosshairIcon,
   DownloadIcon,
   EllipsisIcon,
+  PencilIcon,
   HammerIcon,
   RotateCcwIcon,
   SquareIcon,
@@ -63,6 +64,7 @@ import { defaultBuildTab, type BuildRecord as Build } from "@/components/builds/
 import { BuildJsonTab, type BuildJsonView } from "@/components/builds/build-json-tab"
 import { ModuleIcon } from "@/components/modules/module-icon"
 import { DeleteBuildDialog } from "@/components/builds/delete-build-dialog"
+import { EditDescriptionDialog } from "@/components/builds/edit-description-dialog"
 import { BuildTargets } from "@/components/targets/build-targets"
 import { useBindConnections } from "@/graphql/hooks/minion-targets"
 
@@ -115,6 +117,7 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
   const cancel = useCancelBuild()
   const [deleting, setDeleting] = useState(false)
   const [deletingBuild, setDeletingBuild] = useState(false)
+  const [editingDescription, setEditingDescription] = useState(false)
   const running = isUnfinished(b.state)
   const artifact = b.artifact && !b.artifact.deleted ? b.artifact : null
   // The tab the URL names; else the one for the state the build was in when
@@ -243,6 +246,10 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
                   }
                 />
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setEditingDescription(true)}>
+                    <PencilIcon />
+                    Edit description…
+                  </DropdownMenuItem>
                   <DropdownMenuItem variant="destructive" onClick={() => setDeletingBuild(true)}>
                     <Trash2Icon />
                     Delete build…
@@ -255,7 +262,12 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
 
         <TabsContent value="overview" className="flex min-h-0 flex-col">
           <RecordModalBody>
-            <BuildOverview build={b} canWrite={canWrite} onDeleteArtifact={() => setDeleting(true)} />
+            <BuildOverview
+              build={b}
+              canWrite={canWrite}
+              onEditDescription={() => setEditingDescription(true)}
+              onDeleteArtifact={() => setDeleting(true)}
+            />
           </RecordModalBody>
         </TabsContent>
 
@@ -297,6 +309,7 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
 
       <DeleteArtifactDialog build={deleting ? b : null} onClose={() => setDeleting(false)} />
       <DeleteBuildDialog build={deletingBuild ? b : null} onClose={() => setDeletingBuild(false)} onDeleted={close} />
+      <EditDescriptionDialog build={editingDescription ? b : null} onClose={() => setEditingDescription(false)} />
     </>
   )
 }

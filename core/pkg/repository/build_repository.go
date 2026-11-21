@@ -118,6 +118,8 @@ type IBuildRepository interface {
 	// SetCredentialRevs records the revision of each credential that went
 	// to the factory with the build, by id.
 	SetCredentialRevs(ctx context.Context, buildID uuid.UUID, revs map[string]int64) error
+	// SetDescription changes the operators' note on a build.
+	SetDescription(ctx context.Context, buildID uuid.UUID, description string) error
 	// SetCrypto records the keys a factory made for a build of its own
 	// suite (docs: Codecs, Keys), once: false when the build has keys
 	// already.
@@ -210,6 +212,10 @@ func (r *buildRepository) Insert(ctx context.Context, b *models.Build) error {
 	b.SearchText = models.BuildSearchText(b)
 	_, err := r.coll.InsertOne(ctx, b)
 	return err
+}
+
+func (r *buildRepository) SetDescription(ctx context.Context, buildID uuid.UUID, description string) error {
+	return r.coll.UpdateOne(ctx, bson.M{"build_id": buildID}, bson.M{"$set": bson.M{"description": description}})
 }
 
 func (r *buildRepository) SetCredentialRevs(ctx context.Context, buildID uuid.UUID, revs map[string]int64) error {
