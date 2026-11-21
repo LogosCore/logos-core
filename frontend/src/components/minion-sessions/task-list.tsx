@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, type KeyboardEvent } from "react"
+import { Fragment, useEffect, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from "react"
 import {
   ArrowDownIcon,
   CopyIcon,
@@ -240,18 +240,23 @@ export function TaskList({
         onKeyDown={onKeyDown}
         aria-busy={stale || undefined}
         className={cn(
-          "min-h-0 flex-1 overflow-y-auto pb-1 outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+          "min-h-0 flex-1 overflow-auto pb-1 outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
           stale && "opacity-60",
         )}
       >
+        {/* As wide as the widest line, every row with it: long lines scroll
+            sideways, not cut. What is centered stays in view (InView). */}
+        <div className="w-max min-w-full">
         {hasOlder && (
-          <div className="flex justify-center py-1">
-            <Button variant="ghost" size="xs" disabled={loadingOlder} onClick={onLoadOlder}>
-              {loadingOlder ? "Loading…" : "Older tasks"}
-            </Button>
+          <div className="py-1">
+            <InView>
+              <Button variant="ghost" size="xs" disabled={loadingOlder} onClick={onLoadOlder}>
+                {loadingOlder ? "Loading…" : "Older tasks"}
+              </Button>
+            </InView>
           </div>
         )}
-        {tasks.length === 0 && !loading && <p className="px-3 py-2 text-sm text-muted-foreground">{emptyListText(filter)}</p>}
+        {tasks.length === 0 && !loading && <p className="sticky left-0 px-3 py-2 text-sm text-muted-foreground">{emptyListText(filter)}</p>}
         {tasks.map((t, i) => {
           const day = dayGroup(t.queuedAt, now)
           const newDay = i === 0 || dayGroup(tasks[i - 1].queuedAt, now).key !== day.key
@@ -272,6 +277,7 @@ export function TaskList({
             </Fragment>
           )
         })}
+        </div>
       </div>
       {moved && (
         <button
@@ -292,10 +298,17 @@ export function TaskList({
 /** Where a day's tasks start, as in a messenger: it stays at the top while its day scrolls by. */
 function DaySeparator({ label }: { label: string }) {
   return (
-    <div role="presentation" className="sticky top-0 z-10 flex justify-center bg-background/90 py-1 backdrop-blur-sm">
-      <span className="text-xs font-medium text-muted-foreground tabular-nums">{label}</span>
+    <div role="presentation" className="sticky top-0 z-10 bg-background/90 py-1 backdrop-blur-sm">
+      <InView>
+        <span className="text-xs font-medium text-muted-foreground tabular-nums">{label}</span>
+      </InView>
     </div>
   )
+}
+
+/** Centered in the list's view, wherever it is scrolled sideways. */
+function InView({ children }: { children: ReactNode }) {
+  return <span className="sticky left-1/2 inline-block -translate-x-1/2">{children}</span>
 }
 
 function TaskRow({
@@ -368,8 +381,8 @@ function TaskRow({
         {t.parentId && (
           <CornerDownRightIcon className="size-3 shrink-0 self-center text-violet-600 dark:text-violet-400" aria-label="a subtask" />
         )}
-        <code className="min-w-0 flex-1 truncate font-mono">{line}</code>
-        {sub && <span className="max-w-[40%] min-w-0 shrink truncate text-muted-foreground">{sub}</span>}
+        <code className="flex-1 font-mono whitespace-nowrap">{line}</code>
+        {sub && <span className="shrink-0 whitespace-nowrap text-muted-foreground">{sub}</span>}
         <TaskAs as={t.as} />
         {t.feedbackErrors + t.feedbackWarnings > 0 && (
           <span className="self-center" title={`What the minion said of it: ${feedbackSummary(t.feedbackErrors, t.feedbackWarnings)}`}>
