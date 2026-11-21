@@ -108,20 +108,6 @@ export function ConnectionCards({ s }: { s: Session }) {
 
   return (
     <>
-      {addCommand && open && (
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            title={`Queue ${addCommand.id}: the minion takes a connection it did not have, after its others`}
-            onClick={() => setAdding(true)}
-          >
-            <PlusIcon />
-            Add connection
-          </Button>
-        </div>
-      )}
       {connections.map((c) => {
         const inUse = c.place === s.conn
         const expanded = unfolded.has(c.place)
@@ -210,6 +196,18 @@ export function ConnectionCards({ s }: { s: Session }) {
           </ConnectionFoldCard>
         )
       })}
+      {/* Where a new connection lands: after the others, as the build form adds one. */}
+      {addCommand && open && (
+        <button
+          type="button"
+          className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          title={`Queue ${addCommand.id}: the minion takes a connection it did not have, after its others`}
+          onClick={() => setAdding(true)}
+        >
+          <PlusIcon className="size-4" />
+          Add connection
+        </button>
+      )}
       <EditConnectionDialog
         sessionId={s.id}
         connection={choices.find((x) => x.place === editing) ?? null}
