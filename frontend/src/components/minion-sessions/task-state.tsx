@@ -1,4 +1,5 @@
 import { BanIcon, CheckIcon, CircleDashedIcon, LoaderIcon, SendIcon, StarIcon, WorkflowIcon, XIcon } from "lucide-react"
+import { useSteadyTitle } from "@/hooks/use-steady-title"
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { clock, FINISHED, took, type Task } from "./task-actions"
@@ -40,12 +41,17 @@ export function StateIcon({ t, className, held }: { t: Task; className?: string;
   const s = stateStyle(t)
   const Icon = s.icon
   const blocked = held && waits(t.state)
+  // The reason counts the minutes the target has been out: held while
+  // hovered (useSteadyTitle).
+  const hover = useSteadyTitle(blocked ? `Waiting: ${held}` : undefined)
   return (
     <Icon
       aria-label={t.state.toLowerCase()}
       className={cn("size-3.5 shrink-0", blocked ? HELD : s.className, s.spin && "animate-spin", className)}
+      onPointerEnter={hover.onPointerEnter}
+      onPointerLeave={hover.onPointerLeave}
     >
-      {blocked && <title>{`Waiting: ${held}`}</title>}
+      {hover.title && <title>{hover.title}</title>}
     </Icon>
   )
 }
@@ -63,6 +69,7 @@ export const STAR = "text-yellow-500 dark:text-yellow-400"
 export function ImportantIcon({ t, className, held }: { t: Task; className?: string; held?: string | null }) {
   const s = stateStyle(t)
   const blocked = held && waits(t.state)
+  const hover = useSteadyTitle(blocked ? `Waiting: ${held}` : undefined)
   return (
     <StarIcon
       aria-label={`important, ${t.state.toLowerCase()}`}
@@ -72,8 +79,10 @@ export function ImportantIcon({ t, className, held }: { t: Task; className?: str
         s.spin && "animate-pulse",
         className,
       )}
+      onPointerEnter={hover.onPointerEnter}
+      onPointerLeave={hover.onPointerLeave}
     >
-      {blocked && <title>{`Waiting: ${held}`}</title>}
+      {hover.title && <title>{hover.title}</title>}
     </StarIcon>
   )
 }

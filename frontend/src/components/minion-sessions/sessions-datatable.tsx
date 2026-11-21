@@ -584,9 +584,12 @@ export function SessionsDatatable({
                             data-cell
                             data-column={col.id}
                             className="min-w-0"
-                            // Its value, for the menu's Copy, and in a title when it is cut.
+                            // Its value, for the menu's Copy, and in a title when it is cut:
+                            // measured each hover, as the row may show another session by
+                            // then (Virtuoso keys rows by place).
                             onContextMenu={(e) => setCopyCell({ label: col.label, text: cellText(e.currentTarget), column: col.id })}
                             onPointerOver={(e) => titleIfCut(e.currentTarget)}
+                            onPointerLeave={(e) => e.currentTarget.removeAttribute("title")}
                           >
                             <SessionCell id={col.id} session={s} ctx={ctx} />
                           </div>
@@ -808,13 +811,16 @@ function naturalWidth(el: HTMLElement | null): number {
   return w
 }
 
-/** A cell's value as text, for Copy. */
+/**
+ * A cell's value as text, for Copy: its value's title, else its text (read
+ * now, not the cell's own title, which is the text as titleIfCut found it).
+ */
 function cellText(cell: HTMLElement): string {
-  const t = (cell.title || cell.querySelector<HTMLElement>("[title]")?.title || cell.innerText).trim()
+  const t = (cell.querySelector<HTMLElement>("[title]")?.title || cell.innerText).trim()
   return t === "—" ? "" : t
 }
 
-/** Gives a cell whose text is cut its whole text as a title, unless it has one. */
+/** Gives a cell whose text is cut its whole text as a title, unless it has one; the pointer leaving takes it off. */
 function titleIfCut(cell: HTMLElement) {
   if (cell.querySelector("[title]") || cell.title) return
   const cut = [...cell.querySelectorAll<HTMLElement>("*")].some((el) => el.scrollWidth > el.clientWidth + 1)

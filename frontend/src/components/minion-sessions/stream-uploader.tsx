@@ -5,6 +5,7 @@ import { errorMessage } from "@/components/modules/management/api-errors"
 import { Button } from "@/components/ui/button"
 import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
 import { fetchMinionStreamLink } from "@/graphql/hooks/minion-tasks"
+import { useSteadyTitle } from "@/hooks/use-steady-title"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { formatBytes } from "@/lib/format-bytes"
 import { startStreamUpload, stopStreamUpload, useStreamUpload } from "@/lib/stream-upload"
@@ -27,6 +28,8 @@ export function StreamUploader({ task: t, upload: up }: { task: Task; upload: Up
   const [copying, setCopying] = useState(false)
   const open = up.uploaderState === "WAITING" || up.uploaderState === "PAUSED" || up.uploaderState === "UPLOADING"
   const going = mine?.state === "uploading" || mine?.state === "retrying"
+  // Another client's upload moves it on: held while hovered (useSteadyTitle).
+  const curlHover = useSteadyTitle(up.received > 0 ? `A curl command going on from byte ${up.received}` : "A curl command with a signed link (24 hours at most)")
 
   const pick = (file: File) => {
     if (up.sized && file.size !== up.size) {
@@ -94,8 +97,7 @@ export function StreamUploader({ task: t, upload: up }: { task: Task; upload: Up
           <UploadIcon />
           {up.received > 0 ? "Resume from a file" : "Pick the file"}
         </Button>
-        <Button variant="outline" disabled={copying} onClick={() => void copyCurl()}
-          title={up.received > 0 ? `A curl command going on from byte ${up.received}` : "A curl command with a signed link (24 hours at most)"}>
+        <Button variant="outline" disabled={copying} onClick={() => void copyCurl()} {...curlHover}>
           <TerminalIcon />
           {up.received > 0 ? "Copy resume curl" : "Copy curl"}
         </Button>

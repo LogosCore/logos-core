@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import type { MinionTaskFilter } from "@/graphql/hooks/minion-tasks"
 import { useNow } from "@/hooks/use-now"
+import { useSteadyTitle } from "@/hooks/use-steady-title"
 import { dayGroup, formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { fromWithin } from "@/lib/portal-events"
@@ -339,6 +340,10 @@ function TaskRow({
   // task's status line, on hover.
   const sub = subtaskText(t)
   const status = t.composite?.status
+  // The status changes as the factory's code goes: held while hovered (useSteadyTitle).
+  const hover = useSteadyTitle(
+    `${line}${t.parentId ? `\nA subtask of a composite task${sub ? `: ${sub}` : ""}` : ""}${status ? `\n${status}` : ""}\n${t.issuedBy === "00000000-0000-0000-0000-000000000000" ? "core" : (t.issuedByName ?? "someone gone")} · queued ${formatAbsolute(t.queuedAt)}${t.importantAt ? `\nMarked important by ${markedBy(t)}` : ""}`,
+  )
   return (
     <ContextMenu>
       <ContextMenuTrigger
@@ -350,7 +355,7 @@ function TaskRow({
             onClick={onSelect}
             // The menu shows the row it is for.
             onContextMenu={onSelect}
-            title={`${line}${t.parentId ? `\nA subtask of a composite task${sub ? `: ${sub}` : ""}` : ""}${status ? `\n${status}` : ""}\n${t.issuedBy === "00000000-0000-0000-0000-000000000000" ? "core" : (t.issuedByName ?? "someone gone")} · queued ${formatAbsolute(t.queuedAt)}${t.importantAt ? `\nMarked important by ${markedBy(t)}` : ""}`}
+            {...hover}
             className={cn(
               "relative flex cursor-pointer items-baseline gap-2 px-3 py-1 text-xs select-none",
               selected ? "bg-muted before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-foreground" : "hover:bg-muted/50",

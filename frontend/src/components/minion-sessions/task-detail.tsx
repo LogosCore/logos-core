@@ -19,6 +19,7 @@ import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-edi
 import { useMinionTaskDocument, useMinionTaskFeedback, useMinionTaskOutput } from "@/graphql/hooks/minion-tasks"
 import { useMinionSession } from "@/graphql/hooks/minion-sessions"
 import { useRecordModals } from "@/hooks/use-record-modals"
+import { useSteadyTitle } from "@/hooks/use-steady-title"
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
@@ -317,11 +318,7 @@ export function TaskDetail({
         </div>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 border-l pl-2">
           <StateLabel t={t} held={held} />
-          {t.composite?.status && (
-            <span className="max-w-full min-w-0 truncate text-xs" title={t.composite.status}>
-              {t.composite.status}
-            </span>
-          )}
+          {t.composite?.status && <StatusLine status={t.composite.status} />}
           {t.parentId && (
             <button
               type="button"
@@ -511,6 +508,16 @@ export function TaskDetail({
         )
       )}
     </div>
+  )
+}
+
+/** A composite task's status line beside its state, cut to its room: whole on hover, held while hovered (its factory's code changes it as it goes). */
+function StatusLine({ status }: { status: string }) {
+  const hover = useSteadyTitle(status)
+  return (
+    <span className="max-w-full min-w-0 truncate text-xs" {...hover}>
+      {status}
+    </span>
   )
 }
 

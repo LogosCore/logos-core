@@ -194,7 +194,7 @@ export function BuildsTable({
                   {b.description || <span className="text-muted-foreground">—</span>}
                 </div>
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <LivePipelineDots stages={b.stages} />
+                  <LivePipelineDots buildId={b.id} stages={b.stages} />
                   {/* Where the build is, or where it stopped and why. */}
                   {(at || b.error) && (
                     <span
@@ -224,7 +224,7 @@ export function BuildsTable({
 }
 
 /** A build's pipeline dots, timing a running stage on the shared clock: a tick re-renders them, not the table. */
-function LivePipelineDots({ stages }: { stages: Parameters<typeof PipelineDots>[0]["stages"] }) {
+function LivePipelineDots({ buildId, stages }: { buildId: string; stages: Parameters<typeof PipelineDots>[0]["stages"] }) {
   const now = useNow()
-  return <PipelineDots stages={stages} now={now} />
+  return <PipelineDots buildId={buildId} stages={stages} now={now} />
 }

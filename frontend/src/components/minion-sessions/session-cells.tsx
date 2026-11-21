@@ -26,6 +26,7 @@ import { MARK_TONE_CLASSES, isMarkColor } from "./session-mark-colors"
 import { cn } from "@/lib/utils"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { useNow } from "@/hooks/use-now"
+import { useSteadyTitle } from "@/hooks/use-steady-title"
 import { FEEDBACK_TONE, feedbackSummary } from "./feedback-values"
 import { ELEVATED, identityLabel, identityUser, shortUser } from "./identity-values"
 import { formatAgo, formatAgoExact, formatInterval, formatRoundtrip, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
@@ -33,7 +34,8 @@ import { formatAgo, formatAgoExact, formatInterval, formatRoundtrip, lateness, s
 // How each Sessions column shows a session: one line each, the full value on
 // hover where a cell may cut it. The cells that count time (Last seen, an
 // external address's last seen) read the clock themselves: the rest of the
-// row is not rendered again every second.
+// row is not rendered again every second. Their hovers hold still while the
+// pointer is on them (useSteadyTitle): the time in them moves on every tick.
 
 export interface CellContext {
   icons: ReadonlyMap<string, ModuleIconSvgs>
@@ -113,8 +115,10 @@ function connNote(s: MinionSessionFieldsFragment, now: number): string[] {
 /** When an external address was last seen, and how many messages came from it. */
 function PeerSeen({ lastSeen, count }: { lastSeen: string; count: number }) {
   const now = useNow(1_000)
+  // Each check-in through it moves it.
+  const hover = useSteadyTitle(`Last seen ${formatAbsolute(lastSeen)}`)
   return (
-    <span title={`Last seen ${formatAbsolute(lastSeen)}`}>
+    <span {...hover}>
       <Ago at={lastSeen} now={now} /> · {count}×
     </span>
   )
@@ -130,6 +134,21 @@ function LastSeen({ s }: { s: MinionSessionFieldsFragment }) {
   // A persistent connection open: the minion is there now.
   const state = s.connected ? "live" : lateness(s, now)
   const KindIcon = CONN_KIND_ICONS[connKindKey(s)]
+  // Of the session, not the place: the table keys its rows by place.
+  const hover = useSteadyTitle(
+    [
+      s.connected ? "Connected: a connection to the minion is open, and core sends to it at once" : state && scheduleNote(s, state, now),
+      s.lastSeenAt &&
+        `Last seen ${formatAbsolute(s.lastSeenAt)} (${formatAgoExact(now - Date.parse(s.lastSeenAt))})`,
+      s.roundtripTime != null && `Round trip ${formatRoundtrip(s.roundtripTime)}, as the minion last said`,
+      ...connNote(s, now),
+      viaNote(s.via, s.viaSince),
+      `Opened ${formatAbsolute(s.createdAt)}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    s.id,
+  )
   return (
     <div
       // A marked row's style recolors these (session-mark-styles.css).
@@ -141,17 +160,7 @@ function LastSeen({ s }: { s: MinionSessionFieldsFragment }) {
         state === "lost" && "text-red-600 dark:text-red-400",
         state === null && "text-muted-foreground",
       )}
-      title={[
-        s.connected ? "Connected: a connection to the minion is open, and core sends to it at once" : state && scheduleNote(s, state, now),
-        s.lastSeenAt &&
-          `Last seen ${formatAbsolute(s.lastSeenAt)} (${formatAgoExact(now - Date.parse(s.lastSeenAt))})`,
-        s.roundtripTime != null && `Round trip ${formatRoundtrip(s.roundtripTime)}, as the minion last said`,
-        ...connNote(s, now),
-        viaNote(s.via, s.viaSince),
-        `Opened ${formatAbsolute(s.createdAt)}`,
-      ]
-        .filter(Boolean)
-        .join("\n")}
+      {...hover}
     >
       {KindIcon && <KindIcon className="size-3.5 shrink-0 self-center" aria-label={s.connKind ?? undefined} />}
       <span className="truncate">

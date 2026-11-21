@@ -23,6 +23,7 @@ import { useFactoryIcons } from "@/graphql/hooks/builds"
 import { useMinionSession, useMinionSessionConnections } from "@/graphql/hooks/minion-sessions"
 import { useNow } from "@/hooks/use-now"
 import { useRecordModals } from "@/hooks/use-record-modals"
+import { useSteadyTitle } from "@/hooks/use-steady-title"
 import { formatJson } from "@/lib/json-edit"
 import { whenIdle } from "@/lib/preloadable"
 import type { RecordModal as RecordModalTarget, SessionTab } from "@/lib/record-modals"
@@ -220,6 +221,8 @@ function SessionHeadline({ s }: { s: Session }) {
   const standing = s.connected ? "live" : lateness(s, now)
   const where = [s.host || "unknown host", userOf(s), platformLabel(`${s.os}/${s.arch}`)].filter(Boolean).join(" · ")
   const ago = s.lastSeenAt ? formatAgo(now - Date.parse(s.lastSeenAt)) : null
+  // Each check-in moves it: held while hovered (useSteadyTitle).
+  const seenHover = useSteadyTitle(s.lastSeenAt ? formatAbsolute(s.lastSeenAt) : undefined)
   return (
     <div className="flex min-w-0 items-baseline gap-2 text-sm text-muted-foreground">
       <span className="truncate">{where}</span>
@@ -231,7 +234,7 @@ function SessionHeadline({ s }: { s: Session }) {
         standing && <Badge className={STANDING[standing].className}>{STANDING[standing].label}</Badge>
       )}
       {s.archived && <Badge>Archived</Badge>}
-      <span className="shrink-0 tabular-nums" title={s.lastSeenAt ? formatAbsolute(s.lastSeenAt) : undefined}>
+      <span className="shrink-0 tabular-nums" {...seenHover}>
         {s.connected ? "connected" : s.lastSeenAt ? `seen ${ago ?? formatAbsolute(s.lastSeenAt)}` : "not seen yet"}
       </span>
     </div>
@@ -243,8 +246,10 @@ const none = <span className="text-muted-foreground">—</span>
 /** A time: the date and time, and how long ago within the last day. */
 function When({ at, now }: { at: string; now: number }) {
   const ago = formatAgo(now - Date.parse(at))
+  // Held while hovered: a check-in moves Late at, Lost at and an address's last seen.
+  const hover = useSteadyTitle(formatAbsolute(at))
   return (
-    <span title={formatAbsolute(at)}>
+    <span {...hover}>
       <FormattedDateTimeText date={at} />
       {ago !== null && <span className="text-muted-foreground"> · {ago}</span>}
     </span>
@@ -255,6 +260,8 @@ function SessionCard({ s }: { s: Session }) {
   // Ticks, as the table does: Last seen counts a silent minion's seconds.
   const now = useNow(1_000)
   const state = s.connected ? "live" : lateness(s, now)
+  // It counts seconds: held while hovered.
+  const seenHover = useSteadyTitle(s.lastSeenAt ? `${formatAbsolute(s.lastSeenAt)} (${formatAgoExact(now - Date.parse(s.lastSeenAt))})` : undefined)
   return (
     <InfoCard title="Session" note={s.persisted ? "persisted" : undefined}>
       {s.state === "RESERVED" && <NoteRow>Reserved for its build&apos;s first minion.</NoteRow>}
@@ -269,7 +276,7 @@ function SessionCard({ s }: { s: Session }) {
               state === "late" && "text-amber-600 dark:text-amber-400",
               state === "lost" && "text-red-600 dark:text-red-400",
             )}
-            title={`${formatAbsolute(s.lastSeenAt)} (${formatAgoExact(now - Date.parse(s.lastSeenAt))})`}
+            {...seenHover}
           >
             <FormattedDateTimeText date={s.lastSeenAt} />
             {formatAgo(now - Date.parse(s.lastSeenAt)) !== null && <> · {formatAgo(now - Date.parse(s.lastSeenAt))}</>}
