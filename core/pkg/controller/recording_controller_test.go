@@ -18,7 +18,8 @@ import (
 
 // A recording is its operation's to read, viewers too: its file as it was
 // recorded, an attachment named for its format; one whose desktop did not
-// open has none.
+// open has none. A desktop's is never cached: it may become a video at the
+// same URL; a terminal's that ended may be.
 func TestRecordingFile(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	viewer := uuid.New()
@@ -48,7 +49,8 @@ func TestRecordingFile(t *testing.T) {
 	w := get(saved.ID().String())
 	body, _ := io.ReadAll(w.Body)
 	if w.Code != http.StatusOK || string(body) != stream || w.Header().Get("Content-Length") != strconv.Itoa(len(stream)) ||
-		!strings.Contains(w.Header().Get("Content-Disposition"), "desktop-vnc-"+task.String()[:8]+"-1.guac") {
+		!strings.Contains(w.Header().Get("Content-Disposition"), "desktop-vnc-"+task.String()[:8]+"-1.guac") ||
+		w.Header().Get("Cache-Control") != "no-cache" {
 		t.Errorf("file: %d %q %v", w.Code, body, w.Header())
 	}
 	if w := get(failed.ID().String()); w.Code != http.StatusConflict {
@@ -65,7 +67,8 @@ func TestRecordingFile(t *testing.T) {
 	body, _ = io.ReadAll(w.Body)
 	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "application/x-asciicast" ||
 		!strings.HasPrefix(string(body), `{"version":2,"width":80,"height":24,`) || !strings.HasSuffix(string(body), `"o","$ "]`+"\n") ||
-		!strings.Contains(w.Header().Get("Content-Disposition"), "terminal-"+task.String()[:8]+"-3.cast") {
+		!strings.Contains(w.Header().Get("Content-Disposition"), "terminal-"+task.String()[:8]+"-3.cast") ||
+		w.Header().Get("Cache-Control") != "private, max-age=3600" {
 		t.Errorf("a terminal's: %d %q %v", w.Code, body, w.Header())
 	}
 	who = uuid.New()

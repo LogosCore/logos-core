@@ -101,10 +101,16 @@ func (rc *RecordingController) File(c *gin.Context) {
 	c.Header("Content-Type", contentType)
 	c.Header("Content-Disposition", contentDispositionFor(name, contentType, false))
 	c.Header("X-Content-Type-Options", "nosniff")
-	// One that ended stays as it is; one recording grows.
-	if rec.State == models.RecordingStateRecording {
+	// One recording grows. A desktop's that ended becomes a video where core
+	// has an encoder, at this same URL: kept, the browser would play these
+	// bytes as the video, so it asks again each time. A terminal's that
+	// ended stays as it is.
+	switch {
+	case rec.State == models.RecordingStateRecording:
 		c.Header("Cache-Control", "no-store")
-	} else {
+	case rec.FileFormat() != models.RecordingFormatAsciicast:
+		c.Header("Cache-Control", "no-cache")
+	default:
 		c.Header("Cache-Control", "private, max-age=3600")
 	}
 	if err := writeFileBody(c.Writer, c.Request, body, rec.Size); err != nil {
