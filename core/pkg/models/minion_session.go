@@ -231,14 +231,15 @@ type MinionSessionConnSpec struct {
 	MaxMessage   int            `bson:"max_message,omitempty" json:"max_message,omitempty"`
 }
 
-// ConnSpecsFrom are a hello's own connections as core keeps them; nil when
-// it says none. One without a name is "<channel>-<place>", as a build's.
-func ConnSpecsFrom(h protocol.HelloItem) []MinionSessionConnSpec {
-	if len(h.Connections) == 0 {
+// ConnSpecsOf are a minion's own connections (a hello's or a
+// connection_update's) as core keeps them; nil for none. One without a name
+// is "<channel>-<place>", as a build's.
+func ConnSpecsOf(conns []protocol.HelloConnection) []MinionSessionConnSpec {
+	if len(conns) == 0 {
 		return nil
 	}
-	out := make([]MinionSessionConnSpec, len(h.Connections))
-	for i, c := range h.Connections {
+	out := make([]MinionSessionConnSpec, len(conns))
+	for i, c := range conns {
 		name := c.Name
 		if name == "" {
 			name = fmt.Sprintf("%s-%d", c.Channel, i+1)

@@ -108,3 +108,68 @@ func TestHelloWithoutOwnConnections(t *testing.T) {
 		t.Fatalf("session own %v, conn %d %q, count %d", s.Connections, s.Conn, s.ConnName, s.ConnCount)
 	}
 }
+
+// A connection_update replaces the session's connections, a build's ones
+// too: the connection in use keeps its place and takes its new details,
+// no move is recorded; a list too short for it, or one naming a channel
+// core does not know, is refused and changes nothing; a conn_update before
+// it in the same message moves first, so a shorter list passes.
+func TestConnectionUpdate(t *testing.T) {
+	r := newRig(t)
+	r.build.Connections.Items = []protocol.BuildConnection{endpoint(protocol.KindReverseCall, "http"),
+		endpoint(protocol.KindReversePersistent, "dns")}
+	r.svc.WithChannelSchemas(fakeSchemas{
+		"http": {Kinds: map[string]protocol.ConnectionKind{protocol.KindReverseCall: {}, protocol.KindReversePersistent: {}}},
+		"dns":  {Kinds: map[string]protocol.ConnectionKind{protocol.KindReversePersistent: {}}},
+	})
+	ctx := ViaChannel(context.Background(), "dns")
+	h := hello("ws01")
+	h.Conn = 2
+	_, c := newSock("ws")
+	sid := r.helloOver(t, ctx, c, h)
+	if s := r.sessionRow(t, sid); s.Connections != nil || s.Conn != 2 || s.ConnName != "dns-reverse-persistent" {
+		t.Fatalf("build's: own %v, conn %d %q", s.Connections, s.Conn, s.ConnName)
+	}
+	update := func(conns ...protocol.HelloConnection) protocol.ConnectionUpdateItem {
+		return protocol.ConnectionUpdateItem{T: protocol.ItemConnectionUpdate, Connections: conns}
+	}
+	say := func(items ...any) int {
+		return errCodeIn(t, r.openUnder(t, sid, r.keys, r.say(t, ctx, c, sid, items...)))
+	}
+
+	// Replaced: the one in use (2) keeps its place, with its new details.
+	if code := say(update(protocol.HelloConnection{Channel: "http", Kind: protocol.KindReverseCall},
+		protocol.HelloConnection{Channel: "dns", Kind: protocol.KindReversePersistent, Name: "tunnel", MaxMessage: 1024})); code != 0 {
+		t.Fatalf("err %d", code)
+	}
+	s := r.sessionRow(t, sid)
+	if len(s.Connections) != 2 || s.ConnCount != 2 || s.Conn != 2 || s.ConnName != "tunnel" || s.MessageLimit() != 1024 ||
+		len(s.ConnChanges) != 0 {
+		t.Fatalf("replaced: own %d, count %d, conn %d %q, limit %d, changes %d", len(s.Connections), s.ConnCount, s.Conn,
+			s.ConnName, s.MessageLimit(), len(s.ConnChanges))
+	}
+
+	// Refused, nothing changed: too short for the one in use, an unknown
+	// channel.
+	for name, u := range map[string]protocol.ConnectionUpdateItem{
+		"too short":       update(protocol.HelloConnection{Channel: "http", Kind: protocol.KindReverseCall}),
+		"unknown channel": update(protocol.HelloConnection{Channel: "smoke", Kind: protocol.KindReverseCall}),
+	} {
+		if code := say(u); code != protocol.ErrItemBadMessage {
+			t.Errorf("%s: err %d", name, code)
+		}
+	}
+	if s = r.sessionRow(t, sid); len(s.Connections) != 2 || s.ConnName != "tunnel" {
+		t.Fatalf("after refusals: own %d, conn %q", len(s.Connections), s.ConnName)
+	}
+
+	// The move first, then the shorter list, in one message: items are
+	// taken in their order.
+	if code := say(protocol.ConnUpdateItem{T: protocol.ItemConnUpdate, Conn: 1},
+		update(protocol.HelloConnection{Channel: "http", Kind: protocol.KindReverseCall, Name: "only"})); code != 0 {
+		t.Fatalf("move then shorten: err %d", code)
+	}
+	if s = r.sessionRow(t, sid); len(s.Connections) != 1 || s.Conn != 1 || s.ConnName != "only" {
+		t.Fatalf("after move then shorten: own %d, conn %d %q", len(s.Connections), s.Conn, s.ConnName)
+	}
+}

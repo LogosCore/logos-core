@@ -568,7 +568,7 @@ func (s *Service) underStaging(ctx context.Context, from *sender, peer string, m
 func (s *Service) openSession(ctx context.Context, from *sender, peer string, raw cbor.RawMessage) ([]cbor.RawMessage, error) {
 	hello, err := readHello(raw)
 	if err == nil {
-		err = s.checkConns(ctx, hello)
+		err = s.checkConns(ctx, "hello", hello.Connections)
 	}
 	if err != nil {
 		return errItem(protocol.ErrItemBadMessage, err.Error(), 0)
@@ -645,7 +645,7 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 	}
 	// The minion's own connections when its hello says them, else the
 	// build's.
-	own := s.ownConns(ctx, hello)
+	own := s.ownConns(ctx, hello.Connections)
 	place := helloPlace(hello, from, own)
 	conn := connOf(b, own, place)
 	session.Connections = own
@@ -731,7 +731,7 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	// replace the session's), else the ones the session kept, else the
 	// build's.
 	own := sess.Connections
-	if said := s.ownConns(ctx, hello); said != nil {
+	if said := s.ownConns(ctx, hello.Connections); said != nil {
 		own = said
 		if err := s.sessions.SetConnections(ctx, sid, own); err != nil {
 			return nil, false, fmt.Errorf("claim the session: %w", err)
@@ -836,7 +836,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 		case protocol.ItemHello:
 			var hello protocol.HelloItem
 			if hello, err = readHello(raw); err == nil {
-				err = s.checkConns(ctx, hello)
+				err = s.checkConns(ctx, "hello", hello.Connections)
 			}
 			if err != nil {
 				out, err = errItem(protocol.ErrItemBadMessage, err.Error(), i)
@@ -845,7 +845,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			// Connections it says replace the ones the session kept; a
 			// rehello without keeps them.
 			replaced := false
-			if own := s.ownConns(ctx, hello); own != nil {
+			if own := s.ownConns(ctx, hello.Connections); own != nil {
 				if err = s.sessions.SetConnections(ctx, session.SessionID, own); err != nil {
 					return nil, fmt.Errorf("rehello: %w", err)
 				}
@@ -892,6 +892,10 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			if _, rErr := readSleepUpdate(raw); rErr != nil {
 				out, err = errItem(protocol.ErrItemBadMessage, rErr.Error(), i)
 			}
+		case protocol.ItemConnectionUpdate:
+			// The minion's connections again: they replace the session's;
+			// the connection in use keeps its place. Nothing to answer.
+			out, err = s.takeConnectionUpdate(ctx, session, raw, i)
 		case protocol.ItemConnUpdate:
 			// Recorded; nothing to answer.
 			u, rErr := readConnUpdate(raw)
@@ -1093,6 +1097,42 @@ func readMaxTasks(raw cbor.RawMessage) (protocol.MaxTasksItem, error) {
 	return m, m.Validate()
 }
 
+// takeConnectionUpdate replaces session's connections with a
+// connection_update's: refused (bad_message, nothing kept) when the list
+// does not pass or is too short for the connection in use; the one in use
+// takes its new details, and no move is recorded.
+func (s *Service) takeConnectionUpdate(ctx context.Context, session *models.MinionSession, raw cbor.RawMessage, i int) ([]cbor.RawMessage, error) {
+	var u protocol.ConnectionUpdateItem
+	if err := protocol.UnmarshalCBOR(raw, &u); err != nil {
+		return errItem(protocol.ErrItemBadMessage, "the connection_update does not read", i)
+	}
+	err := u.Validate()
+	if err == nil {
+		err = s.checkConns(ctx, "connection_update", u.Connections)
+	}
+	if err == nil && session.Conn > len(u.Connections) {
+		err = fmt.Errorf("connection_update: the connection in use, %d, is past its %d connections: say the move first",
+			session.Conn, len(u.Connections))
+	}
+	if err != nil {
+		return errItem(protocol.ErrItemBadMessage, err.Error(), i)
+	}
+	own := s.ownConns(ctx, u.Connections)
+	if err := s.sessions.SetConnections(ctx, session.SessionID, own); err != nil {
+		return nil, fmt.Errorf("record a connection_update: %w", err)
+	}
+	session.Connections, session.ConnCount = own, len(own)
+	if session.Conn > 0 {
+		conn := connOf(nil, own, session.Conn)
+		if err := s.sessions.SetConn(ctx, session.SessionID, conn, nil); err != nil {
+			return nil, fmt.Errorf("record a connection_update: %w", err)
+		}
+		session.ConnKind, session.ConnMaxMessage = conn.Kind, conn.MaxMessage
+	}
+	s.logger.Info("minion connections refreshed", zap.String("session_id", session.SessionID.String()), zap.Int("connections", len(own)))
+	return nil, nil
+}
+
 func readConnUpdate(raw cbor.RawMessage) (protocol.ConnUpdateItem, error) {
 	var u protocol.ConnUpdateItem
 	if err := protocol.UnmarshalCBOR(raw, &u); err != nil {
@@ -1153,11 +1193,12 @@ func helloPlace(hello protocol.HelloItem, from *sender, own []models.MinionSessi
 	return from.place
 }
 
-// ownConns are the hello's own connections as core keeps them, their
-// params named by the channel's fields (a param its schema does not number
-// keeps its number); nil when it says none.
-func (s *Service) ownConns(ctx context.Context, hello protocol.HelloItem) []models.MinionSessionConnSpec {
-	own := models.ConnSpecsFrom(hello)
+// ownConns are a minion's own connections (a hello's or a
+// connection_update's) as core keeps them, their params named by the
+// channel's fields (a param its schema does not number keeps its number);
+// nil for none.
+func (s *Service) ownConns(ctx context.Context, conns []protocol.HelloConnection) []models.MinionSessionConnSpec {
+	own := models.ConnSpecsOf(conns)
 	if s.channels == nil {
 		return own
 	}
@@ -1184,20 +1225,21 @@ func (s *Service) ownConns(ctx context.Context, hello protocol.HelloItem) []mode
 	return own
 }
 
-// checkConns refuses a hello whose own connections name a channel core
-// does not know, or a kind that channel does not carry. Without the
-// channels' schemas only their shape is checked (Validate).
-func (s *Service) checkConns(ctx context.Context, hello protocol.HelloItem) error {
+// checkConns refuses a minion's own connections (what: "hello" or
+// "connection_update") that name a channel core does not know, or a kind
+// that channel does not carry. Without the channels' schemas only their
+// shape is checked (Validate).
+func (s *Service) checkConns(ctx context.Context, what string, conns []protocol.HelloConnection) error {
 	if s.channels == nil {
 		return nil
 	}
-	for i, c := range hello.Connections {
+	for i, c := range conns {
 		schema, err := s.channels.Schema(ctx, c.Channel)
 		if err != nil || schema == nil {
-			return fmt.Errorf("hello: connection %d: channel %q is not one core knows", i+1, c.Channel)
+			return fmt.Errorf("%s: connection %d: channel %q is not one core knows", what, i+1, c.Channel)
 		}
 		if _, ok := schema.Kinds[c.Kind]; !ok {
-			return fmt.Errorf("hello: connection %d: channel %q does not carry %s", i+1, c.Channel, c.Kind)
+			return fmt.Errorf("%s: connection %d: channel %q does not carry %s", what, i+1, c.Channel, c.Kind)
 		}
 	}
 	return nil
