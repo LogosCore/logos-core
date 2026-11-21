@@ -22,7 +22,8 @@ import { useRecordModals } from "@/hooks/use-record-modals"
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
-import { lineOf, type CommandDef } from "./command-line"
+import { lineOf } from "./command-line"
+import type { ConsoleCommand } from "./command-bar"
 import { readDirListing } from "./dir-listing"
 import { readDirWalk } from "./dir-walk"
 import { WalkView } from "./walk-view"
@@ -118,7 +119,7 @@ export function TaskDetail({
   showingComposite,
 }: {
   task: Task
-  command?: CommandDef
+  command?: ConsoleCommand
   canWrite: boolean
   /** Whether the caller marks tasks important: an operator, whatever the session's state. */
   canMark: boolean
@@ -454,7 +455,7 @@ export function TaskDetail({
             <p className="border-b px-3 py-1 text-xs text-amber-700 dark:text-amber-400">{dataNotes.join(" ")}</p>
           )}
           {isDelegate && t.delegate ? (
-            <DelegateView delegate={t.delegate} />
+            <DelegateView delegate={t.delegate} args={t.args} command={command} />
           ) : isTunnel && t.tunnel ? (
             <TunnelView key={t.id} task={t} tunnel={t.tunnel} />
           ) : (isFile || keptStream) && t.file && !rawData ? (
