@@ -2,6 +2,8 @@ package models
 
 import (
 	"fmt"
+	"net"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -74,6 +76,48 @@ type OperationalPort struct {
 	// StopIdle is the task's stop_idle: core stops it once no stream has
 	// been open that long; 0, never.
 	StopIdle time.Duration `bson:"stop_idle,omitempty" json:"stop_idle,omitempty"`
+}
+
+// OperationalPortUse is a port a session took for one use: its purpose
+// and target (OperationalPortTarget), how many times, the first and the
+// last. When the session opens a tunnel naming no port, core offers it
+// the port it last took for the same use, then for the same purpose
+// (miniontunnels.Service.Open). An operation's go with it.
+type OperationalPortUse struct {
+	SessionID   uuid.UUID `bson:"session_id" json:"session_id"`
+	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
+	Port        int       `bson:"port" json:"port"`
+	Purpose     string    `bson:"purpose" json:"purpose"`
+	Target      string    `bson:"target" json:"target"`
+	Uses        int64     `bson:"uses" json:"uses"`
+	FirstAt     time.Time `bson:"first_at" json:"first_at"`
+	LastAt      time.Time `bson:"last_at" json:"last_at"`
+}
+
+// OperationalPortHeat is how many times core took a port, for any task of
+// any operation, and when it last did: a port's heat. A tunnel naming no
+// port that its session has none to take again for gets one of the least
+// heated, at random. It holds nothing of an operation, and outlives
+// them.
+type OperationalPortHeat struct {
+	Port   int       `bson:"port" json:"port"`
+	Uses   int64     `bson:"uses" json:"uses"`
+	LastAt time.Time `bson:"last_at" json:"last_at"`
+}
+
+// OperationalPortTarget is what a port serves past its purpose: a
+// forward's (or a desktop's) destination, host:port or a path; a
+// terminal's program ("" for the host's shell); "" for a proxy.
+func OperationalPortTarget(p *OperationalPort) string {
+	switch {
+	case p.Path != "":
+		return p.Path
+	case p.Host != "":
+		return net.JoinHostPort(p.Host, strconv.Itoa(p.HostPort))
+	case p.Purpose == OperationalPurposeTerminal:
+		return p.Program
+	}
+	return ""
 }
 
 // What an operational port serves: its task's front (protocol.ParamFront).

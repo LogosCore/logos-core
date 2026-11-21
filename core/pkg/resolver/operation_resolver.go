@@ -58,16 +58,17 @@ type IOperationResolver interface {
 
 type operationResolver struct {
 	operationRepo  repository.IOperationRepository
-	userRepo       repository.IUserRepository                // needed for Members field resolver
-	wikiDocRepo    repository.IWikiDocumentRepository        // needed for cascade delete
-	wikiBackupRepo repository.IWikiDocumentBackupRepository  // needed for cascade delete
-	credRepo       repository.ICredentialRepository          // needed for cascade delete
-	hostRepo       repository.IHostRepository                // needed for cascade delete
-	endpointRepo   repository.IChannelEndpointRepository     // needed for cascade delete
-	targetRepo     repository.IMinionTargetRepository        // needed for cascade delete
-	buildCleanup   BuildCleanup                              // needed for cascade delete
-	sessionRepo    repository.IMinionSessionRepository       // needed for cascade delete
-	markRepo       repository.IMinionSessionMarkRepository   // needed for cascade delete
+	userRepo       repository.IUserRepository               // needed for Members field resolver
+	wikiDocRepo    repository.IWikiDocumentRepository       // needed for cascade delete
+	wikiBackupRepo repository.IWikiDocumentBackupRepository // needed for cascade delete
+	credRepo       repository.ICredentialRepository         // needed for cascade delete
+	hostRepo       repository.IHostRepository               // needed for cascade delete
+	endpointRepo   repository.IChannelEndpointRepository    // needed for cascade delete
+	targetRepo     repository.IMinionTargetRepository       // needed for cascade delete
+	buildCleanup   BuildCleanup                             // needed for cascade delete
+	sessionRepo    repository.IMinionSessionRepository      // needed for cascade delete
+	markRepo       repository.IMinionSessionMarkRepository  // needed for cascade delete
+	portMemory     repository.IOperationalPortMemoryRepository
 	folderRepo     repository.IMinionSessionFolderRepository // needed for cascade delete
 	minionTaskRepo repository.IMinionTaskRepository          // needed for cascade delete
 	fsEntryRepo    repository.IFsEntryRepository             // needed for cascade delete
@@ -165,6 +166,14 @@ func WithMinionSessionRepo(repo repository.IMinionSessionRepository) OperationRe
 func WithMinionSessionFolderRepo(repo repository.IMinionSessionFolderRepository) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.folderRepo = repo
+	}
+}
+
+// WithPortMemory adds what the sessions took operational ports for, for
+// cascade delete (the ports' heat stays).
+func WithPortMemory(repo repository.IOperationalPortMemoryRepository) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.portMemory = repo
 	}
 }
 
@@ -407,6 +416,13 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.markRepo != nil {
 		if err := r.markRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's session marks: %w", err)
+		}
+	}
+
+	// Cascade delete: what its sessions took operational ports for
+	if r.portMemory != nil {
+		if err := r.portMemory.DeleteByOperationID(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's operational port uses: %w", err)
 		}
 	}
 

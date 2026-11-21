@@ -100,6 +100,7 @@ type Repositories struct {
 	MinionFeedback     repository.IMinionFeedbackRepository
 	MinionIdentity     repository.IMinionIdentityRepository
 	OperationalPort    repository.IOperationalPortRepository
+	PortMemory         repository.IOperationalPortMemoryRepository
 	MinionListener     repository.IMinionListenerRepository
 	VPNTunnel          repository.IVPNTunnelRepository
 	VPNKey             repository.IVPNKeyRepository
@@ -292,6 +293,7 @@ func NewApp() (*App, error) {
 	tunnelsCfg.Desktops = e.Guacd != ""
 	minionTunnels := miniontunnels.New(tunnelsCfg, repos.OperationalPort, repos.MinionTask, bus, l).
 		WithListeners(repos.MinionListener).
+		WithPortMemory(repos.PortMemory).
 		WithVPN(repos.VPNTunnel, repos.VPNKey, vpnRoles{users: repos.User, ops: repos.Operation}).
 		WithTerminalRecordings(terminalRecordings{recordingSvc})
 	minionSync := minionsync.NewService(repos.Build, repos.MinionStaging, repos.MinionSession, repos.MinionReservation, infra.cache, bus, l).

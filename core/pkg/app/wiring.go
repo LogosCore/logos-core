@@ -207,6 +207,7 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithBuildCleanup(a.builds),
 			resolver.WithMinionSessionRepo(a.repos.MinionSession),
 			resolver.WithMinionSessionMarkRepo(a.repos.MinionMark),
+			resolver.WithPortMemory(a.repos.PortMemory),
 			resolver.WithMinionSessionFolderRepo(a.repos.MinionFolder),
 			resolver.WithMinionTaskRepo(a.repos.MinionTask),
 			resolver.WithMinionFiles(a.minionFiles),

@@ -112,6 +112,11 @@ var ErrNoPort = errors.New("no operational port")
 type Service struct {
 	cfg   Config
 	ports repository.IOperationalPortRepository
+	// memory keeps what ports were taken for (WithPortMemory): none, and
+	// a tunnel naming no port takes the first free one.
+	memory repository.IOperationalPortMemoryRepository
+	// shuffle orders ports of the same heat (rand.Shuffle's).
+	shuffle func([]int)
 	// listeners keeps reverse port forwards' (WithListeners): none, and
 	// core opens none.
 	listeners repository.IMinionListenerRepository
@@ -229,11 +234,19 @@ type Opening struct {
 
 // Open takes an operational port for a tunnel task about to be queued, and
 // listens on it: its SOCKS clients wait for the minion to have the task.
+// One naming no port tries them in order's turn: its session's first, then
+// the least heated (port_memory.go). Each port taken is remembered.
 // ErrNoPort when none is free (or the one asked for is not free, or not
 // one).
 func (s *Service) Open(ctx context.Context, o Opening) (int, error) {
-	candidates := s.cfg.Ports
-	if o.Port != 0 {
+	purpose := o.Purpose
+	if purpose == "" {
+		purpose = models.OperationalPurposeSOCKS
+	}
+	var candidates []int
+	if o.Port == 0 {
+		candidates = s.order(ctx, o, purpose)
+	} else {
 		if !slices.Contains(s.cfg.Ports, o.Port) {
 			return 0, fmt.Errorf("%w: %d is not one of core's operational ports", ErrNoPort, o.Port)
 		}
@@ -245,10 +258,6 @@ func (s *Service) Open(ctx context.Context, o Opening) (int, error) {
 	for _, port := range candidates {
 		if s.inUse(port) {
 			continue
-		}
-		purpose := o.Purpose
-		if purpose == "" {
-			purpose = models.OperationalPurposeSOCKS
 		}
 		rec := &models.OperationalPort{Port: port, Purpose: purpose, Host: o.Host, HostPort: o.HostPort, OperationID: o.Operation, SessionID: o.Session,
 			TaskID: o.Task, OpenedBy: o.By, OpenedAt: s.now(), MaxStreams: o.MaxStreams, Timeout: o.Timeout, StopIdle: o.StopIdle,
@@ -270,6 +279,7 @@ func (s *Service) Open(ctx context.Context, o Opening) (int, error) {
 			continue
 		}
 		s.portChanged(o.Task, o.Operation, true, false)
+		s.remember(ctx, rec)
 		return port, nil
 	}
 	if o.Port != 0 {
