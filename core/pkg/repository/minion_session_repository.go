@@ -113,6 +113,13 @@ type IMinionSessionRepository interface {
 	// MaxTasksSent counts one more message that carried the operator's
 	// limit (models.MinionSession.MaxTasksSends).
 	MaxTasksSent(ctx context.Context, sessionID uuid.UUID) error
+	// AskRehello records an operator's ask for the minion's hello, at at
+	// (models.MinionSession.RehelloAt), its count of sends at 0.
+	AskRehello(ctx context.Context, sessionID uuid.UUID, at time.Time) error
+	// RehelloSent counts one more message that carried it.
+	RehelloSent(ctx context.Context, sessionID uuid.UUID) error
+	// RehelloDone forgets the ask: a hello came, or none will.
+	RehelloDone(ctx context.Context, sessionID uuid.UUID) error
 	// SetConnected records whether a persistent connection serving the
 	// session is open (models.MinionSession.Connected).
 	SetConnected(ctx context.Context, sessionID uuid.UUID, connected bool) error
@@ -669,6 +676,19 @@ func (r *minionSessionRepository) MaxTasksSent(ctx context.Context, sessionID uu
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$inc": bson.M{"max_tasks_sends": 1}}))
 }
 
+func (r *minionSessionRepository) AskRehello(ctx context.Context, sessionID uuid.UUID, at time.Time) error {
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
+		withRev(bson.M{"$set": bson.M{"rehello_at": at}, "$unset": bson.M{"rehello_sends": ""}}))
+}
+
+func (r *minionSessionRepository) RehelloSent(ctx context.Context, sessionID uuid.UUID) error {
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$inc": bson.M{"rehello_sends": 1}}))
+}
+
+func (r *minionSessionRepository) RehelloDone(ctx context.Context, sessionID uuid.UUID) error {
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$unset": bson.M{"rehello_at": "", "rehello_sends": ""}}))
+}
+
 func (r *minionSessionRepository) SetConnected(ctx context.Context, sessionID uuid.UUID, connected bool) error {
 	update := withRev(bson.M{"$unset": bson.M{"connected": ""}})
 	if connected {
@@ -729,6 +749,8 @@ func (r *minionSessionRepository) Claim(ctx context.Context, sessionID uuid.UUID
 		"codec":              codecOrRemove(c.Codec),
 		"codec_down_since":   "$$REMOVE",
 		"max_tasks_sends":    "$$REMOVE",
+		"rehello_at":         "$$REMOVE", // the claim's hello answers it
+		"rehello_sends":      "$$REMOVE",
 		"late_at":            "$$REMOVE", // set again by the claim's check-in
 		"lost_at":            "$$REMOVE",
 		"rev":                revStage,

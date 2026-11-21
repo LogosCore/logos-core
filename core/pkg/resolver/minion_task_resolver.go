@@ -371,9 +371,10 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 	}
 	var out []protocol.BuildCommand
 	for _, c := range sc.Commands {
-		// help, connect and disconnect are core's own: a schema from before
-		// they were reserved does not shadow them.
-		if slices.Contains(has, c.ID) && !protocol.IsCoreCommand(c.ID) {
+		// help, connect, disconnect, max_tasks and rehello are core's own: a
+		// schema declaring one (one from before it was reserved, or rehello,
+		// which the protocol does not reserve) does not shadow it.
+		if slices.Contains(has, c.ID) && !models.IsCoreCommand(c.ID) {
 			switch {
 			case protocol.IsTunnelAction(c.Action):
 				c = tunnelCommand(sc.BuildSchema, c, b.Target, r.tunnels != nil && r.tunnels.Desktops())
@@ -389,6 +390,9 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 	}
 	if r.offersMaxTasks(s) {
 		out = append(out, maxTasksCommand())
+	}
+	if r.limits != nil {
+		out = append(out, rehelloCommand())
 	}
 	return &sc.BuildSchema, append(out, helpCommand(out)), nil
 }
@@ -476,6 +480,9 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	}
 	if command == protocol.CommandMaxTasks {
 		return r.runMaxTasks(ctx, s, uid, values, wire)
+	}
+	if command == models.CommandRehello {
+		return r.runRehello(ctx, s, uid, values)
 	}
 	if commands[i].Composite && r.composites == nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("%s is a composite command: core runs none here", command))
@@ -1121,7 +1128,7 @@ func (r *minionTaskResolver) CancelMinionTask(ctx context.Context, id string) (*
 	if _, err := r.session(ctx, t.SessionID.String(), models.OperationRoleOperator); err != nil {
 		return nil, err
 	}
-	if protocol.IsCoreCommand(t.Command) && !t.Finished() {
+	if models.IsCoreCommand(t.Command) && !t.Finished() {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("core runs %s itself: it ends on its own", t.Command))
 	}
 	if t.Composing() && r.composites != nil {

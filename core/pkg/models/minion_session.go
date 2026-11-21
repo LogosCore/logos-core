@@ -130,6 +130,11 @@ type MinionSession struct {
 	MaxTasksSettable bool       `bson:"max_tasks_settable,omitempty" json:"max_tasks_settable,omitempty"`
 	MaxTasksSet      *int       `bson:"max_tasks_set,omitempty" json:"max_tasks_set,omitempty"`
 	MaxTasksSends    int        `bson:"max_tasks_sends,omitempty" json:"max_tasks_sends,omitempty"`
+	// RehelloAt is when an operator asked the minion for its hello again
+	// (CommandRehello), until a hello comes: core sends it a rehello item
+	// with each message, RehelloSends counting them, RehelloTries at most.
+	RehelloAt    *time.Time `bson:"rehello_at,omitempty" json:"rehello_at,omitempty"`
+	RehelloSends int        `bson:"rehello_sends,omitempty" json:"rehello_sends,omitempty"`
 	// Connected: a persistent connection serving the session is open. Core
 	// holds the connections (minionsync); it writes this when the session's
 	// first opens and its last closes, and clears it as it starts, so the
@@ -396,6 +401,22 @@ type MinionHello struct {
 	Version   string         `bson:"version,omitempty" json:"version,omitempty"`
 	MachineID string         `bson:"machine_id,omitempty" json:"machine_id,omitempty"` // "<source>:<value>" (protocol.MachineID), by the source's name; empty when the minion said none
 	X         map[string]any `bson:"x,omitempty" json:"x,omitempty"`
+}
+
+// RehelloTries is how many messages carry an operator's rehello before core
+// gives up on it: a minion says its hello in its next message, and one that
+// does not would be asked for ever.
+const RehelloTries = 5
+
+// RehelloDue: an operator's rehello is still to go to the minion.
+func (s MinionSession) RehelloDue() bool {
+	return s.RehelloAt != nil && s.RehelloSends < RehelloTries
+}
+
+// RehelloUnanswered: an operator's rehello went with RehelloTries messages
+// and no hello came.
+func (s MinionSession) RehelloUnanswered() bool {
+	return s.RehelloAt != nil && s.RehelloSends >= RehelloTries
 }
 
 // MaxTasksTries is how many messages carry the operator's limit unanswered

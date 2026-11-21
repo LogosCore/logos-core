@@ -152,7 +152,8 @@ func roomFor(limit int, answers []cbor.RawMessage) int {
 // most urgent first: cancels, a reack (core asks which tasks the minion
 // still has), the operator's limit of tasks (a max_tasks,
 // in every message until the minion says it has it: whatever it runs, as a
-// cancel goes), resumes, the streams' acks, then tasks (those sent and not
+// cancel goes), an operator's rehello (the same way, until a hello comes),
+// resumes, the streams' acks, then tasks (those sent and not
 // acknowledged first), then the tunnels' items. A delegate's items go
 // before its tasks. What does not fit waits
 // for the next message; a task too large for any message of the
@@ -215,6 +216,24 @@ func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d d
 				return o, fmt.Errorf("count a max_tasks: %w", err)
 			}
 			session.MaxTasksSends++
+		}
+	}
+	// An operator's ask for the minion's hello (rehello.go): in every
+	// message until one comes, RehelloTries at most.
+	if session.RehelloUnanswered() {
+		s.rehelloUnanswered(ctx, session)
+	}
+	if session.RehelloDue() {
+		item, err := protocol.MarshalCBOR(protocol.RehelloItem{T: protocol.ItemRehello})
+		if err != nil {
+			return o, err
+		}
+		if add(item) {
+			o.fresh = true
+			if err := s.sessions.RehelloSent(ctx, session.SessionID); err != nil {
+				return o, fmt.Errorf("count a rehello: %w", err)
+			}
+			session.RehelloSends++
 		}
 	}
 	if d.resumes {

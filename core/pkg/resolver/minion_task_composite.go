@@ -42,7 +42,7 @@ func (r *minionTaskResolver) QueueSubtask(ctx context.Context, parent *models.Mi
 		return nil, &composites.Refusal{Reason: fmt.Sprintf("%q is not one of the commands %s uses", sub.Command, parent.Command)}
 	}
 	i := slices.IndexFunc(commands, func(c protocol.BuildCommand) bool { return c.ID == sub.Command })
-	if i < 0 || protocol.IsCoreCommand(sub.Command) {
+	if i < 0 || models.IsCoreCommand(sub.Command) {
 		return nil, &composites.Refusal{Reason: fmt.Sprintf("the session's minion has no %q command", sub.Command)}
 	}
 	cmd := commands[i]

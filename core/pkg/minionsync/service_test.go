@@ -230,6 +230,7 @@ func (f *fakeSessions) Claim(_ context.Context, id uuid.UUID, c repository.Minio
 		r.Crypto, r.Hello, r.BuildID, r.Address, r.AddressPicked, r.Persisted = c.Crypto, c.Hello, c.BuildID, c.Address, c.AddressPicked, true
 		r.Sleep, r.LateAt, r.LostAt = c.Sleep, nil, nil
 		r.MaxTasks, r.MaxTasksSettable, r.MaxTasksSends = c.MaxTasks, c.MaxTasksSettable, 0
+		r.RehelloAt, r.RehelloSends = nil, 0
 		return nil
 	}
 	return qmgo.ErrNoSuchDocuments
@@ -252,6 +253,39 @@ func (f *fakeSessions) SetMaxTasksWanted(_ context.Context, id uuid.UUID, max in
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			f.rows[i].MaxTasksSet, f.rows[i].MaxTasksSends = &max, 0
+		}
+	}
+	return nil
+}
+
+func (f *fakeSessions) AskRehello(_ context.Context, id uuid.UUID, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.rows {
+		if f.rows[i].SessionID == id {
+			f.rows[i].RehelloAt, f.rows[i].RehelloSends = &at, 0
+		}
+	}
+	return nil
+}
+
+func (f *fakeSessions) RehelloSent(_ context.Context, id uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.rows {
+		if f.rows[i].SessionID == id {
+			f.rows[i].RehelloSends++
+		}
+	}
+	return nil
+}
+
+func (f *fakeSessions) RehelloDone(_ context.Context, id uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.rows {
+		if f.rows[i].SessionID == id {
+			f.rows[i].RehelloAt, f.rows[i].RehelloSends = nil, 0
 		}
 	}
 	return nil

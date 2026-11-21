@@ -760,6 +760,10 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	if sess.ConnKind != protocol.KindBindCall {
 		s.askTasks(ctx, sid, "a new process claimed its session")
 	}
+	// Its hello answers an operator's rehello (the claim forgot the ask).
+	was := sess.Hello
+	sess.Hello, sess.RehelloAt = models.MinionHelloFrom(hello), nil
+	s.rehelloAnswered(ctx, sess, was, true)
 	items, err = helloResponse(sid)
 	return items, err == nil, err
 }
@@ -869,6 +873,9 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				return nil, fmt.Errorf("rehello: %w", err)
 			}
 			s.endMaxTasksCommands(ctx, session)
+			// An operator's rehello, answered: the commands waiting end with
+			// what it says.
+			s.rehelloAnswered(ctx, session, was, false)
 			// The connection it says hello through: the one it names, else
 			// the one that carried it when only one of the build's fits (a
 			// call's answer is its target's).

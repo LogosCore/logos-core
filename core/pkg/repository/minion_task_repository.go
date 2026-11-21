@@ -388,7 +388,7 @@ func uuidsIn(ids []uuid.UUID) bson.A {
 // word) run in core: they take none of the minion's room.
 func runningFilter(sessionID uuid.UUID) bson.M {
 	core := bson.A{}
-	for _, c := range protocol.CoreCommands() {
+	for _, c := range models.CoreCommands() {
 		core = append(core, c)
 	}
 	return bson.M{"session_id": sessionID, "command": bson.M{"$nin": core}, "state": models.MinionTaskRunning}

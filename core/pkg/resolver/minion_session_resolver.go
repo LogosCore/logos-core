@@ -110,9 +110,11 @@ type SessionTasks interface {
 }
 
 // MaxTasksSetter sets the operator's limit of tasks a session's minion runs
-// at once (minionsync.Service.SetMaxTasks): kept, and sent to the minion.
+// at once (minionsync.Service.SetMaxTasks), and asks it for its hello again
+// (AskRehello): kept, and sent to the minion.
 type MaxTasksSetter interface {
 	SetMaxTasks(ctx context.Context, session *models.MinionSession, max int) error
+	AskRehello(ctx context.Context, session *models.MinionSession) error
 }
 
 func NewMinionSessionResolver(sessions repository.IMinionSessionRepository, operationRepo repository.IOperationRepository,

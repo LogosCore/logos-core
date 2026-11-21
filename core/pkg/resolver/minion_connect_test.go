@@ -92,6 +92,7 @@ func TestOffersConnect(t *testing.T) {
 type limitsOK struct{}
 
 func (limitsOK) SetMaxTasks(context.Context, *models.MinionSession, int) error { return nil }
+func (limitsOK) AskRehello(context.Context, *models.MinionSession) error       { return nil }
 
 // Only a session whose build's factory declares max tasks, and whose
 // minion said its limit, has max_tasks; it takes a max of 0 to 64.
@@ -123,5 +124,20 @@ func TestOffersMaxTasks(t *testing.T) {
 	}
 	if wire, problems := protocol.TaskArgs(c.Params, map[string]any{"max": 0}); problems != nil || wire["max"] != int64(0) {
 		t.Errorf("0: %v %v", wire, problems)
+	}
+}
+
+// rehello is core's own: no params, never counted as the minion's, and a
+// schema's command of that id does not shadow it.
+func TestRehelloCommand(t *testing.T) {
+	c := rehelloCommand()
+	if c.ID != models.CommandRehello || len(c.Params) != 0 || !strings.Contains(c.Description, "no task goes to the minion") {
+		t.Fatalf("%+v", c)
+	}
+	if !models.IsCoreCommand(models.CommandRehello) || !models.IsCoreCommand(protocol.CommandHelp) || models.IsCoreCommand("shell") {
+		t.Error("core's commands")
+	}
+	if _, problems := protocol.TaskArgs(c.Params, map[string]any{}); problems != nil {
+		t.Errorf("no args: %v", problems)
 	}
 }
