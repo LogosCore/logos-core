@@ -16,6 +16,28 @@ export interface ConnectionChoice {
   address?: string
   /** The one the minion uses now. */
   inUse?: boolean
+  /**
+   * The connection as a structured connection param takes it (protocol
+   * FormatConnection): channel, kind, name, params and values by key.
+   */
+  value?: ConnectionValue
+}
+
+/** A connection as a structured param of the connection format takes it. */
+export interface ConnectionValue {
+  channel: string
+  kind: string
+  name: string
+  params?: Record<string, unknown>
+  values?: Record<string, unknown>
+}
+
+/** A connection value as the JSON editor shows it; leaves out empty params and values. */
+export function connectionJSON(v: ConnectionValue): string {
+  const out: Record<string, unknown> = { channel: v.channel, kind: v.kind, name: v.name }
+  if (v.params && Object.keys(v.params).length > 0) out.params = v.params
+  if (v.values && Object.keys(v.values).length > 0) out.values = v.values
+  return JSON.stringify(out, null, 2)
 }
 
 /**

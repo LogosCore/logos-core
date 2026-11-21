@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { lineOf, parseCommandLine, valueCompletion, type CommandDef } from "./command-line"
-import { connectionFromText, connectionText, matchConnections, type ConnectionChoice } from "./connection-choices"
+import { connectionFromText, connectionText, matchConnections, type ConnectionChoice, connectionJSON } from "./connection-choices"
 
 const connect: CommandDef = {
   id: "connect",
@@ -61,5 +61,16 @@ describe("a connection param", () => {
   test("matches by name or place", () => {
     expect(matchConnections("2", connections).map((c) => c.name)).toEqual(["ws"])
     expect(matchConnections("P", connections).map((c) => c.name)).toEqual(["poll"])
+  })
+})
+
+describe("connectionJSON", () => {
+  test("writes a connection as the connection format takes it, without empty params or values", () => {
+    expect(JSON.parse(connectionJSON({ channel: "http", kind: "reverse-call", name: "front", params: { url: "https://a" }, values: {} }))).toEqual({
+      channel: "http",
+      kind: "reverse-call",
+      name: "front",
+      params: { url: "https://a" },
+    })
   })
 })

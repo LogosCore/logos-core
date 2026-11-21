@@ -17,7 +17,7 @@ import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react"
 import { BuildFileControl } from "@/components/builds/build-file-control"
 import { CredentialFieldControl } from "@/components/findings/credential-field-control"
 import { StreamFieldControl } from "@/components/minion-sessions/stream-field-control"
-import { CONNECTION_FORMAT, choiceDetail } from "@/components/minion-sessions/connection-choices"
+import { CONNECTION_FORMAT, choiceDetail, connectionJSON } from "@/components/minion-sessions/connection-choices"
 import { useConnectionChoices } from "@/components/minion-sessions/use-connection-choices"
 import { move } from "@/components/builds/build-values"
 import { FORMATS as GENERATED_FORMATS } from "@/lib/word-generator"
@@ -184,6 +184,29 @@ export function FieldControl({
     case "json":
       return (
         <div className="flex flex-col gap-1">
+          {/* A connection: one of the session's fills the editor, then it is edited as JSON. */}
+          {field.format === CONNECTION_FORMAT && connections.some((c) => c.value) && (
+            <Select
+              value={null}
+              onValueChange={(v) => {
+                const c = connections.find((x) => String(x.place) === v)
+                if (c?.value) onChange({ kind: "json", text: connectionJSON(c.value) })
+              }}
+              disabled={disabled}
+            >
+              <SelectTrigger id={id} className="w-full" aria-label="Fill from one of the session's connections">
+                <SelectValue placeholder="Fill from one of the session's connections" />
+              </SelectTrigger>
+              <SelectContent>
+                {connections.map((c) => (
+                  <SelectItem key={c.place} value={String(c.place)} description={choiceDetail(c)}>
+                    {c.name}
+                    {c.inUse && <span className="text-xs text-muted-foreground"> · in use</span>}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <LazyJsonEditor
             value={draft.text}
             onChange={(t) => onChange({ kind: "json", text: t })}

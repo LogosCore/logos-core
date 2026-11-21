@@ -27,8 +27,19 @@ export function useSessionConnectionChoices(sessionId: string): ConnectionChoice
       kind: c.kind,
       address: settingsSummary(channels.get(c.moduleName), c.kind, c.params, 1) || undefined,
       inUse: c.place === conn,
+      value: {
+        channel: c.moduleName,
+        kind: c.kind,
+        name: c.name,
+        params: isRecord(c.params) ? c.params : undefined,
+        values: isRecord(c.values) ? c.values : undefined,
+      },
     }))
   }, [data, kinds.data, conn])
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v)
 }
 
 /** The session's connections the command forms under ConnectionChoicesProvider offer. */
