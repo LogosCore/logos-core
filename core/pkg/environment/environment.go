@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"slices"
 	"strconv"
@@ -127,6 +128,10 @@ type EnvironmentSettings struct {
 	// contracts/minion-messages/tunnels.md, Desktops). Empty, the default:
 	// core offers no desktop front.
 	Guacd string
+	// GuacencURL is the encoder that makes a video of each desktop's
+	// recording (http://guacenc:4823; docs: Core Infrastructure, guacenc):
+	// empty for none, recordings then stay as they were recorded.
+	GuacencURL string
 	// GuacdCoreHost is the host guacd reaches core's operational ports at:
 	// core's name on their network. Required with Guacd.
 	GuacdCoreHost string
@@ -232,6 +237,7 @@ func init() {
 	viper.SetDefault("VPN_CLIENT_DIR", "/app/vpn-clients")
 	viper.SetDefault("GUACD_ADDRESS", "")
 	viper.SetDefault("GUACD_CORE_HOST", "")
+	viper.SetDefault("GUACENC_URL", "")
 	viper.SetDefault("WIKI_FILE_BUCKET", "wiki-files")
 	viper.SetDefault("WIKI_FILE_MAX_SIZE", int64(50*1024*1024))
 	viper.SetDefault("WIKI_FILE_DENIED_CONTENT_TYPES", "")
@@ -346,6 +352,7 @@ func init() {
 		OperationalAddress: strings.TrimSpace(viper.GetString("OPERATIONAL_ADDRESS")),
 		VPNClientDir:       strings.TrimSpace(viper.GetString("VPN_CLIENT_DIR")),
 		Guacd:              guacdOrFatal("GUACD_ADDRESS", viper.GetString("GUACD_ADDRESS"), viper.GetString("GUACD_CORE_HOST")),
+		GuacencURL:         urlOrFatal("GUACENC_URL", viper.GetString("GUACENC_URL")),
 		GuacdCoreHost:      strings.TrimSpace(viper.GetString("GUACD_CORE_HOST")),
 
 		// Wiki transfer
@@ -560,6 +567,18 @@ func guacdOrFatal(key, raw, coreHost string) string {
 	}
 	if strings.TrimSpace(coreHost) == "" {
 		log.Fatalf("GUACD_CORE_HOST must name the host guacd reaches core's operational ports at, with %s", key)
+	}
+	return raw
+}
+
+// urlOrFatal is an http(s) URL setting, or empty for none.
+func urlOrFatal(key, raw string) string {
+	raw = strings.TrimRight(strings.TrimSpace(raw), "/")
+	if raw == "" {
+		return ""
+	}
+	if u, err := url.Parse(raw); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		log.Fatalf("%s must be an http(s) URL (http://guacenc:4823), got %q", key, raw)
 	}
 	return raw
 }

@@ -544,7 +544,14 @@ func newRecordingService(ctx context.Context, e *environment.EnvironmentSettings
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize the recording store: %w", err)
 	}
-	return recordings.NewService(repos.Recording, repos.MinionTask, store, bus, recordings.DefaultConfig(), l), nil
+	svc := recordings.NewService(repos.Recording, repos.MinionTask, store, bus, recordings.DefaultConfig(), l)
+	// A desktop's recording becomes a video where core has an encoder
+	// (guacenc); without one, recordings stay as they were recorded.
+	if e.GuacencURL != "" {
+		svc.WithEncoder(recordings.NewHTTPEncoder(e.GuacencURL))
+		l.Info("Desktop recordings become videos", zap.String("guacenc", e.GuacencURL))
+	}
+	return svc, nil
 }
 
 // newMinionFileService stands up the files minions send: their bucket and

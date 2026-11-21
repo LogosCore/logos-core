@@ -558,6 +558,14 @@ type Recording {
   # store failed): the recording plays past them.
   size: Int!
   lost: Int!
+  # A desktop's recording made a video, where core has an encoder (docs:
+  # Tunnels, Recordings): CONVERTING, CONVERTED (its file is then the
+  # video, videoSize bytes, and its keys are at /recordings/{id}/keys) or
+  # FAILED (videoError says why: it plays as it was recorded); null until
+  # then, and for a terminal's.
+  video: String
+  videoSize: Int
+  videoError: String
   # How it ended: closed (the web app closed the desktop, or the
   # terminal's client left), desktop (guacd ended it: its server's end, or
   # an error), process (the terminal's process ended: msg its exit),

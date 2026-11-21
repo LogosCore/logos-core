@@ -337,7 +337,7 @@ guacd:
   # workstation name with each RDP desktop, so another guacd opens none).
   image:
     repository: ghcr.io/logoscore/logos-guacd
-    tag: "1.6.0-freerdp3.30.0-logos5"
+    tag: "1.6.0-freerdp3.30.0-logos6"
     pullPolicy: IfNotPresent
   port: 4822
   resources:
@@ -347,6 +347,25 @@ guacd:
     limits:
       cpu: 2000m
       memory: 1Gi
+
+# guacenc: makes a video of each desktop's recording once it ended (docs:
+# Core Infrastructure, guacenc), from guacd's own image (guacd.image),
+# its worker the command. Off: core converts nothing, and recordings stay
+# as they were recorded. One recording at a time; an encoding takes a core
+# while it runs.
+guacenc:
+  enabled: true
+  port: 4823
+  # Room for a recording and its videos while one encodes (an emptyDir at
+  # /tmp): a long desktop session's recording is a few GB.
+  tmpSize: 20Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
 
 hocuspocus:
   enabled: true

@@ -3513,6 +3513,9 @@ export type Recording = {
   taskId: Scalars['ID']['output'];
   userId?: Maybe<Scalars['ID']['output']>;
   username: Scalars['String']['output'];
+  video?: Maybe<Scalars['String']['output']>;
+  videoError?: Maybe<Scalars['String']['output']>;
+  videoSize?: Maybe<Scalars['Int']['output']>;
   width: Scalars['Int']['output'];
 };
 
@@ -5205,7 +5208,7 @@ export type RecordingsQueryVariables = Exact<{
 }>;
 
 
-export type RecordingsQuery = { recordings: { before?: string | null, recordings: Array<{ id: string, taskId: string, number: number, front: string, format: string, userId?: string | null, username: string, client: string, stream: number, settings?: unknown | null, width: number, height: number, keys: boolean, state: string, startedAt: string, endedAt?: string | null, durationMs: number, size: number, lost: number, end?: string | null, msg?: string | null, path: string }> } };
+export type RecordingsQuery = { recordings: { before?: string | null, recordings: Array<{ id: string, taskId: string, number: number, front: string, format: string, userId?: string | null, username: string, client: string, stream: number, settings?: unknown | null, width: number, height: number, keys: boolean, state: string, startedAt: string, endedAt?: string | null, durationMs: number, size: number, lost: number, video?: string | null, videoSize?: number | null, videoError?: string | null, end?: string | null, msg?: string | null, path: string }> } };
 
 export type DeleteRecordingMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -12324,6 +12327,9 @@ export const RecordingsDocument = new TypedDocumentString(`
       durationMs
       size
       lost
+      video
+      videoSize
+      videoError
       end
       msg
       path

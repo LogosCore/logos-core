@@ -63,13 +63,17 @@ type Config struct {
 	// part's next try (twice that before the third).
 	PutWait   time.Duration
 	RetryWait time.Duration
+	// ConvertEvery is how often recordings waiting for their video are
+	// looked for, and the first pause after an encoder that did not answer
+	// (each after it twice the last, 30 minutes at most).
+	ConvertEvery time.Duration
 }
 
 // DefaultConfig: a part each 5 seconds or 4 MiB, at most 32 MiB held, a
 // recording with no word for 2 minutes ended.
 func DefaultConfig() Config {
 	return Config{PartEvery: 5 * time.Second, PartMax: 4 << 20, MaxHeld: 32 << 20, StaleAfter: 2 * time.Minute,
-		SweepEvery: time.Minute, PutWait: 30 * time.Second, RetryWait: time.Second}
+		SweepEvery: time.Minute, PutWait: 30 * time.Second, RetryWait: time.Second, ConvertEvery: 30 * time.Second}
 }
 
 type Service struct {
@@ -93,6 +97,17 @@ type Service struct {
 	gone   map[uuid.UUID]time.Time
 	stop   chan struct{}
 	wg     sync.WaitGroup
+
+	// encoder makes desktops' recordings videos (WithEncoder); nil: none
+	// is converted.
+	encoder Encoder
+}
+
+// WithEncoder has the service make a video of each desktop's recording
+// once it ended (convert.go), and of those that wait; before Start.
+func (s *Service) WithEncoder(e Encoder) *Service {
+	s.encoder = e
+	return s
 }
 
 // goneFor is how long after an operation's recordings were deleted a
@@ -226,7 +241,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) (*models.Recording, 
 	if rec.State == models.RecordingStateRecording {
 		return rec, ErrRecording
 	}
-	s.dropParts(ctx, *rec)
+	s.dropAll(ctx, *rec)
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return rec, err
 	}
@@ -269,9 +284,16 @@ func (s *Service) DeleteByOperation(ctx context.Context, operationID uuid.UUID) 
 		return err
 	}
 	for _, rec := range recs {
-		s.dropParts(ctx, rec)
+		s.dropAll(ctx, rec)
 	}
 	return s.repo.DeleteByOperationID(ctx, operationID)
+}
+
+// dropAll deletes what a recording keeps: its parts, and its video and keys.
+func (s *Service) dropAll(ctx context.Context, rec models.Recording) {
+	s.dropParts(ctx, rec)
+	_ = s.store.Delete(ctx, videoKey(rec.RecordingID))
+	_ = s.store.Delete(ctx, keysKey(rec.RecordingID))
 }
 
 // dropParts deletes a recording's parts: those it says, and any past them
@@ -291,6 +313,10 @@ func (s *Service) dropParts(ctx context.Context, rec models.Recording) {
 // Start sweeps now and every SweepEvery: recordings whose core stopped
 // are ended.
 func (s *Service) Start() {
+	if s.encoder != nil {
+		s.wg.Add(1)
+		go s.convertLoop()
+	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()

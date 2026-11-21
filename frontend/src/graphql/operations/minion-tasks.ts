@@ -257,6 +257,9 @@ export const RecordingsQuery = graphql(`
         durationMs
         size
         lost
+        video
+        videoSize
+        videoError
         end
         msg
         path

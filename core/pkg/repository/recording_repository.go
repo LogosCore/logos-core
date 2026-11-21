@@ -2,11 +2,13 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/qiniu/qmgo"
 	opts "github.com/qiniu/qmgo/options"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -32,6 +34,10 @@ type IRecordingRepository interface {
 	// word since before: false when it is not (its core spoke, or ended
 	// it).
 	EndStale(ctx context.Context, recordingID uuid.UUID, before time.Time, set bson.M) (bool, error)
+	// ClaimToConvert takes the oldest desktop recording that ended and has
+	// no video yet (none, or a conversion whose lease ran out), due now
+	// (VideoNextAt), marking it converting until lease: nil for none.
+	ClaimToConvert(ctx context.Context, now, lease time.Time) (*models.Recording, error)
 	ListByOperation(ctx context.Context, operationID uuid.UUID) ([]models.Recording, error)
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
 	Delete(ctx context.Context, recordingID uuid.UUID) error
@@ -47,6 +53,8 @@ func NewRecordingRepository(db database.Database) IRecordingRepository {
 		{Key: []string{"task_id", "-number"}},
 		{Key: []string{"state", "seen_at"}},
 		{Key: []string{"operation_id"}},
+		// The next to convert: saved, by age.
+		{Key: []string{"state", "started_at"}},
 	})
 	return &recordingRepository{coll: db.Collection(recordingCollection)}
 }
@@ -99,6 +107,35 @@ func (r *recordingRepository) EndStale(ctx context.Context, recordingID uuid.UUI
 		return false, nil
 	}
 	return err == nil, err
+}
+
+func (r *recordingRepository) ClaimToConvert(ctx context.Context, now, lease time.Time) (*models.Recording, error) {
+	var rec models.Recording
+	err := r.coll.Find(ctx, bson.M{
+		"state":  models.RecordingStateSaved,
+		"format": bson.M{"$ne": models.RecordingFormatAsciicast},
+		"$and": bson.A{
+			bson.M{"$or": bson.A{
+				bson.M{"video": bson.M{"$exists": false}},
+				bson.M{"video": ""},
+				bson.M{"video": models.RecordingVideoConverting, "video_lease": bson.M{"$lt": now}},
+			}},
+			bson.M{"$or": bson.A{
+				bson.M{"video_next_at": bson.M{"$exists": false}},
+				bson.M{"video_next_at": bson.M{"$lte": now}},
+			}},
+		},
+	}).Sort("started_at").Apply(qmgo.Change{
+		Update:    bson.M{"$set": bson.M{"video": models.RecordingVideoConverting, "video_lease": lease, "updateAt": now}},
+		ReturnNew: true,
+	}, &rec)
+	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &rec, nil
 }
 
 func (r *recordingRepository) ListByOperation(ctx context.Context, operationID uuid.UUID) ([]models.Recording, error) {

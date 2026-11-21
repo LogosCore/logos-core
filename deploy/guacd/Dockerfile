@@ -125,6 +125,7 @@ ARG GUACAMOLE_SERVER_ARM_OPTS=""
 
 ARG GUACAMOLE_SERVER_OPTS="\
     --disable-guaclog \
+    --enable-guacenc \
     CPPFLAGS=-Wno-error=deprecated-declarations"
 
 ARG GUACAMOLE_SERVER_X86_OPTS=""
@@ -199,6 +200,7 @@ RUN apk add --no-cache                \
         cjson-dev                     \
         cmake                         \
         cunit-dev                     \
+        ffmpeg-dev                    \
         git                           \
         grep                          \
         krb5-dev                      \
@@ -326,9 +328,21 @@ ARG FREERDP_LIB_PATH=${PREFIX_DIR}/lib/freerdp${FREERDP_VERSION}
 # Record the packages of all runtime library dependencies
 RUN ${BUILD_DIR}/src/guacd-docker/bin/list-dependencies.sh \
         ${PREFIX_DIR}/sbin/guacd               \
+        ${PREFIX_DIR}/bin/guacenc              \
         ${PREFIX_DIR}/lib/libguac-client-*.so  \
         ${FREERDP_LIB_PATH}/*guac*.so   \
         > ${PREFIX_DIR}/DEPENDENCIES
+
+#
+# logos: guacenc-worker, which core sends a desktop's recording to for its
+# video (guacenc-worker/; docs: Core Infrastructure, guacenc): a static
+# binary, run from this image as a service of its own beside guacd.
+#
+
+FROM golang:1.25-alpine AS guacenc-worker
+WORKDIR /src
+COPY guacenc-worker/ ./
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /guacenc-worker .
 
 #
 # STAGE 8: Final, runtime image.
@@ -353,6 +367,11 @@ RUN apk add --no-cache                \
         ttf-liberation                \
         util-linux-login && \
     xargs apk add --no-cache < ${PREFIX_DIR}/DEPENDENCIES
+
+# logos: ffmpeg, which encodes guacenc's video again for browsers (H.264),
+# and the worker that runs both (guacenc-worker, a service of its own).
+RUN apk add --no-cache ffmpeg
+COPY --from=guacenc-worker /guacenc-worker ${PREFIX_DIR}/bin/guacenc-worker
 
 # logos: the time zones. guacd gives a session's (its timezone param, or
 # the web app's) to FreeRDP as TZ, which FreeRDP reads from here to tell

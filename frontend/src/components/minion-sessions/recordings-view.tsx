@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { Suspense, lazy, useEffect, useState } from "react"
 import { DownloadIcon, FileTextIcon, FilmIcon, Loader2Icon, PlayIcon, Trash2Icon } from "lucide-react"
 import { toast } from "sonner"
 import { errorMessage } from "@/components/modules/management/api-errors"
@@ -19,15 +19,22 @@ import { preloadRecordingPlayer } from "./recording-code"
 import {
   RECORDING,
   downloadable,
+  fileSize,
   formatClock,
   isTerminalRecording,
+  isVideo,
   openedBy,
   playable,
   recordingFileName,
   recordingState,
   settingsSummary,
+  videoNote,
   type Recording,
 } from "./recording-values"
+
+// A desktop recording made a video: the browser's own player, a chunk of
+// its own (its keys are read with Guacamole's interpreter).
+const VideoRecordingPlayer = lazy(() => import("./video-recording-player"))
 import { preloadTerminalRecordingPlayer } from "./terminal-recording-code"
 import { FRONT_TERMINAL, type Tone } from "./tunnel-values"
 
@@ -71,6 +78,19 @@ export function RecordingsView({ task: t, canDelete }: { task: Task; canDelete: 
         <div className="flex h-[36rem] max-h-[80vh] shrink-0 flex-col">
           {isTerminalRecording(playing) ? (
             <LazyTerminalRecordingPlayer key={playing.id} recording={playing} onClose={() => setPlaying(null)} />
+          ) : isVideo(playing) ? (
+            <Suspense
+              fallback={
+                <div className="flex flex-1 items-center justify-center rounded-md border text-sm text-muted-foreground">Loading the player…</div>
+              }
+            >
+              <VideoRecordingPlayer
+                key={playing.id}
+                recording={playing}
+                settings={settingsSummary(fields, playing.settings)}
+                onClose={() => setPlaying(null)}
+              />
+            </Suspense>
           ) : (
             <LazyRecordingPlayer
               key={playing.id}
@@ -166,6 +186,7 @@ function RecordingRow({
   onDelete: () => void
 }) {
   const state = recordingState(r)
+  const video = videoNote(r)
   const terminal = isTerminalRecording(r)
   const who = openedBy(r)
   // A terminal's: its stream, and the raw port's when no one signed in.
@@ -187,9 +208,16 @@ function RecordingRow({
       <span className="text-right text-xs tabular-nums">
         {r.state === RECORDING ? <LiveLength since={r.startedAt} /> : r.state === "FAILED" ? "" : formatClock(r.durationMs)}
       </span>
-      <span className="text-right text-xs tabular-nums">{r.state === "FAILED" ? "" : formatBytes(r.size)}</span>
+      <span className="text-right text-xs tabular-nums" title={isVideo(r) ? `A video now; ${formatBytes(r.size)} as recorded` : undefined}>
+        {r.state === "FAILED" ? "" : formatBytes(fileSize(r))}
+      </span>
       <span className="flex min-w-0 flex-col">
         <span className={cn("text-xs", TONE[state.tone])}>{state.label}</span>
+        {video && (
+          <span className="truncate text-xs text-muted-foreground" title={video.title}>
+            {video.text}
+          </span>
+        )}
         {state.detail && (
           <span className="truncate text-xs text-muted-foreground" title={state.detail}>
             {state.detail}
@@ -220,11 +248,13 @@ function RecordingRow({
             title={
               terminal
                 ? `Download recording #${r.number}: an asciicast, which asciinema plays (asciinema play file.cast)`
-                : `Download recording #${r.number}: Guacamole's format, which guacenc makes a video of`
+                : isVideo(r)
+                  ? `Download recording #${r.number}: a video (H.264, MP4)`
+                  : `Download recording #${r.number}: Guacamole's format, which guacenc makes a video of`
             }
             aria-label={`Download recording #${r.number}`}
             nativeButton={false}
-            render={<a href={`${API_URL}${r.path}`} download={recordingFileName(r)} />}
+            render={<a href={`${API_URL}${r.path}`} download={recordingFileName(r, isVideo(r) ? "mp4" : undefined)} />}
           >
             <DownloadIcon />
           </Button>

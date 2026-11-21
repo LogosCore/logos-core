@@ -1638,6 +1638,9 @@ type Recording struct {
 	DurationMs int     `json:"durationMs"`
 	Size       int     `json:"size"`
 	Lost       int     `json:"lost"`
+	Video      *string `json:"video,omitempty"`
+	VideoSize  *int    `json:"videoSize,omitempty"`
+	VideoError *string `json:"videoError,omitempty"`
 	End        *string `json:"end,omitempty"`
 	Msg        *string `json:"msg,omitempty"`
 	Path       string  `json:"path"`

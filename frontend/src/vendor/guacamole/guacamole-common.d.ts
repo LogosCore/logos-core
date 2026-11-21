@@ -164,6 +164,17 @@ declare namespace Guacamole {
     onkeyevents: ((events: KeyEventInterpreter.KeyEvent[]) => void) | null
   }
 
+  // Reads a recording's key instructions as its player does, each key
+  // named by guacamole-common's own keysym table: what a recording made a
+  // video kept of its keys is read with it.
+  class KeyEventInterpreter {
+    // startTimestamp: the recording's first sync's, its 0.
+    constructor(startTimestamp?: number)
+    // A key instruction's args: keysym, pressed, timestamp.
+    handleKeyEvent(args: readonly string[]): void
+    getEvents(): KeyEventInterpreter.KeyEvent[]
+  }
+
   namespace KeyEventInterpreter {
     class KeyDefinition {
       keysym: number

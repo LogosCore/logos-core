@@ -1,3 +1,4 @@
-# The build takes patches/ alone (Dockerfile).
+# The build takes patches/ and the worker's sources alone (Dockerfile).
 *
 !patches/
+!guacenc-worker/

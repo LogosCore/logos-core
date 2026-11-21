@@ -92,6 +92,12 @@ data:
   GUACD_ADDRESS: ""
   GUACD_CORE_HOST: ""
   {{- end }}
+  # The encoder that makes videos of desktops' recordings; empty: none.
+  {{- if .Values.guacenc.enabled }}
+  GUACENC_URL: {{ printf "http://%s:%d" (include "logos.guacenc.fullname" .) (int .Values.guacenc.port) | quote }}
+  {{- else }}
+  GUACENC_URL: ""
+  {{- end }}
 
   # ----- Auth -----
   AUTH_ACCESS_TTL: {{ .Values.core.config.auth.accessTtl | quote }}

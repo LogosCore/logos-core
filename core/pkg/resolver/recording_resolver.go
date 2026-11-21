@@ -116,7 +116,12 @@ func recordingModel(rec *models.Recording) *model.Recording {
 		Format: rec.FileFormat(), Username: rec.Username, Client: rec.Client, Stream: int(rec.Stream), Width: rec.Width, Height: rec.Height, Keys: rec.Keys, State: rec.State,
 		StartedAt: rec.StartedAt.UTC().Format(time.RFC3339Nano), EndedAt: taskTime(rec.EndedAt), DurationMs: int(rec.DurationMs),
 		Size: int(rec.Size), Lost: int(rec.Lost), End: strPtr(rec.End), Msg: strPtr(rec.Msg),
+		Video: strPtr(rec.Video), VideoError: strPtr(rec.VideoError),
 		Path: "/recordings/" + rec.RecordingID.String()}
+	if rec.VideoSize > 0 {
+		n := int(rec.VideoSize)
+		m.VideoSize = &n
+	}
 	if rec.UserID != uuid.Nil {
 		id := rec.UserID.String()
 		m.UserID = &id

@@ -24,6 +24,32 @@ export const RECORDING = "RECORDING"
 export const SAVED = "SAVED"
 export const FAILED = "FAILED"
 
+/** Whether a desktop's recording is a video now (docs: Tunnels, Recordings): its file is then the video. */
+export function isVideo(r: Pick<Recording, "video">): boolean {
+  return r.video === "CONVERTED"
+}
+
+/** Its bytes as its file has them: the video's once it is one. */
+export function fileSize(r: Pick<Recording, "video" | "videoSize" | "size">): number {
+  return isVideo(r) ? (r.videoSize ?? 0) : r.size
+}
+
+/** What became of its video, for the list: null while none is made (no encoder, or a terminal's). */
+export function videoNote(r: Pick<Recording, "video" | "videoError">): { text: string; title: string } | null {
+  switch (r.video) {
+    case "CONVERTING":
+      return { text: "becoming a video…", title: "The encoder is making a video of it: it plays as recorded meanwhile" }
+    case "CONVERTED":
+      return { text: "video", title: "A video now (H.264, MP4): the recording it was made from is gone" }
+    case "FAILED":
+      return {
+        text: "no video",
+        title: `The encoder failed on it: it stays as it was recorded${r.videoError ? ` (${r.videoError})` : ""}`,
+      }
+  }
+  return null
+}
+
 /** Whether a recording plays: it ended, and holds something. */
 export function playable(r: Pick<Recording, "state" | "size">): boolean {
   return r.state === SAVED && r.size > 0

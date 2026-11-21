@@ -74,7 +74,33 @@ type Recording struct {
 	// SeenAt is when the core recording it last kept its numbers: one
 	// recording with none for a while lost its core, and is ended.
 	SeenAt time.Time `bson:"seen_at" json:"seen_at"`
+
+	// Video is a desktop's recording made a video (RecordingVideo...),
+	// once it ended, where core has an encoder (docs: Tunnels,
+	// Recordings): empty until then. Converted, its parts are gone, its
+	// video (VideoSize bytes) and keys kept in their place; failed
+	// (VideoError says why), its parts stay and play.
+	Video      string `bson:"video,omitempty" json:"video,omitempty"`
+	VideoSize  int64  `bson:"video_size,omitempty" json:"video_size,omitempty"`
+	VideoError string `bson:"video_error,omitempty" json:"video_error,omitempty"`
+	// VideoTries counts the encoder's failures on it; VideoNextAt is when
+	// it is tried again (after a failure, or an encoder that did not
+	// answer); VideoLease how long the core converting it holds it.
+	VideoTries  int        `bson:"video_tries,omitempty" json:"video_tries,omitempty"`
+	VideoNextAt *time.Time `bson:"video_next_at,omitempty" json:"video_next_at,omitempty"`
+	VideoLease  *time.Time `bson:"video_lease,omitempty" json:"video_lease,omitempty"`
 }
+
+// A desktop recording's video (Recording.Video).
+const (
+	// RecordingVideoConverting: the encoder has it.
+	RecordingVideoConverting = "CONVERTING"
+	// RecordingVideoConverted: it is a video now; its parts are gone.
+	RecordingVideoConverted = "CONVERTED"
+	// RecordingVideoFailed: the encoder failed on it too often; its parts
+	// stay, and play.
+	RecordingVideoFailed = "FAILED"
+)
 
 // FileFormat is its Format; a desktop's recorded before recordings had
 // one, guac.

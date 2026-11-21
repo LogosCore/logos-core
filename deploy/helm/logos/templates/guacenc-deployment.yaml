@@ -1,0 +1,57 @@
+{{- /*
+guacenc: makes a video of each desktop's recording once it ended (docs: Core
+Infrastructure, guacenc). guacd's own image (guacd.image), its worker the
+command: guacenc draws a recording, ffmpeg encodes it H.264. Core sends it
+recordings (GUACENC_URL); it keeps nothing past one, but /tmp while it
+encodes.
+*/ -}}
+{{- if .Values.guacenc.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "logos.guacenc.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "logos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: guacenc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "logos.guacenc.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "logos.labels" . | nindent 8 }}
+        app.kubernetes.io/component: guacenc
+    spec:
+      {{- include "logos.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: guacenc
+          image: {{ include "logos.image" (dict "image" .Values.guacd.image "root" $) | quote }}
+          imagePullPolicy: {{ .Values.guacd.image.pullPolicy }}
+          command: ["/opt/guacamole/bin/guacenc-worker"]
+          env:
+            - name: GUACENC_LISTEN
+              value: {{ printf ":%d" (int .Values.guacenc.port) | quote }}
+            - name: GUACENC_TMP
+              value: /tmp
+          ports:
+            - name: guacenc
+              containerPort: {{ .Values.guacenc.port }}
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: guacenc
+            periodSeconds: 10
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.guacenc.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.guacenc.tmpSize | quote }}
+{{- end }}

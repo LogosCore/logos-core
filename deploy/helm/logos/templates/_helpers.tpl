@@ -75,6 +75,16 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/component: hocuspocus
 {{- end -}}
 
+{{- define "logos.guacenc.fullname" -}}
+{{- printf "%s-guacenc" (include "logos.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "logos.guacenc.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "logos.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: guacenc
+{{- end -}}
+
 {{- define "logos.guacd.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "logos.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}

@@ -1808,6 +1808,9 @@ type ComplexityRoot struct {
 		TaskID     func(childComplexity int) int
 		UserID     func(childComplexity int) int
 		Username   func(childComplexity int) int
+		Video      func(childComplexity int) int
+		VideoError func(childComplexity int) int
+		VideoSize  func(childComplexity int) int
 		Width      func(childComplexity int) int
 	}
 
@@ -11723,6 +11726,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Recording.Username(childComplexity), true
+	case "Recording.video":
+		if e.ComplexityRoot.Recording.Video == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.Video(childComplexity), true
+	case "Recording.videoError":
+		if e.ComplexityRoot.Recording.VideoError == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.VideoError(childComplexity), true
+	case "Recording.videoSize":
+		if e.ComplexityRoot.Recording.VideoSize == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Recording.VideoSize(childComplexity), true
 	case "Recording.width":
 		if e.ComplexityRoot.Recording.Width == nil {
 			break
@@ -17524,6 +17545,14 @@ type Recording {
   # store failed): the recording plays past them.
   size: Int!
   lost: Int!
+  # A desktop's recording made a video, where core has an encoder (docs:
+  # Tunnels, Recordings): CONVERTING, CONVERTED (its file is then the
+  # video, videoSize bytes, and its keys are at /recordings/{id}/keys) or
+  # FAILED (videoError says why: it plays as it was recorded); null until
+  # then, and for a terminal's.
+  video: String
+  videoSize: Int
+  videoError: String
   # How it ended: closed (the web app closed the desktop, or the
   # terminal's client left), desktop (guacd ended it: its server's end, or
   # an error), process (the terminal's process ended: msg its exit),
@@ -79135,6 +79164,93 @@ func (ec *executionContext) fieldContext_Recording_lost(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Recording_video(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_video,
+		func(ctx context.Context) (any, error) {
+			return obj.Video, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_video(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_videoSize(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_videoSize,
+		func(ctx context.Context) (any, error) {
+			return obj.VideoSize, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_videoSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Recording_videoError(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Recording_videoError,
+		func(ctx context.Context) (any, error) {
+			return obj.VideoError, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Recording_videoError(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Recording",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Recording_end(ctx context.Context, field graphql.CollectedField, obj *model.Recording) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -79284,6 +79400,12 @@ func (ec *executionContext) fieldContext_RecordingPage_recordings(_ context.Cont
 				return ec.fieldContext_Recording_size(ctx, field)
 			case "lost":
 				return ec.fieldContext_Recording_lost(ctx, field)
+			case "video":
+				return ec.fieldContext_Recording_video(ctx, field)
+			case "videoSize":
+				return ec.fieldContext_Recording_videoSize(ctx, field)
+			case "videoError":
+				return ec.fieldContext_Recording_videoError(ctx, field)
 			case "end":
 				return ec.fieldContext_Recording_end(ctx, field)
 			case "msg":
@@ -109396,6 +109518,12 @@ func (ec *executionContext) _Recording(ctx context.Context, sel ast.SelectionSet
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "video":
+			out.Values[i] = ec._Recording_video(ctx, field, obj)
+		case "videoSize":
+			out.Values[i] = ec._Recording_videoSize(ctx, field, obj)
+		case "videoError":
+			out.Values[i] = ec._Recording_videoError(ctx, field, obj)
 		case "end":
 			out.Values[i] = ec._Recording_end(ctx, field, obj)
 		case "msg":

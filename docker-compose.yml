@@ -111,6 +111,9 @@ services:
       # this network.
       GUACD_ADDRESS: guacd:4822
       GUACD_CORE_HOST: core-dev
+      # The encoder the stack runs (guacenc, below); set it empty in .env to
+      # keep recordings as they were recorded.
+      GUACENC_URL: ${GUACENC_URL-http://guacenc:4823}
     ports:
       # Core's own port, on the host's loopback: a module run on the host
       # (go run) reaches core at its default, http://localhost:8002, as it
@@ -388,7 +391,7 @@ services:
   # paint (GUACAMOLE-2078 is fixed for FreeRDP 3.8 and later alone). Every
   # library pinned; the CI workflow publish-guacd.yml builds the same.
   guacd:
-    build:
+    build: &guacd-build
       context: ./deploy/guacd
       args:
         GUACAMOLE_SERVER_COMMIT: "1f664e08feae6e7d15d8146b78acab2e6fb470ae"
@@ -398,9 +401,25 @@ services:
         WITH_LIBTELNET: "0.23"
         WITH_LIBVNCCLIENT: "LibVNCServer-0.9.15"
         WITH_LIBWEBSOCKETS: "v4.3.5"
-    image: logos-guacd:1.6.0-freerdp3.30.0-logos5
+    image: logos-guacd:1.6.0-freerdp3.30.0-logos6
     container_name: logos-guacd
     restart: unless-stopped
+    profiles:
+      - development
+    networks:
+      - logos
+
+  # Makes a video of each desktop's recording once it ended (docs: Core
+  # Infrastructure, guacenc): logos-guacd's own image, its worker the
+  # command (guacenc draws, ffmpeg encodes H.264), in a container of its
+  # own so an encoding never takes live desktops' CPU. Core reaches it at
+  # GUACENC_URL; without it, recordings stay as they were recorded.
+  guacenc:
+    build: *guacd-build
+    image: logos-guacd:1.6.0-freerdp3.30.0-logos6
+    container_name: logos-guacenc
+    restart: unless-stopped
+    entrypoint: ["/opt/guacamole/bin/guacenc-worker"]
     profiles:
       - development
     networks:

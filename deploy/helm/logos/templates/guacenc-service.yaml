@@ -1,0 +1,19 @@
+{{- if .Values.guacenc.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "logos.guacenc.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "logos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: guacenc
+spec:
+  type: ClusterIP
+  ports:
+    - name: guacenc
+      port: {{ .Values.guacenc.port }}
+      targetPort: guacenc
+      protocol: TCP
+  selector:
+    {{- include "logos.guacenc.selectorLabels" . | nindent 4 }}
+{{- end -}}

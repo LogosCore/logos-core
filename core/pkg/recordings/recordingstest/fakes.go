@@ -167,10 +167,54 @@ func apply(r *models.Recording, set bson.M) {
 		case "ended_at":
 			at := v.(time.Time)
 			r.EndedAt = &at
+		case "video":
+			r.Video = v.(string)
+		case "video_size":
+			r.VideoSize = v.(int64)
+		case "video_error":
+			r.VideoError = v.(string)
+		case "video_tries":
+			r.VideoTries = v.(int)
+		case "video_next_at":
+			r.VideoNextAt = timeOrNil(v)
+		case "video_lease":
+			r.VideoLease = timeOrNil(v)
 		default:
 			panic("a field the fake does not set: " + k)
 		}
 	}
+}
+
+// timeOrNil is a time set, or nil (unset).
+func timeOrNil(v any) *time.Time {
+	if t, ok := v.(time.Time); ok {
+		return &t
+	}
+	return nil
+}
+
+// ClaimToConvert takes the oldest saved desktop recording without a video
+// (or with a lapsed conversion) that is due, as the repository does.
+func (f *Repo) ClaimToConvert(_ context.Context, now, lease time.Time) (*models.Recording, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var pick *models.Recording
+	for _, r := range f.recs {
+		lapsed := r.Video == models.RecordingVideoConverting && r.VideoLease != nil && r.VideoLease.Before(now)
+		due := r.VideoNextAt == nil || !r.VideoNextAt.After(now)
+		if r.State != models.RecordingStateSaved || r.Format == models.RecordingFormatAsciicast || !(r.Video == "" || lapsed) || !due {
+			continue
+		}
+		if pick == nil || r.StartedAt.Before(pick.StartedAt) {
+			pick = r
+		}
+	}
+	if pick == nil {
+		return nil, nil
+	}
+	pick.Video, pick.VideoLease = models.RecordingVideoConverting, &lease
+	c := *pick
+	return &c, nil
 }
 
 func (f *Repo) Save(_ context.Context, id uuid.UUID, set bson.M) error {

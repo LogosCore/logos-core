@@ -5,7 +5,10 @@ desktop fronts (RDP, VNC, SSH, Telnet) for the web app. It is
 guacamole-server **1.6.0**, built by Apache's own Dockerfile from the
 release's commit, but **against FreeRDP 3** where the official
 `guacamole/guacd:1.6.0` image has FreeRDP 2 (2.11.7), and with **patches**
-of its own (`patches/`).
+of its own (`patches/`). It also holds what makes a video of a desktop's
+recording: `guacenc` (built, as ffmpeg is in the build), ffmpeg itself and
+`guacenc-worker` (`guacenc-worker/`), run as a service of their own,
+`guacenc`, with the worker as the entrypoint (docs: Core Infrastructure).
 
 ## Why not the official image
 
@@ -70,8 +73,17 @@ change marked `logos:`), each about what an RDP server learns of the client:
   desktop's setting `suspend_frame_acks` is on, and nothing otherwise, so
   an older guacd still opens the rest.
 
+- `0006-guacenc-cursor-before-size.patch`: guacenc drew the cursor onto
+  the default layer without asking whether that layer has pixels yet, and
+  crashed (a segmentation fault in cairo) on a recording whose cursor is
+  set, and the mouse moved, before the first `size` gives the default
+  layer its size, as guacd's first instructions to a client often are.
+  Until then there is nothing to draw the cursor on: it is drawn from the
+  next frame.
+
 The runtime image has the time zones too (`tzdata`, Apache's has none):
-FreeRDP reads `TZ`'s zone from `/usr/share/zoneinfo`.
+FreeRDP reads `TZ`'s zone from `/usr/share/zoneinfo`; and ffmpeg, with
+`guacenc-worker`.
 
 Core refuses a desktop whose params guacd does not ask for (`pkg/guacd`,
 `0x0100`), saying which: every RDP desktop sends a workstation name (the
