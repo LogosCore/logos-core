@@ -150,10 +150,21 @@ export function RecordModalTitle({ children }: { children: ReactNode }) {
   return <DialogTitle className="text-lg leading-normal font-semibold">{children}</DialogTitle>
 }
 
-/** The scrolling body; ref is its scroll container. */
-export function RecordModalBody({ children, ref }: { children: ReactNode; ref?: Ref<HTMLDivElement> }) {
+/**
+ * The ground cards lie on in a record modal. A card and the modal are one
+ * colour (card, popover), and on the modal's own surface a card was its thin
+ * border alone. In the light theme a faint grey under the white cards; in
+ * the dark, the page's own background under cards a step lighter, as the
+ * app's pages have them. A tab of cards has it all over (RecordModalBody's
+ * cards); a form, only where its cards are (the build's connections), so
+ * its fields keep the modal's surface: inputs are transparent.
+ */
+export const CARD_GROUND = "bg-muted/50 dark:bg-background"
+
+/** The scrolling body; ref is its scroll container. cards: it holds cards (InfoCards, connections), on CARD_GROUND. */
+export function RecordModalBody({ children, ref, cards = false }: { children: ReactNode; ref?: Ref<HTMLDivElement>; cards?: boolean }) {
   return (
-    <div ref={ref} className="min-h-0 flex-1 overflow-y-auto">
+    <div ref={ref} className={cn("min-h-0 flex-1 overflow-y-auto", cards && CARD_GROUND)}>
       {children}
     </div>
   )

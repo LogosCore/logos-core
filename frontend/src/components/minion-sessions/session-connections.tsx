@@ -200,7 +200,7 @@ export function ConnectionCards({ s }: { s: Session }) {
       {addCommand && open && (
         <button
           type="button"
-          className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           title={`Queue ${addCommand.id}: the minion takes a connection it did not have, after its others`}
           onClick={() => setAdding(true)}
         >

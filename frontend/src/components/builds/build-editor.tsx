@@ -16,6 +16,7 @@ import { LeaveJsonDialog } from "@/components/ui/leave-json-dialog"
 import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
+  CARD_GROUND,
   RecordModalBody,
   RecordModalHeader,
   RecordModalMessage,
@@ -24,6 +25,7 @@ import {
   useRequestClose,
 } from "@/components/ui/record-modal"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
+import { cn } from "@/lib/utils"
 import { MAX_TASKS_LIMIT } from "@/components/minion-sessions/max-tasks-values"
 import { sectionId } from "@/lib/section-id"
 import { useRecordModals } from "@/hooks/use-record-modals"
@@ -704,55 +706,58 @@ function Editor({
                 changes nothing here.
               </p>
               {shown.connections && <p className="text-sm text-destructive">{shown.connections}</p>}
-              {form.connections.map((c, i) => {
-                const at = `connections[${i}]`
-                const ch = channels.get(c.moduleName)
-                return (
-                  <ConnectionCard
-                    key={c.key}
-                    id={connectionSectionId(c.key)}
-                    open={openConnections.has(c.key)}
-                    onOpenChange={(open) => showConnection(c.key, open)}
-                    operationId={operationId}
-                    index={i}
-                    count={form.connections.length}
-                    connection={c}
-                    kind={kind}
-                    kinds={usableKinds(target, ch, c.moduleName)}
-                    channel={ch}
-                    channelIcon={channelIcons.get(c.moduleName)}
-                    errors={shown}
-                    disabled={disabled}
-                    onKind={(k) =>
-                      updateConnection(i, (x) => withKind(x, k, ch, kind), `${at}.kind`, `${at}.settings.`, `${at}.values.`)
-                    }
-                    onName={(name) => updateConnection(i, (x) => ({ ...x, name, named: name.trim() !== "" }), `${at}.name`)}
-                    onDescription={(description) =>
-                      updateConnection(i, (x) => ({ ...x, description, described: description.trim() !== "" }), `${at}.description`)
-                    }
-                    onSetting={(key, d) =>
-                      updateConnection(i, (x) => ({ ...x, settings: { ...x.settings, [key]: d } }), `${at}.settings.${key}`)
-                    }
-                    onParam={(key, d) => updateConnection(i, (x) => ({ ...x, drafts: { ...x.drafts, [key]: d } }), `${at}.values.${key}`)}
-                    onFill={() => setPicker({ open: true, fill: c.key })}
-                    onSave={() => setSaving({ open: true, key: c.key })}
-                    onMove={(by) => setConnections((cs) => move(cs, i, by))}
-                    onRemove={() => setConnections((cs) => cs.filter((_, j) => j !== i))}
-                    buildFailAfter={form.failover.fail_after}
-                    onFailover={(failover) => updateConnection(i, (x) => ({ ...x, failover }), `${at}.failover.`)}
-                  />
-                )
-              })}
-              <Button
-                type="button"
-                variant="outline"
-                className="self-start"
-                disabled={disabled || speaks.length === 0}
-                onClick={() => setPicker({ open: true, fill: null })}
-              >
-                <PlusIcon />
-                Add connection
-              </Button>
+              {/* The cards on their ground (CARD_GROUND), the rest of the form on the modal's surface. */}
+              <div className={cn("flex flex-col gap-3 rounded-xl p-3", CARD_GROUND)}>
+                {form.connections.map((c, i) => {
+                  const at = `connections[${i}]`
+                  const ch = channels.get(c.moduleName)
+                  return (
+                    <ConnectionCard
+                      key={c.key}
+                      id={connectionSectionId(c.key)}
+                      open={openConnections.has(c.key)}
+                      onOpenChange={(open) => showConnection(c.key, open)}
+                      operationId={operationId}
+                      index={i}
+                      count={form.connections.length}
+                      connection={c}
+                      kind={kind}
+                      kinds={usableKinds(target, ch, c.moduleName)}
+                      channel={ch}
+                      channelIcon={channelIcons.get(c.moduleName)}
+                      errors={shown}
+                      disabled={disabled}
+                      onKind={(k) =>
+                        updateConnection(i, (x) => withKind(x, k, ch, kind), `${at}.kind`, `${at}.settings.`, `${at}.values.`)
+                      }
+                      onName={(name) => updateConnection(i, (x) => ({ ...x, name, named: name.trim() !== "" }), `${at}.name`)}
+                      onDescription={(description) =>
+                        updateConnection(i, (x) => ({ ...x, description, described: description.trim() !== "" }), `${at}.description`)
+                      }
+                      onSetting={(key, d) =>
+                        updateConnection(i, (x) => ({ ...x, settings: { ...x.settings, [key]: d } }), `${at}.settings.${key}`)
+                      }
+                      onParam={(key, d) => updateConnection(i, (x) => ({ ...x, drafts: { ...x.drafts, [key]: d } }), `${at}.values.${key}`)}
+                      onFill={() => setPicker({ open: true, fill: c.key })}
+                      onSave={() => setSaving({ open: true, key: c.key })}
+                      onMove={(by) => setConnections((cs) => move(cs, i, by))}
+                      onRemove={() => setConnections((cs) => cs.filter((_, j) => j !== i))}
+                      buildFailAfter={form.failover.fail_after}
+                      onFailover={(failover) => updateConnection(i, (x) => ({ ...x, failover }), `${at}.failover.`)}
+                    />
+                  )
+                })}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="self-start"
+                  disabled={disabled || speaks.length === 0}
+                  onClick={() => setPicker({ open: true, fill: null })}
+                >
+                  <PlusIcon />
+                  Add connection
+                </Button>
+              </div>
             </div>
           </section>
           <FailoverSettings

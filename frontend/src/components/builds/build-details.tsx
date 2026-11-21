@@ -261,7 +261,7 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
         </RecordModalHeader>
 
         <TabsContent value="overview" className="flex min-h-0 flex-col">
-          <RecordModalBody>
+          <RecordModalBody cards>
             <BuildOverview
               build={b}
               canWrite={canWrite}
@@ -273,7 +273,7 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
 
         {connections > 0 && (
           <TabsContent value="connections" className="flex min-h-0 flex-col">
-            <RecordModalBody>
+            <RecordModalBody cards>
               <BuildConnections build={b} />
             </RecordModalBody>
           </TabsContent>
@@ -281,7 +281,7 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
 
         {hasCommands && (
           <TabsContent value="commands" className="flex min-h-0 flex-col">
-            <RecordModalBody>
+            <RecordModalBody cards>
               <BuildCommands build={b} />
             </RecordModalBody>
           </TabsContent>
@@ -293,7 +293,7 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
 
         <TabsContent value="pipeline" className="flex min-h-0 flex-col">
           {/* The modal's full width: a long pipeline fits on one line instead of scrolling. */}
-          <RecordModalBody>
+          <RecordModalBody cards>
             <BuildRun build={b} />
           </RecordModalBody>
         </TabsContent>

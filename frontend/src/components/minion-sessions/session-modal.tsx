@@ -143,7 +143,7 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
       </RecordModalHeader>
 
       <TabsContent value="overview" className="flex min-h-0 flex-col">
-        <RecordModalBody>
+        <RecordModalBody cards>
           <CardColumns className="p-4">
             <SessionCard s={s} />
             <HostCard s={s} />
@@ -156,7 +156,7 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
       </TabsContent>
 
       <TabsContent value="connections" className="flex min-h-0 flex-col">
-        <RecordModalBody>
+        <RecordModalBody cards>
           <CardColumns className="p-4">
             {/* The connections on the left, the rest on the right. */}
             <div className="flex min-w-0 flex-col gap-4">

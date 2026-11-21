@@ -113,7 +113,8 @@ function BuildLog({ build: b, running }: { build: BuildRecord; running: boolean 
             const el = e.currentTarget
             follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
           }}
-          className="min-h-0 flex-1 overflow-auto rounded-xl border bg-muted/40 py-1 font-mono text-xs leading-5"
+          // A card on the tab's ground, as the pipeline is (RecordModalBody's cards).
+          className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card py-1 font-mono text-xs leading-5"
         >
           {log.trimmed > 0 && (
             <p className="px-3 py-1 text-muted-foreground italic">
@@ -131,7 +132,7 @@ function BuildLog({ build: b, running }: { build: BuildRecord; running: boolean 
           ))}
         </div>
       ) : (
-        <div className="flex flex-1 items-center justify-center rounded-xl border text-sm text-muted-foreground">
+        <div className="flex flex-1 items-center justify-center rounded-xl border bg-card text-sm text-muted-foreground">
           {running ? "No output yet." : "The factory sent no output."}
         </div>
       )}
