@@ -53,6 +53,13 @@ export function useConnectionChoices(): readonly ConnectionChoice[] {
 
 const SWITCH = "switch_connection"
 const EDIT = "edit_connection"
+const ADD = "add_connection"
+
+/** The session's command for add_connection: the one picked for the session, else the factory's first; undefined for none. */
+export function useAddConnectionCommand(sessionId: string) {
+  const { commands } = useConsoleCommands(sessionId)
+  return chooseActionCommand(actionCommands(commands, ADD), readPicked(sessionId, ADD))
+}
 
 /** The session's command for edit_connection: the one picked for the session, else the factory's first; undefined for none. */
 export function useEditConnectionCommand(sessionId: string) {

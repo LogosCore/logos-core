@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
+import { PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { IdRows, NoteRow, SectionRow } from "@/components/ui/info-card"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
@@ -25,7 +26,9 @@ import { errorMessage } from "@/components/modules/management/api-errors"
 import { TargetStateBadge } from "@/components/targets/target-state-badge"
 import { TARGET_STATE_LABEL, isPersistent, problemsText, shownState, type Target } from "@/components/targets/target-values"
 import { TargetDialog } from "@/components/targets/target-dialog"
-import { useEditConnectionCommand, useSessionConnectionChoices, useSwitchConnection } from "./use-connection-choices"
+import { useAddConnectionCommand, useEditConnectionCommand, useSessionConnectionChoices, useSwitchConnection } from "./use-connection-choices"
+import { ConnectionChoicesProvider } from "./session-connection-choices"
+import { SessionCommandDialog } from "./session-command-dialog"
 import { EditConnectionDialog } from "./edit-connection-dialog"
 
 // A session's connections (docs: contracts/channel-core-connections, Connection
@@ -63,6 +66,10 @@ export function ConnectionCards({ s }: { s: Session }) {
   const editCommand = useEditConnectionCommand(s.id)
   const choices = useSessionConnectionChoices(s.id)
   const [editing, setEditing] = useState<number | null>(null)
+  // Add connection: the session's command for add_connection, its
+  // connection empty to fill (or filled from one of the session's).
+  const addCommand = useAddConnectionCommand(s.id)
+  const [adding, setAdding] = useState(false)
   // The cards unfolded, by place; the one in use to start with.
   const [unfolded, setUnfolded] = useState<ReadonlySet<number>>(() => new Set(s.conn ? [s.conn] : []))
   const open = s.state === "OPEN"
@@ -88,6 +95,20 @@ export function ConnectionCards({ s }: { s: Session }) {
 
   return (
     <>
+      {addCommand && open && (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            title={`Queue ${addCommand.id}: the minion takes a connection it did not have, after its others`}
+            onClick={() => setAdding(true)}
+          >
+            <PlusIcon />
+            Add connection
+          </Button>
+        </div>
+      )}
       {connections.map((c) => {
         const inUse = c.place === s.conn
         const expanded = unfolded.has(c.place)
@@ -171,6 +192,20 @@ export function ConnectionCards({ s }: { s: Session }) {
         connections={choices}
         onClose={() => setEditing(null)}
       />
+      {addCommand && (
+        <ConnectionChoicesProvider choices={choices}>
+          <SessionCommandDialog
+            sessionId={s.id}
+            command={addCommand}
+            open={adding}
+            onOpenChange={setAdding}
+            formKey={`${addCommand.id}-${adding}`}
+            connections={choices}
+            connKind={s.connKind}
+            onQueued={() => toast.success(`Connection queued to add (${addCommand.id})`)}
+          />
+        </ConnectionChoicesProvider>
+      )}
     </>
   )
 }

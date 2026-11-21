@@ -1618,7 +1618,8 @@ func decodeTimeIDCursor(s string) (time.Time, uuid.UUID, error) {
 // it was given: checked against its channel's fields for its kind and the
 // session's factory's connection parameters for that channel and kind,
 // defaults filled in, its version the channel schema's when it names none
-// (docs: Minion Build, Structured values). For edit_connection (action),
+// (docs: Minion Build, Structured values). For add_connection (action), a
+// name the session's connections have is refused. For edit_connection,
 // what changed of the session's connection at its conn param's place: a
 // protocol.ConnectionPatch, refused when it changes nothing (docs: Task
 // Results and Actions, edit_connection).
@@ -1631,6 +1632,10 @@ func (r *minionTaskResolver) putConnections(ctx context.Context, s *models.Minio
 		conn, err := r.numberedConnection(ctx, s, v)
 		if err != nil {
 			return fmt.Errorf("%s: %w", p.Key, err)
+		}
+		if action == protocol.ActionAddConnection && conn.Name != "" && slices.Contains(r.connectionNames(ctx, s), conn.Name) {
+			// The new one is named apart from the ones the session has.
+			return fmt.Errorf("%s: a connection called %s exists", p.Key, conn.Name)
 		}
 		if action != protocol.ActionEditConnection {
 			wire[p.Key] = conn
@@ -1652,6 +1657,29 @@ func (r *minionTaskResolver) putConnections(ctx context.Context, s *models.Minio
 		wire[p.Key] = patch
 	}
 	return nil
+}
+
+// connectionNames are the names of the session's connections: the
+// minion's own when it said them, else its build's.
+func (r *minionTaskResolver) connectionNames(ctx context.Context, s *models.MinionSession) []string {
+	var names []string
+	if s.Connections != nil {
+		for _, c := range s.Connections {
+			names = append(names, c.Name)
+		}
+		return names
+	}
+	if r.builds == nil {
+		return nil
+	}
+	b, err := r.builds.FindByBuildID(ctx, s.BuildID)
+	if err != nil {
+		return nil
+	}
+	for _, c := range b.Connections.Items {
+		names = append(names, c.Endpoint.Name)
+	}
+	return names
 }
 
 // connPlaceArg is the place a command's connection param (an int of format

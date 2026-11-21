@@ -119,3 +119,35 @@ func TestPutConnectionsEditPatch(t *testing.T) {
 		t.Fatalf("a kind changed: %#v", wire["connection"])
 	}
 }
+
+// add_connection's connection goes whole (no patch: nothing to compare it
+// with), and a name one of the session's connections has is refused.
+func TestPutConnectionsAdd(t *testing.T) {
+	r := &minionTaskResolver{
+		channels: fakeChannelSchemas{"http": {Version: 3, Kinds: map[string]protocol.ConnectionKind{
+			protocol.KindReverseCall: {Fields: []protocol.FieldSpec{{Key: "url", Num: 1, Type: protocol.FieldURL, Required: true}}}}}},
+		schemas: fakeTaskSchemas{s: &models.ModuleBuildSchema{}},
+	}
+	s := &models.MinionSession{ModuleName: "bob", Connections: []models.MinionSessionConnSpec{{Channel: "http", Kind: protocol.KindReverseCall,
+		Name: "front", Params: map[string]any{"url": "https://a.example"}}}}
+	params := []protocol.FieldSpec{{Key: "connection", Num: 1, Type: protocol.FieldStructured, Format: protocol.FormatConnection}}
+	add := func(name string) (map[string]any, error) {
+		wire, problems := protocol.TaskArgs(params, map[string]any{"connection": map[string]any{"channel": "http",
+			"kind": protocol.KindReverseCall, "name": name, "params": map[string]any{"url": "https://b.example"}}})
+		if problems != nil {
+			t.Fatal(problems)
+		}
+		return wire, r.putConnections(context.Background(), s, protocol.ActionAddConnection, params, wire)
+	}
+
+	wire, err := add("back")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, ok := wire["connection"].(protocol.HelloConnection); !ok || c.Name != "back" || c.Params[1] != "https://b.example" || c.Version != 3 {
+		t.Fatalf("the arg: %#v", wire["connection"])
+	}
+	if _, err := add("front"); err == nil || !strings.Contains(err.Error(), "a connection called front exists") {
+		t.Fatalf("a name the session has: %v", err)
+	}
+}
