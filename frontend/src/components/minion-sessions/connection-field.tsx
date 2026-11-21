@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { BracesIcon, ListIcon } from "lucide-react"
+import { BookmarkIcon, BracesIcon, ListIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
@@ -11,17 +11,20 @@ import { FieldRow } from "@/components/builds/build-field-row"
 import { ConnectionFailoverSettings } from "@/components/builds/failover-editor"
 import { DEFAULT_FAILOVER } from "@/components/builds/failover-values"
 import {
+  channelUnusable,
   connectionDraft,
   effectiveKind,
   factoryKindsByName,
+  fillFromEndpoint,
   paramFields,
   usableKinds,
   withKind,
   type ConnectionDraft,
 } from "@/components/builds/build-values"
+import { ConnectionPickerDialog } from "@/components/builds/connection-picker-dialog"
 import { connectionOfDraft, draftOfConnection, readConnectionJSON, type ConnectionJSON } from "@/components/builds/connection-value"
 import { useFactoryKinds } from "@/graphql/hooks/builds"
-import { useChannelKinds } from "@/graphql/hooks/channel-endpoints"
+import { useChannelEndpointCount, useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { useMinionSession } from "@/graphql/hooks/minion-sessions"
 import { choiceDetail, connectionJSON } from "./connection-choices"
 import { useConnectionChoices } from "./use-connection-choices"
@@ -56,6 +59,15 @@ export default function ConnectionField({ text, onChange, disabled, idPrefix, la
   )
   const channels = useMemo(() => kindsByName(channelKinds.data?.channelKinds ?? []), [channelKinds.data])
   const target = factory?.targets.find((t) => t.id === session?.target)
+  const channelIcons = useChannelIcons()
+  // The channels the session's target speaks, and the kinds its minions use
+  // through them: what a saved endpoint may fill the connection from, as
+  // in the build form.
+  const speaks = (target?.channels ?? []).map((c) => ({ name: c.moduleName, why: channelUnusable(target, c.moduleName, channels) }))
+  const usable = speaks.filter((c) => c.why === null).map((c) => c.name)
+  const usableConnKinds = [...new Set(usable.flatMap((m) => usableKinds(target, channels.get(m), m)))]
+  const endpointCount = useChannelEndpointCount(session?.operationId ?? "", usable, usableConnKinds)
+  const [picking, setPicking] = useState(false)
 
   // What the form does not edit, kept from the value it started from.
   const [kept, setKept] = useState<ConnectionJSON | null>(() => readConnectionJSON(text))
@@ -91,6 +103,45 @@ export default function ConnectionField({ text, onChange, disabled, idPrefix, la
   const errors = current ? connectionOfDraft(factory, channels.get(current.moduleName), current, target, kept).errors : {}
 
   const modules = (target?.channels ?? []).map((c) => c.moduleName).filter((m) => channels.has(m))
+  // A saved endpoint's kind and settings in the form (the factory's
+  // parameters kept where the kind keeps them), its slug the name unless
+  // the connection has one: a name none of the session's others has.
+  const fromEndpoint = (ep: Parameters<typeof fillFromEndpoint>[3] & { moduleName: string }) => {
+    setPicking(false)
+    const ch = channels.get(ep.moduleName)
+    if (!ch) return
+    const base =
+      current?.moduleName === ep.moduleName
+        ? current
+        : connectionDraft(factory, ch, { moduleName: ep.moduleName, name: current?.name || null }, target)
+    const taken = choices.map((c) => c.name).filter((n) => n !== current?.name)
+    write(fillFromEndpoint(base, ch, factory, ep, taken))
+  }
+  const savedEndpoint = endpointCount !== 0 && (
+    <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={disabled} onClick={() => setPicking(true)}>
+      <BookmarkIcon />
+      From saved endpoint…
+    </Button>
+  )
+  const picker = (
+    <ConnectionPickerDialog
+      open={picking}
+      onClose={() => setPicking(false)}
+      title="Fill the connection from an endpoint"
+      description={`Its kind and settings become the endpoint's, and its name too unless the connection has one. The ${factory.name} parameters stay where the kind keeps them.`}
+      operationId={session?.operationId ?? ""}
+      kinds={usable}
+      connectionKinds={usableConnKinds}
+      channels={channels}
+      channelIcons={channelIcons}
+      blank={speaks}
+      onEndpoint={fromEndpoint}
+      onBlank={(m) => {
+        setPicking(false)
+        write(connectionDraft(factory, channels.get(m), { moduleName: m }, target))
+      }}
+    />
+  )
   const fill = choices.some((c) => c.value) && (
     <Select
       value={null}
@@ -113,6 +164,18 @@ export default function ConnectionField({ text, onChange, disabled, idPrefix, la
         ))}
       </SelectContent>
     </Select>
+  )
+  // Where the connection can start from: one of the session's, a saved endpoint.
+  const sources = (
+    <>
+      {(fill || savedEndpoint) && (
+        <div className="flex items-center gap-2">
+          {fill && <div className="min-w-0 flex-1">{fill}</div>}
+          {savedEndpoint}
+        </div>
+      )}
+      {picker}
+    </>
   )
   const toggle = (
     <Button
@@ -139,7 +202,7 @@ export default function ConnectionField({ text, onChange, disabled, idPrefix, la
   if (asJSON) {
     return (
       <div className="flex flex-col gap-1">
-        {fill}
+        {sources}
         <JsonText text={text} onChange={onChange} disabled={disabled} label={label} />
         {toggle}
       </div>
@@ -191,7 +254,7 @@ export default function ConnectionField({ text, onChange, disabled, idPrefix, la
 
   return (
     <div className="flex flex-col gap-3">
-      {fill}
+      {sources}
       <div className="flex flex-col gap-6 rounded-md border px-4 pt-1 pb-4">
         {!current ? (
           <SettingsSection sub>{channelPicker}</SettingsSection>

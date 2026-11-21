@@ -798,6 +798,15 @@ describe("a connection param as a connection form", () => {
     expect(connectionOfDraft(kind, http, c, dummy, v).errors["params.request_timeout"]).toBeTruthy()
   })
 
+  it("filled from a saved endpoint keeps the name it has, or takes the slug free of the session's", () => {
+    const ep = { name: "EU front", slug: "front", kind: "reverse-call", values: { base_url: "https://eu.example.com" } }
+    const edited = draftOfConnection(kind, http, readConnectionJSON(text)!, dummy)
+    expect(fillFromEndpoint(edited, http, kind, ep, ["back"]).name).toBe("front")
+    const added = connectionDraft(kind, http, { moduleName: "http" }, dummy)
+    expect(fillFromEndpoint(added, http, kind, ep, ["front"]).name).toBe("front-2")
+    expect(fillFromEndpoint(added, http, kind, ep, ["front"]).settings.base_url).toEqual({ kind: "text", text: "https://eu.example.com" })
+  })
+
   it("reads only a connection: an object with a channel", () => {
     expect(readConnectionJSON("")).toBeNull()
     expect(readConnectionJSON("[1]")).toBeNull()
