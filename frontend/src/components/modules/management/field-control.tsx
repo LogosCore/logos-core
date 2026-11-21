@@ -211,7 +211,8 @@ export function FieldControl({
             value={draft.text}
             onChange={(t) => onChange({ kind: "json", text: t })}
             readOnly={disabled}
-            className={cn("h-48 rounded-md border", invalid && "border-destructive")}
+            className={cn("rounded-md border", invalid && "border-destructive")}
+            style={{ height: jsonEditorHeight(draft.text) }}
             aria-label={field.label || field.key}
           />
           {draft.text.trim() === "" && defaultText !== undefined && (
@@ -819,4 +820,14 @@ function SecretControl({
       )}
     </div>
   )
+}
+
+/**
+ * A JSON field's editor height: its text whole where there is room (a
+ * line is 13 px at 1.6, plus the toolbar), 12rem at least, and at most 60%
+ * of the screen, past which it scrolls.
+ */
+function jsonEditorHeight(text: string): string {
+  const lines = text.split("\n").length
+  return `clamp(12rem, ${lines * 21 + 56}px, 60vh)`
 }

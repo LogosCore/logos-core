@@ -349,7 +349,7 @@ func (r *minionSessionRepository) SetConn(ctx context.Context, sessionID uuid.UU
 
 func (r *minionSessionRepository) SetConnections(ctx context.Context, sessionID uuid.UUID, conns []models.MinionSessionConnSpec) error {
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
-		withRev(bson.M{"$set": bson.M{"connections": conns, "conn_count": len(conns)}}))
+		withRev(bson.M{"$set": bson.M{"connections": conns, "conn_count": len(conns), "connections_at": time.Now().UTC()}}))
 }
 
 func (r *minionSessionRepository) SetAddress(ctx context.Context, sessionID uuid.UUID, address string, picked bool) error {

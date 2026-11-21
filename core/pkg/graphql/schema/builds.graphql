@@ -115,6 +115,10 @@ type BuildCommand {
   default: Boolean!
   # In every build of its targets: the minion cannot run without it.
   required: Boolean!
+  # Kept for the builds that have it (docs: contracts/minion-build, Legacy
+  # commands): no new build picks it, and it serves no action, its action
+  # aside; a session whose build has it runs it from its console.
+  legacy: Boolean!
   # What its data is: one of core's results (dir_listing), its shape and
   # view; null: none, shown raw. And what core can ask it to do itself: one
   # of core's actions (list_dir); null: none (docs:

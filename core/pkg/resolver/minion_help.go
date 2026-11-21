@@ -60,6 +60,9 @@ func helpText(commands []protocol.BuildCommand, topic string) string {
 		if len(c.Kinds) > 0 {
 			label = strings.TrimSpace(label + " (over " + strings.Join(c.Kinds, ", ") + ")")
 		}
+		if c.Legacy {
+			label = strings.TrimSpace(label + " (legacy)")
+		}
 		fmt.Fprintf(&b, "  %-*s  %s\n", width, usages[i], label)
 	}
 	b.WriteString("\n<param> is required, [param] is not, [param=x] defaults to x.\n")
@@ -77,6 +80,9 @@ func writeCommandHelp(b *strings.Builder, c protocol.BuildCommand) {
 	}
 	if len(c.Kinds) > 0 {
 		b.WriteString("\nIt works over " + strings.Join(c.Kinds, ", ") + " connections only: a minion on another kind is switched first.\n")
+	}
+	if c.Legacy {
+		b.WriteString("\nLegacy: kept for the builds that have it. No new build gets it, and the session's buttons never run it.\n")
 	}
 	if len(c.Params) == 0 {
 		b.WriteString("\nIt takes no params.\n")

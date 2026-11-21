@@ -107,6 +107,10 @@ type MinionSession struct {
 	// (docs: Sessions, Connections): Conn and ConnChanges are places in
 	// them, in place of the build's. Nil: the build's.
 	Connections []MinionSessionConnSpec `bson:"connections,omitempty" json:"connections,omitempty"`
+	// ConnectionsAt is when Connections last changed (a hello's list, a
+	// connection_update): a view of them reads them again after it. Nil:
+	// never, or before it was kept.
+	ConnectionsAt *time.Time `bson:"connections_at,omitempty" json:"connections_at,omitempty"`
 	// MaxTasks is how many tasks the minion runs at once, as it last said
 	// (its hello's, or a max_tasks of its); nil when it never said.
 	// MaxTasksSettable: its build's factory declares max_tasks (the build
@@ -238,15 +242,26 @@ type MinionSessionConnSpec struct {
 }
 
 // ConnSpecsOf are a minion's own connections (a hello's or a
-// connection_update's) as core keeps them; nil for none. One without a name
-// is "<channel>-<place>", as a build's.
-func ConnSpecsOf(conns []protocol.HelloConnection) []MinionSessionConnSpec {
+// connection_update's) as core keeps them; nil for none. An entry without a name keeps kept's at its place (the names the session
+// has: its own list's, else the build's), unless another entry names it;
+// one past kept, or whose kept name is taken, is "<channel>-<place>".
+func ConnSpecsOf(conns []protocol.HelloConnection, kept []string) []MinionSessionConnSpec {
 	if len(conns) == 0 {
 		return nil
+	}
+	taken := map[string]bool{}
+	for _, c := range conns {
+		if c.Name != "" {
+			taken[c.Name] = true
+		}
 	}
 	out := make([]MinionSessionConnSpec, len(conns))
 	for i, c := range conns {
 		name := c.Name
+		if name == "" && i < len(kept) && kept[i] != "" && !taken[kept[i]] {
+			name = kept[i]
+			taken[name] = true
+		}
 		if name == "" {
 			name = fmt.Sprintf("%s-%d", c.Channel, i+1)
 		}

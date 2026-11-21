@@ -78,6 +78,10 @@ type IMinionSessionResolver interface {
 }
 
 type minionSessionResolver struct {
+	// channels are the channels' connection schemas
+	// (WithSessionChannelSchemas); nil leaves a minion's own connection's
+	// params as it said them.
+	channels      TaskChannelSchemas
 	sessions      repository.IMinionSessionRepository
 	operationRepo repository.IOperationRepository
 	userRepo      repository.IUserRepository
@@ -143,27 +147,24 @@ func (r *minionSessionResolver) Connections(ctx context.Context, s *model.Minion
 				}
 			}
 			for i, c := range sess.Connections {
-				params := map[string]any{}
-				for k, v := range c.Params {
-					params[k] = v
+				// The minion says them in their types' CBOR forms (a
+				// duration in milliseconds): each as its JSON value, as a
+				// build's connection has it and a connection param takes it.
+				var channelFields []protocol.FieldSpec
+				if r.channels != nil {
+					if cs, err := r.channels.Schema(ctx, c.Channel); err == nil && cs != nil {
+						channelFields = cs.Kinds[c.Kind].Fields
+					}
 				}
-				names := map[string]string{}
+				params := jsonValues(c.Params, channelFields, func(f protocol.FieldSpec) string { return f.Key })
+				var factoryFields []protocol.FieldSpec
 				if factory != nil {
 					if ch, ok := factory.Channel(c.Channel); ok {
-						for _, f := range ch.KindFields(c.Kind) {
-							if f.Num != 0 {
-								names[strconv.Itoa(f.Num)] = f.Key
-							}
-						}
+						factoryFields = ch.KindFields(c.Kind)
 					}
 				}
-				values := map[string]any{}
-				for k, v := range c.Values {
-					if key, ok := names[k]; ok {
-						k = key
-					}
-					values[k] = v
-				}
+				// The factory's values come by number: named by its fields.
+				values := jsonValues(c.Values, factoryFields, func(f protocol.FieldSpec) string { return strconv.Itoa(f.Num) })
 				out = append(out, &model.MinionConnection{Place: i + 1, Name: c.Name, ModuleName: c.Channel, Kind: c.Kind, Params: params,
 					Values: values})
 			}
@@ -197,6 +198,35 @@ func (r *minionSessionResolver) Connections(ctx context.Context, s *model.Minion
 			Kind: c.ConnectionKind(), Params: params, Values: values})
 	}
 	return out, nil
+}
+
+// jsonValues are a connection's params or values as the minion said them,
+// each as its field's JSON value (protocol.FieldJSONValue) and named by its
+// key; the field is found by stored (its key, or its number). One no field
+// names stays as it came.
+func jsonValues(m map[string]any, fields []protocol.FieldSpec, stored func(protocol.FieldSpec) string) map[string]any {
+	byStored := make(map[string]protocol.FieldSpec, len(fields))
+	for _, f := range fields {
+		byStored[stored(f)] = f
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		if f, ok := byStored[k]; ok {
+			out[f.Key] = protocol.FieldJSONValue(f, v)
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// WithSessionChannelSchemas gives the resolver the channels' connection
+// schemas: what a minion's own connection's params are read by.
+func WithSessionChannelSchemas(r IMinionSessionResolver, c TaskChannelSchemas) IMinionSessionResolver {
+	if sr, ok := r.(*minionSessionResolver); ok {
+		sr.channels = c
+	}
+	return r
 }
 
 // viewer authorizes a viewer of the operation.
@@ -287,7 +317,7 @@ func (r *minionSessionResolver) delegateBuilds(ctx context.Context, op uuid.UUID
 	for _, module := range slices.Sorted(maps.Keys(schemas)) {
 		var commands []string
 		for _, c := range schemas[module].Commands {
-			if c.Action == protocol.ActionDelegate && c.Serving(in.ModuleName, in.Kind, in.Version) > 0 {
+			if c.ServedAction() == protocol.ActionDelegate && c.Serving(in.ModuleName, in.Kind, in.Version) > 0 {
 				commands = append(commands, c.ID)
 			}
 		}
@@ -842,6 +872,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 	out.FeedbackAt, out.FeedbackReadAt = timePtr(s.FeedbackAt), timePtr(s.FeedbackReadAt)
 	out.MaxTasksPending, out.MaxTasksNotTaken = s.MaxTasksDue(), s.MaxTasksNotTaken()
 	out.ConnKind, out.ConnName, out.ConnCount = strPtr(s.ConnKind), strPtr(s.ConnName), s.ConnCount
+	out.ConnectionsChangedAt = timePtr(s.ConnectionsAt)
 	out.ConnChanges = make([]*model.MinionConnChange, len(s.ConnChanges))
 	for i, c := range s.ConnChanges {
 		ch := &model.MinionConnChange{At: c.At.UTC().Format(time.RFC3339), To: c.To, Reason: strPtr(c.Reason)}

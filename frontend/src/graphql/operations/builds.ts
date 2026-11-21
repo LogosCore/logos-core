@@ -46,6 +46,8 @@ export const BuildSchemaFields = graphql(`
       targets
       default
       required
+      legacy
+      action
       kinds
       composite
       uses

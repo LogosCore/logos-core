@@ -263,6 +263,28 @@ describe("words in the form's order", () => {
     expect(valueCompletion("switch now off", [switchCmd], conns)).toMatchObject({ key: "conn", partial: "off" })
     expect(valueCompletion("feedback off", cmds, conns)).toBeNull()
   })
+
+  test("an edit's connection is the place param's alone: the whole one is JSON, never a name", () => {
+    const conns = [
+      { place: 1, name: "10.10.10.2-8090", kind: "reverse-call", inUse: true },
+      { place: 2, name: "ws", kind: "reverse-persistent" },
+    ] as unknown as Parameters<typeof valueCompletion>[2]
+    const edit: CommandDef = {
+      id: "edit_connection",
+      label: "Edit connection",
+      params: [
+        { key: "conn", type: "int", label: "Connection", required: true, format: "connection" },
+        { key: "connection", type: "structured", label: "New connection", required: true, format: "connection" },
+      ],
+    }
+    expect(valueCompletion("edit_connection 10.10", [edit], conns)).toMatchObject({ key: "conn", partial: "10.10" })
+    expect(valueCompletion("edit_connection 10.10.10.2-8090 ", [edit], conns)).toBeNull()
+    // Shift+Enter: the form's conn field holds the place, not the name.
+    expect(lineTexts("edit_connection 10.10.10.2-8090", [edit], conns).texts.get("conn")).toBe("1")
+    expect(lineTexts("edit_connection nope", [edit], conns).texts.get("conn")).toBe("nope")
+    const parsed = parseCommandLine(`edit_connection ws '{"channel":"http","kind":"reverse-call"}'`, [edit], conns)
+    expect(parsed).toMatchObject({ ok: true, args: { conn: 2, connection: { channel: "http", kind: "reverse-call" } } })
+  })
 })
 
 describe("a structured param", () => {

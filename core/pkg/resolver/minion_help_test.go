@@ -134,3 +134,14 @@ func TestMinionHelpFormOrder(t *testing.T) {
 		t.Errorf("help feedback:\n%s", one)
 	}
 }
+
+// help marks a legacy command, in the list and in its own help.
+func TestMinionHelpLegacy(t *testing.T) {
+	commands := []protocol.BuildCommand{{ID: "switch", Label: "Switch connection", Legacy: true}, {ID: "switch_connection", Label: "Switch connection"}}
+	if list := helpText(commands, ""); !strings.Contains(list, "Switch connection (legacy)\n") || strings.Count(list, "(legacy)") != 1 {
+		t.Fatalf("the list:\n%s", list)
+	}
+	if one := helpText(commands, "switch"); !strings.Contains(one, "Legacy: kept for the builds that have it.") {
+		t.Fatalf("its help:\n%s", one)
+	}
+}

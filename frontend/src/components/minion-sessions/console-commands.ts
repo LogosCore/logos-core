@@ -13,6 +13,7 @@ export function useConsoleCommands(sessionId: string) {
         label: c.label,
         description: c.description,
         required: c.required,
+        legacy: c.legacy,
         result: c.result,
         action: c.action,
         kinds: c.kinds,

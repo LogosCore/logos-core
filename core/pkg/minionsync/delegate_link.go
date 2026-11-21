@@ -115,7 +115,7 @@ func (s *Service) servingCommands(ctx context.Context, sessionID, operation uuid
 		return nil, nil, err
 	}
 	serving := slices.DeleteFunc(slices.Clone(cmds), func(c protocol.BuildCommand) bool {
-		return c.Action != protocol.ActionDelegate || c.Serving(module, kind, version) == 0
+		return c.ServedAction() != protocol.ActionDelegate || c.Serving(module, kind, version) == 0
 	})
 	if len(serving) == 0 {
 		return nil, nil, fmt.Errorf("%w: session #%d's minion serves no %s %s connections (version %d)", ErrNotADelegate,

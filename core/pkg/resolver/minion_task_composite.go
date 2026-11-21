@@ -109,7 +109,7 @@ func (r *minionTaskResolver) SendOwnOp(ctx context.Context, t *models.MinionTask
 	if err != nil {
 		return nil, &composites.Refusal{Reason: err.Error()}
 	}
-	if err := r.putConnections(ctx, s, cmd.Params, wire); err != nil {
+	if err := r.putConnections(ctx, s, cmd.Action, cmd.Params, wire); err != nil {
 		return nil, &composites.Refusal{Reason: err.Error()}
 	}
 	var wireBytes []byte

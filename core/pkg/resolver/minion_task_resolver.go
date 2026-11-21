@@ -543,7 +543,7 @@ func (r *minionTaskResolver) queue(ctx context.Context, s *models.MinionSession,
 	if err != nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
 	}
-	if err := r.putConnections(ctx, s, cmd.Params, wire); err != nil {
+	if err := r.putConnections(ctx, s, cmd.Action, cmd.Params, wire); err != nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
 	}
 	uid := q.by
@@ -1618,54 +1618,176 @@ func decodeTimeIDCursor(s string) (time.Time, uuid.UUID, error) {
 // it was given: checked against its channel's fields for its kind and the
 // session's factory's connection parameters for that channel and kind,
 // defaults filled in, its version the channel schema's when it names none
-// (docs: Minion Build, Structured values).
-func (r *minionTaskResolver) putConnections(ctx context.Context, s *models.MinionSession, params []protocol.FieldSpec, wire map[string]any) error {
+// (docs: Minion Build, Structured values). For edit_connection (action),
+// what changed of the session's connection at its conn param's place: a
+// protocol.ConnectionPatch, refused when it changes nothing (docs: Task
+// Results and Actions, edit_connection).
+func (r *minionTaskResolver) putConnections(ctx context.Context, s *models.MinionSession, action string, params []protocol.FieldSpec, wire map[string]any) error {
 	for _, p := range params {
 		v, ok := wire[p.Key]
 		if !ok || p.Type != protocol.FieldStructured || p.Format != protocol.FormatConnection {
 			continue
 		}
-		m, _ := v.(map[string]any)
-		module, _ := m["channel"].(string)
-		kind, _ := m["kind"].(string)
-		if r.channels == nil {
-			return fmt.Errorf("%s: core reads no channel schemas here", p.Key)
+		conn, err := r.numberedConnection(ctx, s, v)
+		if err != nil {
+			return fmt.Errorf("%s: %w", p.Key, err)
 		}
-		schema, err := r.channels.Schema(ctx, module)
-		if err != nil || schema == nil {
-			return fmt.Errorf("%s: channel %q is not one core knows", p.Key, module)
+		if action != protocol.ActionEditConnection {
+			wire[p.Key] = conn
+			continue
 		}
-		ck, ok := schema.Kinds[kind]
-		if !ok {
-			return fmt.Errorf("%s: channel %q does not carry %s", p.Key, module, kind)
-		}
-		var factory []protocol.FieldSpec
-		if r.schemas != nil {
-			if bs, err := r.schemas.LatestBuildSchema(ctx, s.ModuleName); err == nil && bs != nil {
-				if ch, ok := bs.Channel(module); ok {
-					factory = ch.KindFields(kind)
-				}
+		place := connPlaceArg(params, wire)
+		// The connection it replaces, as the new one is made: unknown, or
+		// no longer passing its schema, the new one goes whole.
+		var old protocol.HelloConnection
+		if cur, ok := r.currentConnection(ctx, s, place); ok {
+			if c, err := r.numberedConnection(ctx, s, cur); err == nil {
+				old = c
 			}
 		}
-		conn, problems := protocol.ConnectionArg(v, ck.Fields, factory)
-		if problems != nil {
-			keys := make([]string, 0, len(problems))
-			for k := range problems {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			parts := make([]string, len(keys))
-			for i, k := range keys {
-				parts[i] = strings.TrimPrefix(k+": "+problems[k], ": ")
-			}
-			return fmt.Errorf("%s: %s", p.Key, strings.Join(parts, "; "))
+		patch := protocol.DiffConnection(old, conn)
+		if patch.Empty() {
+			return fmt.Errorf("connection %d: nothing changed", place)
 		}
-		if conn.Version == 0 && schema.Version > 0 {
-			conn.Version = uint64(schema.Version) //nolint:gosec // a schema version is positive
-		}
-		wire[p.Key] = conn
+		wire[p.Key] = patch
 	}
 	return nil
+}
+
+// connPlaceArg is the place a command's connection param (an int of format
+// connection: edit_connection's conn) names in wire; 0 for none.
+func connPlaceArg(params []protocol.FieldSpec, wire map[string]any) int {
+	for _, p := range params {
+		if p.Type == protocol.FieldInt && p.Format == protocol.FormatConnection {
+			if n, ok := protocol.AsInt64(wire[p.Key]); ok {
+				return int(n)
+			}
+		}
+	}
+	return 0
+}
+
+// numberedConnection is a connection value (JSON, by names) as the minion
+// gets it (protocol.ConnectionArg), checked against its channel's fields
+// and the session's factory's connection parameters.
+func (r *minionTaskResolver) numberedConnection(ctx context.Context, s *models.MinionSession, v any) (protocol.HelloConnection, error) {
+	m, _ := v.(map[string]any)
+	module, _ := m["channel"].(string)
+	kind, _ := m["kind"].(string)
+	schema, channelFields, factory, err := r.connectionFields(ctx, s, module, kind)
+	if err != nil {
+		return protocol.HelloConnection{}, err
+	}
+	conn, problems := protocol.ConnectionArg(v, channelFields, factory)
+	if problems != nil {
+		keys := make([]string, 0, len(problems))
+		for k := range problems {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, len(keys))
+		for i, k := range keys {
+			parts[i] = strings.TrimPrefix(k+": "+problems[k], ": ")
+		}
+		return protocol.HelloConnection{}, errors.New(strings.Join(parts, "; "))
+	}
+	if conn.Version == 0 && schema.Version > 0 {
+		conn.Version = uint64(schema.Version) //nolint:gosec // a schema version is positive
+	}
+	return conn, nil
+}
+
+// connectionFields are a channel's schema, its fields for kind, and the
+// session's factory's connection parameters for them.
+func (r *minionTaskResolver) connectionFields(ctx context.Context, s *models.MinionSession, module, kind string) (*protocol.ConnectionSchema,
+	[]protocol.FieldSpec, []protocol.FieldSpec, error) {
+	if r.channels == nil {
+		return nil, nil, nil, errors.New("core reads no channel schemas here")
+	}
+	schema, err := r.channels.Schema(ctx, module)
+	if err != nil || schema == nil {
+		return nil, nil, nil, fmt.Errorf("channel %q is not one core knows", module)
+	}
+	ck, ok := schema.Kinds[kind]
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("channel %q does not carry %s", module, kind)
+	}
+	var factory []protocol.FieldSpec
+	if r.schemas != nil {
+		if bs, err := r.schemas.LatestBuildSchema(ctx, s.ModuleName); err == nil && bs != nil {
+			if ch, ok := bs.Channel(module); ok {
+				factory = ch.KindFields(kind)
+			}
+		}
+	}
+	return schema, ck.Fields, factory, nil
+}
+
+// currentConnection is the session's connection at place as a connection
+// value (JSON, by names): the minion's own when it said them, its values
+// as their JSON values, else its build's; false when it has none there.
+func (r *minionTaskResolver) currentConnection(ctx context.Context, s *models.MinionSession, place int) (map[string]any, bool) {
+	if place < 1 {
+		return nil, false
+	}
+	if s.Connections != nil {
+		if place > len(s.Connections) {
+			return nil, false
+		}
+		c := s.Connections[place-1]
+		_, channelFields, factory, err := r.connectionFields(ctx, s, c.Channel, c.Kind)
+		if err != nil {
+			return nil, false
+		}
+		v := map[string]any{"channel": c.Channel, "kind": c.Kind, "name": c.Name,
+			"params": jsonValues(c.Params, channelFields, func(f protocol.FieldSpec) string { return f.Key }),
+			"values": jsonValues(c.Values, factory, func(f protocol.FieldSpec) string { return strconv.Itoa(f.Num) })}
+		// Numbers as JSON gives them (protocol.AsInt64 reads no uint64).
+		if c.Version > 0 {
+			v["version"] = int64(c.Version) //nolint:gosec // a schema version
+		}
+		if c.FailoverAuto != nil || c.FailAfter > 0 {
+			f := map[string]any{}
+			if c.FailoverAuto != nil {
+				f["auto"] = *c.FailoverAuto
+			}
+			if c.FailAfter > 0 {
+				f["fail_after"] = int64(c.FailAfter) //nolint:gosec // a count of failures
+			}
+			v["failover"] = f
+		}
+		if c.MaxMessage > 0 {
+			v["max_message"] = c.MaxMessage
+		}
+		return v, true
+	}
+	if r.builds == nil {
+		return nil, false
+	}
+	b, err := r.builds.FindByBuildID(ctx, s.BuildID)
+	if err != nil || place > len(b.Connections.Items) {
+		return nil, false
+	}
+	c := b.Connections.Items[place-1]
+	v := map[string]any{"channel": c.Endpoint.Channel.ModuleName, "kind": c.ConnectionKind(), "name": c.Endpoint.Name,
+		"params": c.Endpoint.Params, "values": c.Values}
+	if c.Endpoint.Channel.SchemaVersion > 0 {
+		v["version"] = c.Endpoint.Channel.SchemaVersion
+	}
+	if c.Failover != nil {
+		f := map[string]any{}
+		if c.Failover.Auto != nil {
+			f["auto"] = *c.Failover.Auto
+		}
+		if c.Failover.FailAfter > 0 {
+			f["fail_after"] = c.Failover.FailAfter
+		}
+		v["failover"] = f
+	}
+	if c.MaxMessage > 0 {
+		v["max_message"] = c.MaxMessage
+	}
+	return v, true
 }
 
 // putCredentials puts the credentials a task's credential params name in

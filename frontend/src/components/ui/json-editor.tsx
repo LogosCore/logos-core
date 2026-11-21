@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 import {
   CheckIcon,
   ChevronsDownUpIcon,
@@ -102,6 +102,8 @@ export interface JsonEditorProps {
    */
   downloadText?: string
   className?: string
+  /** The box's own style: a height that follows the text, say. */
+  style?: CSSProperties
   "aria-label"?: string
 }
 
@@ -128,6 +130,7 @@ export function JsonEditor({
   fileName,
   downloadText,
   className,
+  style,
   "aria-label": ariaLabel = "JSON",
 }: JsonEditorProps) {
   const host = useRef<HTMLDivElement>(null)
@@ -218,7 +221,7 @@ export function JsonEditor({
   const problemCount = parses ? problems.length : 1
 
   return (
-    <div className={cn("json-editor flex min-h-0 flex-col overflow-hidden", className)}>
+    <div className={cn("json-editor flex min-h-0 flex-col overflow-hidden", className)} style={style}>
       <div role="toolbar" aria-label="JSON tools" className="flex shrink-0 flex-wrap items-center gap-0.5 border-b bg-muted/40 p-1">
         <Tool label="Undo" keys={`${MOD}Z`} onClick={() => run(undo)} disabled={readOnly || !canUndo}>
           <Undo2Icon />

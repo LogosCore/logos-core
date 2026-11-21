@@ -80,6 +80,7 @@ export const MinionSessionFields = graphql(`
     connKind
     connName
     connCount
+    connectionsChangedAt
     connChanges {
       at
       from

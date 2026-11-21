@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import type { Draft, FieldDef } from "@/components/modules/management/field-values"
-import { CommandFormDialog } from "@/components/command-form/command-form-dialog"
+import { SessionCommandDialog } from "./session-command-dialog"
 import { draftsFromTexts } from "@/components/command-form/command-drafts"
 import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
 import { useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
@@ -12,9 +12,8 @@ import { cn } from "@/lib/utils"
 import { useWorkspaceActions } from "./workspace-tabs"
 import { actionCommands } from "./action-commands"
 import { TaskFilesProvider } from "./task-files"
-import { startStreamUpload } from "@/lib/stream-upload"
-import { commandOf, lineOf, lineTexts, paramApplies, parseCommandLine, usage, valueCompletion, words, type CommandDef } from "./command-line"
-import { CONNECTION_FORMAT, choiceDetail, connectionText, type ConnectionChoice } from "./connection-choices"
+import { commandOf, lineTexts, paramApplies, parseCommandLine, usage, valueCompletion, words, type CommandDef } from "./command-line"
+import { choiceDetail, connectionText, isConnectionPlace, withConnection, type ConnectionChoice } from "./connection-choices"
 import { ConnectionChoicesProvider } from "./session-connection-choices"
 import { useSessionConnectionChoices } from "./use-connection-choices"
 import { resolveCredentialArgs } from "./console-credentials"
@@ -49,19 +48,6 @@ function KindsHint({ kinds, connKind }: { kinds?: readonly string[]; connKind?: 
   )
 }
 
-/** The command form's line on a command that works over some kinds only. */
-function KindsLine({ kinds, connKind }: { kinds?: readonly string[]; connKind?: string | null }) {
-  const note = commandKindsNote(kinds, connKind)
-  if (!note) return null
-  return <span className={cn("mt-1 block", note.blocked && "text-amber-700 dark:text-amber-400")}>{note.text}.</span>
-}
-
-/** A composite command's line in its form: what its factory's code runs as its subtasks. */
-function CompositeLine({ uses }: { uses?: readonly string[] }) {
-  if (!uses?.length) return null
-  return <span className="mt-1 block">Composite: its factory&apos;s code runs {uses.join(", ")} as its subtasks.</span>
-}
-
 /** A command as the console uses it: its params as the forms know them too. */
 export interface ConsoleCommand extends CommandDef {
   fields: readonly FieldDef[]
@@ -76,6 +62,8 @@ export interface ConsoleCommand extends CommandDef {
   kinds?: readonly string[]
   /** A command every build of the target has (sleep, exit): first in the prompt's hint. */
   required?: boolean
+  /** Kept for the builds that have it: it serves no action (docs: contracts/minion-build, Legacy commands). */
+  legacy?: boolean
 }
 
 export function CommandBar({
@@ -319,7 +307,13 @@ export function CommandBar({
       return
     }
     setError(null)
-    setForm({ id: c.id, picking: false, drafts: draftsFromTexts(c.fields, lt.texts), typed: [...lt.texts.keys()], key: nextKey() })
+    let drafts = draftsFromTexts(c.fields, lt.texts)
+    // A connection named (edit_connection's conn): the params that take it
+    // whole start as it, to edit, unless typed.
+    const place = c.fields.filter(isConnectionPlace).map((f) => Number(lt.texts.get(f.key)))[0]
+    const named = connections.find((x) => x.place === place)
+    if (named) drafts = withConnection(c.fields, drafts, named, new Set(lt.texts.keys()))
+    setForm({ id: c.id, picking: false, drafts, typed: [...lt.texts.keys()], key: nextKey() })
     setFormOpen(true)
   }
 
@@ -478,6 +472,11 @@ export function CommandBar({
                   composite
                 </span>
               )}
+              {c.legacy && (
+                <span className="shrink-0 text-xs text-muted-foreground" title="Kept for the builds that have it: no new build gets it, and the session's buttons never run it">
+                  legacy
+                </span>
+              )}
               <KindsHint kinds={c.kinds} connKind={connKind} />
             </button>
           ))}
@@ -572,7 +571,9 @@ export function CommandBar({
       </div>
       <TaskFilesProvider key={`${form?.key}-${form?.id}`} operationId={operationId}>
         <ConnectionChoicesProvider choices={connections}>
-        <CommandFormDialog
+        <SessionCommandDialog
+          sessionId={sessionId}
+          command={formCommand}
           open={formOpen}
           onOpenChange={(o) => {
             if (o) return
@@ -580,19 +581,6 @@ export function CommandBar({
             input.current?.focus()
           }}
           formKey={`${form?.key}-${form?.id}`}
-          title={formCommand ? formCommand.label : "Run a command"}
-          description={
-            formCommand ? (
-              <>
-                <code className="font-mono text-xs">{usage(formCommand)}</code>
-                {formCommand.description && <span className="mt-1 block">{formCommand.description}</span>}
-                {formCommand.composite && <CompositeLine uses={formCommand.uses} />}
-                <KindsLine kinds={formCommand.kinds} connKind={connKind} />
-              </>
-            ) : (
-              "Pick one of the session's commands."
-            )
-          }
           before={
             form?.picking && (
               <Select
@@ -612,32 +600,16 @@ export function CommandBar({
               </Select>
             )
           }
-          fields={formCommand?.fields ?? []}
           initialDrafts={form?.drafts}
           showErrorsFor={form?.typed}
-          after={(values) =>
-            formCommand && (
-              <p
-                className="truncate font-mono text-xs text-muted-foreground"
-                title={values ? lineOf(formCommand.id, values, formCommand, connections) : undefined}
-              >
-                Same as: {values ? lineOf(formCommand.id, values, formCommand, connections) : "…"}
-              </p>
-            )
-          }
-          onSubmit={async (values, drafts) => {
-            if (!formCommand) throw new Error("Pick a command first.")
-            const data = await queue.mutateAsync({ sessionId, command: formCommand.id, args: Object.keys(values).length > 0 ? values : null })
-            // A stream picked here goes now, as the task waits for it.
-            for (const d of Object.values(drafts)) {
-              if (d.kind === "stream" && d.file) startStreamUpload(data.queueMinionTask.id, d.file)
-            }
-            onQueued?.(data.queueMinionTask)
+          connections={connections}
+          connKind={connKind}
+          onQueued={(task) => {
+            onQueued?.(task)
             setLine("")
             setBack(null)
             setError(null)
           }}
-          idPrefix={`task-${sessionId}`}
         />
         </ConnectionChoicesProvider>
       </TaskFilesProvider>
@@ -650,7 +622,7 @@ export function CommandBar({
 function readsAs(command: CommandDef, args: Record<string, unknown>, connections: readonly ConnectionChoice[]): string {
   const parts = command.params.map((p) => {
     if (!paramApplies(p, command.params, args)) return null
-    if (p.key in args && p.format === CONNECTION_FORMAT) {
+    if (p.key in args && isConnectionPlace(p)) {
       const c = connections.find((x) => x.place === args[p.key])
       return `${p.key}=${JSON.stringify(args[p.key])}${c ? ` (${c.name}, ${choiceDetail(c)}${c.inUse ? ", in use" : ""})` : ""}`
     }

@@ -225,6 +225,7 @@ type ComplexityRoot struct {
 		ID          func(childComplexity int) int
 		Kinds       func(childComplexity int) int
 		Label       func(childComplexity int) int
+		Legacy      func(childComplexity int) int
 		Op          func(childComplexity int) int
 		Params      func(childComplexity int) int
 		Required    func(childComplexity int) int
@@ -868,69 +869,70 @@ type ComplexityRoot struct {
 	}
 
 	MinionSession struct {
-		Acting           func(childComplexity int) int
-		Address          func(childComplexity int) int
-		AddressPicked    func(childComplexity int) int
-		Addrs            func(childComplexity int) int
-		Arch             func(childComplexity int) int
-		Archived         func(childComplexity int) int
-		BindTarget       func(childComplexity int) int
-		BuildDescription func(childComplexity int) int
-		BuildID          func(childComplexity int) int
-		CodecDownSince   func(childComplexity int) int
-		Conn             func(childComplexity int) int
-		ConnChanges      func(childComplexity int) int
-		ConnCount        func(childComplexity int) int
-		ConnKind         func(childComplexity int) int
-		ConnName         func(childComplexity int) int
-		Connected        func(childComplexity int) int
-		Connections      func(childComplexity int) int
-		CreatedAt        func(childComplexity int) int
-		Description      func(childComplexity int) int
-		Domain           func(childComplexity int) int
-		FeedbackAt       func(childComplexity int) int
-		FeedbackErrors   func(childComplexity int) int
-		FeedbackReadAt   func(childComplexity int) int
-		FeedbackWarnings func(childComplexity int) int
-		FolderID         func(childComplexity int) int
-		Host             func(childComplexity int) int
-		ID               func(childComplexity int) int
-		Integrity        func(childComplexity int) int
-		LastSeenAt       func(childComplexity int) int
-		LateAt           func(childComplexity int) int
-		LostAt           func(childComplexity int) int
-		MachineID        func(childComplexity int) int
-		Mark             func(childComplexity int) int
-		MaxTasks         func(childComplexity int) int
-		MaxTasksNotTaken func(childComplexity int) int
-		MaxTasksPending  func(childComplexity int) int
-		MaxTasksSettable func(childComplexity int) int
-		ModuleName       func(childComplexity int) int
-		Number           func(childComplexity int) int
-		OperationID      func(childComplexity int) int
-		Os               func(childComplexity int) int
-		PeerAddress      func(childComplexity int) int
-		Peers            func(childComplexity int) int
-		Persisted        func(childComplexity int) int
-		Pid              func(childComplexity int) int
-		Platform         func(childComplexity int) int
-		Proc             func(childComplexity int) int
-		RestartCount     func(childComplexity int) int
-		Restarts         func(childComplexity int) int
-		Rev              func(childComplexity int) int
-		RoundtripTime    func(childComplexity int) int
-		RunningTasks     func(childComplexity int) int
-		RunningTunnels   func(childComplexity int) int
-		SleepInterval    func(childComplexity int) int
-		SleepJitter      func(childComplexity int) int
-		Staged           func(childComplexity int) int
-		State            func(childComplexity int) int
-		Target           func(childComplexity int) int
-		User             func(childComplexity int) int
-		Version          func(childComplexity int) int
-		Via              func(childComplexity int) int
-		ViaSince         func(childComplexity int) int
-		X                func(childComplexity int) int
+		Acting               func(childComplexity int) int
+		Address              func(childComplexity int) int
+		AddressPicked        func(childComplexity int) int
+		Addrs                func(childComplexity int) int
+		Arch                 func(childComplexity int) int
+		Archived             func(childComplexity int) int
+		BindTarget           func(childComplexity int) int
+		BuildDescription     func(childComplexity int) int
+		BuildID              func(childComplexity int) int
+		CodecDownSince       func(childComplexity int) int
+		Conn                 func(childComplexity int) int
+		ConnChanges          func(childComplexity int) int
+		ConnCount            func(childComplexity int) int
+		ConnKind             func(childComplexity int) int
+		ConnName             func(childComplexity int) int
+		Connected            func(childComplexity int) int
+		Connections          func(childComplexity int) int
+		ConnectionsChangedAt func(childComplexity int) int
+		CreatedAt            func(childComplexity int) int
+		Description          func(childComplexity int) int
+		Domain               func(childComplexity int) int
+		FeedbackAt           func(childComplexity int) int
+		FeedbackErrors       func(childComplexity int) int
+		FeedbackReadAt       func(childComplexity int) int
+		FeedbackWarnings     func(childComplexity int) int
+		FolderID             func(childComplexity int) int
+		Host                 func(childComplexity int) int
+		ID                   func(childComplexity int) int
+		Integrity            func(childComplexity int) int
+		LastSeenAt           func(childComplexity int) int
+		LateAt               func(childComplexity int) int
+		LostAt               func(childComplexity int) int
+		MachineID            func(childComplexity int) int
+		Mark                 func(childComplexity int) int
+		MaxTasks             func(childComplexity int) int
+		MaxTasksNotTaken     func(childComplexity int) int
+		MaxTasksPending      func(childComplexity int) int
+		MaxTasksSettable     func(childComplexity int) int
+		ModuleName           func(childComplexity int) int
+		Number               func(childComplexity int) int
+		OperationID          func(childComplexity int) int
+		Os                   func(childComplexity int) int
+		PeerAddress          func(childComplexity int) int
+		Peers                func(childComplexity int) int
+		Persisted            func(childComplexity int) int
+		Pid                  func(childComplexity int) int
+		Platform             func(childComplexity int) int
+		Proc                 func(childComplexity int) int
+		RestartCount         func(childComplexity int) int
+		Restarts             func(childComplexity int) int
+		Rev                  func(childComplexity int) int
+		RoundtripTime        func(childComplexity int) int
+		RunningTasks         func(childComplexity int) int
+		RunningTunnels       func(childComplexity int) int
+		SleepInterval        func(childComplexity int) int
+		SleepJitter          func(childComplexity int) int
+		Staged               func(childComplexity int) int
+		State                func(childComplexity int) int
+		Target               func(childComplexity int) int
+		User                 func(childComplexity int) int
+		Version              func(childComplexity int) int
+		Via                  func(childComplexity int) int
+		ViaSince             func(childComplexity int) int
+		X                    func(childComplexity int) int
 	}
 
 	MinionSessionColumnWidth struct {
@@ -3463,6 +3465,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildCommand.Label(childComplexity), true
+	case "BuildCommand.legacy":
+		if e.ComplexityRoot.BuildCommand.Legacy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildCommand.Legacy(childComplexity), true
 	case "BuildCommand.op":
 		if e.ComplexityRoot.BuildCommand.Op == nil {
 			break
@@ -6216,6 +6224,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.Connections(childComplexity), true
+	case "MinionSession.connectionsChangedAt":
+		if e.ComplexityRoot.MinionSession.ConnectionsChangedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.ConnectionsChangedAt(childComplexity), true
 	case "MinionSession.createdAt":
 		if e.ComplexityRoot.MinionSession.CreatedAt == nil {
 			break
@@ -14163,6 +14177,10 @@ type BuildCommand {
   default: Boolean!
   # In every build of its targets: the minion cannot run without it.
   required: Boolean!
+  # Kept for the builds that have it (docs: contracts/minion-build, Legacy
+  # commands): no new build picks it, and it serves no action, its action
+  # aside; a session whose build has it runs it from its console.
+  legacy: Boolean!
   # What its data is: one of core's results (dir_listing), its shape and
   # view; null: none, shown raw. And what core can ask it to do itself: one
   # of core's actions (list_dir); null: none (docs:
@@ -16225,6 +16243,10 @@ type MinionSession {
   connName: String
   # How many connections the build has.
   connCount: Int!
+  # When the minion's own connections last changed (a hello's list, a
+  # connection_update); null: never. A view of connections reads them again
+  # when it moves.
+  connectionsChangedAt: String
   # Its moves to another connection, as the minion reported them (whatever
   # moved it: an operator's switch, a fallback), most recent first, at most
   # 32.
@@ -27921,6 +27943,35 @@ func (ec *executionContext) fieldContext_BuildCommand_required(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _BuildCommand_legacy(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildCommand_legacy,
+		func(ctx context.Context) (any, error) {
+			return obj.Legacy, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildCommand_legacy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildCommand",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BuildCommand_result(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29568,6 +29619,8 @@ func (ec *executionContext) fieldContext_BuildSchema_commands(_ context.Context,
 				return ec.fieldContext_BuildCommand_default(ctx, field)
 			case "required":
 				return ec.fieldContext_BuildCommand_required(ctx, field)
+			case "legacy":
+				return ec.fieldContext_BuildCommand_legacy(ctx, field)
 			case "result":
 				return ec.fieldContext_BuildCommand_result(ctx, field)
 			case "action":
@@ -39752,6 +39805,8 @@ func (ec *executionContext) fieldContext_MinionDelegateConnection_session(_ cont
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -43777,6 +43832,35 @@ func (ec *executionContext) fieldContext_MinionSession_connCount(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_connectionsChangedAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_connectionsChangedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ConnectionsChangedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_connectionsChangedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_connChanges(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -44587,6 +44671,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -44860,6 +44946,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -46032,6 +46120,8 @@ func (ec *executionContext) fieldContext_MinionSessionVia_session(_ context.Cont
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -47103,6 +47193,8 @@ func (ec *executionContext) fieldContext_MinionTarget_session(_ context.Context,
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -47289,6 +47381,8 @@ func (ec *executionContext) fieldContext_MinionTarget_delegate(_ context.Context
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -61743,6 +61837,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -61989,6 +62085,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -62176,6 +62274,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -62422,6 +62522,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -62609,6 +62711,8 @@ func (ec *executionContext) fieldContext_Mutation_markMinionFeedbackRead(ctx con
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -62796,6 +62900,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMaxTasks(ctx c
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -73864,6 +73970,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
 			case "connChanges":
 				return ec.fieldContext_MinionSession_connChanges(ctx, field)
 			case "connections":
@@ -74704,6 +74812,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionCommands(ctx context
 				return ec.fieldContext_BuildCommand_default(ctx, field)
 			case "required":
 				return ec.fieldContext_BuildCommand_required(ctx, field)
+			case "legacy":
+				return ec.fieldContext_BuildCommand_legacy(ctx, field)
 			case "result":
 				return ec.fieldContext_BuildCommand_result(ctx, field)
 			case "action":
@@ -95855,6 +95965,11 @@ func (ec *executionContext) _BuildCommand(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "legacy":
+			out.Values[i] = ec._BuildCommand_legacy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "result":
 			out.Values[i] = ec._BuildCommand_result(ctx, field, obj)
 		case "action":
@@ -101376,6 +101491,8 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "connectionsChangedAt":
+			out.Values[i] = ec._MinionSession_connectionsChangedAt(ctx, field, obj)
 		case "connChanges":
 			out.Values[i] = ec._MinionSession_connChanges(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

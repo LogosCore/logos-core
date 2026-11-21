@@ -8,11 +8,13 @@
 export interface ActionCommand {
   id: string
   action?: string | null
+  /** A legacy command serves no action (docs: contracts/minion-build, Legacy commands). */
+  legacy?: boolean | null
 }
 
-/** The session's commands with the action, in the factory's order. */
+/** The session's commands with the action, in the factory's order; never a legacy one. */
 export function actionCommands<C extends ActionCommand>(commands: readonly C[], action: string): C[] {
-  return commands.filter((c) => c.action === action)
+  return commands.filter((c) => c.action === action && !c.legacy)
 }
 
 /**

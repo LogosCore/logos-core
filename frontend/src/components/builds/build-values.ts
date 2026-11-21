@@ -130,6 +130,10 @@ export interface Command {
   default: boolean
   /** In every build of its targets: it cannot be unpicked. */
   required: boolean
+  /** Kept for the builds that have it: no new build picks it (docs: contracts/minion-build, Legacy commands). */
+  legacy: boolean
+  /** One of core's actions it serves (list_dir); null: none. */
+  action: string | null
   /** The connection kinds it works over; empty: every kind. */
   kinds: string[]
   /**
@@ -220,6 +224,8 @@ export function factoryKindsByName(
         targets: c.targets,
         default: c.default,
         required: c.required,
+        legacy: c.legacy,
+        action: c.action ?? null,
         kinds: c.kinds,
         composite: c.composite,
         uses: c.uses,
@@ -275,7 +281,7 @@ export function offPlatform(kind: FactoryKind, target: Target | undefined, key: 
 
 /** The commands a build of target can have, in the factory's order. */
 export function targetCommands(kind: FactoryKind, target: Target | undefined): Command[] {
-  return target ? kind.commands.filter((c) => c.targets.includes(target.id)) : []
+  return target ? kind.commands.filter((c) => c.targets.includes(target.id) && !c.legacy) : []
 }
 
 /** What a new build of target starts with, and one naming none gets: its default and required commands, with what they use. */
@@ -294,7 +300,8 @@ export function defaultCommands(kind: FactoryKind, target: Target | undefined): 
  * them, with its required ones and what each composite among them uses (and
  * what those use in turn), in the factory's order: core's PickCommands. A
  * composite with no op of its own stays among the picks; core builds what
- * it uses, and its sessions have it.
+ * it uses, and its sessions have it. A legacy one picked gives way to the
+ * target's commands of its action.
  */
 export function pickedCommands(kind: FactoryKind, target: Target | undefined, picked: Iterable<string>): string[] {
   const commands = targetCommands(kind, target)
@@ -305,6 +312,13 @@ export function pickedCommands(kind: FactoryKind, target: Target | undefined, pi
     if (!c || on.has(id)) return
     on.add(id)
     for (const u of c.uses) pick(u)
+  }
+  // A legacy command (a build made again from one that has it) is no new
+  // build's: the commands of its action take its place.
+  const legacy = new Map(kind.commands.filter((c) => c.legacy).map((c) => [c.id, c]))
+  for (const id of picked) {
+    const old = legacy.get(id)
+    if (old?.action) for (const c of commands) if (c.action === old.action) pick(c.id)
   }
   for (const id of picked) pick(id)
   for (const c of commands) if (c.required) pick(c.id)

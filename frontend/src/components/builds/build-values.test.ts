@@ -103,15 +103,17 @@ const schema: BuildSchemaFieldsFragment = {
       targets: ["dummy", "service"],
       default: false,
       required: true,
+      legacy: false,
+      action: null,
       kinds: [],
       composite: false,
       uses: [],
       params: [field({ key: "jitter", type: "int", order: 2 }), field({ key: "interval", type: "duration", order: 1 })],
     },
-    { id: "hello", op: 2, label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, kinds: [], composite: false, uses: [], params: [] },
-    { id: "ls", op: 3, label: "List", description: null, targets: ["dummy", "service"], default: false, required: false, kinds: [], composite: false, uses: [], params: [] },
-    { id: "shell", op: 4, label: "Shell", description: null, targets: ["dummy"], default: true, required: false, kinds: [], composite: false, uses: [], params: [] },
-    { id: "stop", op: 5, label: "Stop the service", description: null, targets: ["service"], default: true, required: false, kinds: [], composite: false, uses: [], params: [] },
+    { id: "hello", op: 2, label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
+    { id: "ls", op: 3, label: "List", description: null, targets: ["dummy", "service"], default: false, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
+    { id: "shell", op: 4, label: "Shell", description: null, targets: ["dummy"], default: true, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
+    { id: "stop", op: 5, label: "Stop the service", description: null, targets: ["service"], default: true, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
   ],
 }
 
@@ -217,6 +219,25 @@ describe("commands", () => {
     expect(pickedCommands(kind, service, [])).toEqual(["sleep"])
   })
 
+  it("leave a legacy one out, and pick the commands of its action in its place", () => {
+    const cmd = (id: string, op: number, action: string | null, legacy = false) => ({
+      ...kind.commands[1],
+      id,
+      op,
+      label: id,
+      targets: ["dummy"],
+      default: false,
+      legacy,
+      action,
+    })
+    const renamed = {
+      ...kind,
+      commands: [...kind.commands, cmd("switch", 12, "switch_connection", true), cmd("switch_connection", 22, "switch_connection"), cmd("dir", 6, null, true)],
+    }
+    expect(targetCommands(renamed, dummy).map((c) => c.id)).not.toContain("switch")
+    expect(pickedCommands(renamed, dummy, ["ls", "switch", "dir"])).toEqual(["sleep", "ls", "switch_connection"])
+  })
+
   it("start as the target's defaults, or as the build again's picks", () => {
     expect(initialForm(kind, null, channels).commands).toEqual(["sleep", "hello", "shell"])
     expect(initialForm(kind, { target: "dummy", commands: ["ls"] }, channels).commands).toEqual(["sleep", "ls"])
@@ -241,8 +262,8 @@ describe("commands", () => {
     ...kind,
     commands: [
       ...kind.commands,
-      { id: "archive", op: 40, label: "Archive", description: null, targets: ["dummy"], default: false, required: false, kinds: [], composite: true, uses: ["ls", "hello"], params: [] },
-      { id: "bundle", op: 0, label: "Bundle", description: null, targets: ["dummy"], default: false, required: false, kinds: [], composite: true, uses: ["archive"], params: [] },
+      { id: "archive", op: 40, label: "Archive", description: null, targets: ["dummy"], default: false, required: false, legacy: false, action: null, kinds: [], composite: true, uses: ["ls", "hello"], params: [] },
+      { id: "bundle", op: 0, label: "Bundle", description: null, targets: ["dummy"], default: false, required: false, legacy: false, action: null, kinds: [], composite: true, uses: ["archive"], params: [] },
     ],
   }
 

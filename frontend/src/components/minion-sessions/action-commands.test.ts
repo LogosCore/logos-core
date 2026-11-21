@@ -10,6 +10,15 @@ const commands = [
 ]
 
 describe("the command run for an action", () => {
+  test("is never a legacy one", () => {
+    const withLegacy = [
+      { id: "switch", action: "switch_connection", legacy: true },
+      { id: "switch_connection", action: "switch_connection" },
+    ]
+    expect(actionCommands(withLegacy, "switch_connection").map((c) => c.id)).toEqual(["switch_connection"])
+    expect(commandsFor(withLegacy, "switch_connection", "switch").map((c) => c.id)).toEqual(["switch_connection"])
+  })
+
   test("the session's commands with the action, in the factory's order", () => {
     expect(actionCommands(commands, "list_dir").map((c) => c.id)).toEqual(["ls_sh", "ls"])
     expect(actionCommands(commands, "download_file")).toEqual([])

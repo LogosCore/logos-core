@@ -594,3 +594,18 @@ func TestDelegatedPathNests(t *testing.T) {
 		t.Fatalf("the path %+v", d.via)
 	}
 }
+
+// A legacy delegate command serves no action: core neither checks a
+// delegate by it nor queues it for a target, though its build has it.
+func TestLegacyDelegateCommand(t *testing.T) {
+	d := newDelegateRig(t, endpoint(protocol.KindBindPersistent, "tcp"), 0)
+	kinds := []string{protocol.KindReverseCall, protocol.KindReversePersistent}
+	d.svc.WithDelegates(fakeDelegateSchemas{"bob": {BuildSchema: protocol.BuildSchema{Commands: []protocol.BuildCommand{
+		{ID: "relay", Op: 30, Action: protocol.ActionDelegate, Legacy: true, Kinds: kinds, Serves: []protocol.ChannelVersions{
+			{ModuleName: "tcp", Versions: []int{1}, Kinds: []string{protocol.KindBindPersistent}}}},
+	}}}})
+	why, _ := d.svc.CheckDelegate(context.Background(), d.bSession, d.build.OperationID, "tcp", protocol.KindBindPersistent, 1)
+	if !strings.Contains(why, "serves no tcp") {
+		t.Fatalf("a legacy delegate command checked: %q", why)
+	}
+}

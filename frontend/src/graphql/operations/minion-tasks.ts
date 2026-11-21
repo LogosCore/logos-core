@@ -350,6 +350,7 @@ export const MinionSessionCommandsQuery = graphql(`
       label
       description
       required
+      legacy
       result
       action
       kinds

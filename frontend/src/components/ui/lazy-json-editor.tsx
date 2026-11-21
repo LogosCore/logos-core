@@ -18,7 +18,7 @@ export function LazyJsonEditor(props: JsonEditorProps) {
   const code = useLoaded(jsonEditorCode)
   if (!code) {
     return (
-      <div className={cn("flex items-center justify-center text-sm text-muted-foreground", props.className)}>
+      <div className={cn("flex items-center justify-center text-sm text-muted-foreground", props.className)} style={props.style}>
         Loading the editor…
       </div>
     )

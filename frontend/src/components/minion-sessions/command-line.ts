@@ -21,7 +21,7 @@
 
 import { parseGoDuration } from "@/components/modules/management/field-values"
 import {
-  CONNECTION_FORMAT,
+  isConnectionPlace,
   connectionFromText,
   connectionText,
   matchConnections,
@@ -102,7 +102,7 @@ export function restParam(command: CommandDef): CommandParam | undefined {
  * a session's connection; free text takes any word.
  */
 function fits(param: CommandParam, text: string, connections: readonly ConnectionChoice[]): boolean {
-  if (param.format === CONNECTION_FORMAT) return connections.length === 0 || connectionFromText(param.key, text, connections).ok
+  if (isConnectionPlace(param)) return connections.length === 0 || connectionFromText(param.key, text, connections).ok
   switch (param.type) {
     case "enum":
       return !param.options?.length || param.options.includes(text)
@@ -199,7 +199,7 @@ function convert(
   text: string,
   connections: readonly ConnectionChoice[],
 ): { ok: true; value: unknown } | { ok: false; error: string } {
-  if (param.format === CONNECTION_FORMAT) return connectionFromText(param.key, text, connections)
+  if (isConnectionPlace(param)) return connectionFromText(param.key, text, connections)
   switch (param.type) {
     case "enum":
       if (param.options?.length && !param.options.includes(text)) return { ok: false, error: `${param.key}: one of ${param.options.join(", ")}` }
@@ -259,10 +259,15 @@ export function lineTexts(line: string, commands: readonly CommandDef[], connect
   const command = commandOf(line, commands)
   if (!command) return { texts: new Map(), extra: [] }
   const { texts, extra } = readWords(command, line, words(line).slice(1), connections)
-  // A duration typed in seconds opens the form as the duration it is.
+  // A duration typed in seconds opens the form as the duration it is; a
+  // connection typed by name, as its place, which the form's field holds.
   for (const p of command.params) {
     const t = texts.get(p.key)
     if (p.type === "duration" && t !== undefined) texts.set(p.key, promptDuration(t))
+    if (isConnectionPlace(p) && t !== undefined && connections.length > 0) {
+      const c = connectionFromText(p.key, t, connections)
+      if (c.ok) texts.set(p.key, String(c.value))
+    }
   }
   return { command, texts, extra }
 }
@@ -436,7 +441,7 @@ export function lineOf(
   const json = new Set(def?.params.filter((x) => x.type === "structured").map((x) => x.key))
   const entries = Object.entries(args ?? {}).map(([k, v]): [string, unknown] => {
     const p = def?.params.find((x) => x.key === k)
-    return [k, p?.format === CONNECTION_FORMAT && connections.length > 0 ? connectionText(v, connections) : v]
+    return [k, p && isConnectionPlace(p) && connections.length > 0 ? connectionText(v, connections) : v]
   })
   const plain = (s: string) => (/[\s"']/.test(s) || s === "" ? JSON.stringify(s) : s)
   const show = (v: unknown) => (Array.isArray(v) ? v.join(",") : typeof v === "object" && v !== null ? Object.entries(v).map(([k, x]) => `${k}=${String(x)}`).join(",") : String(v))
@@ -495,7 +500,7 @@ export function valueCompletion(
   const before = trailing ? all.slice(1) : all.slice(1, -1)
   const byKey = new Map(command.params.map((p) => [p.key, p]))
   const offer = (param: CommandParam | undefined, start: number, partial: string): ValueCompletion | null =>
-    param?.format === CONNECTION_FORMAT ? { key: param.key, start, partial, options: matchConnections(partial, connections) } : null
+    param && isConnectionPlace(param) ? { key: param.key, start, partial, options: matchConnections(partial, connections) } : null
 
   const eq = /^--([A-Za-z0-9_.-]+)=(.*)$/.exec(current.text)
   if (eq) return offer(byKey.get(eq[1]), current.start + eq[1].length + 3, eq[2])

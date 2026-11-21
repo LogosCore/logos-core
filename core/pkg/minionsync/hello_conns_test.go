@@ -2,6 +2,7 @@ package minionsync
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -70,12 +71,13 @@ func TestHelloOwnConnections(t *testing.T) {
 	if s = r.sessionRow(t, sid); s.Conn != 2 || len(s.ConnChanges) != 1 {
 		t.Fatalf("after a refused conn_update: conn %d, changes %d", s.Conn, len(s.ConnChanges))
 	}
-	// One with connections replaces them.
+	// One with connections replaces them; an unnamed one keeps the name
+	// the session had at its place.
 	re = hello("ws01")
 	re.Conn = 1
 	re.Connections = own[1:]
 	r.say(t, ctx, c, sid, re)
-	if s = r.sessionRow(t, sid); len(s.Connections) != 1 || s.ConnCount != 1 || s.Conn != 1 || s.ConnName != "dns-1" {
+	if s = r.sessionRow(t, sid); len(s.Connections) != 1 || s.ConnCount != 1 || s.Conn != 1 || s.ConnName != "front" {
 		t.Fatalf("after a rehello with: own %d, count %d, conn %d %q", len(s.Connections), s.ConnCount, s.Conn, s.ConnName)
 	}
 
@@ -171,5 +173,59 @@ func TestConnectionUpdate(t *testing.T) {
 	}
 	if s = r.sessionRow(t, sid); len(s.Connections) != 1 || s.Conn != 1 || s.ConnName != "only" {
 		t.Fatalf("after move then shorten: own %d, conn %d %q", len(s.Connections), s.Conn, s.ConnName)
+	}
+}
+
+// A connection_update's unnamed entries keep the names the session has at
+// their places: the build's, then its own list's; a name another entry
+// takes, or a place past them, falls back to "<channel>-<place>".
+func TestConnectionUpdateKeepsNames(t *testing.T) {
+	r := newRig(t)
+	r.build.Connections.Items = []protocol.BuildConnection{endpoint(protocol.KindReverseCall, "http"),
+		endpoint(protocol.KindReversePersistent, "dns")}
+	r.svc.WithChannelSchemas(fakeSchemas{
+		"http": {Kinds: map[string]protocol.ConnectionKind{protocol.KindReverseCall: {}, protocol.KindReversePersistent: {}}},
+		"dns":  {Kinds: map[string]protocol.ConnectionKind{protocol.KindReversePersistent: {}}},
+	})
+	ctx := ViaChannel(context.Background(), "dns")
+	h := hello("ws01")
+	h.Conn = 1
+	_, c := newSock("ws")
+	sid := r.helloOver(t, ctx, c, h)
+	names := func() []string {
+		var out []string
+		for _, sc := range r.sessionRow(t, sid).Connections {
+			out = append(out, sc.Name)
+		}
+		return out
+	}
+	update := func(conns ...protocol.HelloConnection) {
+		t.Helper()
+		reply := r.say(t, ctx, c, sid, protocol.ConnectionUpdateItem{T: protocol.ItemConnectionUpdate, Connections: conns})
+		if code := errCodeIn(t, r.openUnder(t, sid, r.keys, reply)); code != 0 {
+			t.Fatalf("err %d", code)
+		}
+	}
+	http := protocol.HelloConnection{Channel: "http", Kind: protocol.KindReverseCall}
+	dns := protocol.HelloConnection{Channel: "dns", Kind: protocol.KindReversePersistent}
+
+	// The build's names; the third, past them, its own.
+	update(http, dns, dns)
+	if got := names(); !slices.Equal(got, []string{"http-reverse-call", "dns-reverse-persistent", "dns-3"}) {
+		t.Fatalf("from the build's: %v", got)
+	}
+	// Then the session's own: the second edited, named; the others keep theirs.
+	named := dns
+	named.Name = "tunnel"
+	update(http, named, dns)
+	if got := names(); !slices.Equal(got, []string{"http-reverse-call", "tunnel", "dns-3"}) {
+		t.Fatalf("one renamed: %v", got)
+	}
+	// A kept name another entry takes falls back.
+	taken := dns
+	taken.Name = "http-reverse-call"
+	update(http, dns, taken)
+	if got := names(); !slices.Equal(got, []string{"http-1", "tunnel", "http-reverse-call"}) {
+		t.Fatalf("a kept name taken: %v", got)
 	}
 }

@@ -42,7 +42,7 @@ func TestPutConnections(t *testing.T) {
 
 	wire := args(map[string]any{"channel": "http", "kind": protocol.KindReverseCall, "name": "front",
 		"params": map[string]any{"url": "https://a.example"}})
-	if err := r.putConnections(context.Background(), s, params, wire); err != nil {
+	if err := r.putConnections(context.Background(), s, "", params, wire); err != nil {
 		t.Fatal(err)
 	}
 	c, ok := wire["conn"].(protocol.HelloConnection)
@@ -60,9 +60,62 @@ func TestPutConnections(t *testing.T) {
 		"params.nope":        {"channel": "http", "kind": protocol.KindReverseCall, "params": map[string]any{"url": "https://a", "nope": 1}},
 		"values.method":      {"channel": "http", "kind": protocol.KindReverseCall, "params": map[string]any{"url": "https://a"}, "values": map[string]any{"method": "GET"}},
 	} {
-		err := r.putConnections(context.Background(), s, params, args(v))
+		err := r.putConnections(context.Background(), s, "", params, args(v))
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: %v", want, err)
 		}
+	}
+}
+
+// edit_connection's connection goes as what changed of the session's
+// connection at its place (protocol.ConnectionPatch): a value changed
+// alone, the connection whole when its kind changes, and an edit that
+// changes nothing refused. The session's own connections are kept in their
+// CBOR forms (a duration in milliseconds), which count as the same values.
+func TestPutConnectionsEditPatch(t *testing.T) {
+	r := &minionTaskResolver{
+		channels: fakeChannelSchemas{"http": {Version: 3, Kinds: map[string]protocol.ConnectionKind{
+			protocol.KindReverseCall: {Fields: []protocol.FieldSpec{{Key: "url", Num: 1, Type: protocol.FieldURL, Required: true},
+				{Key: "timeout", Num: 2, Type: protocol.FieldDuration, Default: "30s"}}},
+			protocol.KindReversePersistent: {Fields: []protocol.FieldSpec{{Key: "url", Num: 1, Type: protocol.FieldURL, Required: true}}}}}},
+		schemas: fakeTaskSchemas{s: &models.ModuleBuildSchema{BuildSchema: protocol.BuildSchema{Channels: []protocol.BuildChannel{{ModuleName: "http",
+			Kinds: []protocol.BuildKind{{Kind: protocol.KindReverseCall, Fields: []protocol.FieldSpec{
+				{Key: "path_prefix", Num: 2, Type: protocol.FieldString, Default: "/"}}}}}}}}},
+	}
+	s := &models.MinionSession{ModuleName: "bob", Connections: []models.MinionSessionConnSpec{{Channel: "http", Kind: protocol.KindReverseCall,
+		Name: "front", Version: 3, Params: map[string]any{"url": "https://a.example", "timeout": uint64(30000)}, Values: map[string]any{"2": "/new"}}}}
+	params := []protocol.FieldSpec{{Key: "conn", Num: 1, Type: protocol.FieldInt, Format: protocol.FormatConnection},
+		{Key: "connection", Num: 2, Type: protocol.FieldStructured, Format: protocol.FormatConnection}}
+	edit := func(v map[string]any) (map[string]any, error) {
+		wire, problems := protocol.TaskArgs(params, map[string]any{"conn": 1, "connection": v})
+		if problems != nil {
+			t.Fatal(problems)
+		}
+		return wire, r.putConnections(context.Background(), s, protocol.ActionEditConnection, params, wire)
+	}
+	front := func(path, kind string) map[string]any {
+		return map[string]any{"channel": "http", "kind": kind, "name": "front",
+			"params": map[string]any{"url": "https://a.example", "timeout": "30s"}, "values": map[string]any{"path_prefix": path}}
+	}
+
+	wire, err := edit(front("/new/2", protocol.KindReverseCall))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, ok := wire["connection"].(protocol.ConnectionPatch)
+	if !ok || p.Whole() || len(p.Values) != 1 || p.Values[2] != "/new/2" || p.Params != nil || p.Name != "" {
+		t.Fatalf("the patch: %#v", wire["connection"])
+	}
+	if _, err := edit(front("/new", protocol.KindReverseCall)); err == nil || !strings.Contains(err.Error(), "connection 1: nothing changed") {
+		t.Fatalf("an edit changing nothing: %v", err)
+	}
+	persistent := front("/new", protocol.KindReversePersistent)
+	persistent["params"] = map[string]any{"url": "https://a.example"}
+	delete(persistent, "values")
+	if wire, err = edit(persistent); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := wire["connection"].(protocol.ConnectionPatch); !p.Whole() || p.Kind != protocol.KindReversePersistent {
+		t.Fatalf("a kind changed: %#v", wire["connection"])
 	}
 }

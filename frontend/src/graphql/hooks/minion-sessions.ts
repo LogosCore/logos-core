@@ -361,10 +361,16 @@ export function useMinionSession(id: string) {
   return useQuery(sessionQuery(id))
 }
 
-/** A session's build's connections, in the build's order: they change only with the build. */
+/**
+ * A session's connections: its minion's own when it said them, else its
+ * build's. Read again when the minion's own change (a connection_update:
+ * the session's connectionsChangedAt moves), the last ones shown meanwhile.
+ */
 export function useMinionSessionConnections(id: string) {
+  const changed = useMinionSession(id).data?.minionSession?.connectionsChangedAt ?? null
   return useQuery({
-    queryKey: minionSessionKeys.connections(id),
+    queryKey: [...minionSessionKeys.connections(id), changed],
+    placeholderData: keepPreviousData,
     queryFn: () => graphqlClient(MinionSessionConnectionsDocument, { id }),
     enabled: id !== "",
     staleTime: 5 * 60_000,

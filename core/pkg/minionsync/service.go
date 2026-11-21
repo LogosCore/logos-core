@@ -645,10 +645,13 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 	}
 	// The minion's own connections when its hello says them, else the
 	// build's.
-	own := s.ownConns(ctx, hello.Connections)
+	own := s.ownConns(ctx, hello.Connections, namesOf(b, nil))
 	place := helloPlace(hello, from, own)
 	conn := connOf(b, own, place)
 	session.Connections = own
+	if own != nil {
+		session.ConnectionsAt = &now
+	}
 	session.Conn, session.ConnKind, session.ConnName, session.ConnCount = conn.Place, conn.Kind, conn.Name, len(connsOf(b, own))
 	session.ConnMaxMessage = conn.MaxMessage
 	session.Compression, session.Envelope, session.Codec = b.Compression, b.Envelope, b.Codec
@@ -731,7 +734,7 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	// replace the session's), else the ones the session kept, else the
 	// build's.
 	own := sess.Connections
-	if said := s.ownConns(ctx, hello.Connections); said != nil {
+	if said := s.ownConns(ctx, hello.Connections, namesOf(b, sess.Connections)); said != nil {
 		own = said
 		if err := s.sessions.SetConnections(ctx, sid, own); err != nil {
 			return nil, false, fmt.Errorf("claim the session: %w", err)
@@ -849,7 +852,8 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			// Connections it says replace the ones the session kept; a
 			// rehello without keeps them.
 			replaced := false
-			if own := s.ownConns(ctx, hello.Connections); own != nil {
+			if len(hello.Connections) > 0 {
+				own := s.ownConns(ctx, hello.Connections, s.sessionNames(ctx, session))
 				if err = s.sessions.SetConnections(ctx, session.SessionID, own); err != nil {
 					return nil, fmt.Errorf("rehello: %w", err)
 				}
@@ -1125,7 +1129,7 @@ func (s *Service) takeConnectionUpdate(ctx context.Context, session *models.Mini
 	if err != nil {
 		return errItem(protocol.ErrItemBadMessage, err.Error(), i)
 	}
-	own := s.ownConns(ctx, u.Connections)
+	own := s.ownConns(ctx, u.Connections, s.sessionNames(ctx, session))
 	if err := s.sessions.SetConnections(ctx, session.SessionID, own); err != nil {
 		return nil, fmt.Errorf("record a connection_update: %w", err)
 	}
@@ -1177,6 +1181,30 @@ func connsOf(b *models.Build, own []models.MinionSessionConnSpec) []connEntry {
 	return out
 }
 
+// namesOf are the names of a minion's connections (connsOf), by place: what
+// an unnamed one of a list it says keeps (models.ConnSpecsOf).
+func namesOf(b *models.Build, own []models.MinionSessionConnSpec) []string {
+	conns := connsOf(b, own)
+	names := make([]string, len(conns))
+	for i, c := range conns {
+		names[i] = c.name
+	}
+	return names
+}
+
+// sessionNames are the names of session's connections: its own list's,
+// else its build's; none when the build is gone.
+func (s *Service) sessionNames(ctx context.Context, session *models.MinionSession) []string {
+	if session.Connections != nil {
+		return namesOf(nil, session.Connections)
+	}
+	b, err := s.builds.FindByBuildID(ctx, session.BuildID)
+	if err != nil {
+		return nil
+	}
+	return namesOf(b, nil)
+}
+
 // connOf is the connection at place in the minion's connections (connsOf):
 // its kind and name, empty when there is no such one.
 func connOf(b *models.Build, own []models.MinionSessionConnSpec, place int) models.MinionSessionConn {
@@ -1203,10 +1231,10 @@ func helloPlace(hello protocol.HelloItem, from *sender, own []models.MinionSessi
 
 // ownConns are a minion's own connections (a hello's or a
 // connection_update's) as core keeps them, their params named by the
-// channel's fields (a param its schema does not number keeps its number);
-// nil for none.
-func (s *Service) ownConns(ctx context.Context, conns []protocol.HelloConnection) []models.MinionSessionConnSpec {
-	own := models.ConnSpecsOf(conns)
+// channel's fields (a param its schema does not number keeps its number),
+// an unnamed one keeping kept's name at its place; nil for none.
+func (s *Service) ownConns(ctx context.Context, conns []protocol.HelloConnection, kept []string) []models.MinionSessionConnSpec {
+	own := models.ConnSpecsOf(conns, kept)
 	if s.channels == nil {
 		return own
 	}

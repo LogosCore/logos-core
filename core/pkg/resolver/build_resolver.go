@@ -460,7 +460,7 @@ func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 func toBuildCommandModel(s protocol.BuildSchema, c protocol.BuildCommand) *model.BuildCommand {
 	mc := &model.BuildCommand{
 		ID: c.ID, Op: c.Op, Label: orKey(c.Label, c.ID), Description: strPtr(c.Description),
-		Targets: []string{}, Default: c.Default, Required: c.Required, Params: toBuildFieldModels(c.Params),
+		Targets: []string{}, Default: c.Default, Required: c.Required, Legacy: c.Legacy, Params: toBuildFieldModels(c.Params),
 		Result: strPtr(c.Result), Action: strPtr(c.Action), Kinds: append([]string{}, c.Kinds...),
 		Serves: []*model.BuildServe{}, Composite: c.Composite, Uses: append([]string{}, c.Uses...),
 	}

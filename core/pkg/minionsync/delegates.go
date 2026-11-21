@@ -338,7 +338,7 @@ func (s *Service) delegateCommands(ctx context.Context, session *models.MinionSe
 	}
 	var out []protocol.BuildCommand
 	for _, c := range sc.Commands {
-		if protocol.IsDelegateAction(c.Action) && slices.Contains(b.Commands, c.ID) {
+		if protocol.IsDelegateAction(c.ServedAction()) && slices.Contains(b.Commands, c.ID) {
 			out = append(out, c)
 		}
 	}

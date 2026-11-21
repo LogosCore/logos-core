@@ -3,8 +3,39 @@
 // name or by place, shown by name, picked from a list. The minion gets the
 // place (from 1); operators never need to know the build's order.
 
+import type { Draft, FieldDef } from "@/components/modules/management/field-values"
+
 /** The connection format of a param (protocol.FormatConnection). */
 export const CONNECTION_FORMAT = "connection"
+
+/**
+ * A param that takes a connection's place (an int of the connection format:
+ * switch_connection's conn), typed by name or place. A structured one
+ * (edit_connection's connection) takes the connection whole, as JSON.
+ */
+export function isConnectionPlace(p: { type: string; format?: string | null }): boolean {
+  return p.format === CONNECTION_FORMAT && p.type === "int"
+}
+
+/**
+ * Drafts with connection c in fields of the connection format: its place in
+ * the int ones, its JSON in the structured ones; a field in keep (typed
+ * already) stays as it is.
+ */
+export function withConnection(
+  fields: readonly FieldDef[],
+  drafts: Record<string, Draft>,
+  c: ConnectionChoice,
+  keep: ReadonlySet<string> = new Set(),
+): Record<string, Draft> {
+  const out = { ...drafts }
+  for (const f of fields) {
+    if (f.format !== CONNECTION_FORMAT || keep.has(f.key)) continue
+    if (f.type === "int") out[f.key] = { kind: "text", text: String(c.place) }
+    if (f.type === "structured" && c.value) out[f.key] = { kind: "json", text: connectionJSON(c.value) }
+  }
+  return out
+}
 
 /** One of a session's build's connections. */
 export interface ConnectionChoice {
