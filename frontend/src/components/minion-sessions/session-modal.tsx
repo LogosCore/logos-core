@@ -29,8 +29,7 @@ import type { RecordModal as RecordModalTarget, SessionTab } from "@/lib/record-
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { formatAgo, formatAgoExact, formatInterval, formatRoundtrip, lateness } from "./sessions-layout"
-import { ConnectionsCard } from "./session-connections"
-import { ConnectionDetailCards } from "./session-connection-details"
+import { ConnectionCards } from "./session-connections"
 import { MaxTasksValue } from "./max-tasks"
 import { FeedbackCounts } from "./feedback-parts"
 import { FeedbackView } from "./feedback-view"
@@ -158,10 +157,14 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
       <TabsContent value="connections" className="flex min-h-0 flex-col">
         <RecordModalBody>
           <CardColumns className="p-4">
-            <ConnectionsCard s={s} />
-            <ConnectionDetailCards s={s} />
-            <PeersCard s={s} />
-            {s.connChanges.length > 0 && <ConnectionChangesCard s={s} />}
+            {/* The connections on the left, the rest on the right. */}
+            <div className="flex min-w-0 flex-col gap-4">
+              <ConnectionCards s={s} />
+            </div>
+            <div className="flex min-w-0 flex-col gap-4">
+              <PeersCard s={s} />
+              {s.connChanges.length > 0 && <ConnectionChangesCard s={s} />}
+            </div>
           </CardColumns>
         </RecordModalBody>
       </TabsContent>
@@ -402,7 +405,8 @@ function AddressesCard({ s }: { s: Session }) {
 function PeersCard({ s }: { s: Session }) {
   const now = useNow(1_000)
   return (
-    <InfoCard title="External addresses" note={s.peers.length}>
+    // At most 32 kept, so it scrolls past a screenful.
+    <InfoCard title="External addresses" note={s.peers.length} bodyClassName={SCROLLED}>
       {s.peers.length === 0 ? (
         <NoteRow>No channel said where its messages came from.</NoteRow>
       ) : (
@@ -425,11 +429,14 @@ function PeersCard({ s }: { s: Session }) {
   )
 }
 
+/** A card's rows that keep coming (addresses, moves): past this height they scroll. */
+const SCROLLED = "max-h-80 overflow-y-auto"
+
 /** The moves to another connection the minion reported, most recent first. */
 function ConnectionChangesCard({ s }: { s: Session }) {
   const now = useNow(60_000)
   return (
-    <InfoCard title="Connection changes" note={s.connChanges.length}>
+    <InfoCard title="Connection changes" note={s.connChanges.length} bodyClassName={SCROLLED}>
       {/* The same move may come again, so by place. */}
       {s.connChanges.map((c, i) => (
         <LabelRow key={i} label={`${c.from ?? "?"} → ${c.to}`}>

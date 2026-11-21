@@ -14,6 +14,7 @@ export function InfoCard({
   note,
   actions,
   labelWidth = "w-40",
+  bodyClassName,
   children,
 }: {
   /** Without a title or actions, the card has no header: the table alone. */
@@ -24,6 +25,9 @@ export function InfoCard({
   actions?: ReactNode
   /** The first column's width class: the same in cards laid out together. */
   labelWidth?: string
+  /** The table's box, under the header: a height it scrolls past
+   *  ("max-h-80 overflow-y-auto"), for rows that keep coming. */
+  bodyClassName?: string
   children: ReactNode
 }) {
   return (
@@ -39,13 +43,15 @@ export function InfoCard({
       )}
       {/* Fixed widths, set here: a first row across both columns must not
           make them halves. */}
-      <table className="w-full table-fixed text-sm">
-        <colgroup>
-          <col className={labelWidth} />
-          <col />
-        </colgroup>
-        <TableBody>{children}</TableBody>
-      </table>
+      <div className={bodyClassName}>
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col className={labelWidth} />
+            <col />
+          </colgroup>
+          <TableBody>{children}</TableBody>
+        </table>
+      </div>
     </section>
   )
 }

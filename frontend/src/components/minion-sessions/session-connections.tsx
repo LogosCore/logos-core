@@ -1,12 +1,16 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { IdRows, InfoCard, LabelRow, NoteRow } from "@/components/ui/info-card"
+import { IdRows, NoteRow, SectionRow } from "@/components/ui/info-card"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
-import { kindLabels, kindsByName } from "@/components/endpoints/endpoint-values"
-import { settingsSummary } from "@/components/builds/build-values"
+import { kindsByName } from "@/components/endpoints/endpoint-values"
+import { ConnectionFoldCard } from "@/components/builds/connection-fold-card"
+import { factoryKindsByName, paramFields, settingFields, settingsSummary } from "@/components/builds/build-values"
+import { valueRows, type ValueRow } from "@/components/builds/build-record"
+import { rowsOf } from "@/components/builds/build-value-rows"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
-import { useChannelKinds } from "@/graphql/hooks/channel-endpoints"
+import { useBuildFiles, useFactoryKinds } from "@/graphql/hooks/builds"
+import { useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { useMinionSessionConnections, useMinionSessions } from "@/graphql/hooks/minion-sessions"
 import {
   useBindConnections,
@@ -25,142 +29,184 @@ import { useEditConnectionCommand, useSessionConnectionChoices, useSwitchConnect
 import { EditConnectionDialog } from "./edit-connection-dialog"
 
 // A session's connections (docs: contracts/channel-core-connections, Connection
-// management): its build's, in the order the minion tries them, the one it
-// uses marked, as its hello or its last conn_update said; and the moves it
-// reported. Switch to runs the session's command for core's
-// switch_connection action, a task like any other: the minion moves once the
-// new connection answers, and says so. A bind-call session (a minion core
-// calls) shows its target under its connection: where the minion is, what
-// the latest call came to, and Check now; one whose target was removed
-// says core cannot reach it, and a target added there takes the session
-// over. A connection the minion listens on (bind-persistent) offers a target
-// even while the minion uses another: core dials it once the minion
-// switches to it. A session whose latest message came through delegates
-// has a via row: each delegate's session, nearest first, the task that
-// carried it and since when (the session's own fields: live).
+// management): the minion's own when its hello said them, else its build's,
+// in the order the minion tries them, a card each. Its head says what it is
+// (channel, name, kind, where it connects), marks the one in use (as its
+// hello or its last conn_update said), and has its actions: Edit (the
+// session's command for edit_connection) and Switch to (for
+// switch_connection), each a task like any other. Unfolded (the one in use
+// starts so), it lists the channel's settings set and the factory's values.
+// A bind-call session (a minion core calls) shows its target in the head of
+// its connection: where the minion is, what the latest call came to, and
+// Check now; one whose target was removed says core cannot reach it, and a
+// target added there takes the session over. A connection the minion
+// listens on (bind-persistent) offers a target even while the minion uses
+// another: core dials it once the minion switches to it. A session whose
+// latest message came through delegates says so in the head of the one in
+// use: each delegate's session, nearest first, the task that carried it and
+// since when (the session's own fields: live).
 
 type Session = MinionSessionFieldsFragment
 
-export function ConnectionsCard({ s }: { s: Session }) {
+export function ConnectionCards({ s }: { s: Session }) {
   const { data } = useMinionSessionConnections(s.id)
   const connections = data?.minionSession?.connections ?? []
   const kinds = useChannelKinds()
   const channels = useMemo(() => kindsByName(kinds.data?.channelKinds ?? []), [kinds.data])
+  const factoryKinds = useFactoryKinds()
+  const factory = useMemo(() => factoryKindsByName(factoryKinds.data?.factoryKinds ?? []).get(s.moduleName), [factoryKinds.data, s.moduleName])
+  const files = useBuildFiles(s.operationId)
+  const fileNames = useMemo(() => new Map((files.data?.buildFiles ?? []).map((f) => [f.id, f.name])), [files.data])
+  const channelIcons = useChannelIcons()
   const { command, pending, switchTo } = useSwitchConnection(s.id)
   // Edit: the session's command for edit_connection, opened on a connection.
   const editCommand = useEditConnectionCommand(s.id)
   const choices = useSessionConnectionChoices(s.id)
   const [editing, setEditing] = useState<number | null>(null)
+  // The cards unfolded, by place; the one in use to start with.
+  const [unfolded, setUnfolded] = useState<ReadonlySet<number>>(() => new Set(s.conn ? [s.conn] : []))
   const open = s.state === "OPEN"
   const targetQuery = useSessionTarget(s.id)
   const target = targetQuery.data ?? null
   const bind = s.connKind === "bind-call" || s.connKind === "bind-persistent"
   useMinionTargetChangedSubscription(target || bind ? s.operationId : "")
 
+  if (connections.length === 0) {
+    return (
+      <section className="min-w-0 rounded-xl border bg-card px-4 py-3 text-sm text-muted-foreground">
+        {data ? "The build is deleted: its connections are not known." : "Loading…"}
+      </section>
+    )
+  }
+  const toggle = (place: number) =>
+    setUnfolded((was) => {
+      const next = new Set(was)
+      if (next.has(place)) next.delete(place)
+      else next.add(place)
+      return next
+    })
+
   return (
-    <InfoCard
-      title="Connections"
-      note={s.conn ? `using ${s.conn} of ${connections.length}` : connections.length || undefined}
-    >
-      {connections.length === 0 ? (
-        <NoteRow>{data ? "The build is deleted: its connections are not known." : "Loading…"}</NoteRow>
-      ) : (
-        <IdRows
-          rows={connections.map((c) => {
-            const address = settingsSummary(channels.get(c.moduleName), c.kind, c.params, 1)
-            const inUse = c.place === s.conn
-            return {
-              id: String(c.place),
-              content: (
-                <div className="flex items-baseline gap-2">
-                  <div className="min-w-0 flex-1">
-                    <span className="font-mono">{c.name}</span>
-                    <span className="text-muted-foreground" title={kindLabels[c.kind]}>
-                      {" "}
-                      · {c.moduleName} · {c.kind}
-                    </span>
-                    {inUse && <span className="ml-2 rounded-md border px-1.5 py-0.5 text-xs">in use</span>}
-                    {address && <div className="truncate font-mono text-xs text-muted-foreground">{address}</div>}
-                    {target && target.conn === c.place && <TargetLine target={target} />}
-                    {!target && targetQuery.isSuccess && ((bind && inUse) || c.kind === "bind-persistent") && (
-                      <NoTargetLine s={s} place={c.place} open={open} inUse={inUse} />
-                    )}
-                  </div>
-                  {editCommand && open && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="xs"
-                      title={`Queue ${editCommand.id} for connection ${c.place}: edit it as JSON first`}
-                      onClick={() => setEditing(c.place)}
-                    >
-                      Edit
-                    </Button>
-                  )}
-                  {command && open && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="xs"
-                      disabled={pending}
-                      title={
-                        c.kind === "bind-persistent"
-                          ? `Queue ${command.id} with conn ${c.place}: the minion opens its port, and moves once core dials it (its target)`
-                          : `Queue ${command.id} with conn ${c.place}: the minion moves once this connection answers`
-                      }
-                      onClick={() => switchTo(c.place)}
-                    >
-                      Switch to
-                    </Button>
-                  )}
-                </div>
-              ),
+    <>
+      {connections.map((c) => {
+        const inUse = c.place === s.conn
+        const expanded = unfolded.has(c.place)
+        const address = settingsSummary(channels.get(c.moduleName), c.kind, c.params, 1)
+        const settings = valueRows(settingFields(channels.get(c.moduleName), c.kind), c.params).filter(isSet)
+        const own = valueRows(factory ? paramFields(factory, c.moduleName, c.kind) : [], c.values).filter(isSet)
+        return (
+          <ConnectionFoldCard
+            key={c.place}
+            place={c.place}
+            name={c.name}
+            moduleName={c.moduleName}
+            kind={c.kind}
+            icon={channelIcons.get(c.moduleName)}
+            badge={inUse && <span className="shrink-0 rounded-md border px-1.5 text-xs">in use</span>}
+            expanded={expanded}
+            onToggle={() => toggle(c.place)}
+            actions={
+              <>
+                {editCommand && open && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    title={`Queue ${editCommand.id} for connection ${c.place}: change its settings first`}
+                    onClick={() => setEditing(c.place)}
+                  >
+                    Edit
+                  </Button>
+                )}
+                {command && open && !inUse && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    disabled={pending}
+                    title={
+                      c.kind === "bind-persistent"
+                        ? `Queue ${command.id} with conn ${c.place}: the minion opens its port, and moves once core dials it (its target)`
+                        : `Queue ${command.id} with conn ${c.place}: the minion moves once this connection answers`
+                    }
+                    onClick={() => switchTo(c.place)}
+                  >
+                    Switch to
+                  </Button>
+                )}
+              </>
             }
-          })}
-        />
-      )}
-      <ViaRow s={s} />
+            lines={
+              <>
+                {address && (
+                  <div className="truncate font-mono text-xs text-muted-foreground" title={address}>
+                    {c.moduleName} · {address}
+                  </div>
+                )}
+                {target && target.conn === c.place && <TargetLine target={target} />}
+                {!target && targetQuery.isSuccess && ((bind && inUse) || c.kind === "bind-persistent") && (
+                  <NoTargetLine s={s} place={c.place} open={open} inUse={inUse} />
+                )}
+                {inUse && <ViaLine s={s} />}
+                {inUse && connections.length > 1 && !command && (
+                  <p className="text-xs text-muted-foreground">The minion was built without a command to switch connections.</p>
+                )}
+              </>
+            }
+          >
+            {own.length > 0 && <SectionRow title="Settings" note={c.moduleName} />}
+            {settings.length === 0 ? <NoteRow>No settings set.</NoteRow> : <IdRows rows={rowsOf(settings, fileNames)} />}
+            {own.length > 0 && (
+              <>
+                <SectionRow title={`${s.moduleName}'s values`} note={`for ${c.moduleName}`} />
+                <IdRows rows={rowsOf(own, fileNames)} />
+              </>
+            )}
+          </ConnectionFoldCard>
+        )
+      })}
       <EditConnectionDialog
         sessionId={s.id}
         connection={choices.find((x) => x.place === editing) ?? null}
         connections={choices}
         onClose={() => setEditing(null)}
       />
-      {connections.length > 1 && !command && (
-        <NoteRow>The minion was built without a command to switch connections.</NoteRow>
-      )}
-    </InfoCard>
+    </>
   )
 }
 
+/** A row with a value: one not set says nothing about the connection. */
+function isSet(r: ValueRow): boolean {
+  return r.value !== undefined
+}
+
 /** The delegates the session's latest message came through, nearest first: each one's session (opens it), then the task that carried it and since when. */
-function ViaRow({ s }: { s: Session }) {
+function ViaLine({ s }: { s: Session }) {
   const modals = useRecordModals()
   // Their hosts; null: removed.
   const hops = useMinionSessions(s.via.map((v) => v.sessionId))
   if (s.via.length === 0) return null
   const task = s.via[0].taskId
   return (
-    <LabelRow label="via">
-      <div className="flex flex-wrap items-baseline gap-x-1.5">
-        {s.via.map((v, i) => (
-          <span key={v.sessionId} className="flex items-baseline gap-1.5">
-            {i > 0 && <span className="text-muted-foreground">→</span>}
-            <button
-              type="button"
-              className="font-mono underline-offset-2 hover:underline"
-              title={`Open session #${v.number}`}
-              onClick={() => modals.open({ kind: "session", id: v.sessionId })}
-            >
-              #{v.number}
-            </button>
-            {hops[i]?.host && <span className="text-muted-foreground">{hops[i].host}</span>}
-            {hops[i] === null && <span className="text-muted-foreground italic">removed</span>}
-          </span>
-        ))}
-      </div>
-      <div className="text-xs text-muted-foreground">
-        delegate task{" "}
+    <div className="mt-1 flex flex-wrap items-baseline gap-x-1.5 text-xs">
+      <span className="text-muted-foreground">via</span>
+      {s.via.map((v, i) => (
+        <span key={v.sessionId} className="flex items-baseline gap-1.5">
+          {i > 0 && <span className="text-muted-foreground">→</span>}
+          <button
+            type="button"
+            className="font-mono underline-offset-2 hover:underline"
+            title={`Open session #${v.number}`}
+            onClick={() => modals.open({ kind: "session", id: v.sessionId })}
+          >
+            #{v.number}
+          </button>
+          {hops[i]?.host && <span className="text-muted-foreground">{hops[i].host}</span>}
+          {hops[i] === null && <span className="text-muted-foreground italic">removed</span>}
+        </span>
+      ))}
+      <span className="text-muted-foreground">
+        · delegate task{" "}
         <code className="font-mono" title={task}>
           {task.slice(0, 8)}
         </code>
@@ -170,8 +216,8 @@ function ViaRow({ s }: { s: Session }) {
             · since <FormattedDateTimeText date={s.viaSince} />
           </>
         )}
-      </div>
-    </LabelRow>
+      </span>
+    </div>
   )
 }
 
