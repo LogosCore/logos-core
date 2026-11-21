@@ -1,27 +1,30 @@
 // A minion's feedback (docs: contracts/minion-messages/sessions, Feedback):
-// the warnings and errors it sends its operators, as the session's views say
-// them.
+// the warnings, errors and information it sends its operators, as the
+// session's views say them. Information marks nothing: core counts it
+// nowhere as unread, and no session or task is flagged by it.
 
-export type FeedbackLevel = "warning" | "error"
+export type FeedbackLevel = "warning" | "error" | "info"
 
 /** A level as core gives it: one a later version adds is a warning. */
 export function feedbackLevel(level: string): FeedbackLevel {
-  return level === "error" ? "error" : "warning"
+  return level === "error" || level === "info" ? level : "warning"
 }
 
-/** "3 errors, 1 warning"; "" for none. */
-export function feedbackSummary(errors: number, warnings: number): string {
+/** "3 errors, 1 warning, 2 info"; "" for none. */
+export function feedbackSummary(errors: number, warnings: number, infos = 0): string {
   const parts = [
     errors > 0 ? `${errors} ${errors === 1 ? "error" : "errors"}` : "",
     warnings > 0 ? `${warnings} ${warnings === 1 ? "warning" : "warnings"}` : "",
+    infos > 0 ? `${infos} info` : "",
   ]
   return parts.filter(Boolean).join(", ")
 }
 
-/** The tone of a level: red for errors, amber for warnings. */
+/** The tone of a level: red for errors, amber for warnings, sky for information (as the module logs' INFO). */
 export const FEEDBACK_TONE: Record<FeedbackLevel, string> = {
   error: "text-red-600 dark:text-red-400",
   warning: "text-amber-700 dark:text-amber-400",
+  info: "text-sky-700 dark:text-sky-400",
 }
 
 /** The ids of the entries shown whole, with id's turned. */

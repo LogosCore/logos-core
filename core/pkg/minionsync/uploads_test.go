@@ -48,7 +48,7 @@ func (f *fakeTasks) SetDataProblem(_ context.Context, id uuid.UUID, problem stri
 	return t, nil
 }
 
-func (f *fakeTasks) AddFeedback(_ context.Context, sid, id uuid.UUID, errs, warns int) (*models.MinionTask, error) {
+func (f *fakeTasks) AddFeedback(_ context.Context, sid, id uuid.UUID, errs, warns, infos int) (*models.MinionTask, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t := f.find(id)
@@ -57,6 +57,7 @@ func (f *fakeTasks) AddFeedback(_ context.Context, sid, id uuid.UUID, errs, warn
 	}
 	t.FeedbackErrors += errs
 	t.FeedbackWarnings += warns
+	t.FeedbackInfos += infos
 	return t, nil
 }
 

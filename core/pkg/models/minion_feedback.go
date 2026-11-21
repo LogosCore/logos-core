@@ -6,8 +6,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// MinionFeedback is a warning or an error a session's minion sent its
-// operators (docs: contracts/minion-messages/sessions, Feedback;
+// MinionFeedback is a warning, an error or information a session's minion
+// sent its operators (docs: contracts/minion-messages/sessions, Feedback;
 // protocol.FeedbackItem): what it would otherwise only log on the host.
 // Kept per session, the newest MaxSessionFeedback; read for everyone of the
 // operation alike (MinionSession.FeedbackReadAt).
@@ -19,7 +19,7 @@ type MinionFeedback struct {
 	// MinionID is the minion's own id for it: one entry per id in a
 	// session, so a message sent again adds nothing.
 	MinionID []byte `bson:"minion_id" json:"-"`
-	// Level is FeedbackWarning or FeedbackError.
+	// Level is FeedbackWarning, FeedbackError or FeedbackInfo.
 	Level string     `bson:"level" json:"level"`
 	Msg   string     `bson:"msg" json:"msg"`
 	Code  string     `bson:"code,omitempty" json:"code,omitempty"`
@@ -31,10 +31,12 @@ type MinionFeedback struct {
 	ReceivedAt time.Time `bson:"received_at" json:"received_at"`
 }
 
-// Feedback levels, as core keeps them.
+// Feedback levels, as core keeps them (protocol.FeedbackLevelName). Info is
+// counted nowhere as unread: it marks no session and no task.
 const (
 	FeedbackWarning = "warning"
 	FeedbackError   = "error"
+	FeedbackInfo    = "info"
 )
 
 // MaxSessionFeedback is how many feedback entries a session keeps: older

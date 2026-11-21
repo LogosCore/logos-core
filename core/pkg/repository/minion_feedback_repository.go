@@ -38,7 +38,7 @@ type IMinionFeedbackRepository interface {
 
 // FeedbackQuery is how a session's feedback is asked for.
 type FeedbackQuery struct {
-	// Level keeps one level's ("warning", "error"); "" keeps both.
+	// Level keeps one level's ("warning", "error", "info"); "" keeps them all.
 	Level string
 	// Search keeps the entries whose message or code holds it, any case.
 	Search string

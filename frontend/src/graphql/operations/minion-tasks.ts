@@ -41,6 +41,7 @@ export const MinionTaskFields = graphql(`
     missingParts
     feedbackErrors
     feedbackWarnings
+    feedbackInfos
     recordings
     as {
       user

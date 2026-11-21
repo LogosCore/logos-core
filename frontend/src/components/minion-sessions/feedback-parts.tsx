@@ -1,4 +1,4 @@
-import { ChevronRightIcon, CircleAlertIcon, TriangleAlertIcon } from "lucide-react"
+import { ChevronRightIcon, CircleAlertIcon, InfoIcon, TriangleAlertIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { MinionFeedbackFieldsFragment } from "@/graphql/gql/graphql"
 import { formatDateTime } from "@/lib/date-format"
@@ -8,24 +8,33 @@ import { FEEDBACK_TONE, feedbackLevel, feedbackSummary, firstLine, type Feedback
 // A minion's feedback as the session's views show it: a level's icon, the
 // counts, and an entry.
 
+const LEVEL_ICON = { error: CircleAlertIcon, warning: TriangleAlertIcon, info: InfoIcon } as const
+const LEVEL_LABEL = { error: "Error", warning: "Warning", info: "Info" } as const
+
 export function FeedbackLevelIcon({ level, className }: { level: FeedbackLevel; className?: string }) {
-  const Icon = level === "error" ? CircleAlertIcon : TriangleAlertIcon
-  return <Icon className={cn("size-3.5 shrink-0", FEEDBACK_TONE[level], className)} aria-label={level === "error" ? "Error" : "Warning"} />
+  const Icon = LEVEL_ICON[level]
+  return <Icon className={cn("size-3.5 shrink-0", FEEDBACK_TONE[level], className)} aria-label={LEVEL_LABEL[level]} />
 }
 
-/** Errors and warnings (unread ones, unless titled otherwise), each with its icon; nothing when there are none. */
+/**
+ * Errors and warnings (unread ones, unless titled otherwise), and a task's
+ * information, each with its icon; nothing when there are none.
+ */
 export function FeedbackCounts({
   errors,
   warnings,
+  infos = 0,
   className,
-  title = `Unread feedback: ${feedbackSummary(errors, warnings)}`,
+  title = `Unread feedback: ${feedbackSummary(errors, warnings, infos)}`,
 }: {
   errors: number
   warnings: number
+  /** Information: counted on a task, never unread. */
+  infos?: number
   className?: string
   title?: string
 }) {
-  if (errors + warnings === 0) return null
+  if (errors + warnings + infos === 0) return null
   return (
     <span className={cn("inline-flex items-center gap-2 tabular-nums", className)} title={title}>
       {errors > 0 && (
@@ -38,6 +47,12 @@ export function FeedbackCounts({
         <span className={cn("inline-flex items-center gap-0.5", FEEDBACK_TONE.warning)}>
           <TriangleAlertIcon className="size-3.5" aria-hidden />
           {warnings}
+        </span>
+      )}
+      {infos > 0 && (
+        <span className={cn("inline-flex items-center gap-0.5", FEEDBACK_TONE.info)}>
+          <InfoIcon className="size-3.5" aria-hidden />
+          {infos}
         </span>
       )}
     </span>

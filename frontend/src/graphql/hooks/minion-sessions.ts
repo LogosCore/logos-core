@@ -300,7 +300,7 @@ export function useSetMinionSessionAddress() {
 
 /** How a session's feedback is asked for: one level, a word of its message or code. */
 export interface FeedbackFilter {
-  level: "" | "warning" | "error"
+  level: "" | "warning" | "error" | "info"
   search: string
 }
 

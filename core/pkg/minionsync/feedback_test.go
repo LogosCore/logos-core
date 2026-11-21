@@ -109,3 +109,30 @@ func TestFeedback(t *testing.T) {
 		t.Fatalf("%d errs for feedback that does not read", errs)
 	}
 }
+
+// Information is kept as the others are and counted nowhere as unread: the
+// session's FeedbackAt moves (its views read it again), its counts do not;
+// the task it is about counts it apart.
+func TestFeedbackInfo(t *testing.T) {
+	r := newRig(t)
+	feedback := &fakeFeedback{}
+	r.svc.WithFeedback(feedback)
+	sid, row := helloWith(t, r, nil)
+	task := uuid.New()
+	tasks := &fakeTasks{rows: []models.MinionTask{{TaskID: task, SessionID: sid}}}
+	r.svc.WithTasks(tasks)
+	info := protocol.FeedbackItem{T: protocol.ItemFeedback, ID: bytes.Repeat([]byte{4}, 8), Level: protocol.FeedbackInfo,
+		Msg: "a fallback taken", Code: "fallback", Task: task[:]}
+	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), info); err != nil {
+		t.Fatal(err)
+	}
+	if len(feedback.rows) != 1 || feedback.rows[0].Level != models.FeedbackInfo {
+		t.Fatalf("kept %+v", feedback.rows)
+	}
+	if row.FeedbackErrors != 0 || row.FeedbackWarnings != 0 || row.FeedbackUnread != 0 || row.FeedbackAt == nil {
+		t.Fatalf("session: %d errors, %d warnings, %d unread, at %v", row.FeedbackErrors, row.FeedbackWarnings, row.FeedbackUnread, row.FeedbackAt)
+	}
+	if tt := tasks.find(task); tt.FeedbackInfos != 1 || tt.FeedbackErrors+tt.FeedbackWarnings != 0 {
+		t.Fatalf("the task counts %d infos, %d errors, %d warnings", tt.FeedbackInfos, tt.FeedbackErrors, tt.FeedbackWarnings)
+	}
+}

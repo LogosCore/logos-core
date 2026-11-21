@@ -194,9 +194,9 @@ type IMinionTaskRepository interface {
 	// SetDataProblem records why the task's data does not fit, unless one is
 	// recorded.
 	SetDataProblem(ctx context.Context, taskID uuid.UUID, problem string) (*models.MinionTask, error)
-	// AddFeedback counts new feedback about one of the session's tasks: the
-	// task after; IsNotFound when it is not the session's.
-	AddFeedback(ctx context.Context, sessionID, taskID uuid.UUID, errors, warnings int) (*models.MinionTask, error)
+	// AddFeedback counts new feedback about one of the session's tasks, by
+	// level: the task after; IsNotFound when it is not the session's.
+	AddFeedback(ctx context.Context, sessionID, taskID uuid.UUID, errors, warnings, infos int) (*models.MinionTask, error)
 	// AddRecording counts a desktop task's recordings (pkg/recordings): kept
 	// by kept (1 for a new one, -1 for one deleted), made by made, its rev
 	// bumped (a recording's own change: 0 and 0). It returns the task
@@ -996,10 +996,10 @@ func (r *minionTaskRepository) SetDataProblem(ctx context.Context, taskID uuid.U
 	return &after, nil
 }
 
-func (r *minionTaskRepository) AddFeedback(ctx context.Context, sessionID, taskID uuid.UUID, errors, warnings int) (*models.MinionTask, error) {
+func (r *minionTaskRepository) AddFeedback(ctx context.Context, sessionID, taskID uuid.UUID, errors, warnings, infos int) (*models.MinionTask, error) {
 	var after models.MinionTask
 	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID}).Apply(qmgo.Change{
-		Update:    bson.M{"$inc": bson.M{"feedback_errors": errors, "feedback_warnings": warnings, "rev": 1}},
+		Update:    bson.M{"$inc": bson.M{"feedback_errors": errors, "feedback_warnings": warnings, "feedback_infos": infos, "rev": 1}},
 		ReturnNew: true,
 	}, &after)
 	if err != nil {

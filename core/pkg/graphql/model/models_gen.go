@@ -1166,6 +1166,7 @@ type MinionTask struct {
 	Feedback          []*MinionFeedback `json:"feedback"`
 	FeedbackErrors    int               `json:"feedbackErrors"`
 	FeedbackWarnings  int               `json:"feedbackWarnings"`
+	FeedbackInfos     int               `json:"feedbackInfos"`
 	Recordings        int               `json:"recordings"`
 	Rev               int               `json:"rev"`
 	SessionID         string            `json:"sessionId"`

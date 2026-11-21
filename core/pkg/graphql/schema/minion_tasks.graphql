@@ -9,9 +9,11 @@ type MinionTask {
   # Feedback its minion sent about it (MinionFeedback), newest first, the
   # latest 20.
   feedback: [MinionFeedback!]!
-  # How many errors and warnings its minion sent about it, all of them.
+  # How many errors and warnings its minion sent about it, all of them,
+  # and how much information (which marks nothing, but is there to read).
   feedbackErrors: Int!
   feedbackWarnings: Int!
+  feedbackInfos: Int!
   # A desktop or terminal task's recordings kept: one for each desktop
   # opened in the web app, or each terminal session (recordings lists
   # them); 0 for any other task.

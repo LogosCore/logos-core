@@ -180,12 +180,13 @@ export function TaskDetail({
   const data = (detail?.data as Record<string, unknown> | null | undefined) ?? null
   // Its feedback, read when it has some, again as more comes or the
   // session's is marked read (unread ones are marked).
-  const counts = { errors: t.feedbackErrors, warnings: t.feedbackWarnings }
-  const hasFeedback = counts.errors + counts.warnings > 0
+  // Information too, which marks the task in no list.
+  const counts = { errors: t.feedbackErrors, warnings: t.feedbackWarnings, infos: t.feedbackInfos }
+  const hasFeedback = counts.errors + counts.warnings + counts.infos > 0
   const session = useMinionSession(t.sessionId).data?.minionSession
-  const feedbackQ = useMinionTaskFeedback(t.id, `${counts.errors}:${counts.warnings}:${session?.feedbackReadAt ?? ""}`, hasFeedback)
+  const feedbackQ = useMinionTaskFeedback(t.id, `${counts.errors}:${counts.warnings}:${counts.infos}:${session?.feedbackReadAt ?? ""}`, hasFeedback)
   const feedback = feedbackQ.data?.minionTask?.feedback ?? []
-  const feedbackTitle = `What the minion said of it: ${feedbackSummary(counts.errors, counts.warnings)}`
+  const feedbackTitle = `What the minion said of it: ${feedbackSummary(counts.errors, counts.warnings, counts.infos)}`
   const { open: openRecord } = useRecordModals()
   const sessionId = t.sessionId
   // Whether it gave data, known from its size until it is read (and
@@ -308,7 +309,7 @@ export function TaskDetail({
             <TabButton active={shown === "feedback"} onClick={() => setTab("feedback")} title={feedbackTitle}>
               <span className="inline-flex items-center gap-1.5">
                 Feedback
-                <FeedbackCounts errors={counts.errors} warnings={counts.warnings} className="gap-1.5" title={feedbackTitle} />
+                <FeedbackCounts errors={counts.errors} warnings={counts.warnings} infos={counts.infos} className="gap-1.5" title={feedbackTitle} />
               </span>
             </TabButton>
           )}

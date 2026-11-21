@@ -1109,6 +1109,7 @@ type ComplexityRoot struct {
 		Exit              func(childComplexity int) int
 		Feedback          func(childComplexity int) int
 		FeedbackErrors    func(childComplexity int) int
+		FeedbackInfos     func(childComplexity int) int
 		FeedbackWarnings  func(childComplexity int) int
 		File              func(childComplexity int) int
 		ID                func(childComplexity int) int
@@ -7242,6 +7243,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.FeedbackErrors(childComplexity), true
+	case "MinionTask.feedbackInfos":
+		if e.ComplexityRoot.MinionTask.FeedbackInfos == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.FeedbackInfos(childComplexity), true
 	case "MinionTask.feedbackWarnings":
 		if e.ComplexityRoot.MinionTask.FeedbackWarnings == nil {
 			break
@@ -16296,20 +16303,21 @@ type MinionSession {
   runningTasks: Int!
   runningTunnels: Int!
   # Its minion's feedback since it was last marked read (for everyone of the
-  # operation): errors and warnings; when the latest came, and when it was
-  # marked read. Entries: minionFeedback.
+  # operation): errors and warnings (information is counted nowhere); when
+  # the latest came, information too, and when it was marked read. Entries:
+  # minionFeedback.
   feedbackErrors: Int!
   feedbackWarnings: Int!
   feedbackAt: String
   feedbackReadAt: String
 }
 
-# A warning or an error a session's minion sent its operators (docs:
-# contracts/minion-messages/sessions, Feedback): what it would otherwise only
-# log on the host.
+# A warning, an error or information a session's minion sent its operators
+# (docs: contracts/minion-messages/sessions, Feedback): what it would
+# otherwise only log on the host.
 type MinionFeedback {
   id: ID!
-  # warning or error.
+  # warning, error or info.
   level: String!
   msg: String!
   # The factory's short tag for the kind of problem ("checkin_failed").
@@ -16321,7 +16329,8 @@ type MinionFeedback {
   # How many times it happened (the minion folds repeats).
   count: Int!
   receivedAt: String!
-  # Came after the session's feedback was last marked read.
+  # A warning or an error that came after the session's feedback was last
+  # marked read; information is never unread.
   unread: Boolean!
 }
 
@@ -16643,8 +16652,8 @@ extend type Query {
 
   # A session's feedback, newest first, a page at a time (first: 200 by
   # default, 500 at most; after: a page's next). level keeps one level's
-  # (warning, error); search the entries whose message or code holds it, any
-  # case. Needs at least viewer.
+  # (warning, error, info); search the entries whose message or code holds
+  # it, any case. Needs at least viewer.
   minionFeedback(sessionId: ID!, level: String, search: String, after: String, first: Int): MinionFeedbackPage!
   # A session's identity history, newest first, a page at a time (first:
   # 100 by default, 500 at most).
@@ -16996,9 +17005,11 @@ type MinionTask {
   # Feedback its minion sent about it (MinionFeedback), newest first, the
   # latest 20.
   feedback: [MinionFeedback!]!
-  # How many errors and warnings its minion sent about it, all of them.
+  # How many errors and warnings its minion sent about it, all of them,
+  # and how much information (which marks nothing, but is there to read).
   feedbackErrors: Int!
   feedbackWarnings: Int!
+  feedbackInfos: Int!
   # A desktop or terminal task's recordings kept: one for each desktop
   # opened in the web app, or each terminal session (recordings lists
   # them); 0 for any other task.
@@ -48251,6 +48262,35 @@ func (ec *executionContext) fieldContext_MinionTask_feedbackWarnings(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_feedbackInfos(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_feedbackInfos,
+		func(ctx context.Context) (any, error) {
+			return obj.FeedbackInfos, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_feedbackInfos(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_recordings(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -49891,6 +49931,8 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
 				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "feedbackInfos":
+				return ec.fieldContext_MinionTask_feedbackInfos(ctx, field)
 			case "recordings":
 				return ec.fieldContext_MinionTask_recordings(ctx, field)
 			case "rev":
@@ -63773,6 +63815,8 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
 				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "feedbackInfos":
+				return ec.fieldContext_MinionTask_feedbackInfos(ctx, field)
 			case "recordings":
 				return ec.fieldContext_MinionTask_recordings(ctx, field)
 			case "rev":
@@ -63938,6 +63982,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
 				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "feedbackInfos":
+				return ec.fieldContext_MinionTask_feedbackInfos(ctx, field)
 			case "recordings":
 				return ec.fieldContext_MinionTask_recordings(ctx, field)
 			case "rev":
@@ -64103,6 +64149,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTaskImportant(ctx con
 				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
 				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "feedbackInfos":
+				return ec.fieldContext_MinionTask_feedbackInfos(ctx, field)
 			case "recordings":
 				return ec.fieldContext_MinionTask_recordings(ctx, field)
 			case "rev":
@@ -64268,6 +64316,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelCap(ctx context
 				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
 				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "feedbackInfos":
+				return ec.fieldContext_MinionTask_feedbackInfos(ctx, field)
 			case "recordings":
 				return ec.fieldContext_MinionTask_recordings(ctx, field)
 			case "rev":
@@ -64433,6 +64483,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelRoutes(ctx cont
 				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
 				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "feedbackInfos":
+				return ec.fieldContext_MinionTask_feedbackInfos(ctx, field)
 			case "recordings":
 				return ec.fieldContext_MinionTask_recordings(ctx, field)
 			case "rev":
@@ -64663,6 +64715,8 @@ func (ec *executionContext) fieldContext_Mutation_disconnectMinionVPNClient(ctx 
 				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
 				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "feedbackInfos":
+				return ec.fieldContext_MinionTask_feedbackInfos(ctx, field)
 			case "recordings":
 				return ec.fieldContext_MinionTask_recordings(ctx, field)
 			case "rev":
@@ -74416,6 +74470,8 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
 				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "feedbackInfos":
+				return ec.fieldContext_MinionTask_feedbackInfos(ctx, field)
 			case "recordings":
 				return ec.fieldContext_MinionTask_recordings(ctx, field)
 			case "rev":
@@ -82121,6 +82177,8 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
 				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "feedbackInfos":
+				return ec.fieldContext_MinionTask_feedbackInfos(ctx, field)
 			case "recordings":
 				return ec.fieldContext_MinionTask_recordings(ctx, field)
 			case "rev":
@@ -102965,6 +103023,11 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			}
 		case "feedbackWarnings":
 			out.Values[i] = ec._MinionTask_feedbackWarnings(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "feedbackInfos":
+			out.Values[i] = ec._MinionTask_feedbackInfos(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}

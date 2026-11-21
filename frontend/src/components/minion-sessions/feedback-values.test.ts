@@ -5,13 +5,16 @@ describe("feedback", () => {
   it("reads a level, a later one as a warning", () => {
     expect(feedbackLevel("error")).toBe("error")
     expect(feedbackLevel("warning")).toBe("warning")
+    expect(feedbackLevel("info")).toBe("info")
     expect(feedbackLevel("critical")).toBe("warning")
   })
-  it("says the unread counts", () => {
+  it("says the counts, a task's information last", () => {
     expect(feedbackSummary(3, 1)).toBe("3 errors, 1 warning")
     expect(feedbackSummary(1, 0)).toBe("1 error")
     expect(feedbackSummary(0, 2)).toBe("2 warnings")
     expect(feedbackSummary(0, 0)).toBe("")
+    expect(feedbackSummary(1, 0, 2)).toBe("1 error, 2 info")
+    expect(feedbackSummary(0, 0, 1)).toBe("1 info")
   })
 })
 

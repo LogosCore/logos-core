@@ -15,10 +15,12 @@ import (
 )
 
 // Feedback (docs: contracts/minion-messages/sessions, Feedback): a minion's
-// warnings and errors, kept with its session (models.MinionFeedback), its
-// unread counts on the session. Nothing answers it: the message that
-// carried it went, and one sent again adds nothing (one entry per the
-// minion's id).
+// warnings, errors and information, kept with its session
+// (models.MinionFeedback), the warnings' and errors' unread counts on the
+// session; information is counted nowhere, but moves the session's
+// FeedbackAt as the others do, so the views read it. Nothing answers it:
+// the message that carried it went, and one sent again adds nothing (one
+// entry per the minion's id).
 
 // WithFeedback keeps minions' feedback; without it a feedback item is
 // taken and dropped.
@@ -44,9 +46,9 @@ func (s *Service) takeFeedback(ctx context.Context, session *models.MinionSessio
 		return false, nil
 	}
 	now := s.now()
-	errs, warns := 0, 0
+	errs, warns, infos := 0, 0, 0
 	// The new ones about each task: counted on it too.
-	type tally struct{ errs, warns int }
+	type tally struct{ errs, warns, infos int }
 	byTask := map[uuid.UUID]tally{}
 	for _, f := range items {
 		e := &models.MinionFeedback{FeedbackID: uuid.New(), OperationID: session.OperationID, SessionID: session.SessionID,
@@ -68,23 +70,28 @@ func (s *Service) takeFeedback(ctx context.Context, session *models.MinionSessio
 			continue
 		}
 		var about tally
-		if e.Level == models.FeedbackError {
+		switch e.Level {
+		case models.FeedbackError:
 			errs++
 			about.errs++
-		} else {
+		case models.FeedbackInfo:
+			infos++
+			about.infos++
+		default:
 			warns++
 			about.warns++
 		}
 		if e.Task != nil {
 			n := byTask[*e.Task]
-			byTask[*e.Task] = tally{n.errs + about.errs, n.warns + about.warns}
+			byTask[*e.Task] = tally{n.errs + about.errs, n.warns + about.warns, n.infos + about.infos}
 		}
 		s.logger.Info("minion feedback", zap.String("session_id", session.SessionID.String()), zap.String("level", e.Level),
 			zap.String("code", e.Code), zap.String("msg", e.Msg))
 	}
-	if errs+warns == 0 {
+	if errs+warns+infos == 0 {
 		return false, nil
 	}
+	// Information alone: no count moves, FeedbackAt does.
 	if err := s.sessions.AddFeedback(ctx, session.SessionID, errs, warns, now); err != nil {
 		return false, fmt.Errorf("count feedback: %w", err)
 	}
@@ -102,7 +109,7 @@ func (s *Service) takeFeedback(ctx context.Context, session *models.MinionSessio
 		if s.tasks == nil {
 			break
 		}
-		task, err := s.tasks.AddFeedback(ctx, session.SessionID, id, n.errs, n.warns)
+		task, err := s.tasks.AddFeedback(ctx, session.SessionID, id, n.errs, n.warns, n.infos)
 		if repository.IsNotFound(err) {
 			continue
 		}

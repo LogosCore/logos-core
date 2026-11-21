@@ -33,8 +33,8 @@ func (r *minionSessionResolver) MinionFeedback(ctx context.Context, sessionID st
 		return nil, err
 	}
 	q := repository.FeedbackQuery{Level: deref(level), Search: deref(search), After: deref(after)}
-	if q.Level != "" && q.Level != models.FeedbackWarning && q.Level != models.FeedbackError {
-		return nil, moduleGQLError(ctx, errCodeBadUserInput, "level is warning or error")
+	if q.Level != "" && q.Level != models.FeedbackWarning && q.Level != models.FeedbackError && q.Level != models.FeedbackInfo {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "level is warning, error or info")
 	}
 	if first != nil {
 		q.First = int64(*first)
@@ -101,9 +101,13 @@ func (r *minionTaskResolver) Feedback(ctx context.Context, t *model.MinionTask) 
 
 // toFeedbackModel is an entry as GraphQL has it: unread when it came after
 // readAt (its session's feedback last marked read).
+// toFeedbackModel is an entry as GraphQL has it: unread when it is a warning
+// or an error that came after the session's feedback was last marked read
+// (information is never unread: it is counted nowhere).
 func toFeedbackModel(e models.MinionFeedback, readAt *time.Time) *model.MinionFeedback {
+	unread := e.Level != models.FeedbackInfo && (readAt == nil || e.ReceivedAt.After(*readAt))
 	m := &model.MinionFeedback{ID: e.FeedbackID.String(), Level: e.Level, Msg: e.Msg, Code: strPtr(e.Code), Count: max(e.Count, 1),
-		ReceivedAt: e.ReceivedAt.UTC().Format(time.RFC3339Nano), Unread: readAt == nil || e.ReceivedAt.After(*readAt)}
+		ReceivedAt: e.ReceivedAt.UTC().Format(time.RFC3339Nano), Unread: unread}
 	if e.Task != nil {
 		id := e.Task.String()
 		m.TaskID = &id

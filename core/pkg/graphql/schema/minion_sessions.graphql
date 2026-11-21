@@ -160,20 +160,21 @@ type MinionSession {
   runningTasks: Int!
   runningTunnels: Int!
   # Its minion's feedback since it was last marked read (for everyone of the
-  # operation): errors and warnings; when the latest came, and when it was
-  # marked read. Entries: minionFeedback.
+  # operation): errors and warnings (information is counted nowhere); when
+  # the latest came, information too, and when it was marked read. Entries:
+  # minionFeedback.
   feedbackErrors: Int!
   feedbackWarnings: Int!
   feedbackAt: String
   feedbackReadAt: String
 }
 
-# A warning or an error a session's minion sent its operators (docs:
-# contracts/minion-messages/sessions, Feedback): what it would otherwise only
-# log on the host.
+# A warning, an error or information a session's minion sent its operators
+# (docs: contracts/minion-messages/sessions, Feedback): what it would
+# otherwise only log on the host.
 type MinionFeedback {
   id: ID!
-  # warning or error.
+  # warning, error or info.
   level: String!
   msg: String!
   # The factory's short tag for the kind of problem ("checkin_failed").
@@ -185,7 +186,8 @@ type MinionFeedback {
   # How many times it happened (the minion folds repeats).
   count: Int!
   receivedAt: String!
-  # Came after the session's feedback was last marked read.
+  # A warning or an error that came after the session's feedback was last
+  # marked read; information is never unread.
   unread: Boolean!
 }
 
@@ -507,8 +509,8 @@ extend type Query {
 
   # A session's feedback, newest first, a page at a time (first: 200 by
   # default, 500 at most; after: a page's next). level keeps one level's
-  # (warning, error); search the entries whose message or code holds it, any
-  # case. Needs at least viewer.
+  # (warning, error, info); search the entries whose message or code holds
+  # it, any case. Needs at least viewer.
   minionFeedback(sessionId: ID!, level: String, search: String, after: String, first: Int): MinionFeedbackPage!
   # A session's identity history, newest first, a page at a time (first:
   # 100 by default, 500 at most).

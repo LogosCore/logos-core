@@ -97,7 +97,8 @@ type IMinionSessionRepository interface {
 	// SetPersisted marks a session persisted: a build names it.
 	SetPersisted(ctx context.Context, sessionID uuid.UUID) error
 	// AddFeedback counts feedback its minion sent at at: errors and warnings
-	// unread (models.MinionSession.FeedbackErrors), and when the latest came.
+	// unread (models.MinionSession.FeedbackErrors), and when the latest came
+	// (information too, with none of them: it is counted nowhere).
 	AddFeedback(ctx context.Context, sessionID uuid.UUID, errors, warnings int, at time.Time) error
 	// MarkFeedbackRead marks the session's feedback read at at, for
 	// everyone: its unread counts go back to 0.

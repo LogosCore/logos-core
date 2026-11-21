@@ -12,10 +12,11 @@ import { useMarkMinionFeedbackRead, useMinionFeedback, type FeedbackFilter } fro
 import { FeedbackCounts, FeedbackEntry } from "./feedback-parts"
 import { toggled } from "./feedback-values"
 
-// A session's feedback (its Feedback tab): the warnings and errors its
-// minion sent, newest first, paged and searched by core; unread ones marked
-// until someone marks them read, for everyone in the operation. A long one
-// shows its first line until opened.
+// A session's feedback (its Feedback tab): the warnings, errors and
+// information its minion sent, newest first, paged and searched by core;
+// unread warnings and errors marked until someone marks them read, for
+// everyone in the operation (information is never unread). A long one shows
+// its first line until opened.
 
 export function FeedbackView({ s }: { s: MinionSessionFieldsFragment }) {
   const [filter, setFilter] = useState<FeedbackFilter>({ level: "", search: "" })
@@ -32,12 +33,13 @@ export function FeedbackView({ s }: { s: MinionSessionFieldsFragment }) {
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
         <Select value={filter.level} onValueChange={(v) => setFilter((f) => ({ ...f, level: (v ?? "") as FeedbackFilter["level"] }))}>
           <SelectTrigger size="sm" className="w-32" aria-label="Level">
-            <SelectValue>{(v: string) => (v === "error" ? "Errors" : v === "warning" ? "Warnings" : "All levels")}</SelectValue>
+            <SelectValue>{(v: string) => (v === "error" ? "Errors" : v === "warning" ? "Warnings" : v === "info" ? "Info" : "All levels")}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="">All levels</SelectItem>
             <SelectItem value="error">Errors</SelectItem>
             <SelectItem value="warning">Warnings</SelectItem>
+            <SelectItem value="info">Info</SelectItem>
           </SelectContent>
         </Select>
         <SearchInput
@@ -72,7 +74,7 @@ export function FeedbackView({ s }: { s: MinionSessionFieldsFragment }) {
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
           <MessageSquareWarningIcon className="size-6 opacity-50" />
           <p className="text-sm">
-            {filter.level || filter.search.trim() ? "No feedback matches." : "The minion has sent no warnings or errors."}
+            {filter.level || filter.search.trim() ? "No feedback matches." : "The minion has sent no feedback."}
           </p>
         </div>
       ) : (

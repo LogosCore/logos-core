@@ -321,14 +321,18 @@ func TestIntegrationMinionTaskUploads(t *testing.T) {
 
 	// Feedback about it: counted, its rev bumped; not about another session's.
 	before, _ := repo.FindByTaskID(ctx, task.TaskID)
-	got, err := repo.AddFeedback(ctx, session, task.TaskID, 1, 2)
+	got, err := repo.AddFeedback(ctx, session, task.TaskID, 1, 2, 0)
 	if err != nil || got.FeedbackErrors != 1 || got.FeedbackWarnings != 2 || got.Rev != before.Rev+1 {
 		t.Fatalf("feedback: %+v %v", got, err)
 	}
-	if got, _ = repo.AddFeedback(ctx, session, task.TaskID, 0, 1); got.FeedbackErrors != 1 || got.FeedbackWarnings != 3 {
+	if got, _ = repo.AddFeedback(ctx, session, task.TaskID, 0, 1, 0); got.FeedbackErrors != 1 || got.FeedbackWarnings != 3 {
 		t.Fatalf("more feedback: %d errors, %d warnings", got.FeedbackErrors, got.FeedbackWarnings)
 	}
-	if _, err := repo.AddFeedback(ctx, uuid.New(), task.TaskID, 1, 0); !IsNotFound(err) {
+	// Information: counted apart.
+	if got, _ = repo.AddFeedback(ctx, session, task.TaskID, 0, 0, 2); got.FeedbackInfos != 2 || got.FeedbackErrors != 1 || got.FeedbackWarnings != 3 {
+		t.Fatalf("information: %d infos, %d errors, %d warnings", got.FeedbackInfos, got.FeedbackErrors, got.FeedbackWarnings)
+	}
+	if _, err := repo.AddFeedback(ctx, uuid.New(), task.TaskID, 1, 0, 0); !IsNotFound(err) {
 		t.Fatalf("another session's: %v", err)
 	}
 }
