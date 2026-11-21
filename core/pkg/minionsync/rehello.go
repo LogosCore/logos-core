@@ -98,8 +98,14 @@ func helloSays(h models.MinionHello, claim bool) string {
 	if h.Integrity != "" {
 		integrity = "integrity " + h.Integrity
 	}
+	// The round trip the session has: this hello's, or the last one said
+	// when it says none.
+	roundtrip := ""
+	if h.RoundtripTime != nil {
+		roundtrip = fmt.Sprintf("round trip %d ms", *h.RoundtripTime)
+	}
 	parts := []string{}
-	for _, p := range []string{h.Host, who, fmt.Sprintf("pid %d", h.PID), integrity, h.OS + "/" + h.Arch, h.Version} {
+	for _, p := range []string{h.Host, who, fmt.Sprintf("pid %d", h.PID), integrity, h.OS + "/" + h.Arch, h.Version, roundtrip} {
 		if p != "" && p != "/" {
 			parts = append(parts, p)
 		}

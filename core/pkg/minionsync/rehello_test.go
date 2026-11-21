@@ -69,15 +69,17 @@ func TestRehelloCommand(t *testing.T) {
 	if end(asked) != nil || row.RehelloAt == nil || row.RehelloSends != 2 {
 		t.Fatalf("ended before a hello: %+v, at %v, sends %d", end(asked), row.RehelloAt, row.RehelloSends)
 	}
-	// The hello again, another user now: done, saying so.
+	// The hello again, another user now: done, saying so, with its round
+	// trip.
 	h := hello("web01")
 	h.User = "root"
+	h.RoundtripTime = &[]uint64{142}[0]
 	if n := rehellos(checkIn(h)); n != 0 {
 		t.Fatalf("asked again in the hello's reply: %d", n)
 	}
 	e := end(asked)
 	if e == nil || !*e.OK || !strings.Contains(string(e.Out), "hello: web01 · root · pid 4242") ||
-		!strings.Contains(string(e.Out), "user: (none) → root") {
+		!strings.Contains(string(e.Out), "linux/amd64 · round trip 142 ms\n") || !strings.Contains(string(e.Out), "user: (none) → root") {
 		t.Fatalf("the answered one: %+v %q", e, e.Out)
 	}
 	if row.RehelloAt != nil || rehellos(checkIn()) != 0 {
