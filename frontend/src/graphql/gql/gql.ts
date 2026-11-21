@@ -165,7 +165,7 @@ type Documents = {
     "\n  query MinionTasks($sessionId: ID!, $last: Int, $before: String, $search: String, $important: Boolean, $composite: ID) {\n    minionTasks(sessionId: $sessionId, last: $last, before: $before, search: $search, important: $important, composite: $composite) {\n      tasks {\n        ...MinionTaskFields\n      }\n      before\n    }\n  }\n": typeof types.MinionTasksDocument,
     "\n  query MinionTaskImportantCount($sessionId: ID!) {\n    minionTaskImportantCount(sessionId: $sessionId)\n  }\n": typeof types.MinionTaskImportantCountDocument,
     "\n  query MinionTaskDocument($id: ID!) {\n    minionTask(id: $id) {\n      id\n      document\n    }\n  }\n": typeof types.MinionTaskDocumentDocument,
-    "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      result\n      action\n      kinds\n      composite\n      uses\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": typeof types.MinionSessionCommandsDocument,
+    "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      required\n      result\n      action\n      kinds\n      composite\n      uses\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": typeof types.MinionSessionCommandsDocument,
     "\n  query MinionDesktopSettings($front: String!) {\n    minionDesktopSettings(front: $front) {\n      ...ModuleFieldDefFields\n    }\n  }\n": typeof types.MinionDesktopSettingsDocument,
     "\n  mutation QueueMinionTask($sessionId: ID!, $command: String!, $args: JSON) {\n    queueMinionTask(sessionId: $sessionId, command: $command, args: $args) {\n      ...MinionTaskFields\n    }\n  }\n": typeof types.QueueMinionTaskDocument,
     "\n  mutation CancelMinionTask($id: ID!) {\n    cancelMinionTask(id: $id) {\n      ...MinionTaskFields\n    }\n  }\n": typeof types.CancelMinionTaskDocument,
@@ -456,7 +456,7 @@ const documents: Documents = {
     "\n  query MinionTasks($sessionId: ID!, $last: Int, $before: String, $search: String, $important: Boolean, $composite: ID) {\n    minionTasks(sessionId: $sessionId, last: $last, before: $before, search: $search, important: $important, composite: $composite) {\n      tasks {\n        ...MinionTaskFields\n      }\n      before\n    }\n  }\n": types.MinionTasksDocument,
     "\n  query MinionTaskImportantCount($sessionId: ID!) {\n    minionTaskImportantCount(sessionId: $sessionId)\n  }\n": types.MinionTaskImportantCountDocument,
     "\n  query MinionTaskDocument($id: ID!) {\n    minionTask(id: $id) {\n      id\n      document\n    }\n  }\n": types.MinionTaskDocumentDocument,
-    "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      result\n      action\n      kinds\n      composite\n      uses\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": types.MinionSessionCommandsDocument,
+    "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      required\n      result\n      action\n      kinds\n      composite\n      uses\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": types.MinionSessionCommandsDocument,
     "\n  query MinionDesktopSettings($front: String!) {\n    minionDesktopSettings(front: $front) {\n      ...ModuleFieldDefFields\n    }\n  }\n": types.MinionDesktopSettingsDocument,
     "\n  mutation QueueMinionTask($sessionId: ID!, $command: String!, $args: JSON) {\n    queueMinionTask(sessionId: $sessionId, command: $command, args: $args) {\n      ...MinionTaskFields\n    }\n  }\n": types.QueueMinionTaskDocument,
     "\n  mutation CancelMinionTask($id: ID!) {\n    cancelMinionTask(id: $id) {\n      ...MinionTaskFields\n    }\n  }\n": types.CancelMinionTaskDocument,
@@ -1200,7 +1200,7 @@ export function graphql(source: "\n  query MinionTaskDocument($id: ID!) {\n    m
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      result\n      action\n      kinds\n      composite\n      uses\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n"): typeof import('./graphql').MinionSessionCommandsDocument;
+export function graphql(source: "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      required\n      result\n      action\n      kinds\n      composite\n      uses\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n"): typeof import('./graphql').MinionSessionCommandsDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

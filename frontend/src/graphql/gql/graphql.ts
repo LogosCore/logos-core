@@ -5253,7 +5253,7 @@ export type MinionSessionCommandsQueryVariables = Exact<{
 }>;
 
 
-export type MinionSessionCommandsQuery = { minionSessionCommands: Array<{ id: string, label: string, description?: string | null, result?: string | null, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> };
+export type MinionSessionCommandsQuery = { minionSessionCommands: Array<{ id: string, label: string, description?: string | null, required: boolean, result?: string | null, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> };
 
 export type MinionDesktopSettingsQueryVariables = Exact<{
   front: Scalars['String']['input'];
@@ -12522,6 +12522,7 @@ export const MinionSessionCommandsDocument = new TypedDocumentString(`
     id
     label
     description
+    required
     result
     action
     kinds

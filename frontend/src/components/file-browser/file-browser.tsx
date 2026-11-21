@@ -21,6 +21,7 @@ import {
   SearchIcon,
   Trash2Icon,
   UploadIcon,
+  SquareTerminalIcon,
 } from "lucide-react"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { useCanBuild } from "@/components/builds/build-access"
@@ -399,6 +400,7 @@ function FolderView({
   toolsSlot: HTMLElement | null
 }) {
   const [search, setSearch] = useState("")
+  const workspace = useWorkspaceActions()
   const q = useFileBrowserEntries(sessionId, path, { ...filter, search })
   const pages = q.data?.pages ?? []
   const entries = pages.flatMap((p) => p.fileBrowserEntries.entries)
@@ -538,6 +540,11 @@ function FolderView({
               >
                 <RefreshCwIcon className={cn((here?.action === "list_dir" || here?.action === "list_volumes") && "animate-spin")} />
               </Button>
+              {workspace && (
+                <Button variant="ghost" size="icon-xs" aria-label="Interact" title="Interact: the session's console" onClick={() => workspace.openConsole(sessionId)}>
+                  <SquareTerminalIcon />
+                </Button>
+              )}
             </>,
             toolsSlot,
           )}

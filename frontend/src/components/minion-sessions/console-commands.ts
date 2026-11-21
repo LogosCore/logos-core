@@ -12,6 +12,7 @@ export function useConsoleCommands(sessionId: string) {
         id: c.id,
         label: c.label,
         description: c.description,
+        required: c.required,
         result: c.result,
         action: c.action,
         kinds: c.kinds,

@@ -349,6 +349,7 @@ export const MinionSessionCommandsQuery = graphql(`
       id
       label
       description
+      required
       result
       action
       kinds

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
-import { ChevronRightIcon, PlayIcon, SlidersHorizontalIcon } from "lucide-react"
+import { ChevronRightIcon, PlayIcon, SlidersHorizontalIcon, FolderTreeIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { errorMessage } from "@/components/modules/management/api-errors"
@@ -9,7 +9,8 @@ import { draftsFromTexts } from "@/components/command-form/command-drafts"
 import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
 import { useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
 import { cn } from "@/lib/utils"
-import { BrowseButton } from "./browse-button"
+import { useWorkspaceActions } from "./workspace-tabs"
+import { actionCommands } from "./action-commands"
 import { TaskFilesProvider } from "./task-files"
 import { startStreamUpload } from "@/lib/stream-upload"
 import { commandOf, lineOf, lineTexts, paramApplies, parseCommandLine, usage, valueCompletion, words, type CommandDef } from "./command-line"
@@ -73,6 +74,8 @@ export interface ConsoleCommand extends CommandDef {
   action?: string | null
   /** The connection kinds it works over; empty: every kind. */
   kinds?: readonly string[]
+  /** A command every build of the target has (sleep, exit): first in the prompt's hint. */
+  required?: boolean
 }
 
 export function CommandBar({
@@ -106,6 +109,7 @@ export function CommandBar({
   onEffect: (effect: PromptFxName | null) => void
 }) {
   const queue = useQueueMinionTask()
+  const workspace = useWorkspaceActions()
   const fx = usePromptFx()
   const connections = useSessionConnectionChoices(sessionId)
   const [line, setLine] = useState("")
@@ -118,6 +122,19 @@ export function CommandBar({
   // is typed or the line is left.
   const [hushed, setHushed] = useState(false)
   const [focused, setFocused] = useState(false)
+  // The prompt's hint: the required commands first, the rest in an order
+  // drawn once per tab opening (a seed kept for the bar's life).
+  const [hintSeed] = useState(() => Math.random())
+  const hintIds = useMemo(() => {
+    const rank = (id: string) => {
+      let h = Math.floor(hintSeed * 2 ** 31)
+      for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x5bd1e995) >>> 0
+      return h
+    }
+    const rest = commands.filter((c) => !c.required).map((c) => c.id)
+    rest.sort((a, b) => rank(a) - rank(b))
+    return [...commands.filter((c) => c.required).map((c) => c.id), ...rest]
+  }, [commands, hintSeed])
   // Where ↑ and ↓ are in the history; null: the line being typed.
   const [back, setBack] = useState<number | null>(null)
   const draft = useRef("")
@@ -527,7 +544,7 @@ export function CommandBar({
           spellCheck={false}
           autoComplete="off"
           aria-label="Command"
-          placeholder={hushed ? "" : commands.length > 0 ? `${commands.map((c) => c.id).join(", ")}` : "No commands"}
+          placeholder={hushed ? "" : commands.length > 0 ? hintIds.join(", ") : "No commands"}
           title="The command line (/). A line that starts with / is the console's own: /fx sets the prompt's effect."
           className="peer min-w-0 flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-muted-foreground/60"
         />
@@ -538,7 +555,12 @@ export function CommandBar({
           <kbd className="rounded border px-1 font-mono">↵</kbd> run
           <kbd className="ml-1 rounded border px-1 font-mono">⇧↵</kbd> form
         </span>
-        <BrowseButton sessionId={sessionId} commands={commands} onQueued={onQueued} />
+        {workspace && actionCommands(commands, "list_dir").length > 0 && (
+          <Button variant="ghost" size="icon-xs" title="File browser" aria-label="File browser"
+            onMouseDown={(e) => e.preventDefault()} onClick={() => workspace.openFileBrowser(sessionId)}>
+            <FolderTreeIcon />
+          </Button>
+        )}
         <Button variant="ghost" size="icon-xs" title="Fill the command's params in a form (Shift+Enter)" aria-label="Command form"
           disabled={commands.length === 0} onMouseDown={(e) => e.preventDefault()} onClick={openForm}>
           <SlidersHorizontalIcon />
