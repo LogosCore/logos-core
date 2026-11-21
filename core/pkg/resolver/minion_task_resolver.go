@@ -113,6 +113,12 @@ type TaskSchemas interface {
 	LatestBuildSchema(ctx context.Context, moduleName string) (*models.ModuleBuildSchema, error)
 }
 
+// TaskChannelSchemas reads channels' connection schemas (the channel
+// endpoints service): what a connection param's value is checked against.
+type TaskChannelSchemas interface {
+	Schema(ctx context.Context, moduleName string) (*protocol.ConnectionSchema, error)
+}
+
 // TaskTargets finds a bind-call session's target (the minion target
 // repository): a page core reaches only by calling it.
 type TaskTargets interface {
@@ -156,6 +162,10 @@ type minionTaskResolver struct {
 	tunnels TaskTunnels
 	// recordings are the desktops'; nil, a task has none.
 	recordings TaskRecordings
+	// channels are the channels' connection schemas, for a connection
+	// param (a structured one of format connection); nil, a command with
+	// one takes no task.
+	channels TaskChannelSchemas
 	// composites runs composite commands' tasks; nil, a composite command
 	// takes no task.
 	composites TaskComposites
@@ -240,6 +250,15 @@ func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repo
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
 		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser, targets: targets, connector: connector,
 		limits: limits, feedback: feedback, creds: creds, tunnels: tunnels, recordings: recordings, composites: composites}
+}
+
+// WithTaskChannelSchemas gives the resolver the channels' connection
+// schemas, for connection params.
+func WithTaskChannelSchemas(r IMinionTaskResolver, c TaskChannelSchemas) IMinionTaskResolver {
+	if tr, ok := r.(*minionTaskResolver); ok {
+		tr.channels = c
+	}
+	return r
 }
 
 const (
@@ -515,6 +534,9 @@ func (r *minionTaskResolver) queue(ctx context.Context, s *models.MinionSession,
 	}
 	credentialIDs, err := r.putCredentials(ctx, s.OperationID, cmd.Params, wire)
 	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+	}
+	if err := r.putConnections(ctx, s, cmd.Params, wire); err != nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
 	}
 	uid := q.by
@@ -1582,6 +1604,61 @@ func decodeTimeIDCursor(s string) (time.Time, uuid.UUID, error) {
 		return time.Time{}, uuid.Nil, err
 	}
 	return time.Unix(0, ns).UTC(), uid, nil
+}
+
+// putConnections puts the minion's numbered form of each connection param
+// (a structured param of format connection) in wire, in place of the JSON
+// it was given: checked against its channel's fields for its kind and the
+// session's factory's connection parameters for that channel and kind,
+// defaults filled in, its version the channel schema's when it names none
+// (docs: Minion Build, Structured values).
+func (r *minionTaskResolver) putConnections(ctx context.Context, s *models.MinionSession, params []protocol.FieldSpec, wire map[string]any) error {
+	for _, p := range params {
+		v, ok := wire[p.Key]
+		if !ok || p.Type != protocol.FieldStructured || p.Format != protocol.FormatConnection {
+			continue
+		}
+		m, _ := v.(map[string]any)
+		module, _ := m["channel"].(string)
+		kind, _ := m["kind"].(string)
+		if r.channels == nil {
+			return fmt.Errorf("%s: core reads no channel schemas here", p.Key)
+		}
+		schema, err := r.channels.Schema(ctx, module)
+		if err != nil || schema == nil {
+			return fmt.Errorf("%s: channel %q is not one core knows", p.Key, module)
+		}
+		ck, ok := schema.Kinds[kind]
+		if !ok {
+			return fmt.Errorf("%s: channel %q does not carry %s", p.Key, module, kind)
+		}
+		var factory []protocol.FieldSpec
+		if r.schemas != nil {
+			if bs, err := r.schemas.LatestBuildSchema(ctx, s.ModuleName); err == nil && bs != nil {
+				if ch, ok := bs.Channel(module); ok {
+					factory = ch.KindFields(kind)
+				}
+			}
+		}
+		conn, problems := protocol.ConnectionArg(v, ck.Fields, factory)
+		if problems != nil {
+			keys := make([]string, 0, len(problems))
+			for k := range problems {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			parts := make([]string, len(keys))
+			for i, k := range keys {
+				parts[i] = strings.TrimPrefix(k+": "+problems[k], ": ")
+			}
+			return fmt.Errorf("%s: %s", p.Key, strings.Join(parts, "; "))
+		}
+		if conn.Version == 0 && schema.Version > 0 {
+			conn.Version = uint64(schema.Version) //nolint:gosec // a schema version is positive
+		}
+		wire[p.Key] = conn
+	}
+	return nil
 }
 
 // putCredentials puts the credentials a task's credential params name in
