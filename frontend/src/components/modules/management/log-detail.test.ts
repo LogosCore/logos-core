@@ -51,6 +51,7 @@ describe("recordJSON", () => {
       level: "INFO",
       message: "m",
       attrs: { headers: { accept: "*/*" }, "dotted.key": 1 },
+      pairs: [],
       attrsText: "",
       searchText: "",
     }

@@ -19,10 +19,21 @@ export interface LogLine {
   level: ModuleLogLevel
   message: string
   attrs: Record<string, unknown> | null
-  // Computed once at ingest: the one-line attrs preview and the lowercase
-  // text the filter searches, so renders and filtering stay cheap.
+  // Computed once at ingest: the attrs flattened to key=value pairs (a row
+  // takes the highlighted ones out of them), their one-line preview, and
+  // the lowercase text the filter searches, so renders and filtering stay
+  // cheap.
+  pairs: AttrPair[]
   attrsText: string
   searchText: string
+}
+
+/** One attr of a record, flattened: a nested object's by its dotted path. */
+export interface AttrPair {
+  /** "headers.accept": the detail pane's path too. */
+  path: string
+  /** Its value as the one-line preview writes it: quoted when it holds a space, a quote or "=". */
+  text: string
 }
 
 export interface LogEventLike {
@@ -77,7 +88,8 @@ export function applyEvent(buf: LogBuffer, ev: LogEventLike, trim = true): LogBu
       lastKeys = [...lastKeys, key]
     }
     const attrs = isRecord(r.attrs) ? r.attrs : null
-    const attrsText = formatAttrs(attrs)
+    const pairs = attrPairs(attrs)
+    const attrsText = pairsText(pairs)
     added.push({
       id: nextId++,
       time: r.time,
@@ -85,6 +97,7 @@ export function applyEvent(buf: LogBuffer, ev: LogEventLike, trim = true): LogBu
       level: r.level,
       message: r.message,
       attrs,
+      pairs,
       attrsText,
       searchText: `${r.level} ${r.message} ${attrsText}`.toLowerCase(),
     })
@@ -115,13 +128,13 @@ export function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /**
- * Renders attrs on one line as `key=value` pairs in the record's own key
- * order, nested objects as dotted paths; values with spaces are quoted. For
- * the list preview and the filter only — the detail pane shows the structure.
+ * Flattens attrs to pairs in the record's own key order, nested objects as
+ * dotted paths; values with spaces are quoted. For the list and the filter
+ * only — the detail pane shows the structure.
  */
-export function formatAttrs(attrs: Record<string, unknown> | null): string {
-  if (!attrs) return ""
-  const parts: string[] = []
+export function attrPairs(attrs: Record<string, unknown> | null): AttrPair[] {
+  if (!attrs) return []
+  const pairs: AttrPair[] = []
   const walk = (obj: Record<string, unknown>, prefix: string) => {
     for (const [k, v] of Object.entries(obj)) {
       if (isRecord(v)) {
@@ -129,11 +142,21 @@ export function formatAttrs(attrs: Record<string, unknown> | null): string {
         continue
       }
       const s = typeof v === "string" ? v : JSON.stringify(v)
-      parts.push(`${prefix}${k}=${/[\s"=]/.test(s) ? JSON.stringify(s) : s}`)
+      pairs.push({ path: `${prefix}${k}`, text: /[\s"=]/.test(s) ? JSON.stringify(s) : s })
     }
   }
   walk(attrs, "")
-  return parts.join(" ")
+  return pairs
+}
+
+/** Pairs on one line as `key=value`, a space between. */
+export function pairsText(pairs: readonly AttrPair[]): string {
+  return pairs.map((p) => `${p.path}=${p.text}`).join(" ")
+}
+
+/** Renders attrs on one line as `key=value` pairs (attrPairs). */
+export function formatAttrs(attrs: Record<string, unknown> | null): string {
+  return pairsText(attrPairs(attrs))
 }
 
 /** HH:MM:SS.mmm in local time. */

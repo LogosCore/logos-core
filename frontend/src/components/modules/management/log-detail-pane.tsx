@@ -1,10 +1,11 @@
 import { useState } from "react"
-import { BracesIcon, CopyIcon, XIcon } from "lucide-react"
+import { BracesIcon, CopyIcon, HighlighterIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { cn } from "@/lib/utils"
 import type { LogLine } from "./log-buffer"
 import { detailSections, recordJSON, type DetailRow } from "./log-detail"
+import { HIGHLIGHT_TONES, MAX_HIGHLIGHTS } from "./log-highlights"
 import { formatDateTime } from "@/lib/date-format"
 
 const LEVEL_BADGE: Record<LogLine["level"], string> = {
@@ -17,14 +18,19 @@ const LEVEL_BADGE: Record<LogLine["level"], string> = {
 interface LogDetailPaneProps {
   line: LogLine
   onClose: () => void
+  /** The fields highlighted in every line (log-highlights.ts), by path. */
+  highlights: readonly string[]
+  /** Highlights a field in every line, or stops. */
+  onHighlight: (path: string) => void
   className?: string
 }
 
 /**
  * One log record laid out for reading: header, then the record's attrs as the
- * module structured them (see log-detail.ts), or the raw JSON.
+ * module structured them (see log-detail.ts), or the raw JSON. A field can be
+ * highlighted from here: its value then goes up front in every line.
  */
-export function LogDetailPane({ line, onClose, className }: LogDetailPaneProps) {
+export function LogDetailPane({ line, onClose, highlights, onHighlight, className }: LogDetailPaneProps) {
   const [raw, setRaw] = useState(false)
   const sections = detailSections(line.attrs)
   const local = new Date(line.ms)
@@ -77,7 +83,13 @@ export function LogDetailPane({ line, onClose, className }: LogDetailPaneProps) 
               )}
               <dl className="divide-y">
                 {s.rows.map((r) => (
-                  <FieldRow key={r.path} row={r} />
+                  <FieldRow
+                    key={r.path}
+                    row={r}
+                    tone={highlights.indexOf(r.path)}
+                    full={highlights.length >= MAX_HIGHLIGHTS}
+                    onHighlight={onHighlight}
+                  />
                 ))}
               </dl>
             </section>
@@ -98,23 +110,62 @@ export function LogDetailPane({ line, onClose, className }: LogDetailPaneProps) 
   )
 }
 
-function FieldRow({ row }: { row: DetailRow }) {
+/**
+ * A field: its name, its value, and on hover its buttons: highlight it in
+ * every line (shown while it is, in its tone), copy its value.
+ */
+function FieldRow({
+  row,
+  tone,
+  full,
+  onHighlight,
+}: {
+  row: DetailRow
+  /** Its place among the highlighted fields, -1 when it is not one. */
+  tone: number
+  /** As many fields are highlighted as can be: no more until one stops. */
+  full: boolean
+  onHighlight: (path: string) => void
+}) {
+  const on = tone >= 0
   return (
     <div className="group grid grid-cols-[minmax(7rem,38%)_1fr_auto] items-start gap-2 px-4 py-1.5 hover:bg-muted/40">
       <dt className="truncate font-mono text-xs text-muted-foreground" title={row.path}>
-        {row.label}
+        {on ? <span className={cn("rounded px-1", HIGHLIGHT_TONES[tone].chip)}>{row.label}</span> : row.label}
       </dt>
       <dd className="min-w-0 font-mono text-xs break-all whitespace-pre-wrap">
         {row.text === "" ? <span className="text-muted-foreground">""</span> : row.text}
       </dd>
-      <button
-        type="button"
-        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        title="Copy value"
-        onClick={() => copyToClipboard(row.text, row.label)}
-      >
-        <CopyIcon className="size-3.5 text-muted-foreground hover:text-foreground" />
-      </button>
+      <span className="flex items-center gap-1.5">
+        <button
+          type="button"
+          className={cn(
+            "transition-opacity focus-visible:opacity-100 disabled:cursor-not-allowed",
+            on ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
+          title={
+            on
+              ? "Stop highlighting it in every line"
+              : full
+                ? `At most ${MAX_HIGHLIGHTS} fields highlighted: stop one first`
+                : "Highlight it in every line: its value up front"
+          }
+          aria-label={on ? `Stop highlighting ${row.path}` : `Highlight ${row.path} in every line`}
+          aria-pressed={on}
+          disabled={!on && full}
+          onClick={() => onHighlight(row.path)}
+        >
+          <HighlighterIcon className={cn("size-3.5", on ? HIGHLIGHT_TONES[tone].icon : "text-muted-foreground hover:text-foreground")} />
+        </button>
+        <button
+          type="button"
+          className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+          title="Copy value"
+          onClick={() => copyToClipboard(row.text, row.label)}
+        >
+          <CopyIcon className="size-3.5 text-muted-foreground hover:text-foreground" />
+        </button>
+      </span>
     </div>
   )
 }

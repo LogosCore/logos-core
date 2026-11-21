@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   applyEvent,
+  attrPairs,
   clearLines,
   emptyBuffer,
   endedStatus,
@@ -99,6 +100,20 @@ describe("formatting and search", () => {
     expect(formatAttrs(line.attrs)).toBe('stage=unpack err="too short" n=3')
     expect(lineText(line)).toBe(`${line.time} INFO  request failed stage=unpack err="too short" n=3`)
     expect(formatAttrs({ headers: { accept: "*/*" }, n: 1 })).toBe("headers.accept=*/* n=1")
+  })
+
+  it("keeps a line's attrs as pairs, by the paths the detail pane uses", () => {
+    expect(line.pairs).toEqual([
+      { path: "stage", text: "unpack" },
+      { path: "err", text: '"too short"' },
+      { path: "n", text: "3" },
+    ])
+    expect(attrPairs({ req: { method: "GET", headers: { accept: "*/*" } }, ok: true })).toEqual([
+      { path: "req.method", text: "GET" },
+      { path: "req.headers.accept", text: "*/*" },
+      { path: "ok", text: "true" },
+    ])
+    expect(attrPairs(null)).toEqual([])
   })
 
   it("matches every term across level, message and attrs", () => {

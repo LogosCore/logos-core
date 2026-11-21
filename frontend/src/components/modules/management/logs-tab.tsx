@@ -4,10 +4,12 @@ import {
   ArrowDownToLineIcon,
   DownloadIcon,
   EraserIcon,
+  HighlighterIcon,
   PauseIcon,
   PlayIcon,
   ScrollTextIcon,
   TriangleAlertIcon,
+  XIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SearchInput } from "@/components/ui/search-input"
@@ -28,11 +30,14 @@ import {
   formatTime,
   lineMatcher,
   lineText,
+  pairsText,
   upperBound,
   type LogBuffer,
   type LogLine,
 } from "./log-buffer"
 import { LogDetailPane } from "./log-detail-pane"
+import { HIGHLIGHT_TONES, highlightsKey, splitHighlighted } from "./log-highlights"
+import { useLogHighlights } from "@/stores/log-highlights"
 
 const LEVELS: { value: ModuleLogLevel; label: string }[] = [
   { value: "DEBUG", label: "Debug" },
@@ -71,6 +76,9 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
   // A rejection is tied to the registration it happened in: a module that
   // registers again is worth another try.
   const [rejected, setRejected] = useState<{ message: string; registeredAt: string } | null>(null)
+  // Fields shown up front in every line, picked in the detail pane: the
+  // module kind's, kept in this browser.
+  const { highlights, toggle: toggleHighlight } = useLogHighlights(highlightsKey(module))
 
   const registered = module.status === "registered"
   const error = rejected && rejected.registeredAt === module.registeredAt ? rejected.message : null
@@ -213,6 +221,29 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
           <DownloadIcon />
           Download
         </Button>
+        {highlights.length > 0 && (
+          <span className="flex flex-wrap items-center gap-1.5" aria-label="Highlighted fields">
+            {highlights.map((path, tone) => (
+              <span
+                key={path}
+                className={cn("inline-flex items-center gap-1 rounded-md py-0.5 pr-0.5 pl-1.5 font-mono text-xs", HIGHLIGHT_TONES[tone].chip)}
+                title={`${path}: its value up front in every line that has it`}
+              >
+                <HighlighterIcon className="size-3 shrink-0" aria-hidden />
+                {path}
+                <button
+                  type="button"
+                  className="cursor-pointer rounded p-0.5 hover:bg-foreground/10"
+                  aria-label={`Stop highlighting ${path}`}
+                  title="Stop highlighting"
+                  onClick={() => toggleHighlight(path)}
+                >
+                  <XIcon className="size-3" />
+                </button>
+              </span>
+            ))}
+          </span>
+        )}
         <StreamStatus
           buf={buf}
           registered={registered}
@@ -256,6 +287,7 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
                     top={item.start}
                     selected={shown[item.index].id === selectedId}
                     onSelect={toggleLine}
+                    highlights={highlights}
                   />
                 ))}
               </div>
@@ -276,6 +308,8 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
           <LogDetailPane
             line={selected}
             onClose={() => setSelectedId(null)}
+            highlights={highlights}
+            onHighlight={toggleHighlight}
             className="max-lg:max-h-[50vh] lg:w-[28rem] lg:shrink-0"
           />
         )}
@@ -285,7 +319,7 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
 }
 
 // Memoized: a new event re-renders the tab, but a row only when its line,
-// position or selection changed.
+// position, selection or the highlighted fields changed.
 const LogRow = memo(function LogRow({
   line,
   index,
@@ -293,6 +327,7 @@ const LogRow = memo(function LogRow({
   measure,
   selected,
   onSelect,
+  highlights,
 }: {
   line: LogLine
   index: number
@@ -300,8 +335,12 @@ const LogRow = memo(function LogRow({
   measure: (el: Element | null) => void
   selected: boolean
   onSelect: (id: number) => void
+  /** Fields whose values go up front, each in its tone, out of the muted tail. */
+  highlights: readonly string[]
 }) {
-  const attrs = line.attrsText
+  const split = highlights.length > 0 ? splitHighlighted(line.pairs, highlights) : null
+  // With none highlighted, the tail as made at ingest.
+  const attrs = split ? pairsText(split.rest) : line.attrsText
   return (
     <div
       ref={measure}
@@ -320,6 +359,11 @@ const LogRow = memo(function LogRow({
       </span>
       <span className={cn("w-10 shrink-0 font-semibold", LEVEL_CLASS[line.level])}>{line.level}</span>
       <span className="min-w-0 whitespace-pre-wrap break-words">
+        {split?.picked.map((p) => (
+          <span key={p.path} title={`${p.path}=${p.text}`} className={cn("mr-1.5 rounded px-1", HIGHLIGHT_TONES[p.tone].chip)}>
+            {p.text}
+          </span>
+        ))}
         {line.message}
         {attrs && <span className="text-muted-foreground"> {attrs}</span>}
       </span>
