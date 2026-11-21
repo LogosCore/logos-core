@@ -26,7 +26,15 @@ import { errorMessage } from "@/components/modules/management/api-errors"
 import { TargetStateBadge } from "@/components/targets/target-state-badge"
 import { TARGET_STATE_LABEL, isPersistent, problemsText, shownState, type Target } from "@/components/targets/target-values"
 import { TargetDialog } from "@/components/targets/target-dialog"
-import { useAddConnectionCommand, useEditConnectionCommand, useSessionConnectionChoices, useSwitchConnection } from "./use-connection-choices"
+import {
+  useAddConnectionCommand,
+  useEditConnectionCommand,
+  useRemoveConnectionCommand,
+  useSessionConnectionChoices,
+  useSwitchConnection,
+} from "./use-connection-choices"
+import { withConnection } from "./connection-choices"
+import { initialParamDrafts } from "@/components/modules/management/field-values"
 import { ConnectionChoicesProvider } from "./session-connection-choices"
 import { SessionCommandDialog } from "./session-command-dialog"
 import { EditConnectionDialog } from "./edit-connection-dialog"
@@ -70,6 +78,11 @@ export function ConnectionCards({ s }: { s: Session }) {
   // connection empty to fill (or filled from one of the session's).
   const addCommand = useAddConnectionCommand(s.id)
   const [adding, setAdding] = useState(false)
+  // Remove: the session's command for remove_connection, opened on a
+  // connection (its form is the confirmation). Never the one in use, the
+  // only one, or the one its target names: core refuses those.
+  const removeCommand = useRemoveConnectionCommand(s.id)
+  const [removing, setRemoving] = useState<number | null>(null)
   // The cards unfolded, by place; the one in use to start with.
   const [unfolded, setUnfolded] = useState<ReadonlySet<number>>(() => new Set(s.conn ? [s.conn] : []))
   const open = s.state === "OPEN"
@@ -139,6 +152,17 @@ export function ConnectionCards({ s }: { s: Session }) {
                     Edit
                   </Button>
                 )}
+                {removeCommand && open && !inUse && connections.length > 1 && !(target && target.conn === c.place) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    title={`Queue ${removeCommand.id} for connection ${c.place}: the minion takes it out, the ones after it moving up`}
+                    onClick={() => setRemoving(c.place)}
+                  >
+                    Remove
+                  </Button>
+                )}
                 {command && open && !inUse && (
                   <Button
                     type="button"
@@ -192,6 +216,25 @@ export function ConnectionCards({ s }: { s: Session }) {
         connections={choices}
         onClose={() => setEditing(null)}
       />
+      {removeCommand && (
+        <ConnectionChoicesProvider choices={choices}>
+          <SessionCommandDialog
+            sessionId={s.id}
+            command={removeCommand}
+            open={removing !== null}
+            onOpenChange={(o) => !o && setRemoving(null)}
+            initialDrafts={(() => {
+              const picked = choices.find((x) => x.place === removing)
+              const drafts = initialParamDrafts(removeCommand.fields)
+              return picked ? withConnection(removeCommand.fields, drafts, picked) : drafts
+            })()}
+            formKey={`${removeCommand.id}-${removing ?? 0}`}
+            connections={choices}
+            connKind={s.connKind}
+            onQueued={() => toast.success(`Removal of connection ${removing} queued (${removeCommand.id})`)}
+          />
+        </ConnectionChoicesProvider>
+      )}
       {addCommand && (
         <ConnectionChoicesProvider choices={choices}>
           <SessionCommandDialog

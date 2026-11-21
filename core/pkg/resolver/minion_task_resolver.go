@@ -546,6 +546,9 @@ func (r *minionTaskResolver) queue(ctx context.Context, s *models.MinionSession,
 	if err := r.putConnections(ctx, s, cmd.Action, cmd.Params, wire); err != nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
 	}
+	if err := r.checkRemoval(ctx, s, cmd.Action, cmd.Params, wire); err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+	}
 	uid := q.by
 	taskID := uuid.New()
 	if q.sub != nil {
@@ -1655,6 +1658,32 @@ func (r *minionTaskResolver) putConnections(ctx context.Context, s *models.Minio
 			return fmt.Errorf("connection %d: nothing changed", place)
 		}
 		wire[p.Key] = patch
+	}
+	return nil
+}
+
+// checkRemoval refuses a remove_connection (action) core will not send
+// (docs: Task Results and Actions, remove_connection): the connection in
+// use, the minion's only one, a place past its connections, and the one
+// the session's target names. nil for any other action.
+func (r *minionTaskResolver) checkRemoval(ctx context.Context, s *models.MinionSession, action string, params []protocol.FieldSpec,
+	wire map[string]any) error {
+	if action != protocol.ActionRemoveConnection {
+		return nil
+	}
+	place, n := connPlaceArg(params, wire), len(r.connectionNames(ctx, s))
+	switch {
+	case place < 1 || (n > 0 && place > n):
+		return fmt.Errorf("the minion has %d connection(s): there is no connection %d", n, place)
+	case place == s.Conn:
+		return fmt.Errorf("connection %d is in use: switch first", place)
+	case n == 1:
+		return fmt.Errorf("connection %d is the minion's only connection", place)
+	}
+	if r.targets != nil {
+		if t, err := r.targets.FindBySessionID(ctx, s.SessionID); err == nil && t != nil && t.Conn == place {
+			return fmt.Errorf("connection %d is the one its target %s names: remove the target first", place, t.Name)
+		}
 	}
 	return nil
 }

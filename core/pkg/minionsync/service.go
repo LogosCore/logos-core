@@ -1122,24 +1122,40 @@ func (s *Service) takeConnectionUpdate(ctx context.Context, session *models.Mini
 	if err == nil {
 		err = s.checkConns(ctx, "connection_update", u.Connections)
 	}
-	if err == nil && session.Conn > len(u.Connections) {
+	// A connection taken out (removed, its place before): the names kept
+	// for unnamed entries skip its, and the place in use, after it, is one
+	// less: the same connection, no move.
+	kept, place := s.sessionNames(ctx, session), session.Conn
+	if err == nil && u.Removed > 0 {
+		r := int(u.Removed) //nolint:gosec // within the list before (Validate)
+		switch {
+		case r == session.Conn:
+			err = fmt.Errorf("connection_update: removed %d is the connection in use: switch first", r)
+		case r <= len(kept):
+			kept = slices.Delete(slices.Clone(kept), r-1, r)
+		}
+		if place > r {
+			place--
+		}
+	}
+	if err == nil && place > len(u.Connections) {
 		err = fmt.Errorf("connection_update: the connection in use, %d, is past its %d connections: say the move first",
-			session.Conn, len(u.Connections))
+			place, len(u.Connections))
 	}
 	if err != nil {
 		return errItem(protocol.ErrItemBadMessage, err.Error(), i)
 	}
-	own := s.ownConns(ctx, u.Connections, s.sessionNames(ctx, session))
+	own := s.ownConns(ctx, u.Connections, kept)
 	if err := s.sessions.SetConnections(ctx, session.SessionID, own); err != nil {
 		return nil, fmt.Errorf("record a connection_update: %w", err)
 	}
 	session.Connections, session.ConnCount = own, len(own)
-	if session.Conn > 0 {
-		conn := connOf(nil, own, session.Conn)
+	if place > 0 {
+		conn := connOf(nil, own, place)
 		if err := s.sessions.SetConn(ctx, session.SessionID, conn, nil); err != nil {
 			return nil, fmt.Errorf("record a connection_update: %w", err)
 		}
-		session.ConnKind, session.ConnMaxMessage = conn.Kind, conn.MaxMessage
+		session.Conn, session.ConnKind, session.ConnName, session.ConnMaxMessage = place, conn.Kind, conn.Name, conn.MaxMessage
 	}
 	s.logger.Info("minion connections refreshed", zap.String("session_id", session.SessionID.String()), zap.Int("connections", len(own)))
 	return nil, nil

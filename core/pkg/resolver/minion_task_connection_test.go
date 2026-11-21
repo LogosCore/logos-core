@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
@@ -149,5 +150,37 @@ func TestPutConnectionsAdd(t *testing.T) {
 	}
 	if _, err := add("front"); err == nil || !strings.Contains(err.Error(), "a connection called front exists") {
 		t.Fatalf("a name the session has: %v", err)
+	}
+}
+
+type oneTarget struct{ t *models.MinionTarget }
+
+func (o oneTarget) FindBySessionID(context.Context, uuid.UUID) (*models.MinionTarget, error) {
+	return o.t, nil
+}
+
+// remove_connection is refused when it is queued for the connection in use,
+// the minion's only one, a place past them, and the one its target names.
+func TestCheckRemoval(t *testing.T) {
+	s := &models.MinionSession{Conn: 1, Connections: []models.MinionSessionConnSpec{{Name: "front"}, {Name: "ws"}, {Name: "dial"}}}
+	r := &minionTaskResolver{targets: oneTarget{t: &models.MinionTarget{Conn: 3, Name: "office"}}}
+	params := []protocol.FieldSpec{{Key: "conn", Num: 1, Type: protocol.FieldInt, Format: protocol.FormatConnection}}
+	check := func(place int) error {
+		return r.checkRemoval(context.Background(), s, protocol.ActionRemoveConnection, params, map[string]any{"conn": int64(place)})
+	}
+	if err := check(2); err != nil {
+		t.Fatalf("another one: %v", err)
+	}
+	for place, want := range map[int]string{1: "is in use: switch first", 4: "there is no connection 4", 3: "its target office names"} {
+		if err := check(place); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("connection %d: %v", place, err)
+		}
+	}
+	s.Connections, s.Conn = s.Connections[:1], 0
+	if err := check(1); err == nil || !strings.Contains(err.Error(), "only connection") {
+		t.Errorf("the only one: %v", err)
+	}
+	if err := r.checkRemoval(context.Background(), s, protocol.ActionSwitchConnection, params, map[string]any{"conn": int64(1)}); err != nil {
+		t.Errorf("another action: %v", err)
 	}
 }

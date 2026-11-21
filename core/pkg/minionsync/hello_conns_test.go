@@ -229,3 +229,47 @@ func TestConnectionUpdateKeepsNames(t *testing.T) {
 		t.Fatalf("a kept name taken: %v", got)
 	}
 }
+
+// A connection taken out (remove_connection): the update says its place
+// before (removed), and core moves the names it keeps and the place in use
+// with the list, recording no move; an update that removed the one in use
+// is refused.
+func TestConnectionUpdateRemoved(t *testing.T) {
+	r := newRig(t)
+	r.build.Connections.Items = []protocol.BuildConnection{endpoint(protocol.KindReverseCall, "http"),
+		endpoint(protocol.KindReversePersistent, "dns"), endpoint(protocol.KindReversePersistent, "http")}
+	r.svc.WithChannelSchemas(fakeSchemas{
+		"http": {Kinds: map[string]protocol.ConnectionKind{protocol.KindReverseCall: {}, protocol.KindReversePersistent: {}}},
+		"dns":  {Kinds: map[string]protocol.ConnectionKind{protocol.KindReversePersistent: {}}},
+	})
+	ctx := ViaChannel(context.Background(), "http")
+	h := hello("ws01")
+	h.Conn = 3
+	_, c := newSock("ws")
+	sid := r.helloOver(t, ctx, c, h)
+	update := func(removed uint64, conns ...protocol.HelloConnection) int {
+		t.Helper()
+		u := protocol.ConnectionUpdateItem{T: protocol.ItemConnectionUpdate, Connections: conns, Removed: removed}
+		return errCodeIn(t, r.openUnder(t, sid, r.keys, r.say(t, ctx, c, sid, u)))
+	}
+	dns := protocol.HelloConnection{Channel: "dns", Kind: protocol.KindReversePersistent}
+	ws := protocol.HelloConnection{Channel: "http", Kind: protocol.KindReversePersistent}
+
+	// The one in use cannot have gone.
+	if code := update(3, dns, ws); code != protocol.ErrItemBadMessage {
+		t.Fatalf("the one in use removed: err %d", code)
+	}
+	// The first taken out: the others keep their names, the one in use moves up.
+	if code := update(1, dns, ws); code != 0 {
+		t.Fatalf("err %d", code)
+	}
+	s := r.sessionRow(t, sid)
+	var names []string
+	for _, sc := range s.Connections {
+		names = append(names, sc.Name)
+	}
+	if !slices.Equal(names, []string{"dns-reverse-persistent", "http-reverse-persistent"}) || s.Conn != 2 ||
+		s.ConnName != "http-reverse-persistent" || len(s.ConnChanges) != 0 {
+		t.Fatalf("names %v, conn %d %q, changes %d", names, s.Conn, s.ConnName, len(s.ConnChanges))
+	}
+}
