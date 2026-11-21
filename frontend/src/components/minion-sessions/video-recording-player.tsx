@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
-import { DownloadIcon, ExpandIcon, KeyboardIcon, XIcon } from "lucide-react"
+import { useFullscreen } from "@/hooks/use-fullscreen"
+import { DownloadIcon, ExpandIcon, KeyboardIcon, XIcon, ShrinkIcon } from "lucide-react"
 import Guacamole from "@/vendor/guacamole/guacamole-common"
 import { Button } from "@/components/ui/button"
 import { formatDateTime } from "@/lib/date-format"
@@ -30,6 +31,7 @@ interface RecordingKeys {
 
 export default function VideoRecordingPlayer({ recording: rec, settings, onClose }: VideoRecordingPlayerProps) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const fullscreen = useFullscreen(rootRef)
   const videoRef = useRef<HTMLVideoElement>(null)
   const keysRef = useRef<HTMLDivElement>(null)
   const [keysOpen, setKeysOpen] = useState(rec.keys)
@@ -104,11 +106,12 @@ export default function VideoRecordingPlayer({ recording: rec, settings, onClose
         <Button
           variant="ghost"
           size="icon-xs"
-          title="Full screen (Esc leaves it)"
-          aria-label="Full screen"
-          onClick={() => void rootRef.current?.requestFullscreen?.()}
+          title={fullscreen.full ? "Leave full screen" : "Full screen (Esc leaves it too)"}
+          aria-label={fullscreen.full ? "Leave full screen" : "Full screen"}
+          aria-pressed={fullscreen.full}
+          onClick={fullscreen.toggle}
         >
-          <ExpandIcon />
+          {fullscreen.full ? <ShrinkIcon /> : <ExpandIcon />}
         </Button>
         <Button variant="ghost" size="icon-xs" title="Close the recording" aria-label="Close the recording" onClick={onClose}>
           <XIcon />

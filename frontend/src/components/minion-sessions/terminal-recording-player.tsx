@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useFullscreen } from "@/hooks/use-fullscreen"
 import { Terminal } from "@xterm/xterm"
 import "@xterm/xterm/css/xterm.css"
-import { DownloadIcon, ExpandIcon, FileTextIcon, KeyboardIcon, Loader2Icon, LoaderIcon, PauseIcon, PlayIcon, SkipForwardIcon, XIcon } from "lucide-react"
+import { DownloadIcon, ExpandIcon, FileTextIcon, KeyboardIcon, Loader2Icon, LoaderIcon, PauseIcon, PlayIcon, SkipForwardIcon, XIcon, ShrinkIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
@@ -74,6 +75,7 @@ class Playback {
 
 export function TerminalRecordingPlayer({ recording: rec, onClose }: TerminalRecordingPlayerProps) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const fullscreen = useFullscreen(rootRef)
   const frameRef = useRef<HTMLDivElement>(null)
   const keysRef = useRef<HTMLDivElement>(null)
   const playbackRef = useRef<Playback | null>(null)
@@ -250,11 +252,12 @@ export function TerminalRecordingPlayer({ recording: rec, onClose }: TerminalRec
         <Button
           variant="ghost"
           size="icon-xs"
-          title="Full screen (Esc leaves it)"
-          aria-label="Full screen"
-          onClick={() => void rootRef.current?.requestFullscreen?.()}
+          title={fullscreen.full ? "Leave full screen" : "Full screen (Esc leaves it too)"}
+          aria-label={fullscreen.full ? "Leave full screen" : "Full screen"}
+          aria-pressed={fullscreen.full}
+          onClick={fullscreen.toggle}
         >
-          <ExpandIcon />
+          {fullscreen.full ? <ShrinkIcon /> : <ExpandIcon />}
         </Button>
         <Button variant="ghost" size="icon-xs" title="Close the recording" aria-label="Close the recording" onClick={onClose}>
           <XIcon />

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
-import { DownloadIcon, ExpandIcon, KeyboardIcon, LoaderIcon, PauseIcon, PlayIcon, XIcon } from "lucide-react"
+import { useFullscreen } from "@/hooks/use-fullscreen"
+import { DownloadIcon, ExpandIcon, KeyboardIcon, LoaderIcon, PauseIcon, PlayIcon, XIcon, ShrinkIcon } from "lucide-react"
 import Guacamole from "@/vendor/guacamole/guacamole-common"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
@@ -26,6 +27,7 @@ export interface RecordingPlayerProps {
 
 export function RecordingPlayer({ recording: rec, settings, onClose }: RecordingPlayerProps) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const fullscreen = useFullscreen(rootRef)
   const frameRef = useRef<HTMLDivElement>(null)
   const keysRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<Guacamole.SessionRecording | null>(null)
@@ -177,11 +179,12 @@ export function RecordingPlayer({ recording: rec, settings, onClose }: Recording
         <Button
           variant="ghost"
           size="icon-xs"
-          title="Full screen (Esc leaves it)"
-          aria-label="Full screen"
-          onClick={() => void rootRef.current?.requestFullscreen?.()}
+          title={fullscreen.full ? "Leave full screen" : "Full screen (Esc leaves it too)"}
+          aria-label={fullscreen.full ? "Leave full screen" : "Full screen"}
+          aria-pressed={fullscreen.full}
+          onClick={fullscreen.toggle}
         >
-          <ExpandIcon />
+          {fullscreen.full ? <ShrinkIcon /> : <ExpandIcon />}
         </Button>
         <Button variant="ghost" size="icon-xs" title="Close the recording" aria-label="Close the recording" onClick={onClose}>
           <XIcon />

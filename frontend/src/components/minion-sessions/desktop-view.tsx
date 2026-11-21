@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
-import { ClipboardIcon, ExpandIcon, KeyboardIcon, LoaderIcon, LogOutIcon, RotateCcwIcon, XIcon } from "lucide-react"
+import { ClipboardIcon, ExpandIcon, KeyboardIcon, LoaderIcon, LogOutIcon, RotateCcwIcon, ShrinkIcon, XIcon } from "lucide-react"
+import { useFullscreen } from "@/hooks/use-fullscreen"
 import Guacamole from "@/vendor/guacamole/guacamole-common"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -58,6 +59,14 @@ const UNEXPLAINED_END = "guacd ended the session without saying why: it may have
 
 export function DesktopView({ taskId, front, settings, warning, onClose, onRestart }: DesktopViewProps) {
   const frameRef = useRef<HTMLDivElement>(null)
+  // Full screen takes the whole view, its toolbar too: the button that
+  // leaves it, Ctrl+Alt+Del and the clipboard stay at hand; the desktop
+  // follows its frame's size. Entered, the desktop has the keyboard.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const fullscreen = useFullscreen(rootRef)
+  useEffect(() => {
+    if (fullscreen.full) frameRef.current?.focus()
+  }, [fullscreen.full])
   const clientRef = useRef<Guacamole.Client | null>(null)
   const [phase, setPhase] = useState<Phase>("connecting")
   const [error, setError] = useState<string | null>(null)
@@ -234,7 +243,7 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
     return () => window.removeEventListener("beforeunload", warn)
   }, [signedIn])
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border">
+    <div ref={rootRef} className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border bg-background">
       <div className="flex min-h-8 flex-wrap items-center gap-1 border-b px-2 py-1 text-xs">
         <span className="flex min-w-0 flex-1 items-center gap-1.5">
           {phase === "connecting" && <LoaderIcon className="size-3.5 shrink-0 animate-spin text-muted-foreground" />}
@@ -277,11 +286,12 @@ export function DesktopView({ taskId, front, settings, warning, onClose, onResta
         <Button
           variant="ghost"
           size="icon-xs"
-          title="Full screen (Esc leaves it)"
-          aria-label="Full screen"
-          onClick={() => void frameRef.current?.requestFullscreen?.().then(() => frameRef.current?.focus())}
+          title={fullscreen.full ? "Leave full screen" : "Full screen"}
+          aria-label={fullscreen.full ? "Leave full screen" : "Full screen"}
+          aria-pressed={fullscreen.full}
+          onClick={fullscreen.toggle}
         >
-          <ExpandIcon />
+          {fullscreen.full ? <ShrinkIcon /> : <ExpandIcon />}
         </Button>
         {phase === "ended" && (
           <Button variant="ghost" size="xs" title="Open the desktop again: a new session" onClick={onRestart}>
