@@ -8,6 +8,7 @@ import { settingsSummary } from "@/components/builds/build-values"
 import { useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { useMinionSession, useMinionSessionConnections } from "@/graphql/hooks/minion-sessions"
 import { connectionText, type ConnectionChoice } from "./connection-choices"
+import { useConsoleCommands } from "./console-commands"
 
 /**
  * A session's connections as choices (connection-choices.ts): its build's,
@@ -51,6 +52,13 @@ export function useConnectionChoices(): readonly ConnectionChoice[] {
 }
 
 const SWITCH = "switch_connection"
+const EDIT = "edit_connection"
+
+/** The session's command for edit_connection: the one picked for the session, else the factory's first; undefined for none. */
+export function useEditConnectionCommand(sessionId: string) {
+  const { commands } = useConsoleCommands(sessionId)
+  return chooseActionCommand(actionCommands(commands, EDIT), readPicked(sessionId, EDIT))
+}
 
 /**
  * Switching a session's connection: the session's command for core's

@@ -21,7 +21,8 @@ import { errorMessage } from "@/components/modules/management/api-errors"
 import { TargetStateBadge } from "@/components/targets/target-state-badge"
 import { TARGET_STATE_LABEL, isPersistent, problemsText, shownState, type Target } from "@/components/targets/target-values"
 import { TargetDialog } from "@/components/targets/target-dialog"
-import { useSwitchConnection } from "./use-connection-choices"
+import { useEditConnectionCommand, useSessionConnectionChoices, useSwitchConnection } from "./use-connection-choices"
+import { EditConnectionDialog } from "./edit-connection-dialog"
 
 // A session's connections (docs: contracts/channel-core-connections, Connection
 // management): its build's, in the order the minion tries them, the one it
@@ -46,6 +47,10 @@ export function ConnectionsCard({ s }: { s: Session }) {
   const kinds = useChannelKinds()
   const channels = useMemo(() => kindsByName(kinds.data?.channelKinds ?? []), [kinds.data])
   const { command, pending, switchTo } = useSwitchConnection(s.id)
+  // Edit: the session's command for edit_connection, opened on a connection.
+  const editCommand = useEditConnectionCommand(s.id)
+  const choices = useSessionConnectionChoices(s.id)
+  const [editing, setEditing] = useState<number | null>(null)
   const open = s.state === "OPEN"
   const targetQuery = useSessionTarget(s.id)
   const target = targetQuery.data ?? null
@@ -81,6 +86,17 @@ export function ConnectionsCard({ s }: { s: Session }) {
                       <NoTargetLine s={s} place={c.place} open={open} inUse={inUse} />
                     )}
                   </div>
+                  {editCommand && open && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      title={`Queue ${editCommand.id} for connection ${c.place}: edit it as JSON first`}
+                      onClick={() => setEditing(c.place)}
+                    >
+                      Edit
+                    </Button>
+                  )}
                   {command && open && !inUse && (
                     <Button
                       type="button"
@@ -104,6 +120,12 @@ export function ConnectionsCard({ s }: { s: Session }) {
         />
       )}
       <ViaRow s={s} />
+      <EditConnectionDialog
+        sessionId={s.id}
+        connection={choices.find((x) => x.place === editing) ?? null}
+        connections={choices}
+        onClose={() => setEditing(null)}
+      />
       {connections.length > 1 && !command && (
         <NoteRow>The minion was built without a command to switch connections.</NoteRow>
       )}
