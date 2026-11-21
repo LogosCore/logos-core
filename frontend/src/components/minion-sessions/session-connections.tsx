@@ -97,7 +97,7 @@ export function ConnectionsCard({ s }: { s: Session }) {
                       Edit
                     </Button>
                   )}
-                  {command && open && !inUse && (
+                  {command && open && (
                     <Button
                       type="button"
                       variant="outline"

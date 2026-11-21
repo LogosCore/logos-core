@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils"
 import type { ConsoleCommand } from "./command-bar"
 import { commandKindsNote } from "./command-kinds"
 import { lineOf, usage } from "./command-line"
-import type { ConnectionChoice } from "./connection-choices"
+import { isConnectionPlace, withConnection, type ConnectionChoice } from "./connection-choices"
+import { SessionFormContext } from "./session-form-context"
 
 // A session's command as a form, wherever it opens: the console's
 // Shift+Enter and form button, and the views that run one of the session's
@@ -53,6 +54,8 @@ export function SessionCommandDialog({
 }: SessionCommandDialogProps) {
   const queue = useQueueMinionTask()
   return (
+    // Its fields read the session by it (a connection param: connection-field.tsx).
+    <SessionFormContext.Provider value={sessionId}>
     <CommandFormDialog
       open={open}
       onOpenChange={onOpenChange}
@@ -94,7 +97,18 @@ export function SessionCommandDialog({
         onQueued?.(data.queueMinionTask)
       }}
       idPrefix={`task-${sessionId}`}
+      className={formWidth(command)}
+      followDrafts={(key, drafts) => {
+        // A connection picked (edit_connection's conn): the params that
+        // take one whole start over as it.
+        const f = command?.fields.find((x) => x.key === key)
+        const d = drafts[key]
+        if (!command || !f || !isConnectionPlace(f) || d?.kind !== "text") return drafts
+        const picked = connections.find((c) => String(c.place) === d.text.trim())
+        return picked ? withConnection(command.fields, drafts, picked, new Set([key])) : drafts
+      }}
     />
+    </SessionFormContext.Provider>
   )
 }
 
@@ -109,4 +123,12 @@ function KindsLine({ kinds, connKind }: { kinds?: readonly string[]; connKind?: 
 function CompositeLine({ uses }: { uses?: readonly string[] }) {
   if (!uses?.length) return null
   return <span className="mt-1 block">Composite: its factory&apos;s code runs {uses.join(", ")} as its subtasks.</span>
+}
+
+/**
+ * The form's width: wide for a command with a structured param (a
+ * connection's form, a JSON editor), the dialog's own otherwise.
+ */
+function formWidth(command: ConsoleCommand | undefined): string | undefined {
+  return command?.fields.some((f) => f.type === "structured") ? "sm:max-w-3xl" : undefined
 }

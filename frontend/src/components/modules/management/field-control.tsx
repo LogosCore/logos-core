@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -19,6 +20,7 @@ import { CredentialFieldControl } from "@/components/findings/credential-field-c
 import { StreamFieldControl } from "@/components/minion-sessions/stream-field-control"
 import { CONNECTION_FORMAT, choiceDetail, connectionJSON } from "@/components/minion-sessions/connection-choices"
 import { useConnectionChoices } from "@/components/minion-sessions/use-connection-choices"
+import { useSessionFormId } from "@/components/minion-sessions/session-form-context"
 import { move } from "@/components/builds/build-values"
 import { FORMATS as GENERATED_FORMATS } from "@/lib/word-generator"
 import { UserAgentCheck, UserAgentGenerator } from "./user-agent-generator"
@@ -61,6 +63,11 @@ interface FieldControlProps {
 }
 
 /** One control per field type; the label, badges and errors live around it. */
+// A session's connection param as the build form's connection editor
+// (every setting of the channel's kind, set or not): a chunk of its own,
+// fetched when one is shown.
+const ConnectionField = lazy(() => import("@/components/minion-sessions/connection-field"))
+
 export function FieldControl({
   field,
   draft,
@@ -73,6 +80,7 @@ export function FieldControl({
 }: FieldControlProps) {
   // A connection param's choices: the session's, in a session's command form.
   const connections = useConnectionChoices()
+  const sessionFormId = useSessionFormId()
   const defaultText =
     defaultValue === null || defaultValue === undefined
       ? undefined
@@ -182,6 +190,20 @@ export function FieldControl({
       )
 
     case "json":
+      // In a session's command form, a connection as a form, its JSON a toggle away.
+      if (field.format === CONNECTION_FORMAT && sessionFormId) {
+        return (
+          <Suspense fallback={<span className="text-sm text-muted-foreground">Loading the connection form…</span>}>
+            <ConnectionField
+              text={draft.text}
+              onChange={(t) => onChange({ kind: "json", text: t })}
+              disabled={!!disabled}
+              idPrefix={id}
+              label={field.label || field.key}
+            />
+          </Suspense>
+        )
+      }
       return (
         <div className="flex flex-col gap-1">
           {/* A connection: one of the session's fills the editor, then it is edited as JSON. */}
@@ -315,7 +337,7 @@ export function FieldControl({
             </SelectTrigger>
             <SelectContent>
               {connections.map((c) => (
-                <SelectItem key={c.place} value={String(c.place)} disabled={c.inUse} description={choiceDetail(c)}>
+                <SelectItem key={c.place} value={String(c.place)} description={choiceDetail(c)}>
                   {c.name}
                   {c.inUse && <span className="text-xs text-muted-foreground"> · in use</span>}
                 </SelectItem>

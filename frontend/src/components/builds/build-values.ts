@@ -816,7 +816,7 @@ export interface FormInput {
   uniqueErrorCodes: boolean | null
 }
 
-function evaluateFields(
+export function evaluateFields(
   prefix: string,
   fields: readonly FieldDef[],
   drafts: Record<string, Draft>,

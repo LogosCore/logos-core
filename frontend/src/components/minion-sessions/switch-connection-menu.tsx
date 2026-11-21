@@ -37,8 +37,8 @@ function Connections({ s }: { s: MinionSessionFieldsFragment }) {
   return connections.map((c) => (
     <ContextMenuItem
       key={c.place}
-      disabled={c.inUse || pending}
-      title={c.inUse ? "In use" : `Queue ${command.id}: the minion moves once this connection answers`}
+      disabled={pending}
+      title={`Queue ${command.id}: the minion moves once this connection answers${c.inUse ? " (it is in use now)" : ""}`}
       onClick={() => void switchTo(c.place, connections)}
     >
       {c.inUse ? <CheckIcon /> : <span className="size-4" />}

@@ -3,6 +3,7 @@ import type { FieldDef } from "@/components/modules/management/field-values"
 import { kindsByName } from "@/components/endpoints/endpoint-values"
 import type { BuildSchemaFieldsFragment } from "@/graphql/gql/graphql"
 import { DEFAULT_FAILOVER } from "./failover-values"
+import { connectionOfDraft, draftOfConnection, readConnectionJSON } from "./connection-value"
 import {
   acceptText,
   buildConnectionRows,
@@ -763,5 +764,43 @@ describe("onPlatform", () => {
     // None picked yet: a field for some platforms waits.
     expect(onPlatform({ platforms: ["linux/arm"] }, "")).toBe(false)
     expect(onPlatform({ platforms: [] }, "")).toBe(true)
+  })
+})
+
+describe("a connection param as a connection form", () => {
+  const dummy = kind.targets[0]
+  const text = JSON.stringify({
+    channel: "http",
+    kind: "reverse-call",
+    name: "front",
+    version: 2,
+    params: { base_url: "http://10.10.10.2:8090", request_timeout: "40s" },
+    max_message: 4096,
+  })
+
+  it("shows every setting of its kind, set or not, and reads back what it had", () => {
+    const v = readConnectionJSON(text)!
+    const c = draftOfConnection(kind, http, v, dummy)
+    // token is unset in the JSON, yet the form has it to fill.
+    expect(Object.keys(c.settings).sort()).toEqual(["base_url", "request_timeout", "token"])
+    const { value, errors } = connectionOfDraft(kind, http, c, dummy, v)
+    expect(errors).toEqual({})
+    // request_timeout at its default is left to core; version and max_message kept.
+    expect(value).toEqual({ channel: "http", kind: "reverse-call", name: "front", version: 2, params: { base_url: "http://10.10.10.2:8090" }, max_message: 4096 })
+  })
+
+  it("takes a setting typed in, and says a wrong one", () => {
+    const v = readConnectionJSON(text)!
+    const c = draftOfConnection(kind, http, v, dummy)
+    c.settings.token = { kind: "text", text: "s3cret" }
+    expect(connectionOfDraft(kind, http, c, dummy, v).value.params).toEqual({ base_url: "http://10.10.10.2:8090", token: "s3cret" })
+    c.settings.request_timeout = { kind: "text", text: "soon" }
+    expect(connectionOfDraft(kind, http, c, dummy, v).errors["params.request_timeout"]).toBeTruthy()
+  })
+
+  it("reads only a connection: an object with a channel", () => {
+    expect(readConnectionJSON("")).toBeNull()
+    expect(readConnectionJSON("[1]")).toBeNull()
+    expect(readConnectionJSON('{"kind":"reverse-call"}')).toBeNull()
   })
 })

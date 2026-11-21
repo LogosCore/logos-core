@@ -30,6 +30,10 @@ export interface CommandFormDialogProps {
   /** Fields whose problems show from the start (what was typed for them);
    *  the others' show once Run is tried. */
   showErrorsFor?: readonly string[]
+  /** What the other fields become when the one at key changed: the
+   *  drafts with it changed in, given back changed or as they are (a
+   *  connection picked fills the connection it becomes). */
+  followDrafts?: (key: string, drafts: Record<string, Draft>) => Record<string, Draft>
   /** Below the fields, given the values as they stand (null while any is
    *  wrong): a confirmation, an equivalent command line. */
   after?: (values: Record<string, unknown> | null) => ReactNode
@@ -66,6 +70,7 @@ function CommandForm({
   fields,
   initialDrafts,
   showErrorsFor,
+  followDrafts,
   after,
   submitLabel = "Run",
   destructive,
@@ -126,7 +131,10 @@ function CommandForm({
             params={fields}
             drafts={drafts}
             onChange={(key, d) => {
-              setDrafts((prev) => ({ ...prev, [key]: d }))
+              setDrafts((prev) => {
+                const next = { ...prev, [key]: d }
+                return followDrafts ? followDrafts(key, next) : next
+              })
               setTouched((prev) => (prev.has(key) ? prev : new Set([...prev, key])))
             }}
             errors={shown}
