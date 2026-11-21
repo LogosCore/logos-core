@@ -529,3 +529,88 @@ func TestSubscriberBufferFullDropsForThatSubscriberOnly(t *testing.T) {
 	close(blockCh)
 	bus.Stop(context.Background())
 }
+
+// TestMissedToldAfterDrops: a subscription that names TopicMissed learns
+// that its full buffer lost events, once, as it takes events again; one that
+// does not name it gets the events it kept and nothing more.
+func TestMissedToldAfterDrops(t *testing.T) {
+	bus := newTestBus()
+	release := make(chan struct{})
+	var mu sync.Mutex
+	var told []Topic
+	bus.Subscribe([]Topic{TopicUserCreated, TopicMissed}, func(_ context.Context, e Event) {
+		<-release
+		mu.Lock()
+		told = append(told, e.Topic)
+		mu.Unlock()
+	})
+	var plain atomic.Int32
+	var plainMissed atomic.Bool
+	plainRelease := make(chan struct{})
+	bus.Subscribe([]Topic{TopicUserCreated}, func(_ context.Context, e Event) {
+		<-plainRelease
+		if e.Topic == TopicMissed {
+			plainMissed.Store(true)
+		}
+		plain.Add(1)
+	})
+	bus.Start()
+
+	const sent = defaultSubscriberBufferSize + 20
+	for range sent {
+		bus.Publish(NewUserCreatedEvent(SystemActor(), UserEventPayload{}))
+	}
+	time.Sleep(50 * time.Millisecond) // dispatched: both buffers full, the rest dropped
+	close(release)
+	close(plainRelease)
+	bus.Stop(context.Background())
+
+	mu.Lock()
+	defer mu.Unlock()
+	missed, events := 0, 0
+	for i, topic := range told {
+		switch topic {
+		case TopicMissed:
+			missed++
+			if i != 1 {
+				t.Errorf("TopicMissed came %d events in, want right after the event in hand", i)
+			}
+		case TopicUserCreated:
+			events++
+		}
+	}
+	if missed != 1 {
+		t.Errorf("TopicMissed told %d times, want once", missed)
+	}
+	if events == 0 || events >= sent {
+		t.Errorf("events handled %d of %d, want some dropped", events, sent)
+	}
+	if plainMissed.Load() {
+		t.Error("a subscription that does not name TopicMissed was told")
+	}
+	if got := plain.Load(); got == 0 || got >= sent {
+		t.Errorf("plain subscription handled %d of %d, want some dropped", got, sent)
+	}
+}
+
+// TestMissedNotToldWithoutDrops: a subscription that keeps up hears nothing
+// of TopicMissed.
+func TestMissedNotToldWithoutDrops(t *testing.T) {
+	bus := newTestBus()
+	var missed atomic.Bool
+	var got atomic.Int32
+	bus.Subscribe([]Topic{TopicUserCreated, TopicMissed}, func(_ context.Context, e Event) {
+		if e.Topic == TopicMissed {
+			missed.Store(true)
+		}
+		got.Add(1)
+	})
+	bus.Start()
+	for range 10 {
+		bus.Publish(NewUserCreatedEvent(SystemActor(), UserEventPayload{}))
+	}
+	bus.Stop(context.Background())
+	if missed.Load() || got.Load() != 10 {
+		t.Errorf("missed %v, handled %d: want 10 events and no TopicMissed", missed.Load(), got.Load())
+	}
+}

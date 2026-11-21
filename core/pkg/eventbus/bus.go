@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -25,6 +26,10 @@ type subscription struct {
 	handler Handler
 	ch      chan Event
 	closed  atomic.Bool // set by unsubscribe; checked by dispatcher before sending
+	// dropped counts the events its full buffer lost since its drain last
+	// looked: the dispatcher adds, the drain takes (and tells a subscription
+	// that names TopicMissed).
+	dropped atomic.Int64
 }
 
 type eventBus struct {
@@ -146,7 +151,8 @@ func (b *eventBus) Start() {
 
 // dispatch processes events from the publisher channel and fans them out
 // to matching subscriber channels. Topic matching and optional filter are
-// checked per subscriber. A slow subscriber only drops its own events.
+// checked per subscriber. A slow subscriber only drops its own events: the
+// first of a run is logged, and the drain says how many when it catches up.
 func (b *eventBus) dispatch() {
 	defer close(b.dispatched)
 
@@ -167,11 +173,13 @@ func (b *eventBus) dispatch() {
 			select {
 			case sub.ch <- event:
 			default:
-				b.logger.Warn("event bus: subscriber buffer full, dropping event",
-					zap.String("topic", string(event.Topic)),
-					zap.String("event_id", event.ID),
-					zap.Uint64("subscriber_id", sub.id),
-				)
+				if sub.dropped.Add(1) == 1 {
+					b.logger.Warn("event bus: subscriber buffer full, dropping event",
+						zap.String("topic", string(event.Topic)),
+						zap.String("event_id", event.ID),
+						zap.Uint64("subscriber_id", sub.id),
+					)
+				}
 			}
 		}
 		b.mu.RUnlock()
@@ -179,12 +187,26 @@ func (b *eventBus) dispatch() {
 }
 
 // drain is a long-lived goroutine that reads events from a subscription's
-// channel and calls its handler with panic recovery.
+// channel and calls its handler with panic recovery. After each event it
+// looks for drops: a drop happens only while the buffer is full, so an event
+// is always left to come after it, and the look after that event sees it.
+// A subscription that names TopicMissed gets it then, at once rather than
+// behind what is still queued: what it built is behind already.
 func (b *eventBus) drain(sub *subscription) {
 	defer b.wg.Done()
 
 	for event := range sub.ch {
 		b.handleSafe(sub.handler, event)
+		if n := sub.dropped.Swap(0); n > 0 {
+			b.logger.Warn("event bus: a subscriber lost events to its full buffer",
+				zap.Uint64("subscriber_id", sub.id),
+				zap.Int64("dropped", n),
+				zap.Bool("told", sub.topics[TopicMissed]),
+			)
+			if sub.topics[TopicMissed] {
+				b.handleSafe(sub.handler, Event{Topic: TopicMissed, Timestamp: time.Now().UTC()})
+			}
+		}
 	}
 }
 

@@ -3,8 +3,10 @@ package resolver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -311,17 +313,126 @@ func TestWikiDocumentChanged_ReadsDocumentOnlyWhenSelected(t *testing.T) {
 	}
 }
 
-// capturingBus hands the test the handler a subscription registers, and
-// signals when the subscription lets go of the bus.
+// capturingBus hands the test the handler a subscription registers and the
+// topics it names, and signals when the subscription lets go of the bus.
 type capturingBus struct {
 	eventbus.IEventBus
 	handler      eventbus.Handler
+	topics       []eventbus.Topic
 	unsubscribed chan struct{}
 }
 
-func (b *capturingBus) Subscribe(_ []eventbus.Topic, h eventbus.Handler, _ ...eventbus.Filter) func() {
-	b.handler = h
-	return func() { close(b.unsubscribed) }
+func (b *capturingBus) Subscribe(topics []eventbus.Topic, h eventbus.Handler, _ ...eventbus.Filter) func() {
+	b.handler, b.topics = h, topics
+	var once sync.Once
+	return func() { once.Do(func() { close(b.unsubscribed) }) }
+}
+
+// TestStream_EndsWhenTheBusMissedEvents: told it lost events, a stream
+// closes its channel (gqlgen completes the subscription, and the client
+// reads afresh), and what still comes for it is dropped without a panic.
+func TestStream_EndsWhenTheBusMissedEvents(t *testing.T) {
+	bus := &capturingBus{unsubscribed: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch := stream(ctx, bus, []eventbus.Topic{eventbus.TopicHostUpdated}, nil, func(_ context.Context, e eventbus.Event) *string {
+		topic := string(e.Topic)
+		return &topic
+	})
+	if !slices.Contains(bus.topics, eventbus.TopicMissed) || !slices.Contains(bus.topics, eventbus.TopicHostUpdated) {
+		t.Fatalf("subscribed to %v, want its topics and TopicMissed", bus.topics)
+	}
+
+	bus.handler(context.Background(), eventbus.Event{Topic: eventbus.TopicHostUpdated})
+	if got := <-ch; *got != string(eventbus.TopicHostUpdated) {
+		t.Fatalf("payload %q", *got)
+	}
+	bus.handler(context.Background(), eventbus.Event{Topic: eventbus.TopicMissed})
+	if _, open := <-ch; open {
+		t.Fatal("the channel stays open after missed events: the client never learns it is behind")
+	}
+	for range 5 {
+		bus.handler(context.Background(), eventbus.Event{Topic: eventbus.TopicHostUpdated})
+	}
+}
+
+// TestStreamLatest_MergesWhatWaits: while the client is slow, a row's
+// events wait as one (a creation stays one), rows keep the order they first
+// came in, and each costs one build.
+func TestStreamLatest_MergesWhatWaits(t *testing.T) {
+	bus := &capturingBus{unsubscribed: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	started, gate := make(chan struct{}), make(chan struct{})
+	var builds atomic.Int32
+	ch := streamLatest(ctx, bus, minionSessionTopics, nil, minionSessionKey, minionSessionMerge,
+		func(_ context.Context, e eventbus.Event) *string {
+			if builds.Add(1) == 1 {
+				close(started)
+				<-gate // a slow client: everything else waits meanwhile
+			}
+			s := fmt.Sprintf("%s %s", minionSessionKey(e), e.Topic)
+			return &s
+		})
+	ev := func(topic eventbus.Topic, id string) eventbus.Event {
+		return eventbus.Event{Topic: topic, Payload: eventbus.MinionSessionEventPayload{SessionID: id, OperationID: "op"}}
+	}
+	upd, created := eventbus.TopicMinionSessionUpdated, eventbus.TopicMinionSessionCreated
+
+	bus.handler(context.Background(), ev(upd, "a"))
+	<-started
+	for _, e := range []eventbus.Event{ev(upd, "a"), ev(upd, "b"), ev(upd, "a"), ev(created, "c"), ev(upd, "c"), ev(upd, "b")} {
+		bus.handler(context.Background(), e)
+	}
+	close(gate)
+
+	want := []string{"a " + string(upd), "a " + string(upd), "b " + string(upd), "c " + string(created)}
+	for i, w := range want {
+		select {
+		case got := <-ch:
+			if *got != w {
+				t.Fatalf("payload %d = %q, want %q", i, *got, w)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("payload %d never came", i)
+		}
+	}
+	select {
+	case got := <-ch:
+		t.Fatalf("an extra payload %q: waiting events were not merged", *got)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if got := builds.Load(); got != 4 {
+		t.Errorf("builds = %d, want 4 (one per row that waited, and the first)", got)
+	}
+}
+
+// TestStreamLatest_EndsWhenTheBusMissedEvents: as stream's: the channel
+// closes and the stream lets go of the bus.
+func TestStreamLatest_EndsWhenTheBusMissedEvents(t *testing.T) {
+	bus := &capturingBus{unsubscribed: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch := streamLatest(ctx, bus, minionSessionTopics, nil, minionSessionKey, minionSessionMerge,
+		func(_ context.Context, e eventbus.Event) *string { s := string(e.Topic); return &s })
+	if !slices.Contains(bus.topics, eventbus.TopicMissed) {
+		t.Fatalf("subscribed to %v, want TopicMissed among them", bus.topics)
+	}
+	bus.handler(context.Background(), eventbus.Event{Topic: eventbus.TopicMissed})
+	select {
+	case _, open := <-ch:
+		if open {
+			t.Fatal("a payload instead of the end")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the channel stayed open after missed events")
+	}
+	select {
+	case <-bus.unsubscribed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the stream kept its bus subscription after it ended")
+	}
+	bus.handler(context.Background(), eventbus.Event{Topic: eventbus.TopicMinionSessionUpdated, Payload: eventbus.MinionSessionEventPayload{SessionID: "a"}})
 }
 
 // TestStream_SurvivesAnEventInFlightAtDisconnect pins the race every

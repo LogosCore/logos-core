@@ -3,11 +3,13 @@ import { useQueryClient } from "@tanstack/react-query"
 import { onSubscriptionsResumed } from "@/lib/subscription-registry"
 
 /**
- * Refill the cache gap left by a hidden tab.
+ * Refill the cache gap left by a hidden tab, a socket that dropped, or a
+ * subscription the server ended.
  *
- * Subscriptions are torn down while the tab is hidden
- * (lib/subscription-registry.ts) and the event bus has no replay, so
- * everything published in that window is gone. That would be harmless if the
+ * Subscriptions are torn down while the tab is hidden, are down while the
+ * socket is, and are opened again a while after the server ends one
+ * (lib/subscription-registry.ts); the event bus has no replay, so
+ * everything published in such a window is gone. That would be harmless if the
  * caches refetched on their own — but they deliberately do not. Subscriptions
  * are the single invalidation source for wiki documents and friends, so those
  * queries run at `staleTime: Infinity`, and `refetchOnWindowFocus` is off

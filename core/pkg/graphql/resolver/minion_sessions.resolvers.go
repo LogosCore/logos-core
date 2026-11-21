@@ -157,7 +157,7 @@ func (r *subscriptionResolver) MinionSessionChanged(ctx context.Context, operati
 	if err != nil {
 		return nil, err
 	}
-	return stream(ctx, r.EventBus, minionSessionTopics, filter, r.minionSessionEvent), nil
+	return streamLatest(ctx, r.EventBus, minionSessionTopics, filter, minionSessionKey, minionSessionMerge, r.minionSessionEvent), nil
 }
 
 // MinionSession returns generated.MinionSessionResolver implementation.

@@ -148,8 +148,11 @@ type Service struct {
 	fileBrowser FileBrowser
 	cache       cache.Cache
 	bus         eventbus.IEventBus
-	logger      *zap.Logger
-	now         func() time.Time
+	// checkIns tells check-ins' changes, a session's at most once a second
+	// (checkin_events.go).
+	checkIns *checkInEvents
+	logger   *zap.Logger
+	now      func() time.Time
 	// tunnelPack is how packing goes for each tunnel stream (tunnelpack.go).
 	tunnelPack tunnelPacking
 	// conns are the persistent connections open, by session
@@ -211,10 +214,13 @@ func (s *Service) WithComposites(c Composites) *Service {
 
 func NewService(builds Builds, stagings repository.IMinionStagingRepository, sessions repository.IMinionSessionRepository,
 	reservations repository.IMinionSessionReservationRepository, c cache.Cache, bus eventbus.IEventBus, logger *zap.Logger) *Service {
-	return &Service{builds: builds, stagings: stagings, sessions: sessions, reservations: reservations, cache: c, bus: bus,
+	s := &Service{builds: builds, stagings: stagings, sessions: sessions, reservations: reservations, cache: c, bus: bus,
 		logger: logger.Named("minionsync"), now: func() time.Time { return time.Now().UTC() },
 		conns: newConnections(), binds: newBinds(), persist: newPersistent(), reacks: newReacks(), answers: newAnswers(),
 		dlg: newDelegates()}
+	// Through the service's bus as it is then: a test may give it another.
+	s.checkIns = newCheckInEvents(func(e eventbus.Event) { s.bus.Publish(e) }, checkInEvery)
+	return s
 }
 
 // Handle opens a minion's sealed frame sent under id from peer (the IP
@@ -1096,7 +1102,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			items = append(items, chunks...)
 		}
 	}
-	s.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(sessionPayload(session)))
+	s.checkIns.tell(sessionPayload(session))
 	return items, nil
 }
 

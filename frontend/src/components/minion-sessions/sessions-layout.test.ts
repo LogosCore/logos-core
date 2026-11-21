@@ -280,7 +280,7 @@ describe("live updates", () => {
       expect(data.pages[0].minionSessions.edges[0].node.lastSeenAt).toBe("2026-10-30T10:00:05Z")
     }
     expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: byLastSeen, exact: true })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: byLastSeen, exact: true }, { cancelRefetch: false })
   })
 
   test("a check-in from a new external address moves rows only where the list depends on it", () => {
@@ -299,10 +299,12 @@ describe("live updates", () => {
     applyMinionSessionEvent(qc, "UPDATED", { ...row, peerAddress: "198.51.100.2", peers: [{ ...seen, address: "198.51.100.2" }, seen] })
     vi.advanceTimersByTime(REFRESH_WINDOW_MS)
     expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: byPeer, exact: true })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: byPeer, exact: true }, { cancelRefetch: false })
   })
 
-  test("a session not loaded refetches only lists it may now belong to", () => {
+  test("a session not loaded refetches a narrowed list, and the list of every session that would show it", () => {
+    // In the list of every session, one it lacks but would show is a new
+    // session whose own event was lost: refetched, with the folders' counts.
     const qc = new QueryClient()
     const plain = minionSessionKeys.infiniteList(params())
     const filtered = minionSessionKeys.infiniteList(params({ filters: [{ column: "os", op: "IN", values: ["linux"] }] }))
@@ -311,8 +313,34 @@ describe("live updates", () => {
     const invalidate = vi.spyOn(qc, "invalidateQueries")
     applyMinionSessionEvent(qc, "UPDATED", session("b", { os: "linux" }))
     vi.advanceTimersByTime(REFRESH_WINDOW_MS)
-    expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: filtered, exact: true })
+    expect(invalidate).toHaveBeenCalledTimes(3)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: filtered, exact: true }, { cancelRefetch: false })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: plain, exact: true }, { cancelRefetch: false })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: [...minionSessionKeys.all, "folders"], exact: false }, { cancelRefetch: false })
+  })
+
+  test("the list of every session leaves alone a session it would not show", () => {
+    // Two pages loaded of more: its oldest row is a's, of 10:00.
+    const qc = new QueryClient()
+    const plain = minionSessionKeys.infiniteList(params())
+    const data = listData(session("a", { createdAt: "2026-10-30T10:00:00Z" }))
+    data.pages[0].minionSessions.pageInfo.hasNextPage = true
+    qc.setQueryData(plain, data)
+    const invalidate = vi.spyOn(qc, "invalidateQueries")
+    const later = { createdAt: "2026-10-30T11:00:00Z" }
+    for (const s of [
+      session("older", { createdAt: "2026-10-30T09:00:00Z" }), // on a page not loaded
+      session("archived", { ...later, archived: true }), // in the other list
+      session("closed", { ...later, state: "CLOSED" }), // in neither
+    ]) {
+      applyMinionSessionEvent(qc, "UPDATED", s)
+    }
+    vi.advanceTimersByTime(REFRESH_WINDOW_MS)
+    expect(invalidate).not.toHaveBeenCalled()
+    // One it would show, newer than its oldest row: read again.
+    applyMinionSessionEvent(qc, "UPDATED", session("lost", later))
+    vi.advanceTimersByTime(REFRESH_WINDOW_MS)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: plain, exact: true }, { cancelRefetch: false })
   })
 
   test("archiving or restoring refetches the lists: the row moves between them", () => {
@@ -321,7 +349,7 @@ describe("live updates", () => {
     const invalidate = vi.spyOn(qc, "invalidateQueries")
     applyMinionSessionEvent(qc, "UPDATED", session("a", { archived: true }))
     vi.advanceTimersByTime(REFRESH_WINDOW_MS)
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: minionSessionKeys.lists(), exact: false })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: minionSessionKeys.lists(), exact: false }, { cancelRefetch: false })
   })
 
   test("a new session refetches the lists", () => {
@@ -330,7 +358,7 @@ describe("live updates", () => {
     const invalidate = vi.spyOn(qc, "invalidateQueries")
     applyMinionSessionEvent(qc, "CREATED", session("b"))
     vi.advanceTimersByTime(REFRESH_WINDOW_MS)
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: minionSessionKeys.lists(), exact: false })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: minionSessionKeys.lists(), exact: false }, { cancelRefetch: false })
   })
 })
 

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/google/uuid"
@@ -466,6 +467,24 @@ var minionSessionTopics = []eventbus.Topic{
 	eventbus.TopicMinionSessionUpdated,
 }
 
+// minionSessionKey is the session an event is about, for streamLatest: the
+// events of one session that wait are one. Those naming none (a folder's
+// change: the client reads the lists and the folders again) are one too.
+func minionSessionKey(event eventbus.Event) string {
+	p, _ := event.Payload.(eventbus.MinionSessionEventPayload)
+	return p.SessionID
+}
+
+// minionSessionMerge keeps a waiting creation a creation: the session is
+// read afresh as it goes out, so of the events that wait only whether one
+// opened it matters.
+func minionSessionMerge(waiting, next eventbus.Event) eventbus.Event {
+	if waiting.Topic == eventbus.TopicMinionSessionCreated {
+		return waiting
+	}
+	return next
+}
+
 // skillTopics is the list of community skill registry topics for the
 // skillChanged subscription.
 var skillTopics = []eventbus.Topic{
@@ -574,11 +593,18 @@ func subscriberAuth(ctx context.Context) (gqlctx.AuthInfo, error) {
 // for all) is turned into a payload by build — which may return nil to skip
 // it — and sent to the client until the subscription's context ends.
 //
-// The channel is never closed. gqlgen stops reading it when ctx ends, and at
-// that moment the bus may still be running build for an event in flight.
+// The channel is not closed when ctx ends. gqlgen stops reading it then, and
+// at that moment the bus may still be running build for an event in flight.
 // Every resolver used to close the channel right after unsubscribing, and a
 // send racing that close panicked. Unsubscribing alone stops the bus calling
 // build, and the channel is collected with the subscription.
+//
+// It is closed, by the one goroutine that sends on it, when the bus says the
+// subscription lost events (eventbus.TopicMissed: it fell behind and its
+// buffer filled). What the client holds is behind then and nothing here
+// knows what it missed, so the subscription ends (gqlgen completes it): the
+// client takes that as a gap, subscribes again and reads what it shows
+// afresh (the web app's subscription registry).
 func stream[T any](
 	ctx context.Context,
 	bus eventbus.IEventBus,
@@ -587,7 +613,17 @@ func stream[T any](
 	build func(context.Context, eventbus.Event) *T,
 ) <-chan *T {
 	ch := make(chan *T, 1)
-	unsubscribe := bus.Subscribe(topics, func(_ context.Context, event eventbus.Event) {
+	// Read and written by the bus's one goroutine for this subscription.
+	ended := false
+	unsubscribe := bus.Subscribe(append(slices.Clip(topics), eventbus.TopicMissed), func(_ context.Context, event eventbus.Event) {
+		if ended {
+			return
+		}
+		if event.Topic == eventbus.TopicMissed {
+			ended = true
+			close(ch)
+			return
+		}
 		payload := build(ctx, event)
 		if payload == nil {
 			return
@@ -600,6 +636,91 @@ func stream[T any](
 	go func() {
 		<-ctx.Done()
 		unsubscribe()
+	}()
+	return ch
+}
+
+// streamLatest is stream for a payload built from the row as it is when it
+// goes out (a session read afresh): while the client takes one, the events
+// that come for one row (key) wait as one, in the place of the first, and
+// merge says which event that one is (a creation stays one). A busy row,
+// a minion sending many messages a second, costs one read and one message
+// a turn rather than one an event, and the bus's goroutine for the
+// subscription only files events, so its buffer does not fill behind a slow
+// client. Events lost all the same (eventbus.TopicMissed) end it, as
+// stream's do.
+func streamLatest[T any](
+	ctx context.Context,
+	bus eventbus.IEventBus,
+	topics []eventbus.Topic,
+	filter eventbus.Filter,
+	key func(eventbus.Event) string,
+	merge func(waiting, next eventbus.Event) eventbus.Event,
+	build func(context.Context, eventbus.Event) *T,
+) <-chan *T {
+	ch := make(chan *T, 1)
+	var (
+		mu      sync.Mutex
+		order   []string
+		waiting = map[string]eventbus.Event{}
+		missed  bool
+	)
+	wake := make(chan struct{}, 1)
+	unsubscribe := bus.Subscribe(append(slices.Clip(topics), eventbus.TopicMissed), func(_ context.Context, event eventbus.Event) {
+		mu.Lock()
+		if event.Topic == eventbus.TopicMissed {
+			missed = true
+		} else {
+			k := key(event)
+			if w, ok := waiting[k]; ok {
+				waiting[k] = merge(w, event)
+			} else {
+				order = append(order, k)
+				waiting[k] = event
+			}
+		}
+		mu.Unlock()
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
+	}, filter)
+	// The one goroutine that sends on ch, and closes it.
+	go func() {
+		defer unsubscribe()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-wake:
+			}
+			for {
+				mu.Lock()
+				if missed {
+					mu.Unlock()
+					close(ch)
+					return
+				}
+				if len(order) == 0 {
+					mu.Unlock()
+					break
+				}
+				k := order[0]
+				order = order[1:]
+				event := waiting[k]
+				delete(waiting, k)
+				mu.Unlock()
+				payload := build(ctx, event)
+				if payload == nil {
+					continue
+				}
+				select {
+				case ch <- payload:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
 	}()
 	return ch
 }

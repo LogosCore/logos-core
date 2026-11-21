@@ -156,6 +156,12 @@ const (
 	// see what the agent is doing": the durable half is the agent_actions
 	// collection, and writes additionally land on the timeline.
 	TopicAgentAction Topic = "agent.action"
+
+	// TopicMissed is never published: the bus hands it to a subscription
+	// that names it among its topics, once that subscription takes events
+	// again after its full buffer made the bus drop some (bus.go). It fell
+	// behind and lost them; what it built from the events is behind too.
+	TopicMissed Topic = "bus.missed"
 )
 
 // ActorType identifies who originated an event.
@@ -246,6 +252,8 @@ type IEventBus interface {
 	// A single subscription can cover multiple topics with one channel and one goroutine.
 	// The optional filter is applied after topic matching — only events that match
 	// a topic AND pass the filter are delivered to the handler.
+	// A subscription whose buffer is full loses the events that do not fit;
+	// one that names TopicMissed among its topics is told so after them.
 	// Returns an unsubscribe function that removes this subscription.
 	// Safe to call before or after Start().
 	Subscribe(topics []Topic, handler Handler, filter ...Filter) func()

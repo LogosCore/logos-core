@@ -144,6 +144,10 @@ const pendingRefreshes = new WeakMap<
 // however many times it is asked for within it. The first request opens the
 // window; later ones join it rather than postponing it, so a steady stream of
 // events still refreshes every REFRESH_WINDOW_MS instead of never.
+//
+// A refetch already on its way is not cancelled (refresh): cancelled, one
+// slower than the window never landed while events kept coming, each window
+// cancelling the one before, and the list stayed as it was until a reload.
 export function scheduleRefresh(
   queryClient: QueryClient,
   queryKey: QueryKey,
@@ -162,15 +166,42 @@ export function scheduleRefresh(
       const prefixes = due.filter((d) => !d.exact)
       for (const d of due) {
         // A key a broader prefix in the same batch already covers is skipped:
-        // invalidating it too would cancel and restart that refetch.
+        // invalidating it too would read it twice.
         const covered = prefixes.some(
           (p) => p !== d && p.queryKey.length <= d.queryKey.length && startsWith(d.queryKey, p.queryKey),
         )
-        if (!covered) void queryClient.invalidateQueries({ queryKey: d.queryKey, exact: d.exact })
+        if (!covered) refresh(queryClient, d.queryKey, d.exact)
       }
     }, REFRESH_WINDOW_MS)
   }
   pending.set(JSON.stringify([queryKey, exact]), { queryKey, exact })
+}
+
+// The keys whose refetch on its way has another to follow it (refresh).
+const trailing = new WeakMap<QueryClient, Set<string>>()
+
+// refresh invalidates a key without cancelling a refetch already on its way.
+// Asked for while one is, it waits for that one and then reads once more:
+// the one on its way may have started before what this refresh is for, and
+// landing it marks the query fresh. Asked for again meanwhile, it is the same
+// one to follow.
+function refresh(queryClient: QueryClient, queryKey: QueryKey, exact: boolean): void {
+  const filters = { queryKey, exact }
+  const busy = queryClient.isFetching(filters) > 0
+  const landed = queryClient.invalidateQueries(filters, { cancelRefetch: false })
+  if (!busy) return
+  let waiting = trailing.get(queryClient)
+  if (!waiting) {
+    waiting = new Set()
+    trailing.set(queryClient, waiting)
+  }
+  const id = JSON.stringify([queryKey, exact])
+  if (waiting.has(id)) return
+  waiting.add(id)
+  void landed.finally(() => {
+    waiting.delete(id)
+    void queryClient.invalidateQueries(filters, { cancelRefetch: false })
+  })
 }
 
 function startsWith(key: QueryKey, prefix: QueryKey): boolean {

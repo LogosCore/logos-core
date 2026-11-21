@@ -1,9 +1,9 @@
-// Generic React hook for GraphQL subscriptions over SSE.
+// Generic React hook for GraphQL subscriptions over the graphql-ws socket.
 //
 // Thin wrapper over lib/subscription-registry.ts. All connection management
-// (dedup, backoff, refresh-on-401, reachable-gating, visibility-pause)
-// lives in the registry — this hook just attaches/detaches a listener for
-// the lifetime of the component.
+// (dedup, backoff, refresh-on-401, reachable-gating, visibility-pause,
+// reopening one the server ended) lives in the registry and the client — this
+// hook just attaches/detaches a listener for the lifetime of the component.
 
 import { useEffect, useLayoutEffect, useRef } from "react"
 import type { TypedDocumentString } from "@/graphql/gql/graphql"
@@ -14,7 +14,11 @@ interface UseSubscriptionOptions<TResult> {
   onData: (data: TResult) => void
   /** Whether the subscription is active. Defaults to true. */
   enabled?: boolean
-  /** Called when the server rejects the subscription (it then stops delivering). */
+  /**
+   * Called when the server rejects the subscription. The registry tries it
+   * again after a wait, longer each time; a caller for whom a refusal is
+   * final turns enabled off.
+   */
   onError?: (message: string) => void
 }
 

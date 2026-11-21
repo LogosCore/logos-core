@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import { QueryClient } from "@tanstack/react-query"
+import { InfiniteQueryObserver, QueryClient } from "@tanstack/react-query"
 import {
   applyRowRemoval,
   applyRowUpdate,
@@ -117,7 +117,7 @@ describe("applyRowUpdate", () => {
     vi.advanceTimersByTime(REFRESH_WINDOW_MS)
 
     expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: listKey({ search: "a" }), exact: true })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: listKey({ search: "a" }), exact: true }, { cancelRefetch: false })
     // The row still shows its new name until the refetch lands.
     expect(rowsOf(qc.getQueryData(listKey({ search: "a" })))[0].name).toBe("Zed")
   })
@@ -128,7 +128,7 @@ describe("applyRowUpdate", () => {
     applyRowUpdate(qc, spec, { id: "new", name: "Zed" })
     vi.advanceTimersByTime(REFRESH_WINDOW_MS)
 
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: listKey({ search: "z" }), exact: true })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: listKey({ search: "z" }), exact: true }, { cancelRefetch: false })
   })
 })
 
@@ -139,7 +139,7 @@ describe("applyRowRemoval", () => {
 
     expect(rowsOf(qc.getQueryData(listKey({}))).map((r) => r.id)).toEqual(["b"])
     vi.advanceTimersByTime(REFRESH_WINDOW_MS)
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: lists, exact: false })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: lists, exact: false }, { cancelRefetch: false })
   })
 })
 
@@ -162,7 +162,7 @@ describe("scheduleRefresh", () => {
     vi.advanceTimersByTime(REFRESH_WINDOW_MS)
 
     expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: lists, exact: false })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: lists, exact: false }, { cancelRefetch: false })
   })
 
   test("a steady stream still refreshes once per window", () => {
@@ -172,6 +172,46 @@ describe("scheduleRefresh", () => {
       vi.advanceTimersByTime(50)
     }
     expect(invalidate).toHaveBeenCalledTimes(3)
+  })
+
+  test("a refetch slower than the window lands under a steady stream", async () => {
+    // Each window used to cancel the refetch on its way: one slower than the
+    // window never landed while events kept coming. Now it lands, and the
+    // refresh asked for meanwhile reads once more after it.
+    let started = 0
+    let finished = 0
+    const key = listKey({})
+    const observer = new InfiniteQueryObserver(qc, {
+      queryKey: key,
+      initialPageParam: 0,
+      getNextPageParam: () => undefined,
+      queryFn: ({ signal }) =>
+        new Promise((resolve, reject) => {
+          started++
+          const timer = setTimeout(() => {
+            finished++
+            resolve({ things: { edges: [] } })
+          }, 500)
+          signal.addEventListener("abort", () => {
+            clearTimeout(timer)
+            reject(new Error("cancelled"))
+          })
+        }),
+    })
+    const unsubscribe = observer.subscribe(() => {})
+    await vi.advanceTimersByTimeAsync(600)
+    // An event every 100 ms for 5 s.
+    for (let i = 0; i < 50; i++) {
+      scheduleRefresh(qc, key, { exact: true })
+      await vi.advanceTimersByTimeAsync(100)
+    }
+    const lastAsked = started
+    await vi.advanceTimersByTimeAsync(2_000)
+    unsubscribe()
+    expect(finished).toBe(started) // none cancelled
+    expect(finished).toBeGreaterThanOrEqual(10)
+    // The last refresh asked for was read: one more after the one on its way, then quiet.
+    expect(started - lastAsked).toBeLessThanOrEqual(1)
   })
 })
 

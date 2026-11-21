@@ -231,9 +231,18 @@ export function applyMinionSessionEvent(
     const narrowed =
       params.archived || params.folderId !== null || params.search !== null || params.filters.length > 0 || params.sort !== null
     if (!before) {
-      // Not loaded here: it may belong now, unless the list is every
-      // session newest first, which nothing but a new session changes.
-      if (narrowed) scheduleRefresh(queryClient, key, { exact: true })
+      // Not loaded here: it may belong now. The list of every session
+      // newest first gains rows by new sessions alone, so an event there
+      // for one it lacks but would show means the new session's own event
+      // was lost on the way (core's bus drops events for a viewer that falls
+      // behind): it refetches too, and the folders' counts with it. A lost
+      // session comes in with its next check-in.
+      if (narrowed) {
+        scheduleRefresh(queryClient, key, { exact: true })
+      } else if (withinLoaded(data, session)) {
+        scheduleRefresh(queryClient, key, { exact: true })
+        scheduleRefresh(queryClient, [...minionSessionKeys.all, "folders"])
+      }
       continue
     }
     const columns = [...dependentColumns(params), ...(params.search ? SEARCHED : [])]
@@ -248,6 +257,20 @@ export function applyMinionSessionEvent(
       if (next !== (data as never)) queryClient.setQueryData(key, next)
     }
   }
+}
+
+/**
+ * Whether the list of every session newest first would show s among the
+ * rows it loaded: s is open and not archived (the list has neither closed
+ * nor archived sessions), and no older than its oldest row, or every page
+ * is loaded.
+ */
+function withinLoaded(data: ListData, s: MinionSessionFieldsFragment): boolean {
+  if (s.archived || s.state === "CLOSED") return false
+  const last = data.pages.at(-1)?.minionSessions
+  if (!last?.pageInfo.hasNextPage) return true
+  const oldest = last.edges.at(-1)?.node
+  return !oldest || Date.parse(s.createdAt) >= Date.parse(oldest.createdAt)
 }
 
 /** Keeps the sessions table live: see applyMinionSessionEvent. */
