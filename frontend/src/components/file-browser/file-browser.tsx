@@ -617,7 +617,7 @@ function SearchResults({
       <div className="flex min-h-6 items-center gap-2 border-b px-3 py-1 text-xs text-muted-foreground">
         <SearchIcon className="size-3.5" />
         <span>
-          Entries of the machine matching <span className="font-mono text-foreground">{query}</span>: a click opens its folder at it.
+          Entries of the machine matching <span className="font-mono text-foreground">{query}</span>: a double click opens its folder at it.
         </span>
         <span className="ml-auto tabular-nums">
           {entries.length.toLocaleString("en-US")}
@@ -643,7 +643,7 @@ function SearchResults({
         running={running}
         actions={actions}
         fullPaths
-        onClick={onOpenAt}
+        onOpen={onOpenAt}
       />
     </div>
   )
@@ -661,7 +661,7 @@ function Rows({
   running,
   actions,
   fullPaths = false,
-  onClick,
+  onOpen,
 }: {
   entries: Entry[]
   loading: boolean
@@ -674,10 +674,13 @@ function Rows({
   running: readonly InFlight[]
   actions: EntryActions
   fullPaths?: boolean
-  onClick?: (e: Entry) => void
+  /** A double click on an entry; else openOf's. */
+  onOpen?: (e: Entry) => void
 }) {
   // The entry whose menu is open, marked while it is.
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  // The entry last clicked, marked: a click picks, a double click opens.
+  const [picked, setPicked] = useState<string | null>(null)
   // 30px at the app's size (14px rows): as tall as the pane's text makes it.
   const rowH = usePaneRow(30)
   if (error) return <p className="p-4 text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -703,11 +706,12 @@ function Rows({
         <EntryRow
           entry={e}
           fullPath={fullPaths}
-          marked={(marked !== null && samePath(marked, e.path)) || menuFor === e.path}
+          marked={(marked !== null && samePath(marked, e.path)) || menuFor === e.path || picked === e.path}
           running={inFlightAt(running, e.path)}
           actions={actions}
           onMenu={(isOpen) => setMenuFor(isOpen ? e.path : null)}
-          onClick={onClick ? () => onClick(e) : clickOf(e, actions)}
+          onPick={() => setPicked(e.path)}
+          onOpen={onOpen ? () => onOpen(e) : openOf(e, actions)}
           height={rowH}
         />
       )}
@@ -723,8 +727,8 @@ function Rows({
   )
 }
 
-/** What a click on a folder's entry does: a folder opens; a file core keeps a download of opens that file. */
-function clickOf(e: Entry, actions: EntryActions): (() => void) | undefined {
+/** What a double click on a folder's entry does: a folder opens; a file core keeps a download of opens that file. */
+function openOf(e: Entry, actions: EntryActions): (() => void) | undefined {
   if (e.type === "dir") return () => actions.open(e)
   const kept = e.downloaded.findLast((d) => !!d.fileId)
   return kept ? () => actions.view(kept.taskId) : undefined
@@ -744,7 +748,8 @@ function EntryRow({
   running,
   actions,
   onMenu,
-  onClick,
+  onPick,
+  onOpen,
   height,
 }: {
   entry: Entry
@@ -755,7 +760,10 @@ function EntryRow({
   running?: InFlight
   actions: EntryActions
   onMenu: (open: boolean) => void
-  onClick?: () => void
+  /** A click: marks the entry. */
+  onPick: () => void
+  /** A double click, not on a button of the row's: opens the entry, where it opens. */
+  onOpen?: () => void
 }) {
   const Icon = !e.parent ? HardDriveIcon : e.type === "dir" && e.listErr ? FolderLockIcon : (ICONS[e.type as keyof typeof ICONS] ?? CircleHelpIcon)
   const gone = !!e.goneAt
@@ -787,10 +795,20 @@ function EntryRow({
             className={cn(
               `grid ${GRID} cursor-default items-center gap-3 border-b px-3 text-sm hover:bg-muted/40`,
               marked && "bg-muted",
-              onClick && "cursor-pointer",
             )}
             style={{ height }}
-            onClick={onClick}
+            onClick={onPick}
+            onDoubleClick={
+              onOpen &&
+              ((ev) => {
+                const hit = (ev.target as HTMLElement).closest("button, a, input")
+                if (hit === null || !ev.currentTarget.contains(hit)) onOpen()
+              })
+            }
+            // A double click opens: no word of the row stays selected under it.
+            onMouseDown={(ev) => {
+              if (ev.detail > 1) ev.preventDefault()
+            }}
           />
         }
       >

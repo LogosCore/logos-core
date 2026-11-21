@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils"
 
 /**
  * A data-table row with a menu. A click (or Enter) calls onOpen, when there is
- * one; right-clicking anywhere on the row opens the menu at the pointer, and
+ * one, and a double click onDoubleClick (not on a button or link of the row's:
+ * theirs); right-clicking anywhere on the row opens the menu at the pointer, and
  * the ⋯ button, given to children to place (usually in the last column), opens
  * the same menu under itself. menu is the ContextMenuItems. A table whose
  * columns change at run time passes its grid in style instead of gridCols.
@@ -17,6 +18,7 @@ export function ContextMenuRow({
   style,
   className,
   onOpen,
+  onDoubleClick,
   menu,
   menuLabel,
   menuButtonSize = "icon-sm",
@@ -30,6 +32,8 @@ export function ContextMenuRow({
   className?: string
   /** A click, or Enter; shiftKey says whether shift was down (a range). */
   onOpen?: (e: { shiftKey: boolean }) => void
+  /** A double click on the row: its main action where a click does another or none. */
+  onDoubleClick?: () => void
   menu: ReactNode
   /** The ⋯ button's accessible name, e.g. "Module actions". */
   menuLabel: string
@@ -78,10 +82,18 @@ export function ContextMenuRow({
             role={onOpen ? "link" : undefined}
             tabIndex={onOpen ? 0 : undefined}
             onClick={onOpen}
+            onDoubleClick={
+              onDoubleClick &&
+              ((e) => {
+                const hit = (e.target as HTMLElement).closest("button, a, input, textarea, select")
+                if (hit === null || !e.currentTarget.contains(hit)) onDoubleClick()
+              })
+            }
             // Shift-click is the row's (a range, where the row has one), not
-            // the browser's: it would select every word in between.
+            // the browser's: it would select every word in between. A double
+            // click is the row's too: no word stays selected under it.
             onMouseDown={(e) => {
-              if (onOpen && e.shiftKey) e.preventDefault()
+              if ((onOpen && e.shiftKey) || (onDoubleClick && e.detail > 1)) e.preventDefault()
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") onOpen?.(e)

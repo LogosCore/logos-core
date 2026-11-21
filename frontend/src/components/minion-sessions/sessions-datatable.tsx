@@ -533,6 +533,8 @@ export function SessionsDatatable({
                   )}
                   // While selecting, a click picks the row (shift: a range).
                   onOpen={selecting ? (e) => setSelection(toggleSelected(selection, order, s.id, e.shiftKey)) : undefined}
+                  // A double click interacts, as the menu's Interact does.
+                  onDoubleClick={selecting ? undefined : () => onInteract(s)}
                   menuLabel="Session actions"
                   menuButtonSize="icon-xs"
                   menu={
