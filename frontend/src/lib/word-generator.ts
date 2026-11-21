@@ -15,7 +15,7 @@ export interface GeneratorSettings {
   leading: boolean
   trailing: boolean
   case: LetterCase
-  /** The word lists picked, by id: every word comes from them all. */
+  /** The word lists picked, by id: every word comes from them all. None: every list the catalog has. */
   lists: string[]
 }
 
@@ -44,12 +44,13 @@ export interface WordlistCatalog {
 /** How a field of each format starts, before the operator changes anything. */
 export const PRESETS: Record<string, GeneratorSettings> = {
   path: {
-    segments: 2,
+    segments: 3,
     divider: "/",
     leading: true,
     trailing: true,
     case: "lower",
-    lists: ["common"],
+    // Every list, one added to the catalog later too.
+    lists: [],
   },
 }
 
@@ -80,12 +81,12 @@ export function settingsOf(saved: unknown, preset: GeneratorSettings): Generator
 
 /**
  * The lists a value's words come from: those picked that the catalog has,
- * or its first list when it has none of them (lists picked once and gone
- * since).
+ * or every list it has when none is picked (the preset) or none of those
+ * picked is there any more (picked once and gone since).
  */
 export function drawsFrom(s: GeneratorSettings, catalog: readonly WordlistInfo[]): string[] {
   const picked = s.lists.filter((id) => catalog.some((l) => l.id === id))
-  return picked.length > 0 ? picked : catalog.slice(0, 1).map((l) => l.id)
+  return picked.length > 0 ? picked : catalog.map((l) => l.id)
 }
 
 /** Words of several lists as one pool, each word once. */

@@ -5,6 +5,10 @@ import type { GeneratorSettings } from "@/lib/word-generator"
 // The value generator's settings by field format, kept in this browser: it
 // opens as it was left, after a reload too. What is read back is made whole
 // by settingsOf (lib/word-generator.ts), so an old or broken entry is safe.
+//
+// Settings are kept whole, the preset's with them, so a preset that changes
+// reaches no one who changed anything before: version 1 (every list, three
+// segments) starts over from the presets once.
 
 interface WordGeneratorState {
   saved: Record<string, unknown>
@@ -28,6 +32,8 @@ export const useWordGeneratorStore = create<WordGeneratorState>()(
       name: "word-generator",
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({ saved: s.saved }),
+      version: 1,
+      migrate: () => ({ saved: {} }),
     },
   ),
 )

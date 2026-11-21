@@ -55,8 +55,8 @@ describe("randomIndex", () => {
 })
 
 describe("generate", () => {
-  it("makes a path of words by default: segments between dividers, one before and after", () => {
-    expect(generate(path, words, sequence(0, 1))).toBe("/river/stone/")
+  it("makes a path of three words by default: segments between dividers, one before and after", () => {
+    expect(generate(path, words, sequence(0, 1, 2))).toBe("/river/stone/cloud/")
   })
 
   it("divides a word a segment as asked, and cases the words", () => {
@@ -88,8 +88,9 @@ describe("drawsFrom", () => {
     expect(drawsFrom(set({ lists: ["short", "gone", "long"] }), catalog)).toEqual(["short", "long"])
   })
 
-  it("draws on the catalog's first list when none picked is there any more", () => {
-    expect(drawsFrom(set({ lists: ["theme-coding"] }), catalog)).toEqual(["common"])
+  it("draws on every list the catalog has when none is picked (the preset), or none picked is there any more", () => {
+    expect(drawsFrom(path, catalog)).toEqual(["common", "short", "long"])
+    expect(drawsFrom(set({ lists: ["theme-coding"] }), catalog)).toEqual(["common", "short", "long"])
     expect(drawsFrom(path, [])).toEqual([])
   })
 
