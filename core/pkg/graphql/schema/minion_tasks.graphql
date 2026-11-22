@@ -686,6 +686,16 @@ extend type Query {
   recordings(taskId: ID!, last: Int, before: String): RecordingPage!
     @hasPermission(permission: "operation:member")
 
+  # A page of a process_list task's processes (docs: Task Results and
+  # Actions, process_list), at most first (50 by default, 500 at most)
+  # after a page's cursor: ordered as order says (desc: the other way, those
+  # without a value last either way), searched by name, pid, user, path and
+  # command line (in the tree, each match with its ancestors). totalCount
+  # counts the matches. Needs at least viewer.
+  minionTaskProcesses(taskId: ID!, search: String, order: MinionProcessOrder = TREE, desc: Boolean = false, first: Int = 50,
+    after: String): MinionProcessConnection!
+    @hasPermission(permission: "operation:member")
+
   # A page of the printable strings in a kept file, read from after (0, or
   # a page's next): at most first (200 by default, 1000 at most), of at
   # least minLength characters (4 by default, 2 to 256), in encoding (ascii
@@ -752,4 +762,70 @@ extend type Subscription {
   # least viewer.
   minionTaskChanged(sessionId: ID!): MinionTask!
     @hasPermission(permission: "operation:member")
+}
+
+# A process of a process_list task (docs: Task Results and Actions,
+# process_list), as its view pages them.
+type MinionProcess {
+  pid: Int!
+  # Its parent's pid, as the host keeps it, the parent alive or not.
+  ppid: Int
+  name: String!
+  # Its executable, absolute, as the host writes it.
+  path: String
+  # Its command line as the host shows it.
+  cmdline: String
+  user: String
+  # When it started (RFC 3339).
+  started: String
+  # Windows: the session it runs in, 0 for services.
+  session: Int
+  # low, medium, high, system, root or user ("level 9" for one this version
+  # does not know).
+  integrity: String
+  # GOARCH-style, as the hello's.
+  arch: String
+  threads: Int
+  # The bytes it holds resident; the milliseconds of CPU it used.
+  memory: Int
+  cpuTime: Int
+  # running, sleeping, waiting, stopped or zombie ("state 9" for one this
+  # version does not know).
+  state: String
+  # The factory's own fields.
+  x: JSON
+  # Its depth below its root in the tree (0 flat), and how many processes
+  # the list has under it.
+  depth: Int!
+  children: Int!
+  # This session's minion's own process, by its latest hello's pid.
+  minion: Boolean!
+  # Shown in the tree for a match below it, not matching itself.
+  context: Boolean!
+}
+
+type MinionProcessEdge {
+  node: MinionProcess!
+  cursor: String!
+}
+
+type MinionProcessConnection {
+  edges: [MinionProcessEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+  # The host's path separator, as the list says it: "/" or "\\".
+  sep: String!
+}
+
+# How a process list is ordered: as a tree (each process under its parent,
+# siblings in the order they started), or flat by a column.
+enum MinionProcessOrder {
+  TREE
+  PID
+  NAME
+  USER
+  MEMORY
+  CPU_TIME
+  STARTED
+  THREADS
 }

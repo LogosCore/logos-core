@@ -27,12 +27,14 @@ import {
   MinionTaskFeedbackDocument,
   MinionTaskImportantCountDocument,
   MinionTaskOutputDocument,
+  MinionTaskProcessesDocument,
   MinionTasksDocument,
   MinionTunnelStreamsDocument,
   QueueMinionTaskDocument,
   SetMinionTaskImportantDocument,
   SetMinionTunnelCapDocument,
   type RecordingsQuery,
+  type MinionProcessOrder,
   type MinionTaskFieldsFragment,
   type MinionTasksQuery,
 } from "@/graphql/gql/graphql"
@@ -76,6 +78,38 @@ export const minionTaskKeys = {
     [...minionTaskKeys.all, "fileStrings", fileId, filter] as const,
   tunnelStreams: (taskId: string, filter: TunnelStreamsFilter) => [...minionTaskKeys.all, "tunnelStreams", taskId, filter] as const,
   recordings: (taskId: string) => [...minionTaskKeys.all, "recordings", taskId] as const,
+  processes: (taskId: string, view: ProcessesView) => [...minionTaskKeys.all, "processes", taskId, view] as const,
+}
+
+/** How a process list is read: searched by core, ordered (desc: the other way). */
+export interface ProcessesView {
+  search: string
+  order: MinionProcessOrder
+  desc: boolean
+}
+
+/**
+ * A process_list task's processes, a page of 100 at a time, ordered and
+ * searched by core; read again when version (its parts, its state) moves.
+ */
+export function useMinionTaskProcesses(taskId: string, view: ProcessesView, version: string, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: [...minionTaskKeys.processes(taskId, view), version],
+    queryFn: ({ pageParam }) =>
+      graphqlClient(MinionTaskProcessesDocument, {
+        taskId,
+        search: view.search.trim() || null,
+        order: view.order,
+        desc: view.desc,
+        first: 100,
+        after: pageParam,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) =>
+      last.minionTaskProcesses.pageInfo.hasNextPage ? (last.minionTaskProcesses.pageInfo.endCursor ?? undefined) : undefined,
+    placeholderData: keepPreviousData,
+    enabled,
+  })
 }
 
 /** What a tunnel task's streams are narrowed by: the server's search, and OPEN or ENDED ("" for all). */

@@ -870,6 +870,40 @@ type ComplexityRoot struct {
 		OperationID func(childComplexity int) int
 	}
 
+	MinionProcess struct {
+		Arch      func(childComplexity int) int
+		CPUTime   func(childComplexity int) int
+		Children  func(childComplexity int) int
+		Cmdline   func(childComplexity int) int
+		Context   func(childComplexity int) int
+		Depth     func(childComplexity int) int
+		Integrity func(childComplexity int) int
+		Memory    func(childComplexity int) int
+		Minion    func(childComplexity int) int
+		Name      func(childComplexity int) int
+		Path      func(childComplexity int) int
+		Pid       func(childComplexity int) int
+		Ppid      func(childComplexity int) int
+		Session   func(childComplexity int) int
+		Started   func(childComplexity int) int
+		State     func(childComplexity int) int
+		Threads   func(childComplexity int) int
+		User      func(childComplexity int) int
+		X         func(childComplexity int) int
+	}
+
+	MinionProcessConnection struct {
+		Edges      func(childComplexity int) int
+		PageInfo   func(childComplexity int) int
+		Sep        func(childComplexity int) int
+		TotalCount func(childComplexity int) int
+	}
+
+	MinionProcessEdge struct {
+		Cursor func(childComplexity int) int
+		Node   func(childComplexity int) int
+	}
+
 	MinionSession struct {
 		Acting               func(childComplexity int) int
 		Address              func(childComplexity int) int
@@ -1742,6 +1776,7 @@ type ComplexityRoot struct {
 		MinionTargets                      func(childComplexity int, operationID string, search *string, buildID *string, states []string, first *int, after *string, last *int, before *string) int
 		MinionTask                         func(childComplexity int, id string) int
 		MinionTaskImportantCount           func(childComplexity int, sessionID string) int
+		MinionTaskProcesses                func(childComplexity int, taskID string, search *string, order *model.MinionProcessOrder, desc *bool, first *int, after *string) int
 		MinionTasks                        func(childComplexity int, sessionID string, last *int, before *string, search *string, important *bool, composite *string) int
 		MinionTunnelStreams                func(childComplexity int, taskID string, last *int, before *string, search *string, state *string) int
 		Minions                            func(childComplexity int, operationID string) int
@@ -2755,6 +2790,7 @@ type QueryResolver interface {
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
 	MinionDesktopSettings(ctx context.Context, front string) ([]*model.ModuleField, error)
 	Recordings(ctx context.Context, taskID string, last *int, before *string) (*model.RecordingPage, error)
+	MinionTaskProcesses(ctx context.Context, taskID string, search *string, order *model.MinionProcessOrder, desc *bool, first *int, after *string) (*model.MinionProcessConnection, error)
 	MinionFileStrings(ctx context.Context, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) (*model.MinionFileStringPage, error)
 	Module(ctx context.Context, instance string) (*models.Module, error)
 	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
@@ -6329,6 +6365,159 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionListenerEvent.OperationID(childComplexity), true
+
+	case "MinionProcess.arch":
+		if e.ComplexityRoot.MinionProcess.Arch == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Arch(childComplexity), true
+	case "MinionProcess.cpuTime":
+		if e.ComplexityRoot.MinionProcess.CPUTime == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.CPUTime(childComplexity), true
+	case "MinionProcess.children":
+		if e.ComplexityRoot.MinionProcess.Children == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Children(childComplexity), true
+	case "MinionProcess.cmdline":
+		if e.ComplexityRoot.MinionProcess.Cmdline == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Cmdline(childComplexity), true
+	case "MinionProcess.context":
+		if e.ComplexityRoot.MinionProcess.Context == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Context(childComplexity), true
+	case "MinionProcess.depth":
+		if e.ComplexityRoot.MinionProcess.Depth == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Depth(childComplexity), true
+	case "MinionProcess.integrity":
+		if e.ComplexityRoot.MinionProcess.Integrity == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Integrity(childComplexity), true
+	case "MinionProcess.memory":
+		if e.ComplexityRoot.MinionProcess.Memory == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Memory(childComplexity), true
+	case "MinionProcess.minion":
+		if e.ComplexityRoot.MinionProcess.Minion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Minion(childComplexity), true
+	case "MinionProcess.name":
+		if e.ComplexityRoot.MinionProcess.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Name(childComplexity), true
+	case "MinionProcess.path":
+		if e.ComplexityRoot.MinionProcess.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Path(childComplexity), true
+	case "MinionProcess.pid":
+		if e.ComplexityRoot.MinionProcess.Pid == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Pid(childComplexity), true
+	case "MinionProcess.ppid":
+		if e.ComplexityRoot.MinionProcess.Ppid == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Ppid(childComplexity), true
+	case "MinionProcess.session":
+		if e.ComplexityRoot.MinionProcess.Session == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Session(childComplexity), true
+	case "MinionProcess.started":
+		if e.ComplexityRoot.MinionProcess.Started == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Started(childComplexity), true
+	case "MinionProcess.state":
+		if e.ComplexityRoot.MinionProcess.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.State(childComplexity), true
+	case "MinionProcess.threads":
+		if e.ComplexityRoot.MinionProcess.Threads == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Threads(childComplexity), true
+	case "MinionProcess.user":
+		if e.ComplexityRoot.MinionProcess.User == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.User(childComplexity), true
+	case "MinionProcess.x":
+		if e.ComplexityRoot.MinionProcess.X == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.X(childComplexity), true
+
+	case "MinionProcessConnection.edges":
+		if e.ComplexityRoot.MinionProcessConnection.Edges == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessConnection.Edges(childComplexity), true
+	case "MinionProcessConnection.pageInfo":
+		if e.ComplexityRoot.MinionProcessConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessConnection.PageInfo(childComplexity), true
+	case "MinionProcessConnection.sep":
+		if e.ComplexityRoot.MinionProcessConnection.Sep == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessConnection.Sep(childComplexity), true
+	case "MinionProcessConnection.totalCount":
+		if e.ComplexityRoot.MinionProcessConnection.TotalCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessConnection.TotalCount(childComplexity), true
+
+	case "MinionProcessEdge.cursor":
+		if e.ComplexityRoot.MinionProcessEdge.Cursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessEdge.Cursor(childComplexity), true
+	case "MinionProcessEdge.node":
+		if e.ComplexityRoot.MinionProcessEdge.Node == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessEdge.Node(childComplexity), true
 
 	case "MinionSession.acting":
 		if e.ComplexityRoot.MinionSession.Acting == nil {
@@ -11268,6 +11457,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MinionTaskImportantCount(childComplexity, args["sessionId"].(string)), true
+	case "Query.minionTaskProcesses":
+		if e.ComplexityRoot.Query.MinionTaskProcesses == nil {
+			break
+		}
+
+		args, err := ec.field_Query_minionTaskProcesses_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MinionTaskProcesses(childComplexity, args["taskId"].(string), args["search"].(*string), args["order"].(*model.MinionProcessOrder), args["desc"].(*bool), args["first"].(*int), args["after"].(*string)), true
 	case "Query.minionTasks":
 		if e.ComplexityRoot.Query.MinionTasks == nil {
 			break
@@ -18694,6 +18894,16 @@ extend type Query {
   recordings(taskId: ID!, last: Int, before: String): RecordingPage!
     @hasPermission(permission: "operation:member")
 
+  # A page of a process_list task's processes (docs: Task Results and
+  # Actions, process_list), at most first (50 by default, 500 at most)
+  # after a page's cursor: ordered as order says (desc: the other way, those
+  # without a value last either way), searched by name, pid, user, path and
+  # command line (in the tree, each match with its ancestors). totalCount
+  # counts the matches. Needs at least viewer.
+  minionTaskProcesses(taskId: ID!, search: String, order: MinionProcessOrder = TREE, desc: Boolean = false, first: Int = 50,
+    after: String): MinionProcessConnection!
+    @hasPermission(permission: "operation:member")
+
   # A page of the printable strings in a kept file, read from after (0, or
   # a page's next): at most first (200 by default, 1000 at most), of at
   # least minLength characters (4 by default, 2 to 256), in encoding (ascii
@@ -18760,6 +18970,72 @@ extend type Subscription {
   # least viewer.
   minionTaskChanged(sessionId: ID!): MinionTask!
     @hasPermission(permission: "operation:member")
+}
+
+# A process of a process_list task (docs: Task Results and Actions,
+# process_list), as its view pages them.
+type MinionProcess {
+  pid: Int!
+  # Its parent's pid, as the host keeps it, the parent alive or not.
+  ppid: Int
+  name: String!
+  # Its executable, absolute, as the host writes it.
+  path: String
+  # Its command line as the host shows it.
+  cmdline: String
+  user: String
+  # When it started (RFC 3339).
+  started: String
+  # Windows: the session it runs in, 0 for services.
+  session: Int
+  # low, medium, high, system, root or user ("level 9" for one this version
+  # does not know).
+  integrity: String
+  # GOARCH-style, as the hello's.
+  arch: String
+  threads: Int
+  # The bytes it holds resident; the milliseconds of CPU it used.
+  memory: Int
+  cpuTime: Int
+  # running, sleeping, waiting, stopped or zombie ("state 9" for one this
+  # version does not know).
+  state: String
+  # The factory's own fields.
+  x: JSON
+  # Its depth below its root in the tree (0 flat), and how many processes
+  # the list has under it.
+  depth: Int!
+  children: Int!
+  # This session's minion's own process, by its latest hello's pid.
+  minion: Boolean!
+  # Shown in the tree for a match below it, not matching itself.
+  context: Boolean!
+}
+
+type MinionProcessEdge {
+  node: MinionProcess!
+  cursor: String!
+}
+
+type MinionProcessConnection {
+  edges: [MinionProcessEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+  # The host's path separator, as the list says it: "/" or "\\".
+  sep: String!
+}
+
+# How a process list is ordered: as a tree (each process under its parent,
+# siblings in the order they started), or flat by a column.
+enum MinionProcessOrder {
+  TREE
+  PID
+  NAME
+  USER
+  MEMORY
+  CPU_TIME
+  STARTED
+  THREADS
 }
 `, BuiltIn: false},
 	{Name: "../schema/module_logs.graphql", Input: `# =============================================================================
@@ -24135,6 +24411,42 @@ func (ec *executionContext) field_Query_minionTaskImportantCount_args(ctx contex
 		return nil, err
 	}
 	args["sessionId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_minionTaskProcesses_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "taskId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["taskId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "order", ec.unmarshalOMinionProcessOrder2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessOrder)
+	if err != nil {
+		return nil, err
+	}
+	args["order"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "desc", ec.unmarshalOBoolean2ᚖbool)
+	if err != nil {
+		return nil, err
+	}
+	args["desc"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg5
 	return args, nil
 }
 
@@ -44016,6 +44328,787 @@ func (ec *executionContext) fieldContext_MinionListenerEvent_listener(_ context.
 				return ec.fieldContext_MinionListener_stopsAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionListener", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_pid(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_pid,
+		func(ctx context.Context) (any, error) {
+			return obj.Pid, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_pid(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_ppid(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_ppid,
+		func(ctx context.Context) (any, error) {
+			return obj.Ppid, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_ppid(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_name(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_path(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_path,
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_cmdline(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_cmdline,
+		func(ctx context.Context) (any, error) {
+			return obj.Cmdline, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_cmdline(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_user(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_user,
+		func(ctx context.Context) (any, error) {
+			return obj.User, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_user(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_started(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_started,
+		func(ctx context.Context) (any, error) {
+			return obj.Started, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_started(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_session(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_session,
+		func(ctx context.Context) (any, error) {
+			return obj.Session, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_session(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_integrity(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_integrity,
+		func(ctx context.Context) (any, error) {
+			return obj.Integrity, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_integrity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_arch(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_arch,
+		func(ctx context.Context) (any, error) {
+			return obj.Arch, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_arch(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_threads(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_threads,
+		func(ctx context.Context) (any, error) {
+			return obj.Threads, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_threads(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_memory(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_memory,
+		func(ctx context.Context) (any, error) {
+			return obj.Memory, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_memory(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_cpuTime(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_cpuTime,
+		func(ctx context.Context) (any, error) {
+			return obj.CPUTime, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_cpuTime(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_state(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_state,
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_x(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_x,
+		func(ctx context.Context) (any, error) {
+			return obj.X, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_x(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_depth(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_depth,
+		func(ctx context.Context) (any, error) {
+			return obj.Depth, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_depth(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_children(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_children,
+		func(ctx context.Context) (any, error) {
+			return obj.Children, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_children(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_minion(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_minion,
+		func(ctx context.Context) (any, error) {
+			return obj.Minion, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_minion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_context(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_context,
+		func(ctx context.Context) (any, error) {
+			return obj.Context, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_context(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcessConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessConnection_edges,
+		func(ctx context.Context) (any, error) {
+			return obj.Edges, nil
+		},
+		nil,
+		ec.marshalNMinionProcessEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessEdgeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessConnection_edges(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "node":
+				return ec.fieldContext_MinionProcessEdge_node(ctx, field)
+			case "cursor":
+				return ec.fieldContext_MinionProcessEdge_cursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionProcessEdge", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcessConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessConnection_pageInfo,
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		ec.marshalNPageInfo2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋpaginationᚐPageInfo,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "hasNextPage":
+				return ec.fieldContext_PageInfo_hasNextPage(ctx, field)
+			case "hasPreviousPage":
+				return ec.fieldContext_PageInfo_hasPreviousPage(ctx, field)
+			case "startCursor":
+				return ec.fieldContext_PageInfo_startCursor(ctx, field)
+			case "endCursor":
+				return ec.fieldContext_PageInfo_endCursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PageInfo", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcessConnection_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessConnection_totalCount,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalCount, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessConnection_totalCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcessConnection_sep(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessConnection_sep,
+		func(ctx context.Context) (any, error) {
+			return obj.Sep, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessConnection_sep(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcessEdge_node(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessEdge_node,
+		func(ctx context.Context) (any, error) {
+			return obj.Node, nil
+		},
+		nil,
+		ec.marshalNMinionProcess2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcess,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessEdge_node(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "pid":
+				return ec.fieldContext_MinionProcess_pid(ctx, field)
+			case "ppid":
+				return ec.fieldContext_MinionProcess_ppid(ctx, field)
+			case "name":
+				return ec.fieldContext_MinionProcess_name(ctx, field)
+			case "path":
+				return ec.fieldContext_MinionProcess_path(ctx, field)
+			case "cmdline":
+				return ec.fieldContext_MinionProcess_cmdline(ctx, field)
+			case "user":
+				return ec.fieldContext_MinionProcess_user(ctx, field)
+			case "started":
+				return ec.fieldContext_MinionProcess_started(ctx, field)
+			case "session":
+				return ec.fieldContext_MinionProcess_session(ctx, field)
+			case "integrity":
+				return ec.fieldContext_MinionProcess_integrity(ctx, field)
+			case "arch":
+				return ec.fieldContext_MinionProcess_arch(ctx, field)
+			case "threads":
+				return ec.fieldContext_MinionProcess_threads(ctx, field)
+			case "memory":
+				return ec.fieldContext_MinionProcess_memory(ctx, field)
+			case "cpuTime":
+				return ec.fieldContext_MinionProcess_cpuTime(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionProcess_state(ctx, field)
+			case "x":
+				return ec.fieldContext_MinionProcess_x(ctx, field)
+			case "depth":
+				return ec.fieldContext_MinionProcess_depth(ctx, field)
+			case "children":
+				return ec.fieldContext_MinionProcess_children(ctx, field)
+			case "minion":
+				return ec.fieldContext_MinionProcess_minion(ctx, field)
+			case "context":
+				return ec.fieldContext_MinionProcess_context(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionProcess", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcessEdge_cursor(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessEdge_cursor,
+		func(ctx context.Context) (any, error) {
+			return obj.Cursor, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessEdge_cursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -77483,6 +78576,75 @@ func (ec *executionContext) fieldContext_Query_recordings(ctx context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_minionTaskProcesses(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_minionTaskProcesses,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MinionTaskProcesses(ctx, fc.Args["taskId"].(string), fc.Args["search"].(*string), fc.Args["order"].(*model.MinionProcessOrder), fc.Args["desc"].(*bool), fc.Args["first"].(*int), fc.Args["after"].(*string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionProcessConnection
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionProcessConnection
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionProcessConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessConnection,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_minionTaskProcesses(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "edges":
+				return ec.fieldContext_MinionProcessConnection_edges(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_MinionProcessConnection_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_MinionProcessConnection_totalCount(ctx, field)
+			case "sep":
+				return ec.fieldContext_MinionProcessConnection_sep(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionProcessConnection", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_minionTaskProcesses_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_minionFileStrings(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -107623,6 +108785,194 @@ func (ec *executionContext) _MinionListenerEvent(ctx context.Context, sel ast.Se
 	return out
 }
 
+var minionProcessImplementors = []string{"MinionProcess"}
+
+func (ec *executionContext) _MinionProcess(ctx context.Context, sel ast.SelectionSet, obj *model.MinionProcess) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionProcessImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionProcess")
+		case "pid":
+			out.Values[i] = ec._MinionProcess_pid(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "ppid":
+			out.Values[i] = ec._MinionProcess_ppid(ctx, field, obj)
+		case "name":
+			out.Values[i] = ec._MinionProcess_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._MinionProcess_path(ctx, field, obj)
+		case "cmdline":
+			out.Values[i] = ec._MinionProcess_cmdline(ctx, field, obj)
+		case "user":
+			out.Values[i] = ec._MinionProcess_user(ctx, field, obj)
+		case "started":
+			out.Values[i] = ec._MinionProcess_started(ctx, field, obj)
+		case "session":
+			out.Values[i] = ec._MinionProcess_session(ctx, field, obj)
+		case "integrity":
+			out.Values[i] = ec._MinionProcess_integrity(ctx, field, obj)
+		case "arch":
+			out.Values[i] = ec._MinionProcess_arch(ctx, field, obj)
+		case "threads":
+			out.Values[i] = ec._MinionProcess_threads(ctx, field, obj)
+		case "memory":
+			out.Values[i] = ec._MinionProcess_memory(ctx, field, obj)
+		case "cpuTime":
+			out.Values[i] = ec._MinionProcess_cpuTime(ctx, field, obj)
+		case "state":
+			out.Values[i] = ec._MinionProcess_state(ctx, field, obj)
+		case "x":
+			out.Values[i] = ec._MinionProcess_x(ctx, field, obj)
+		case "depth":
+			out.Values[i] = ec._MinionProcess_depth(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "children":
+			out.Values[i] = ec._MinionProcess_children(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "minion":
+			out.Values[i] = ec._MinionProcess_minion(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "context":
+			out.Values[i] = ec._MinionProcess_context(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionProcessConnectionImplementors = []string{"MinionProcessConnection"}
+
+func (ec *executionContext) _MinionProcessConnection(ctx context.Context, sel ast.SelectionSet, obj *model.MinionProcessConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionProcessConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionProcessConnection")
+		case "edges":
+			out.Values[i] = ec._MinionProcessConnection_edges(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._MinionProcessConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalCount":
+			out.Values[i] = ec._MinionProcessConnection_totalCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sep":
+			out.Values[i] = ec._MinionProcessConnection_sep(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionProcessEdgeImplementors = []string{"MinionProcessEdge"}
+
+func (ec *executionContext) _MinionProcessEdge(ctx context.Context, sel ast.SelectionSet, obj *model.MinionProcessEdge) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionProcessEdgeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionProcessEdge")
+		case "node":
+			out.Values[i] = ec._MinionProcessEdge_node(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cursor":
+			out.Values[i] = ec._MinionProcessEdge_cursor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var minionSessionImplementors = []string{"MinionSession"}
 
 func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.SelectionSet, obj *model.MinionSession) graphql.Marshaler {
@@ -114804,6 +116154,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_recordings(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "minionTaskProcesses":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_minionTaskProcesses(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -124428,6 +125800,56 @@ func (ec *executionContext) marshalNMinionListenerEvent2ᚖgithubᚗcomᚋlogosc
 	return ec._MinionListenerEvent(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNMinionProcess2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcess(ctx context.Context, sel ast.SelectionSet, v *model.MinionProcess) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionProcess(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionProcessConnection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessConnection(ctx context.Context, sel ast.SelectionSet, v model.MinionProcessConnection) graphql.Marshaler {
+	return ec._MinionProcessConnection(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNMinionProcessConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessConnection(ctx context.Context, sel ast.SelectionSet, v *model.MinionProcessConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionProcessConnection(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionProcessEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessEdgeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionProcessEdge) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionProcessEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessEdge(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionProcessEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessEdge(ctx context.Context, sel ast.SelectionSet, v *model.MinionProcessEdge) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionProcessEdge(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNMinionSession2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession(ctx context.Context, sel ast.SelectionSet, v model.MinionSession) graphql.Marshaler {
 	return ec._MinionSession(ctx, sel, &v)
 }
@@ -127877,6 +129299,22 @@ func (ec *executionContext) marshalOMinionListener2ᚖgithubᚗcomᚋlogoscore�
 		return graphql.Null
 	}
 	return ec._MinionListener(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOMinionProcessOrder2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessOrder(ctx context.Context, v any) (*model.MinionProcessOrder, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.MinionProcessOrder)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOMinionProcessOrder2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessOrder(ctx context.Context, sel ast.SelectionSet, v *model.MinionProcessOrder) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) marshalOMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession(ctx context.Context, sel ast.SelectionSet, v *model.MinionSession) graphql.Marshaler {

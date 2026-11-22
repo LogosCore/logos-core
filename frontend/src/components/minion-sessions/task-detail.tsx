@@ -33,6 +33,8 @@ import { feedbackSummary } from "./feedback-values"
 import { TaskFeedbackView } from "./task-feedback"
 import { readVolumes } from "./volumes"
 import { VolumesView } from "./volumes-view"
+import { ProcessListView } from "./process-list-view"
+import type { KillTarget } from "./kill-dialog"
 import { DirListingView } from "./dir-listing-view"
 import { FileView } from "./file-view"
 import { UploadView } from "./upload-view"
@@ -61,7 +63,8 @@ import { ResultFilesView } from "./result-files-view"
 // (its command is the list's row): where it stands and who gave it, what can be done with it,
 // and what came back: the output as text, read again as more comes (Ctrl+F
 // finds in it), and any data the command gave, in its result's
-// view (a dir_listing as a file browser) or as raw JSON. Output and data
+// view (a dir_listing as a file browser, a process_list as a table read
+// from core) or as raw JSON. Output and data
 // download as the minion sent them. What the minion said of it as feedback
 // is a tab of its own, its counts in the tab's name. A composite command's
 // task has a tab of what its factory's code decided (its status, its own op,
@@ -117,6 +120,10 @@ export function TaskDetail({
   walkCommands,
   onOpenInFileBrowser,
   deleteCommands,
+  onKillProcess,
+  killCommands,
+  onRefreshProcesses,
+  refreshCommands,
   findSignal,
   onShowComposite,
   showingComposite,
@@ -162,6 +169,16 @@ export function TaskDetail({
   /** The session's list_dir commands, the task's own first: what List
    *  directory offers. */
   listCommands?: readonly MenuCommand[]
+  /** Kills a process of a process list, with a kill_process command (after
+   *  a confirmation); absent where the viewer may not give tasks. */
+  onKillProcess?: (target: KillTarget, commandId: string) => void
+  /** The session's kill_process commands: what Kill offers. */
+  killCommands?: readonly MenuCommand[]
+  /** Lists the processes again, with a list_processes command: a process
+   *  list's Refresh; absent where the viewer may not give tasks. */
+  onRefreshProcesses?: (commandId: string) => void
+  /** The session's list_processes commands, the task's own first. */
+  refreshCommands?: readonly MenuCommand[]
   /** Goes up when Ctrl+F is pressed in the console: the find bar opens. */
   findSignal: number
   /** Shows a composite task with its subtasks in the list, pick picked there. */
@@ -228,10 +245,12 @@ export function TaskDetail({
   const listing = t.result === "dir_listing" && !t.dataProblem ? readDirListing(data) : null
   const walk = t.result === "dir_walk" && !t.dataProblem ? readDirWalk(data) : null
   const volumes = t.result === "volumes" && !t.dataProblem ? readVolumes(data) : null
+  // A process list is read from core a page at a time, not from data.
+  const processList = t.result === "process_list" && !t.dataProblem
   const dataNotes = [
     t.dataProblem ? `The data does not fit ${t.result}: ${t.dataProblem}. It shows raw.` : null,
     t.result &&
-    !["dir_listing", "dir_walk", "volumes", "file_upload", "file_stream"].includes(t.result) &&
+    !["dir_listing", "dir_walk", "volumes", "process_list", "file_upload", "file_stream"].includes(t.result) &&
     !isFile
       ? `Its result, ${t.result}, is not one this version shows: the data shows raw.`
       : null,
@@ -365,7 +384,8 @@ export function TaskDetail({
               <WrapTextIcon />
             </Button>
           )}
-          {shown === "data" && (listing || walk || (isFile && t.file && data) || (isUpload && data) || (isStream && data)) && (
+          {shown === "data" &&
+            (listing || walk || volumes || (processList && data) || (isFile && t.file && data) || (isUpload && data) || (isStream && data)) && (
             <Button variant={rawData ? "secondary" : "ghost"} size="icon-xs" title={rawData ? "Raw JSON: show it rendered" : "Rendered: show the raw JSON"}
               aria-label="Show the data as raw JSON" aria-pressed={rawData}
               onClick={() => {
@@ -487,6 +507,19 @@ export function TaskDetail({
             <WalkView task={t} walk={walk} onOpenInFileBrowser={onOpenInFileBrowser} />
           ) : volumes && !rawData ? (
             <VolumesView volumes={volumes} onOpenInFileBrowser={onOpenInFileBrowser} />
+          ) : processList && !rawData ? (
+            <ProcessListView
+              task={t}
+              hostArch={session?.arch}
+              onKill={onKillProcess}
+              killCommands={killCommands}
+              onOpenPath={onOpenPath}
+              listCommands={listCommands}
+              onDownload={onDownloadFile}
+              downloadCommands={downloadCommands}
+              onRefresh={onRefreshProcesses}
+              refreshCommands={refreshCommands}
+            />
           ) : listing && !rawData ? (
             <DirListingView
               listing={listing}

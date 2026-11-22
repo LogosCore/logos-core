@@ -25,6 +25,7 @@ import { TaskList } from "./task-list"
 import { emptyListText } from "./task-filter"
 import { UploadDialog } from "./upload-dialog"
 import { DeleteDialog, type DeleteTarget } from "./delete-dialog"
+import { KillDialog, type KillTarget } from "./kill-dialog"
 import { startStreamUpload } from "@/lib/stream-upload"
 import type { UploadTarget } from "./upload-target"
 import { commandsFor } from "./action-commands"
@@ -145,6 +146,14 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   // the confirmation until it runs.
   const [deleting, setDeleting] = useState<{ target: DeleteTarget; commandId: string } | null>(null)
   const deleteCommandId = deleting?.commandId ?? null
+  // A process list's Kill: the process, and the kill_process command picked,
+  // in the confirmation until it runs.
+  const [killing, setKilling] = useState<{ target: KillTarget; commandId: string } | null>(null)
+  const killCommandId = killing?.commandId ?? null
+  // A process list's Refresh: the list's own command again with its args,
+  // or another list_processes command with none (its own have defaults).
+  const refreshProcesses = (t: Task, commandId: string) =>
+    runAction(commandId, commandId === t.command ? ((t.args as Record<string, unknown> | null) ?? {}) : {})
   const openPath = (t: Task, path: string, picked?: string) => {
     const commandId = picked ?? commandsFor(commands, "list_dir", t.command)[0]?.id
     if (!commandId) return
@@ -255,6 +264,10 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                   deleteCommands={commandsFor(commands, "delete_path")}
                   onWalkPath={writable ? (path, commandId) => runAction(commandId, { path }) : undefined}
                   walkCommands={commandsFor(commands, "walk_dir")}
+                  onKillProcess={writable ? (target, commandId) => setKilling({ target, commandId }) : undefined}
+                  killCommands={commandsFor(commands, "kill_process")}
+                  onRefreshProcesses={writable ? (commandId) => refreshProcesses(selected, commandId) : undefined}
+                  refreshCommands={commandsFor(commands, "list_processes", selected.command)}
                   onOpenInFileBrowser={workspace ? (path) => workspace.openFileBrowser(sessionId, path) : undefined}
                   findSignal={findSignal}
                   onShowComposite={showComposite}
@@ -282,6 +295,16 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
           onDelete={async (args) => {
             if (!deleteCommandId) return
             await queue.mutateAsync({ sessionId, command: deleteCommandId, args })
+            ran()
+          }}
+        />
+        <KillDialog
+          target={killing?.target ?? null}
+          commandId={killCommandId}
+          onOpenChange={(open) => !open && setKilling(null)}
+          onKill={async (args) => {
+            if (!killCommandId) return
+            await queue.mutateAsync({ sessionId, command: killCommandId, args })
             ran()
           }}
         />

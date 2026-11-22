@@ -38,6 +38,8 @@ func Check(result string, seq uint64, data []byte) error {
 		_, err = protocol.ReadDirWalk(seq, data)
 	case protocol.ResultVolumes:
 		_, err = protocol.ReadVolumes(seq, data)
+	case protocol.ResultProcessList:
+		_, err = protocol.ReadProcessList(seq, data)
 	}
 	return err
 }

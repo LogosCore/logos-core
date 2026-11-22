@@ -876,6 +876,40 @@ type MinionListenerEvent struct {
 	Listener    *MinionListener `json:"listener,omitempty"`
 }
 
+type MinionProcess struct {
+	Pid       int     `json:"pid"`
+	Ppid      *int    `json:"ppid,omitempty"`
+	Name      string  `json:"name"`
+	Path      *string `json:"path,omitempty"`
+	Cmdline   *string `json:"cmdline,omitempty"`
+	User      *string `json:"user,omitempty"`
+	Started   *string `json:"started,omitempty"`
+	Session   *int    `json:"session,omitempty"`
+	Integrity *string `json:"integrity,omitempty"`
+	Arch      *string `json:"arch,omitempty"`
+	Threads   *int    `json:"threads,omitempty"`
+	Memory    *int    `json:"memory,omitempty"`
+	CPUTime   *int    `json:"cpuTime,omitempty"`
+	State     *string `json:"state,omitempty"`
+	X         any     `json:"x,omitempty"`
+	Depth     int     `json:"depth"`
+	Children  int     `json:"children"`
+	Minion    bool    `json:"minion"`
+	Context   bool    `json:"context"`
+}
+
+type MinionProcessConnection struct {
+	Edges      []*MinionProcessEdge `json:"edges"`
+	PageInfo   *pagination.PageInfo `json:"pageInfo"`
+	TotalCount int                  `json:"totalCount"`
+	Sep        string               `json:"sep"`
+}
+
+type MinionProcessEdge struct {
+	Node   *MinionProcess `json:"node"`
+	Cursor string         `json:"cursor"`
+}
+
 type MinionSession struct {
 	ID                   string                  `json:"id"`
 	Rev                  int                     `json:"rev"`
@@ -2623,6 +2657,73 @@ func (e *HostSortField) UnmarshalJSON(b []byte) error {
 }
 
 func (e HostSortField) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type MinionProcessOrder string
+
+const (
+	MinionProcessOrderTree    MinionProcessOrder = "TREE"
+	MinionProcessOrderPid     MinionProcessOrder = "PID"
+	MinionProcessOrderName    MinionProcessOrder = "NAME"
+	MinionProcessOrderUser    MinionProcessOrder = "USER"
+	MinionProcessOrderMemory  MinionProcessOrder = "MEMORY"
+	MinionProcessOrderCPUTime MinionProcessOrder = "CPU_TIME"
+	MinionProcessOrderStarted MinionProcessOrder = "STARTED"
+	MinionProcessOrderThreads MinionProcessOrder = "THREADS"
+)
+
+var AllMinionProcessOrder = []MinionProcessOrder{
+	MinionProcessOrderTree,
+	MinionProcessOrderPid,
+	MinionProcessOrderName,
+	MinionProcessOrderUser,
+	MinionProcessOrderMemory,
+	MinionProcessOrderCPUTime,
+	MinionProcessOrderStarted,
+	MinionProcessOrderThreads,
+}
+
+func (e MinionProcessOrder) IsValid() bool {
+	switch e {
+	case MinionProcessOrderTree, MinionProcessOrderPid, MinionProcessOrderName, MinionProcessOrderUser, MinionProcessOrderMemory, MinionProcessOrderCPUTime, MinionProcessOrderStarted, MinionProcessOrderThreads:
+		return true
+	}
+	return false
+}
+
+func (e MinionProcessOrder) String() string {
+	return string(e)
+}
+
+func (e *MinionProcessOrder) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = MinionProcessOrder(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid MinionProcessOrder", str)
+	}
+	return nil
+}
+
+func (e MinionProcessOrder) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *MinionProcessOrder) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e MinionProcessOrder) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

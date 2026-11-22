@@ -88,8 +88,14 @@ func TestCheck(t *testing.T) {
 	if Check(protocol.ResultDirListing, 1, data(t, protocol.DirListing{Path: "/x"})) == nil {
 		t.Error("a later part naming the directory passed")
 	}
-	if Check("", 0, data(t, map[string]any{"anything": 1})) != nil || Check("process_list", 0, data(t, map[string]any{})) != nil {
+	if Check("", 0, data(t, map[string]any{"anything": 1})) != nil || Check("registry_keys", 0, data(t, map[string]any{})) != nil {
 		t.Error("no result, or one core does not know, takes any data")
+	}
+	if Check(protocol.ResultProcessList, 0, data(t, protocol.ProcessList{Sep: "/", Processes: []protocol.Process{{PID: 1}}})) == nil {
+		t.Error("a process list whose process has no name passed")
+	}
+	if err := Check(protocol.ResultProcessList, 2, data(t, protocol.ProcessList{Sep: "/", Processes: []protocol.Process{{PID: 1, Name: "init"}}})); err != nil {
+		t.Errorf("a process list: %v", err)
 	}
 }
 

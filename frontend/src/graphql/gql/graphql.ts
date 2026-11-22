@@ -1093,6 +1093,50 @@ export type MinionListenerEvent = {
   operationId: Scalars['ID']['output'];
 };
 
+export type MinionProcess = {
+  arch?: Maybe<Scalars['String']['output']>;
+  children: Scalars['Int']['output'];
+  cmdline?: Maybe<Scalars['String']['output']>;
+  context: Scalars['Boolean']['output'];
+  cpuTime?: Maybe<Scalars['Int']['output']>;
+  depth: Scalars['Int']['output'];
+  integrity?: Maybe<Scalars['String']['output']>;
+  memory?: Maybe<Scalars['Int']['output']>;
+  minion: Scalars['Boolean']['output'];
+  name: Scalars['String']['output'];
+  path?: Maybe<Scalars['String']['output']>;
+  pid: Scalars['Int']['output'];
+  ppid?: Maybe<Scalars['Int']['output']>;
+  session?: Maybe<Scalars['Int']['output']>;
+  started?: Maybe<Scalars['String']['output']>;
+  state?: Maybe<Scalars['String']['output']>;
+  threads?: Maybe<Scalars['Int']['output']>;
+  user?: Maybe<Scalars['String']['output']>;
+  x?: Maybe<Scalars['JSON']['output']>;
+};
+
+export type MinionProcessConnection = {
+  edges: Array<MinionProcessEdge>;
+  pageInfo: PageInfo;
+  sep: Scalars['String']['output'];
+  totalCount: Scalars['Int']['output'];
+};
+
+export type MinionProcessEdge = {
+  cursor: Scalars['String']['output'];
+  node: MinionProcess;
+};
+
+export type MinionProcessOrder =
+  | 'CPU_TIME'
+  | 'MEMORY'
+  | 'NAME'
+  | 'PID'
+  | 'STARTED'
+  | 'THREADS'
+  | 'TREE'
+  | 'USER';
+
 export type MinionSession = {
   acting?: Maybe<MinionIdentity>;
   address?: Maybe<Scalars['String']['output']>;
@@ -2796,6 +2840,7 @@ export type Query = {
   minionTargets: MinionTargetConnection;
   minionTask?: Maybe<MinionTask>;
   minionTaskImportantCount: Scalars['Int']['output'];
+  minionTaskProcesses: MinionProcessConnection;
   minionTasks: MinionTaskPage;
   minionTunnelStreams: MinionTunnelStreamPage;
   minions: Array<Minion>;
@@ -3131,6 +3176,16 @@ export type QueryMinionTaskArgs = {
 
 export type QueryMinionTaskImportantCountArgs = {
   sessionId: Scalars['ID']['input'];
+};
+
+
+export type QueryMinionTaskProcessesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  desc?: InputMaybe<Scalars['Boolean']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  order?: InputMaybe<MinionProcessOrder>;
+  search?: InputMaybe<Scalars['String']['input']>;
+  taskId: Scalars['ID']['input'];
 };
 
 
@@ -5584,6 +5639,18 @@ export type MinionTaskChangedSubscriptionVariables = Exact<{
 
 
 export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null, factory?: { module: string, instance?: string | null, acceptedAt?: string | null, reportAt?: string | null, waiting?: string | null, waitingSince?: string | null, resultAt?: string | null } | null } };
+
+export type MinionTaskProcessesQueryVariables = Exact<{
+  taskId: Scalars['ID']['input'];
+  search?: InputMaybe<Scalars['String']['input']>;
+  order?: InputMaybe<MinionProcessOrder>;
+  desc?: InputMaybe<Scalars['Boolean']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type MinionTaskProcessesQuery = { minionTaskProcesses: { totalCount: number, sep: string, edges: Array<{ cursor: string, node: { pid: number, ppid?: number | null, name: string, path?: string | null, cmdline?: string | null, user?: string | null, started?: string | null, session?: number | null, integrity?: string | null, arch?: string | null, threads?: number | null, memory?: number | null, cpuTime?: number | null, state?: string | null, depth: number, children: number, minion: boolean, context: boolean } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -14075,6 +14142,48 @@ fragment MinionTaskFields on MinionTask {
     resultAt
   }
 }`) as unknown as TypedDocumentString<MinionTaskChangedSubscription, MinionTaskChangedSubscriptionVariables>;
+export const MinionTaskProcessesDocument = new TypedDocumentString(`
+    query MinionTaskProcesses($taskId: ID!, $search: String, $order: MinionProcessOrder, $desc: Boolean, $first: Int, $after: String) {
+  minionTaskProcesses(
+    taskId: $taskId
+    search: $search
+    order: $order
+    desc: $desc
+    first: $first
+    after: $after
+  ) {
+    edges {
+      cursor
+      node {
+        pid
+        ppid
+        name
+        path
+        cmdline
+        user
+        started
+        session
+        integrity
+        arch
+        threads
+        memory
+        cpuTime
+        state
+        depth
+        children
+        minion
+        context
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    totalCount
+    sep
+  }
+}
+    `) as unknown as TypedDocumentString<MinionTaskProcessesQuery, MinionTaskProcessesQueryVariables>;
 export const ModulesDocument = new TypedDocumentString(`
     query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {
   modules(
