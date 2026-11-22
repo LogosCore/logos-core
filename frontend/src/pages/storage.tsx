@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { HardDriveIcon, LoaderIcon, SparklesIcon } from "lucide-react"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { RetentionDialog } from "@/components/storage/retention-dialog"
+import { StorageActionDialog } from "@/components/storage/storage-action-dialog"
 import { BucketCard, CleanupCard, DiskCard, RetentionCard, SeaweedFSCard, StorageWarnings } from "@/components/storage/storage-cards"
 import { ActionsTable, CleanupTable, ConsumersEmpty, ConsumersTable, type CleanupOperation } from "@/components/storage/storage-tables"
 import {
@@ -25,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Permissions } from "@/constants/permissions"
 import {
+  useCancelStorageAction,
   useCleanUpStorage,
   useGrowStorageBucket,
   useReclaimStorage,
@@ -65,7 +67,8 @@ export function StoragePage() {
   const actionsQ = useStorageActions()
   const actions = useConnectionNodes(actionsQ.data, (p) => p.storageActions)
   const running = actions.some((a) => a.status === "running")
-  const reclaiming = actions.some((a) => a.action === "reclaim" && a.status === "running")
+  const runningReclaim = actions.find((a) => a.action === "reclaim" && a.status === "running")
+  const reclaiming = runningReclaim !== undefined
   const cleaning = actions.some((a) => a.action === "cleanup" && a.status === "running")
   useRefreshWhenEnded(running)
   const statusQ = useStorageStatus(running)
@@ -73,7 +76,10 @@ export function StoragePage() {
   const reclaim = useReclaimStorage()
   const grow = useGrowStorageBucket()
   const cleanUp = useCleanUpStorage()
+  const cancel = useCancelStorageAction()
   const [confirm, setConfirm] = useState<Confirm | null>(null)
+  // The action whose details are open.
+  const [details, setDetails] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [tab, setTab] = useState<Tab>("overview")
   const [picked, setPicked] = useState<string | null>(null)
@@ -103,17 +109,27 @@ export function StoragePage() {
 
   const runReclaim = () =>
     void reclaim.mutateAsync().then(
-      () => {
-        toast.success("Reclaiming space: SeaweedFS compacts the volumes in the background. Activity says when it ends.")
+      (data) => {
+        toast.success("Reclaiming space volume by volume, in the background: its details show each one as it goes.")
         setTab("activity")
+        setDetails(data.reclaimStorage.id)
       },
       (err: unknown) => toast.error(errorMessage(err, "Could not reclaim space")),
     )
+  const runCancel = (a: { id: string; action: string }) =>
+    void cancel.mutateAsync(a.id).then(
+      () =>
+        toast.success(
+          a.action === "reclaim" ? "Stopping: the reclaim stops before its next volume" : "Stopping: the cleanup stops before its next recording",
+        ),
+      (err: unknown) => toast.error(errorMessage(err, "Could not stop it")),
+    )
   const runCleanup = (c: Extract<Confirm, { kind: "cleanup" }>) =>
     void cleanUp.mutateAsync({ olderThanDays: c.days, operationId: c.operation?.operationId ?? null }).then(
-      () => {
-        toast.success("Cleaning up recordings in the background. Activity says what it took when it ends.")
+      (data) => {
+        toast.success("Cleaning up recordings in the background: its details show what it takes as it goes.")
         setTab("activity")
+        setDetails(data.cleanUpStorage.id)
       },
       (err: unknown) => toast.error(errorMessage(err, "Could not start the cleanup")),
     )
@@ -190,9 +206,13 @@ export function StoragePage() {
                         <Button
                           variant="ghost"
                           size="xs"
-                          onClick={() => setConfirm({ kind: "reclaim" })}
-                          disabled={reclaiming || reclaim.isPending}
-                          title="Free the space deleted files still hold on disk, in every bucket"
+                          onClick={() => (runningReclaim ? setDetails(runningReclaim.id) : setConfirm({ kind: "reclaim" }))}
+                          disabled={reclaim.isPending}
+                          title={
+                            runningReclaim
+                              ? "See how the reclaim goes, volume by volume, or stop it"
+                              : "Free the space deleted files still hold on disk, in every bucket"
+                          }
                         >
                           {reclaiming ? <LoaderIcon className="animate-spin" /> : <SparklesIcon />}
                           {reclaiming ? "Reclaiming" : "Reclaim space"}
@@ -281,6 +301,8 @@ export function StoragePage() {
             isFetchingNextPage={actionsQ.isFetchingNextPage}
             hasNextPage={actionsQ.hasNextPage}
             fetchNextPage={() => void actionsQ.fetchNextPage()}
+            onOpen={(a) => setDetails(a.id)}
+            onCancel={canManage ? runCancel : undefined}
           />
         </TabsContent>
       </Tabs>
@@ -291,9 +313,10 @@ export function StoragePage() {
             <DialogHeader>
               <DialogTitle>Reclaim space</DialogTitle>
               <DialogDescription>
-                SeaweedFS compacts every volume, in every bucket, whose deleted files hold a tenth of it or more: their space comes back
-                to the disk. It runs in the background and rewrites those volumes, so the store answers slower until it ends. SeaweedFS
-                also does this on its own, past 30%.
+                Core compacts, one at a time and the most deleted first, every volume of every bucket whose deleted files hold a tenth
+                of it or more: their space comes back to the disk. SeaweedFS&apos;s own vacuum waits meanwhile. It runs in the
+                background for as long as it takes; its details show each volume as it goes, and Stop ends it before the next. A volume
+                answers slower while it is compacted. SeaweedFS also compacts on its own, past 30%.
               </DialogDescription>
             </DialogHeader>
           ) : confirm?.kind === "grow" ? (
@@ -337,6 +360,7 @@ export function StoragePage() {
         </DialogContent>
       </Dialog>
       {retention && <RetentionDialog retention={retention} open={editing} onOpenChange={setEditing} />}
+      <StorageActionDialog id={details} onOpenChange={(open) => !open && setDetails(null)} canManage={canManage} />
     </div>
   )
 }

@@ -4,11 +4,13 @@
 // buckets) and sums its own records of what it keeps in each bucket, once a
 // minute, into a snapshot it serves; it warns of what would make writes
 // fail (no free slot, a bucket with no writable volume, a full disk), and
-// runs two maintenance actions: reclaiming deleted files' space (the
-// master's vacuum, every bucket's volumes) and adding a volume to a bucket.
-// It runs retention cleanups of recordings too, an admin's or the retention
-// policy's each day (retention.go). Each action is kept
-// (models.StorageAction) with who ran it and how it went.
+// runs two maintenance actions: reclaiming deleted files' space (core
+// compacts the volumes one at a time, reclaim.go) and adding a volume to a
+// bucket. It runs retention cleanups of recordings too, an admin's or the
+// retention policy's each day (retention.go). Each action is kept
+// (models.StorageAction) with who ran it and how it went; a reclaim and a
+// cleanup run for as long as they take, keep their progress as they go, and
+// stop when an admin cancels them.
 package storage
 
 import (
@@ -30,20 +32,29 @@ import (
 // Config is how the service reads and maintains the store.
 type Config struct {
 	// MasterURL is SeaweedFS's master (http://seaweedfs-master:9333); empty:
-	// core reads its own records alone, and runs no action.
-	MasterURL string
+	// core reads its own records alone, and runs no action. MasterGRPC is
+	// its gRPC address (host:port), a reclaim's: empty, MasterURL's host on
+	// its port plus 10000.
+	MasterURL  string
+	MasterGRPC string
 	// Buckets are core's buckets, by purpose (models.StoragePurpose...).
 	Buckets map[string]string
 	// Interval is how often core reads the store (a minute); CallTimeout a
-	// call's to SeaweedFS (10 s); ReclaimTimeout how long a reclaim may run
-	// (30 minutes).
-	Interval       time.Duration
-	CallTimeout    time.Duration
-	ReclaimTimeout time.Duration
+	// call's to SeaweedFS (10 s), but a compaction's, which takes as long as
+	// it does.
+	Interval    time.Duration
+	CallTimeout time.Duration
 	// ReclaimThreshold is the share of a volume deleted files must hold for a
 	// reclaim to compact it (0.1). SeaweedFS compacts past its own (0.3) on
-	// its own.
-	ReclaimThreshold float64
+	// its own. A volume the master did not compact, still past it, is asked
+	// again ReclaimRetryWait later (10 s), ReclaimTries times in all (3);
+	// ReclaimFirstTries (30: five minutes) until the reclaim's first volume
+	// settles, as SeaweedFS's own vacuum, paused, may still be ending the
+	// volume it was on (its pass holds the master's one vacuum lock).
+	ReclaimThreshold  float64
+	ReclaimRetryWait  time.Duration
+	ReclaimTries      int
+	ReclaimFirstTries int
 	// FewSlots warns when fewer volume slots are free (3); DiskLowPercent
 	// when a disk has less free (10); ReclaimableRatio and ReclaimableMin
 	// tell of a bucket whose deleted files hold that share of it, and that
@@ -56,29 +67,29 @@ type Config struct {
 	// RetentionCheckEvery is how often core looks whether the retention
 	// policy's cleanup is due (10 minutes): a day after the last began
 	// (RetentionEvery), sooner after one that failed, an hour after it ended
-	// (RetentionRetry). CleanupBatch is how many recordings a cleanup takes
-	// at once (50); CleanupTimeout how long one may run (6 hours): what it
-	// did not reach waits for the next.
+	// (RetentionRetry). CleanupBatch is how many recordings a cleanup reads
+	// at once (50).
 	RetentionCheckEvery time.Duration
 	RetentionEvery      time.Duration
 	RetentionRetry      time.Duration
 	CleanupBatch        int
-	CleanupTimeout      time.Duration
 }
 
 // DefaultConfig is Config's defaults, with no master and no buckets.
 func DefaultConfig() Config {
-	return Config{Interval: time.Minute, CallTimeout: 10 * time.Second, ReclaimTimeout: 30 * time.Minute, ReclaimThreshold: 0.1,
-		FewSlots: 3, DiskLowPercent: 10, ReclaimableRatio: 0.3, ReclaimableMin: 64 << 20,
-		RetentionCheckEvery: 10 * time.Minute, RetentionEvery: 24 * time.Hour, RetentionRetry: time.Hour, CleanupBatch: 50,
-		CleanupTimeout: 6 * time.Hour}
+	return Config{Interval: time.Minute, CallTimeout: 10 * time.Second, ReclaimThreshold: 0.1, ReclaimRetryWait: 10 * time.Second,
+		ReclaimTries: 3, ReclaimFirstTries: 30, FewSlots: 3, DiskLowPercent: 10, ReclaimableRatio: 0.3, ReclaimableMin: 64 << 20,
+		RetentionCheckEvery: 10 * time.Minute, RetentionEvery: 24 * time.Hour, RetentionRetry: time.Hour, CleanupBatch: 50}
 }
 
 // Errors the actions refuse with.
 var (
-	ErrNotConfigured = errors.New("core is not set to reach SeaweedFS's master (SEAWEEDFS_MASTER_URL)")
-	ErrUnknownBucket = errors.New("no such bucket")
-	ErrRunning       = errors.New("it is running already")
+	ErrNotConfigured  = errors.New("core is not set to reach SeaweedFS's master (SEAWEEDFS_MASTER_URL)")
+	ErrUnknownBucket  = errors.New("no such bucket")
+	ErrRunning        = errors.New("it is running already")
+	ErrUnknownAction  = errors.New("no such action")
+	ErrNotRunning     = errors.New("it is not running: it ended")
+	ErrNotCancellable = errors.New("it ends at once: there is nothing to stop")
 )
 
 // Operations names operations, for the breakdown and the cleanups.
@@ -89,8 +100,12 @@ type Operations interface {
 
 // Service serves the store's snapshot, and runs its actions.
 type Service struct {
-	cfg     Config
-	sw      *seaweed // nil: no master
+	cfg Config
+	sw  *seaweed // nil: no master
+	// rpc is the master over gRPC, a reclaim's: nil with no master, or
+	// rpcErr says why it could not be made.
+	rpc     *masterRPC
+	rpcErr  error
 	usage   repository.IStorageUsageRepository
 	actions repository.IStorageActionRepository
 	ops     Operations
@@ -103,11 +118,14 @@ type Service struct {
 	recs   Recordings
 	poke   chan struct{}
 
-	// base is the service's context: Stop ends it, and a reclaim running
-	// with it.
+	// base is the service's context: Stop ends it, and a reclaim or a
+	// cleanup running with it. runs are each running one's stop: Cancel
+	// ends it.
 	base   context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+	runMu  sync.Mutex
+	runs   map[uuid.UUID]context.CancelFunc
 
 	// building serializes the snapshot's builds; mu guards snap.
 	building sync.Mutex
@@ -125,11 +143,17 @@ func New(cfg Config, usage repository.IStorageUsageRepository, actions repositor
 	if cfg.CallTimeout <= 0 {
 		cfg.CallTimeout = def.CallTimeout
 	}
-	if cfg.ReclaimTimeout <= 0 {
-		cfg.ReclaimTimeout = def.ReclaimTimeout
-	}
 	if cfg.ReclaimThreshold <= 0 {
 		cfg.ReclaimThreshold = def.ReclaimThreshold
+	}
+	if cfg.ReclaimRetryWait <= 0 {
+		cfg.ReclaimRetryWait = def.ReclaimRetryWait
+	}
+	if cfg.ReclaimTries <= 0 {
+		cfg.ReclaimTries = def.ReclaimTries
+	}
+	if cfg.ReclaimFirstTries <= 0 {
+		cfg.ReclaimFirstTries = def.ReclaimFirstTries
 	}
 	if cfg.FewSlots <= 0 {
 		cfg.FewSlots = def.FewSlots
@@ -155,25 +179,37 @@ func New(cfg Config, usage repository.IStorageUsageRepository, actions repositor
 	if cfg.CleanupBatch <= 0 {
 		cfg.CleanupBatch = def.CleanupBatch
 	}
-	if cfg.CleanupTimeout <= 0 {
-		cfg.CleanupTimeout = def.CleanupTimeout
-	}
-	s := &Service{cfg: cfg, usage: usage, actions: actions, ops: ops, logger: logger, now: time.Now, poke: make(chan struct{}, 1)}
+	s := &Service{cfg: cfg, usage: usage, actions: actions, ops: ops, logger: logger, now: time.Now, poke: make(chan struct{}, 1),
+		runs: map[uuid.UUID]context.CancelFunc{}}
 	if master := strings.TrimRight(strings.TrimSpace(cfg.MasterURL), "/"); master != "" {
 		s.sw = &seaweed{master: master, http: &http.Client{}}
+		addr, err := masterGRPCAddr(master, strings.TrimSpace(cfg.MasterGRPC))
+		if err == nil {
+			s.rpc, err = newMasterRPC(addr)
+		}
+		if err != nil {
+			s.rpcErr = err
+			logger.Warn("storage: SeaweedFS's master over gRPC: no reclaim runs", zap.Error(err))
+		}
 	}
 	s.base, s.cancel = context.WithCancel(context.Background())
 	return s
 }
 
-// Start fails the actions a core that stopped left running, then reads the
-// store now and every Interval, and runs the retention policy when due.
+// Start fails the actions a core that stopped left running, and resumes
+// SeaweedFS's own vacuum where a reclaim left it paused; then reads the store
+// now and every Interval, and runs the retention policy when due.
 func (s *Service) Start() {
-	if n, err := s.actions.EndRunning(s.base, "core stopped before it ended", s.now()); err != nil {
+	if ended, err := s.actions.EndRunning(s.base, coreStopped, s.now()); err != nil {
 		s.logger.Warn("storage: end the actions left running", zap.Error(err))
-	} else if n > 0 {
-		s.logger.Info("storage: ended the actions left running", zap.Int64("actions", n))
+	} else if len(ended) > 0 {
+		s.logger.Info("storage: ended the actions left running", zap.Int("actions", len(ended)))
 	}
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.resumeLeftVacuum()
+	}()
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -199,6 +235,9 @@ func (s *Service) Start() {
 func (s *Service) Stop() {
 	s.cancel()
 	s.wg.Wait()
+	if s.rpc != nil {
+		s.rpc.close()
+	}
 }
 
 // Status is the latest snapshot: one read at once when there is none yet.
@@ -304,46 +343,6 @@ func (s *Service) Actions(ctx context.Context, cursor *pagination.Cursor, limit 
 	return page, total, err
 }
 
-// Reclaim starts compacting every volume deleted files hold past
-// ReclaimThreshold of, freeing their space on disk: it answers with the
-// action running, which ends in the background (the master answers once
-// every volume is done).
-func (s *Service) Reclaim(ctx context.Context, actor models.ModuleActor) (*models.StorageAction, error) {
-	if s.sw == nil {
-		return nil, ErrNotConfigured
-	}
-	a := &models.StorageAction{ActionID: uuid.New(), Action: models.StorageActionReclaim, Actor: actor,
-		Status: models.StorageActionRunning, StartedAt: s.now()}
-	if err := s.actions.Insert(ctx, a); err != nil {
-		if errors.Is(err, repository.ErrStorageActionRunning) {
-			return nil, fmt.Errorf("a reclaim: %w", ErrRunning)
-		}
-		return nil, err
-	}
-	s.logger.Info("storage: reclaiming deleted files' space", zap.String("action_id", a.ActionID.String()), zap.String("by", actor.Name))
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		ctx, cancel := context.WithTimeout(s.base, s.cfg.ReclaimTimeout)
-		defer cancel()
-		before, beforeErr := s.onDisk(ctx)
-		err := s.sw.vacuum(ctx, s.cfg.ReclaimThreshold)
-		status, why, freed := models.StorageActionSucceeded, "", int64(0)
-		switch {
-		case s.base.Err() != nil:
-			status, why = models.StorageActionFailed, "core stopped before it ended"
-		case err != nil:
-			status, why = models.StorageActionFailed, err.Error()
-		default:
-			if after, afterErr := s.onDisk(ctx); beforeErr == nil && afterErr == nil {
-				freed = max(before-after, 0)
-			}
-		}
-		s.finish(a, status, why, freed, 0)
-	}()
-	return a, nil
-}
-
 // Grow adds a writable volume to bucket, one of core's or one SeaweedFS has:
 // the action as it ended (a failure says SeaweedFS's reason, as when no slot
 // is free).
@@ -386,19 +385,6 @@ func (s *Service) finish(a *models.StorageAction, status, why string, freed int6
 		zap.String("status", status), zap.String("err", why), zap.Int64("freed", freed), zap.Int("volumes", volumes))
 	s.Refresh(ctx)
 	return after
-}
-
-// onDisk is every volume's bytes on disk.
-func (s *Service) onDisk(ctx context.Context) (int64, error) {
-	vols, err := s.sw.volStatus(ctx)
-	if err != nil {
-		return 0, err
-	}
-	var total int64
-	for _, v := range vols.all() {
-		total += v.Size
-	}
-	return total, nil
 }
 
 // known reports whether bucket is one of core's or one SeaweedFS has; never

@@ -11,12 +11,14 @@ import (
 	"strings"
 )
 
-// The SeaweedFS calls core makes, over its HTTP API: the master's
+// The SeaweedFS calls core makes over its HTTP API: the master's
 // /dir/status (the topology: volume slots, data nodes, each bucket's
-// writable volumes), /vol/status (every volume), /cluster/status (the
-// leader), /vol/vacuum and /vol/grow; a volume server's /status (its
-// disks). A bucket of the S3 gateway is a collection of the same name;
-// volumes written outside any bucket are the collection "".
+// writable volumes), /vol/status (every volume, as the volume servers last
+// said), /cluster/status (the leader) and /vol/grow; a volume server's
+// /status (its disks, and its volumes as they are now). A reclaim's calls
+// go over gRPC (masterrpc.go). A bucket of the S3 gateway is a collection
+// of the same name; volumes written outside any bucket are the collection
+// "".
 
 // seaweed is a SeaweedFS master's client.
 type seaweed struct {
@@ -48,7 +50,8 @@ type dirStatus struct {
 	} `json:"Topology"`
 }
 
-// volume is one of the master's volumes (/vol/status).
+// volume is one of the master's volumes (/vol/status), or of a volume
+// server's (its /status). CompactRevision counts its compactions.
 type volume struct {
 	ID               uint32 `json:"Id"`
 	Collection       string `json:"Collection"`
@@ -57,6 +60,7 @@ type volume struct {
 	DeleteCount      int64  `json:"DeleteCount"`
 	DeletedByteCount int64  `json:"DeletedByteCount"`
 	ReadOnly         bool   `json:"ReadOnly"`
+	CompactRevision  uint32 `json:"CompactRevision"`
 }
 
 // volStatus is every volume, by data center, rack and data node.
@@ -85,7 +89,8 @@ type clusterStatus struct {
 	Leader   string `json:"Leader"`
 }
 
-// nodeStatus is a volume server's disks (/status).
+// nodeStatus is a volume server's disks, and its volumes as they are now
+// (/status).
 type nodeStatus struct {
 	DiskStatuses []struct {
 		Dir  string `json:"dir"`
@@ -93,6 +98,7 @@ type nodeStatus struct {
 		Used int64  `json:"used"`
 		Free int64  `json:"free"`
 	} `json:"DiskStatuses"`
+	Volumes []volume `json:"Volumes"`
 }
 
 func (s seaweed) dirStatus(ctx context.Context) (dirStatus, error) {
@@ -117,11 +123,19 @@ func (s seaweed) nodeStatus(ctx context.Context, node string) (nodeStatus, error
 	return out, s.get(ctx, "http://"+node+"/status", &out)
 }
 
-// vacuum compacts every volume whose deleted bytes are past threshold (a
-// ratio of its size), freeing them on disk. The master answers once done.
-func (s seaweed) vacuum(ctx context.Context, threshold float64) error {
-	q := url.Values{"garbageThreshold": {strconv.FormatFloat(threshold, 'f', -1, 64)}}
-	return s.post(ctx, s.master+"/vol/vacuum?"+q.Encode(), nil)
+// nodeVolume is one volume as its volume server has it now: the master's
+// view of it comes with the server's next heartbeat.
+func (s seaweed) nodeVolume(ctx context.Context, node string, id uint32) (volume, error) {
+	st, err := s.nodeStatus(ctx, node)
+	if err != nil {
+		return volume{}, err
+	}
+	for _, v := range st.Volumes {
+		if v.ID == id {
+			return v, nil
+		}
+	}
+	return volume{}, fmt.Errorf("volume %d is not on %s", id, node)
 }
 
 // grow adds count writable volumes to collection: how many it added.

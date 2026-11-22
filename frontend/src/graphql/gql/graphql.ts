@@ -1824,6 +1824,7 @@ export type Mutation = {
   bulkImportHashes: BulkImportHashesResult;
   cancelBuild: Build;
   cancelMinionTask: MinionTask;
+  cancelStorageAction: StorageAction;
   changeTaskStage: Task;
   checkMinionTarget: MinionTarget;
   cleanUpStorage: StorageAction;
@@ -1994,6 +1995,11 @@ export type MutationCancelBuildArgs = {
 
 
 export type MutationCancelMinionTaskArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationCancelStorageActionArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -2817,6 +2823,7 @@ export type Query = {
   skillChangelog: SkillChangelog;
   skillRegistry: SkillRegistry;
   skillVersions: Array<SkillVersion>;
+  storageAction?: Maybe<StorageAction>;
   storageActions: StorageActionConnection;
   storageCleanupPreview: StorageCleanupPreview;
   storageConsumers: StorageConsumerConnection;
@@ -3299,6 +3306,11 @@ export type QuerySkillVersionsArgs = {
 };
 
 
+export type QueryStorageActionArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
 export type QueryStorageActionsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
@@ -3701,6 +3713,8 @@ export type StorageAction = {
   before?: Maybe<Scalars['String']['output']>;
   bucket?: Maybe<Scalars['String']['output']>;
   bytes: Scalars['Int']['output'];
+  cancelRequestedAt?: Maybe<Scalars['String']['output']>;
+  cancelledBy?: Maybe<ModuleActor>;
   error?: Maybe<Scalars['String']['output']>;
   finishedAt?: Maybe<Scalars['String']['output']>;
   freed: Scalars['Int']['output'];
@@ -3708,9 +3722,15 @@ export type StorageAction = {
   olderThanDays?: Maybe<Scalars['Int']['output']>;
   operationId?: Maybe<Scalars['ID']['output']>;
   operationName?: Maybe<Scalars['String']['output']>;
+  plannedBytes: Scalars['Int']['output'];
+  plannedRecordings: Scalars['Int']['output'];
+  reclaimVolumes: Array<StorageReclaimVolume>;
   recordings: Scalars['Int']['output'];
   startedAt: Scalars['String']['output'];
   status: Scalars['String']['output'];
+  step?: Maybe<Scalars['String']['output']>;
+  stepAt?: Maybe<Scalars['String']['output']>;
+  vacuumPaused: Scalars['Boolean']['output'];
   volumes: Scalars['Int']['output'];
 };
 
@@ -3792,6 +3812,19 @@ export type StorageDisk = {
   total: Scalars['Int']['output'];
   used: Scalars['Int']['output'];
   volumes: Scalars['Int']['output'];
+};
+
+export type StorageReclaimVolume = {
+  bucket: Scalars['String']['output'];
+  deletedBytes: Scalars['Int']['output'];
+  finishedAt?: Maybe<Scalars['String']['output']>;
+  freed: Scalars['Int']['output'];
+  id: Scalars['Int']['output'];
+  msg?: Maybe<Scalars['String']['output']>;
+  server: Scalars['String']['output'];
+  size: Scalars['Int']['output'];
+  startedAt?: Maybe<Scalars['String']['output']>;
+  state: Scalars['String']['output'];
 };
 
 export type StorageRetention = {
@@ -5889,7 +5922,21 @@ export type StorageConsumersQueryVariables = Exact<{
 
 export type StorageConsumersQuery = { storageConsumers: { totalCount: number, edges: Array<{ cursor: string, node: { operationId?: string | null, operationName?: string | null, purpose: string, kind: string, objects: number, bytes: number } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
-export type StorageActionFieldsFragment = { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, actor: { type: string, id: string, name?: string | null } };
+export type StorageActionFieldsFragment = { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, plannedRecordings: number, plannedBytes: number, step?: string | null, stepAt?: string | null, cancelRequestedAt?: string | null, vacuumPaused: boolean, actor: { type: string, id: string, name?: string | null }, cancelledBy?: { type: string, id: string, name?: string | null } | null, reclaimVolumes: Array<{ state: string }> };
+
+export type StorageActionQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type StorageActionQuery = { storageAction?: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, plannedRecordings: number, plannedBytes: number, step?: string | null, stepAt?: string | null, cancelRequestedAt?: string | null, vacuumPaused: boolean, reclaimVolumes: Array<{ id: number, bucket: string, server: string, size: number, deletedBytes: number, state: string, freed: number, msg?: string | null, startedAt?: string | null, finishedAt?: string | null }>, actor: { type: string, id: string, name?: string | null }, cancelledBy?: { type: string, id: string, name?: string | null } | null } | null };
+
+export type CancelStorageActionMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type CancelStorageActionMutation = { cancelStorageAction: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, plannedRecordings: number, plannedBytes: number, step?: string | null, stepAt?: string | null, cancelRequestedAt?: string | null, vacuumPaused: boolean, actor: { type: string, id: string, name?: string | null }, cancelledBy?: { type: string, id: string, name?: string | null } | null, reclaimVolumes: Array<{ state: string }> } };
 
 export type StorageActionsQueryVariables = Exact<{
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -5897,26 +5944,26 @@ export type StorageActionsQueryVariables = Exact<{
 }>;
 
 
-export type StorageActionsQuery = { storageActions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, actor: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type StorageActionsQuery = { storageActions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, plannedRecordings: number, plannedBytes: number, step?: string | null, stepAt?: string | null, cancelRequestedAt?: string | null, vacuumPaused: boolean, actor: { type: string, id: string, name?: string | null }, cancelledBy?: { type: string, id: string, name?: string | null } | null, reclaimVolumes: Array<{ state: string }> } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type ReclaimStorageMutationVariables = Exact<{ [key: string]: never; }>;
 
 
-export type ReclaimStorageMutation = { reclaimStorage: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, actor: { type: string, id: string, name?: string | null } } };
+export type ReclaimStorageMutation = { reclaimStorage: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, plannedRecordings: number, plannedBytes: number, step?: string | null, stepAt?: string | null, cancelRequestedAt?: string | null, vacuumPaused: boolean, actor: { type: string, id: string, name?: string | null }, cancelledBy?: { type: string, id: string, name?: string | null } | null, reclaimVolumes: Array<{ state: string }> } };
 
 export type GrowStorageBucketMutationVariables = Exact<{
   bucket: Scalars['String']['input'];
 }>;
 
 
-export type GrowStorageBucketMutation = { growStorageBucket: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, actor: { type: string, id: string, name?: string | null } } };
+export type GrowStorageBucketMutation = { growStorageBucket: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, plannedRecordings: number, plannedBytes: number, step?: string | null, stepAt?: string | null, cancelRequestedAt?: string | null, vacuumPaused: boolean, actor: { type: string, id: string, name?: string | null }, cancelledBy?: { type: string, id: string, name?: string | null } | null, reclaimVolumes: Array<{ state: string }> } };
 
-export type StorageRetentionFieldsFragment = { enabled: boolean, olderThanDays: number, updatedAt?: string | null, nextRunAt?: string | null, updatedBy?: { type: string, id: string, name?: string | null } | null, lastRun?: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, actor: { type: string, id: string, name?: string | null } } | null };
+export type StorageRetentionFieldsFragment = { enabled: boolean, olderThanDays: number, updatedAt?: string | null, nextRunAt?: string | null, updatedBy?: { type: string, id: string, name?: string | null } | null, lastRun?: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, plannedRecordings: number, plannedBytes: number, step?: string | null, stepAt?: string | null, cancelRequestedAt?: string | null, vacuumPaused: boolean, actor: { type: string, id: string, name?: string | null }, cancelledBy?: { type: string, id: string, name?: string | null } | null, reclaimVolumes: Array<{ state: string }> } | null };
 
 export type StorageRetentionQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type StorageRetentionQuery = { storageRetention: { enabled: boolean, olderThanDays: number, updatedAt?: string | null, nextRunAt?: string | null, updatedBy?: { type: string, id: string, name?: string | null } | null, lastRun?: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, actor: { type: string, id: string, name?: string | null } } | null } };
+export type StorageRetentionQuery = { storageRetention: { enabled: boolean, olderThanDays: number, updatedAt?: string | null, nextRunAt?: string | null, updatedBy?: { type: string, id: string, name?: string | null } | null, lastRun?: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, plannedRecordings: number, plannedBytes: number, step?: string | null, stepAt?: string | null, cancelRequestedAt?: string | null, vacuumPaused: boolean, actor: { type: string, id: string, name?: string | null }, cancelledBy?: { type: string, id: string, name?: string | null } | null, reclaimVolumes: Array<{ state: string }> } | null } };
 
 export type StorageCleanupPreviewQueryVariables = Exact<{
   olderThanDays: Scalars['Int']['input'];
@@ -5933,7 +5980,7 @@ export type SetStorageRetentionMutationVariables = Exact<{
 }>;
 
 
-export type SetStorageRetentionMutation = { setStorageRetention: { enabled: boolean, olderThanDays: number, updatedAt?: string | null, nextRunAt?: string | null, updatedBy?: { type: string, id: string, name?: string | null } | null, lastRun?: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, actor: { type: string, id: string, name?: string | null } } | null } };
+export type SetStorageRetentionMutation = { setStorageRetention: { enabled: boolean, olderThanDays: number, updatedAt?: string | null, nextRunAt?: string | null, updatedBy?: { type: string, id: string, name?: string | null } | null, lastRun?: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, plannedRecordings: number, plannedBytes: number, step?: string | null, stepAt?: string | null, cancelRequestedAt?: string | null, vacuumPaused: boolean, actor: { type: string, id: string, name?: string | null }, cancelledBy?: { type: string, id: string, name?: string | null } | null, reclaimVolumes: Array<{ state: string }> } | null } };
 
 export type CleanUpStorageMutationVariables = Exact<{
   olderThanDays: Scalars['Int']['input'];
@@ -5941,7 +5988,7 @@ export type CleanUpStorageMutationVariables = Exact<{
 }>;
 
 
-export type CleanUpStorageMutation = { cleanUpStorage: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, actor: { type: string, id: string, name?: string | null } } };
+export type CleanUpStorageMutation = { cleanUpStorage: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, olderThanDays?: number | null, before?: string | null, operationId?: string | null, operationName?: string | null, recordings: number, bytes: number, plannedRecordings: number, plannedBytes: number, step?: string | null, stepAt?: string | null, cancelRequestedAt?: string | null, vacuumPaused: boolean, actor: { type: string, id: string, name?: string | null }, cancelledBy?: { type: string, id: string, name?: string | null } | null, reclaimVolumes: Array<{ state: string }> } };
 
 export type TaskFieldsFragment = { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null };
 
@@ -7911,6 +7958,20 @@ export const StorageActionFieldsFragmentDoc = new TypedDocumentString(`
   operationName
   recordings
   bytes
+  plannedRecordings
+  plannedBytes
+  step
+  stepAt
+  cancelRequestedAt
+  cancelledBy {
+    type
+    id
+    name
+  }
+  vacuumPaused
+  reclaimVolumes {
+    state
+  }
 }
     `, {"fragmentName":"StorageActionFields"}) as unknown as TypedDocumentString<StorageActionFieldsFragment, unknown>;
 export const StorageRetentionFieldsFragmentDoc = new TypedDocumentString(`
@@ -7949,6 +8010,20 @@ export const StorageRetentionFieldsFragmentDoc = new TypedDocumentString(`
   operationName
   recordings
   bytes
+  plannedRecordings
+  plannedBytes
+  step
+  stepAt
+  cancelRequestedAt
+  cancelledBy {
+    type
+    id
+    name
+  }
+  vacuumPaused
+  reclaimVolumes {
+    state
+  }
 }`, {"fragmentName":"StorageRetentionFields"}) as unknown as TypedDocumentString<StorageRetentionFieldsFragment, unknown>;
 export const TaskFieldsFragmentDoc = new TypedDocumentString(`
     fragment TaskFields on Task {
@@ -15282,6 +15357,102 @@ export const StorageConsumersDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<StorageConsumersQuery, StorageConsumersQueryVariables>;
+export const StorageActionDocument = new TypedDocumentString(`
+    query StorageAction($id: ID!) {
+  storageAction(id: $id) {
+    ...StorageActionFields
+    reclaimVolumes {
+      id
+      bucket
+      server
+      size
+      deletedBytes
+      state
+      freed
+      msg
+      startedAt
+      finishedAt
+    }
+  }
+}
+    fragment StorageActionFields on StorageAction {
+  id
+  action
+  bucket
+  actor {
+    type
+    id
+    name
+  }
+  status
+  error
+  startedAt
+  finishedAt
+  freed
+  volumes
+  olderThanDays
+  before
+  operationId
+  operationName
+  recordings
+  bytes
+  plannedRecordings
+  plannedBytes
+  step
+  stepAt
+  cancelRequestedAt
+  cancelledBy {
+    type
+    id
+    name
+  }
+  vacuumPaused
+  reclaimVolumes {
+    state
+  }
+}`) as unknown as TypedDocumentString<StorageActionQuery, StorageActionQueryVariables>;
+export const CancelStorageActionDocument = new TypedDocumentString(`
+    mutation CancelStorageAction($id: ID!) {
+  cancelStorageAction(id: $id) {
+    ...StorageActionFields
+  }
+}
+    fragment StorageActionFields on StorageAction {
+  id
+  action
+  bucket
+  actor {
+    type
+    id
+    name
+  }
+  status
+  error
+  startedAt
+  finishedAt
+  freed
+  volumes
+  olderThanDays
+  before
+  operationId
+  operationName
+  recordings
+  bytes
+  plannedRecordings
+  plannedBytes
+  step
+  stepAt
+  cancelRequestedAt
+  cancelledBy {
+    type
+    id
+    name
+  }
+  vacuumPaused
+  reclaimVolumes {
+    state
+  }
+}`) as unknown as TypedDocumentString<CancelStorageActionMutation, CancelStorageActionMutationVariables>;
 export const StorageActionsDocument = new TypedDocumentString(`
     query StorageActions($first: Int, $after: String) {
   storageActions(first: $first, after: $after) {
@@ -15319,6 +15490,20 @@ export const StorageActionsDocument = new TypedDocumentString(`
   operationName
   recordings
   bytes
+  plannedRecordings
+  plannedBytes
+  step
+  stepAt
+  cancelRequestedAt
+  cancelledBy {
+    type
+    id
+    name
+  }
+  vacuumPaused
+  reclaimVolumes {
+    state
+  }
 }`) as unknown as TypedDocumentString<StorageActionsQuery, StorageActionsQueryVariables>;
 export const ReclaimStorageDocument = new TypedDocumentString(`
     mutation ReclaimStorage {
@@ -15347,6 +15532,20 @@ export const ReclaimStorageDocument = new TypedDocumentString(`
   operationName
   recordings
   bytes
+  plannedRecordings
+  plannedBytes
+  step
+  stepAt
+  cancelRequestedAt
+  cancelledBy {
+    type
+    id
+    name
+  }
+  vacuumPaused
+  reclaimVolumes {
+    state
+  }
 }`) as unknown as TypedDocumentString<ReclaimStorageMutation, ReclaimStorageMutationVariables>;
 export const GrowStorageBucketDocument = new TypedDocumentString(`
     mutation GrowStorageBucket($bucket: String!) {
@@ -15375,6 +15574,20 @@ export const GrowStorageBucketDocument = new TypedDocumentString(`
   operationName
   recordings
   bytes
+  plannedRecordings
+  plannedBytes
+  step
+  stepAt
+  cancelRequestedAt
+  cancelledBy {
+    type
+    id
+    name
+  }
+  vacuumPaused
+  reclaimVolumes {
+    state
+  }
 }`) as unknown as TypedDocumentString<GrowStorageBucketMutation, GrowStorageBucketMutationVariables>;
 export const StorageRetentionDocument = new TypedDocumentString(`
     query StorageRetention {
@@ -15403,6 +15616,20 @@ export const StorageRetentionDocument = new TypedDocumentString(`
   operationName
   recordings
   bytes
+  plannedRecordings
+  plannedBytes
+  step
+  stepAt
+  cancelRequestedAt
+  cancelledBy {
+    type
+    id
+    name
+  }
+  vacuumPaused
+  reclaimVolumes {
+    state
+  }
 }
 fragment StorageRetentionFields on StorageRetention {
   enabled
@@ -15475,6 +15702,20 @@ export const SetStorageRetentionDocument = new TypedDocumentString(`
   operationName
   recordings
   bytes
+  plannedRecordings
+  plannedBytes
+  step
+  stepAt
+  cancelRequestedAt
+  cancelledBy {
+    type
+    id
+    name
+  }
+  vacuumPaused
+  reclaimVolumes {
+    state
+  }
 }
 fragment StorageRetentionFields on StorageRetention {
   enabled
@@ -15517,6 +15758,20 @@ export const CleanUpStorageDocument = new TypedDocumentString(`
   operationName
   recordings
   bytes
+  plannedRecordings
+  plannedBytes
+  step
+  stepAt
+  cancelRequestedAt
+  cancelledBy {
+    type
+    id
+    name
+  }
+  vacuumPaused
+  reclaimVolumes {
+    state
+  }
 }`) as unknown as TypedDocumentString<CleanUpStorageMutation, CleanUpStorageMutationVariables>;
 export const TaskDocument = new TypedDocumentString(`
     query Task($id: ID!) {

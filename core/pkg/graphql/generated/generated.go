@@ -1480,6 +1480,7 @@ type ComplexityRoot struct {
 		BulkImportHashes              func(childComplexity int, operationID string, input model.BulkImportHashesInput) int
 		CancelBuild                   func(childComplexity int, id string) int
 		CancelMinionTask              func(childComplexity int, id string) int
+		CancelStorageAction           func(childComplexity int, id string) int
 		ChangeTaskStage               func(childComplexity int, input model.ChangeTaskStageInput) int
 		CheckMinionTarget             func(childComplexity int, id string) int
 		CleanUpStorage                func(childComplexity int, olderThanDays int, operationID *string) int
@@ -1768,6 +1769,7 @@ type ComplexityRoot struct {
 		SkillChangelog                     func(childComplexity int) int
 		SkillRegistry                      func(childComplexity int) int
 		SkillVersions                      func(childComplexity int, name string) int
+		StorageAction                      func(childComplexity int, id string) int
 		StorageActions                     func(childComplexity int, first *int, after *string, last *int, before *string) int
 		StorageCleanupPreview              func(childComplexity int, olderThanDays int, first *int, after *string) int
 		StorageConsumers                   func(childComplexity int, bucket string, search *string, first *int, after *string) int
@@ -1931,22 +1933,30 @@ type ComplexityRoot struct {
 	}
 
 	StorageAction struct {
-		Action        func(childComplexity int) int
-		Actor         func(childComplexity int) int
-		Before        func(childComplexity int) int
-		Bucket        func(childComplexity int) int
-		Bytes         func(childComplexity int) int
-		Error         func(childComplexity int) int
-		FinishedAt    func(childComplexity int) int
-		Freed         func(childComplexity int) int
-		ID            func(childComplexity int) int
-		OlderThanDays func(childComplexity int) int
-		OperationID   func(childComplexity int) int
-		OperationName func(childComplexity int) int
-		Recordings    func(childComplexity int) int
-		StartedAt     func(childComplexity int) int
-		Status        func(childComplexity int) int
-		Volumes       func(childComplexity int) int
+		Action            func(childComplexity int) int
+		Actor             func(childComplexity int) int
+		Before            func(childComplexity int) int
+		Bucket            func(childComplexity int) int
+		Bytes             func(childComplexity int) int
+		CancelRequestedAt func(childComplexity int) int
+		CancelledBy       func(childComplexity int) int
+		Error             func(childComplexity int) int
+		FinishedAt        func(childComplexity int) int
+		Freed             func(childComplexity int) int
+		ID                func(childComplexity int) int
+		OlderThanDays     func(childComplexity int) int
+		OperationID       func(childComplexity int) int
+		OperationName     func(childComplexity int) int
+		PlannedBytes      func(childComplexity int) int
+		PlannedRecordings func(childComplexity int) int
+		ReclaimVolumes    func(childComplexity int) int
+		Recordings        func(childComplexity int) int
+		StartedAt         func(childComplexity int) int
+		Status            func(childComplexity int) int
+		Step              func(childComplexity int) int
+		StepAt            func(childComplexity int) int
+		VacuumPaused      func(childComplexity int) int
+		Volumes           func(childComplexity int) int
 	}
 
 	StorageActionConnection struct {
@@ -2027,6 +2037,19 @@ type ComplexityRoot struct {
 		Total      func(childComplexity int) int
 		Used       func(childComplexity int) int
 		Volumes    func(childComplexity int) int
+	}
+
+	StorageReclaimVolume struct {
+		Bucket       func(childComplexity int) int
+		DeletedBytes func(childComplexity int) int
+		FinishedAt   func(childComplexity int) int
+		Freed        func(childComplexity int) int
+		ID           func(childComplexity int) int
+		Msg          func(childComplexity int) int
+		Server       func(childComplexity int) int
+		Size         func(childComplexity int) int
+		StartedAt    func(childComplexity int) int
+		State        func(childComplexity int) int
 	}
 
 	StorageRetention struct {
@@ -2630,6 +2653,7 @@ type MutationResolver interface {
 	RemoveSkill(ctx context.Context, name string) (*model.Skill, error)
 	TransferSkill(ctx context.Context, name string, userID string) (*model.Skill, error)
 	ReclaimStorage(ctx context.Context) (*model.StorageAction, error)
+	CancelStorageAction(ctx context.Context, id string) (*model.StorageAction, error)
 	GrowStorageBucket(ctx context.Context, bucket string) (*model.StorageAction, error)
 	SetStorageRetention(ctx context.Context, enabled bool, olderThanDays int) (*model.StorageRetention, error)
 	CleanUpStorage(ctx context.Context, olderThanDays int, operationID *string) (*model.StorageAction, error)
@@ -2746,6 +2770,7 @@ type QueryResolver interface {
 	StorageStatus(ctx context.Context) (*model.StorageStatus, error)
 	StorageConsumers(ctx context.Context, bucket string, search *string, first *int, after *string) (*model.StorageConsumerConnection, error)
 	StorageActions(ctx context.Context, first *int, after *string, last *int, before *string) (*model.StorageActionConnection, error)
+	StorageAction(ctx context.Context, id string) (*model.StorageAction, error)
 	StorageRetention(ctx context.Context) (*model.StorageRetention, error)
 	StorageCleanupPreview(ctx context.Context, olderThanDays int, first *int, after *string) (*model.StorageCleanupPreview, error)
 	Task(ctx context.Context, id string) (*models.Task, error)
@@ -9193,6 +9218,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CancelMinionTask(childComplexity, args["id"].(string)), true
+	case "Mutation.cancelStorageAction":
+		if e.ComplexityRoot.Mutation.CancelStorageAction == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_cancelStorageAction_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CancelStorageAction(childComplexity, args["id"].(string)), true
 	case "Mutation.changeTaskStage":
 		if e.ComplexityRoot.Mutation.ChangeTaskStage == nil {
 			break
@@ -11499,6 +11535,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SkillVersions(childComplexity, args["name"].(string)), true
+	case "Query.storageAction":
+		if e.ComplexityRoot.Query.StorageAction == nil {
+			break
+		}
+
+		args, err := ec.field_Query_storageAction_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.StorageAction(childComplexity, args["id"].(string)), true
 	case "Query.storageActions":
 		if e.ComplexityRoot.Query.StorageActions == nil {
 			break
@@ -12454,6 +12501,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.StorageAction.Bytes(childComplexity), true
+	case "StorageAction.cancelRequestedAt":
+		if e.ComplexityRoot.StorageAction.CancelRequestedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageAction.CancelRequestedAt(childComplexity), true
+	case "StorageAction.cancelledBy":
+		if e.ComplexityRoot.StorageAction.CancelledBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageAction.CancelledBy(childComplexity), true
 	case "StorageAction.error":
 		if e.ComplexityRoot.StorageAction.Error == nil {
 			break
@@ -12496,6 +12555,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.StorageAction.OperationName(childComplexity), true
+	case "StorageAction.plannedBytes":
+		if e.ComplexityRoot.StorageAction.PlannedBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageAction.PlannedBytes(childComplexity), true
+	case "StorageAction.plannedRecordings":
+		if e.ComplexityRoot.StorageAction.PlannedRecordings == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageAction.PlannedRecordings(childComplexity), true
+	case "StorageAction.reclaimVolumes":
+		if e.ComplexityRoot.StorageAction.ReclaimVolumes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageAction.ReclaimVolumes(childComplexity), true
 	case "StorageAction.recordings":
 		if e.ComplexityRoot.StorageAction.Recordings == nil {
 			break
@@ -12514,6 +12591,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.StorageAction.Status(childComplexity), true
+	case "StorageAction.step":
+		if e.ComplexityRoot.StorageAction.Step == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageAction.Step(childComplexity), true
+	case "StorageAction.stepAt":
+		if e.ComplexityRoot.StorageAction.StepAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageAction.StepAt(childComplexity), true
+	case "StorageAction.vacuumPaused":
+		if e.ComplexityRoot.StorageAction.VacuumPaused == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageAction.VacuumPaused(childComplexity), true
 	case "StorageAction.volumes":
 		if e.ComplexityRoot.StorageAction.Volumes == nil {
 			break
@@ -12813,6 +12908,67 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.StorageDisk.Volumes(childComplexity), true
+
+	case "StorageReclaimVolume.bucket":
+		if e.ComplexityRoot.StorageReclaimVolume.Bucket == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageReclaimVolume.Bucket(childComplexity), true
+	case "StorageReclaimVolume.deletedBytes":
+		if e.ComplexityRoot.StorageReclaimVolume.DeletedBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageReclaimVolume.DeletedBytes(childComplexity), true
+	case "StorageReclaimVolume.finishedAt":
+		if e.ComplexityRoot.StorageReclaimVolume.FinishedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageReclaimVolume.FinishedAt(childComplexity), true
+	case "StorageReclaimVolume.freed":
+		if e.ComplexityRoot.StorageReclaimVolume.Freed == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageReclaimVolume.Freed(childComplexity), true
+	case "StorageReclaimVolume.id":
+		if e.ComplexityRoot.StorageReclaimVolume.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageReclaimVolume.ID(childComplexity), true
+	case "StorageReclaimVolume.msg":
+		if e.ComplexityRoot.StorageReclaimVolume.Msg == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageReclaimVolume.Msg(childComplexity), true
+	case "StorageReclaimVolume.server":
+		if e.ComplexityRoot.StorageReclaimVolume.Server == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageReclaimVolume.Server(childComplexity), true
+	case "StorageReclaimVolume.size":
+		if e.ComplexityRoot.StorageReclaimVolume.Size == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageReclaimVolume.Size(childComplexity), true
+	case "StorageReclaimVolume.startedAt":
+		if e.ComplexityRoot.StorageReclaimVolume.StartedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageReclaimVolume.StartedAt(childComplexity), true
+	case "StorageReclaimVolume.state":
+		if e.ComplexityRoot.StorageReclaimVolume.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.StorageReclaimVolume.State(childComplexity), true
 
 	case "StorageRetention.enabled":
 		if e.ComplexityRoot.StorageRetention.Enabled == nil {
@@ -19916,20 +20072,36 @@ type StorageConsumerConnection {
 # policy's.
 type StorageAction {
   id: ID!
-  # reclaim (every bucket's volumes), grow (a volume added to bucket) or
-  # cleanup (a retention cleanup of recordings: bucket is theirs).
+  # reclaim (the volumes of every bucket), grow (a volume added to bucket)
+  # or cleanup (a retention cleanup of recordings: bucket is theirs).
   action: String!
   bucket: String
   # An admin, or the retention policy (type system, id retention_policy).
   actor: ModuleActor!
-  # running, succeeded or failed (error says why).
+  # running, succeeded, failed (error says why) or cancelled (cancelledBy;
+  # error says when the cancel left something to note).
   status: String!
   error: String
   startedAt: String!
   finishedAt: String
-  # A reclaim's bytes taken off the disk; a grow's volumes added.
+  # A reclaim's bytes taken off the disk, so far while it runs; a grow's
+  # volumes added.
   freed: Int!
   volumes: Int!
+  # What a running reclaim or cleanup does now, in a few words, and since
+  # when; null once it ended.
+  step: String
+  stepAt: String
+  # An admin asked a running reclaim or cleanup to stop, and who: it stops
+  # before its next step (a volume, a recording), and ends cancelled.
+  cancelRequestedAt: String
+  cancelledBy: ModuleActor
+  # A reclaim's volumes: those deleted files held a tenth of or more as it
+  # began, the most deleted first, each as it went. Empty for the others,
+  # and for a reclaim that found none.
+  reclaimVolumes: [StorageReclaimVolume!]!
+  # A reclaim paused SeaweedFS's own vacuum, and has not resumed it yet.
+  vacuumPaused: Boolean!
   # A cleanup's: the age it takes recordings at, in days, and so the time
   # they ended before; the operation it covers (null: every operation),
   # named as it was when it ran; the recordings it took and their bytes,
@@ -19940,6 +20112,30 @@ type StorageAction {
   operationName: String
   recordings: Int!
   bytes: Int!
+  # What a cleanup found to take as it began: it takes what still matches.
+  plannedRecordings: Int!
+  plannedBytes: Int!
+}
+
+# One volume a reclaim compacts.
+type StorageReclaimVolume {
+  id: Int!
+  # Its bucket ("" for SeaweedFS's own files), and the volume server it is
+  # read on (host:port).
+  bucket: String!
+  server: String!
+  # Its bytes as the reclaim found it, and those deleted files held.
+  size: Int!
+  deletedBytes: Int!
+  # waiting, compacting, compacted (freed: the bytes it took off the disk),
+  # skipped (it needed none once reached: msg says why), failed (msg says
+  # why) or stopped (the reclaim stopped before it, or as SeaweedFS
+  # compacted it).
+  state: String!
+  freed: Int!
+  msg: String
+  startedAt: String
+  finishedAt: String
 }
 
 type StorageActionEdge {
@@ -20018,6 +20214,11 @@ extend type Query {
   storageActions(first: Int = 50, after: String, last: Int, before: String): StorageActionConnection!
     @hasPermission(permission: "storage:read")
 
+  # One action as it is now, a running one's progress with it; null for
+  # none. Needs storage:read.
+  storageAction(id: ID!): StorageAction
+    @hasPermission(permission: "storage:read")
+
   # The retention policy. Needs storage:read.
   storageRetention: StorageRetention!
     @hasPermission(permission: "storage:read")
@@ -20030,10 +20231,19 @@ extend type Query {
 }
 
 extend type Mutation {
-  # Reclaims the space deleted files hold: compacts every volume, of every
-  # bucket, that they hold a tenth of. It runs in the background: the action
-  # comes back running. Needs storage:manage (admins).
+  # Reclaims the space deleted files hold: core compacts, one at a time,
+  # every volume of every bucket they hold a tenth of or more, the most
+  # deleted first, SeaweedFS's own vacuum paused meanwhile. It runs in the
+  # background for as long as it takes, each volume kept as it goes: the
+  # action comes back running. cancelStorageAction stops it. Needs
+  # storage:manage (admins).
   reclaimStorage: StorageAction!
+    @hasPermission(permission: "storage:manage")
+
+  # Stops a running reclaim or cleanup: it stops before its next step (a
+  # volume, a recording), what it did kept, and ends cancelled. A grow ends
+  # at once: there is nothing to stop. Needs storage:manage.
+  cancelStorageAction(id: ID!): StorageAction!
     @hasPermission(permission: "storage:manage")
 
   # Adds a writable volume to a bucket, one of core's or one SeaweedFS has.
@@ -20051,8 +20261,9 @@ extend type Mutation {
   # Starts a cleanup of the recordings that ended at least olderThanDays
   # ago (1 to 3650), of one operation (null: of every one), but those of
   # tasks marked important: their files are deleted, their records kept,
-  # marked cleaned up. It runs in the background: the action comes back
-  # running. One cleanup runs at a time. Needs storage:manage.
+  # marked cleaned up. It runs in the background for as long as it takes:
+  # the action comes back running. One cleanup runs at a time;
+  # cancelStorageAction stops it. Needs storage:manage.
   cleanUpStorage(olderThanDays: Int!, operationId: ID): StorageAction!
     @hasPermission(permission: "storage:manage")
 }
@@ -21499,6 +21710,17 @@ func (ec *executionContext) field_Mutation_cancelBuild_args(ctx context.Context,
 }
 
 func (ec *executionContext) field_Mutation_cancelMinionTask_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_cancelStorageAction_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
@@ -24490,6 +24712,17 @@ func (ec *executionContext) field_Query_skillVersions_args(ctx context.Context, 
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_storageAction_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -67684,6 +67917,18 @@ func (ec *executionContext) fieldContext_Mutation_reclaimStorage(_ context.Conte
 				return ec.fieldContext_StorageAction_freed(ctx, field)
 			case "volumes":
 				return ec.fieldContext_StorageAction_volumes(ctx, field)
+			case "step":
+				return ec.fieldContext_StorageAction_step(ctx, field)
+			case "stepAt":
+				return ec.fieldContext_StorageAction_stepAt(ctx, field)
+			case "cancelRequestedAt":
+				return ec.fieldContext_StorageAction_cancelRequestedAt(ctx, field)
+			case "cancelledBy":
+				return ec.fieldContext_StorageAction_cancelledBy(ctx, field)
+			case "reclaimVolumes":
+				return ec.fieldContext_StorageAction_reclaimVolumes(ctx, field)
+			case "vacuumPaused":
+				return ec.fieldContext_StorageAction_vacuumPaused(ctx, field)
 			case "olderThanDays":
 				return ec.fieldContext_StorageAction_olderThanDays(ctx, field)
 			case "before":
@@ -67696,9 +67941,122 @@ func (ec *executionContext) fieldContext_Mutation_reclaimStorage(_ context.Conte
 				return ec.fieldContext_StorageAction_recordings(ctx, field)
 			case "bytes":
 				return ec.fieldContext_StorageAction_bytes(ctx, field)
+			case "plannedRecordings":
+				return ec.fieldContext_StorageAction_plannedRecordings(ctx, field)
+			case "plannedBytes":
+				return ec.fieldContext_StorageAction_plannedBytes(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type StorageAction", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_cancelStorageAction(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_cancelStorageAction,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CancelStorageAction(ctx, fc.Args["id"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "storage:manage")
+				if err != nil {
+					var zeroVal *model.StorageAction
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.StorageAction
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNStorageAction2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐStorageAction,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_cancelStorageAction(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_StorageAction_id(ctx, field)
+			case "action":
+				return ec.fieldContext_StorageAction_action(ctx, field)
+			case "bucket":
+				return ec.fieldContext_StorageAction_bucket(ctx, field)
+			case "actor":
+				return ec.fieldContext_StorageAction_actor(ctx, field)
+			case "status":
+				return ec.fieldContext_StorageAction_status(ctx, field)
+			case "error":
+				return ec.fieldContext_StorageAction_error(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_StorageAction_startedAt(ctx, field)
+			case "finishedAt":
+				return ec.fieldContext_StorageAction_finishedAt(ctx, field)
+			case "freed":
+				return ec.fieldContext_StorageAction_freed(ctx, field)
+			case "volumes":
+				return ec.fieldContext_StorageAction_volumes(ctx, field)
+			case "step":
+				return ec.fieldContext_StorageAction_step(ctx, field)
+			case "stepAt":
+				return ec.fieldContext_StorageAction_stepAt(ctx, field)
+			case "cancelRequestedAt":
+				return ec.fieldContext_StorageAction_cancelRequestedAt(ctx, field)
+			case "cancelledBy":
+				return ec.fieldContext_StorageAction_cancelledBy(ctx, field)
+			case "reclaimVolumes":
+				return ec.fieldContext_StorageAction_reclaimVolumes(ctx, field)
+			case "vacuumPaused":
+				return ec.fieldContext_StorageAction_vacuumPaused(ctx, field)
+			case "olderThanDays":
+				return ec.fieldContext_StorageAction_olderThanDays(ctx, field)
+			case "before":
+				return ec.fieldContext_StorageAction_before(ctx, field)
+			case "operationId":
+				return ec.fieldContext_StorageAction_operationId(ctx, field)
+			case "operationName":
+				return ec.fieldContext_StorageAction_operationName(ctx, field)
+			case "recordings":
+				return ec.fieldContext_StorageAction_recordings(ctx, field)
+			case "bytes":
+				return ec.fieldContext_StorageAction_bytes(ctx, field)
+			case "plannedRecordings":
+				return ec.fieldContext_StorageAction_plannedRecordings(ctx, field)
+			case "plannedBytes":
+				return ec.fieldContext_StorageAction_plannedBytes(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type StorageAction", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_cancelStorageAction_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -67766,6 +68124,18 @@ func (ec *executionContext) fieldContext_Mutation_growStorageBucket(ctx context.
 				return ec.fieldContext_StorageAction_freed(ctx, field)
 			case "volumes":
 				return ec.fieldContext_StorageAction_volumes(ctx, field)
+			case "step":
+				return ec.fieldContext_StorageAction_step(ctx, field)
+			case "stepAt":
+				return ec.fieldContext_StorageAction_stepAt(ctx, field)
+			case "cancelRequestedAt":
+				return ec.fieldContext_StorageAction_cancelRequestedAt(ctx, field)
+			case "cancelledBy":
+				return ec.fieldContext_StorageAction_cancelledBy(ctx, field)
+			case "reclaimVolumes":
+				return ec.fieldContext_StorageAction_reclaimVolumes(ctx, field)
+			case "vacuumPaused":
+				return ec.fieldContext_StorageAction_vacuumPaused(ctx, field)
 			case "olderThanDays":
 				return ec.fieldContext_StorageAction_olderThanDays(ctx, field)
 			case "before":
@@ -67778,6 +68148,10 @@ func (ec *executionContext) fieldContext_Mutation_growStorageBucket(ctx context.
 				return ec.fieldContext_StorageAction_recordings(ctx, field)
 			case "bytes":
 				return ec.fieldContext_StorageAction_bytes(ctx, field)
+			case "plannedRecordings":
+				return ec.fieldContext_StorageAction_plannedRecordings(ctx, field)
+			case "plannedBytes":
+				return ec.fieldContext_StorageAction_plannedBytes(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type StorageAction", field.Name)
 		},
@@ -67932,6 +68306,18 @@ func (ec *executionContext) fieldContext_Mutation_cleanUpStorage(ctx context.Con
 				return ec.fieldContext_StorageAction_freed(ctx, field)
 			case "volumes":
 				return ec.fieldContext_StorageAction_volumes(ctx, field)
+			case "step":
+				return ec.fieldContext_StorageAction_step(ctx, field)
+			case "stepAt":
+				return ec.fieldContext_StorageAction_stepAt(ctx, field)
+			case "cancelRequestedAt":
+				return ec.fieldContext_StorageAction_cancelRequestedAt(ctx, field)
+			case "cancelledBy":
+				return ec.fieldContext_StorageAction_cancelledBy(ctx, field)
+			case "reclaimVolumes":
+				return ec.fieldContext_StorageAction_reclaimVolumes(ctx, field)
+			case "vacuumPaused":
+				return ec.fieldContext_StorageAction_vacuumPaused(ctx, field)
 			case "olderThanDays":
 				return ec.fieldContext_StorageAction_olderThanDays(ctx, field)
 			case "before":
@@ -67944,6 +68330,10 @@ func (ec *executionContext) fieldContext_Mutation_cleanUpStorage(ctx context.Con
 				return ec.fieldContext_StorageAction_recordings(ctx, field)
 			case "bytes":
 				return ec.fieldContext_StorageAction_bytes(ctx, field)
+			case "plannedRecordings":
+				return ec.fieldContext_StorageAction_plannedRecordings(ctx, field)
+			case "plannedBytes":
+				return ec.fieldContext_StorageAction_plannedBytes(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type StorageAction", field.Name)
 		},
@@ -78146,6 +78536,115 @@ func (ec *executionContext) fieldContext_Query_storageActions(ctx context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_storageAction(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_storageAction,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().StorageAction(ctx, fc.Args["id"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "storage:read")
+				if err != nil {
+					var zeroVal *model.StorageAction
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.StorageAction
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalOStorageAction2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐStorageAction,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_storageAction(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_StorageAction_id(ctx, field)
+			case "action":
+				return ec.fieldContext_StorageAction_action(ctx, field)
+			case "bucket":
+				return ec.fieldContext_StorageAction_bucket(ctx, field)
+			case "actor":
+				return ec.fieldContext_StorageAction_actor(ctx, field)
+			case "status":
+				return ec.fieldContext_StorageAction_status(ctx, field)
+			case "error":
+				return ec.fieldContext_StorageAction_error(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_StorageAction_startedAt(ctx, field)
+			case "finishedAt":
+				return ec.fieldContext_StorageAction_finishedAt(ctx, field)
+			case "freed":
+				return ec.fieldContext_StorageAction_freed(ctx, field)
+			case "volumes":
+				return ec.fieldContext_StorageAction_volumes(ctx, field)
+			case "step":
+				return ec.fieldContext_StorageAction_step(ctx, field)
+			case "stepAt":
+				return ec.fieldContext_StorageAction_stepAt(ctx, field)
+			case "cancelRequestedAt":
+				return ec.fieldContext_StorageAction_cancelRequestedAt(ctx, field)
+			case "cancelledBy":
+				return ec.fieldContext_StorageAction_cancelledBy(ctx, field)
+			case "reclaimVolumes":
+				return ec.fieldContext_StorageAction_reclaimVolumes(ctx, field)
+			case "vacuumPaused":
+				return ec.fieldContext_StorageAction_vacuumPaused(ctx, field)
+			case "olderThanDays":
+				return ec.fieldContext_StorageAction_olderThanDays(ctx, field)
+			case "before":
+				return ec.fieldContext_StorageAction_before(ctx, field)
+			case "operationId":
+				return ec.fieldContext_StorageAction_operationId(ctx, field)
+			case "operationName":
+				return ec.fieldContext_StorageAction_operationName(ctx, field)
+			case "recordings":
+				return ec.fieldContext_StorageAction_recordings(ctx, field)
+			case "bytes":
+				return ec.fieldContext_StorageAction_bytes(ctx, field)
+			case "plannedRecordings":
+				return ec.fieldContext_StorageAction_plannedRecordings(ctx, field)
+			case "plannedBytes":
+				return ec.fieldContext_StorageAction_plannedBytes(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type StorageAction", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_storageAction_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_storageRetention(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -83852,6 +84351,210 @@ func (ec *executionContext) fieldContext_StorageAction_volumes(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _StorageAction_step(ctx context.Context, field graphql.CollectedField, obj *model.StorageAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageAction_step,
+		func(ctx context.Context) (any, error) {
+			return obj.Step, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageAction_step(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageAction_stepAt(ctx context.Context, field graphql.CollectedField, obj *model.StorageAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageAction_stepAt,
+		func(ctx context.Context) (any, error) {
+			return obj.StepAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageAction_stepAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageAction_cancelRequestedAt(ctx context.Context, field graphql.CollectedField, obj *model.StorageAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageAction_cancelRequestedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.CancelRequestedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageAction_cancelRequestedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageAction_cancelledBy(ctx context.Context, field graphql.CollectedField, obj *model.StorageAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageAction_cancelledBy,
+		func(ctx context.Context) (any, error) {
+			return obj.CancelledBy, nil
+		},
+		nil,
+		ec.marshalOModuleActor2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActor,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageAction_cancelledBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "type":
+				return ec.fieldContext_ModuleActor_type(ctx, field)
+			case "id":
+				return ec.fieldContext_ModuleActor_id(ctx, field)
+			case "name":
+				return ec.fieldContext_ModuleActor_name(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleActor", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageAction_reclaimVolumes(ctx context.Context, field graphql.CollectedField, obj *model.StorageAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageAction_reclaimVolumes,
+		func(ctx context.Context) (any, error) {
+			return obj.ReclaimVolumes, nil
+		},
+		nil,
+		ec.marshalNStorageReclaimVolume2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐStorageReclaimVolumeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageAction_reclaimVolumes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_StorageReclaimVolume_id(ctx, field)
+			case "bucket":
+				return ec.fieldContext_StorageReclaimVolume_bucket(ctx, field)
+			case "server":
+				return ec.fieldContext_StorageReclaimVolume_server(ctx, field)
+			case "size":
+				return ec.fieldContext_StorageReclaimVolume_size(ctx, field)
+			case "deletedBytes":
+				return ec.fieldContext_StorageReclaimVolume_deletedBytes(ctx, field)
+			case "state":
+				return ec.fieldContext_StorageReclaimVolume_state(ctx, field)
+			case "freed":
+				return ec.fieldContext_StorageReclaimVolume_freed(ctx, field)
+			case "msg":
+				return ec.fieldContext_StorageReclaimVolume_msg(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_StorageReclaimVolume_startedAt(ctx, field)
+			case "finishedAt":
+				return ec.fieldContext_StorageReclaimVolume_finishedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type StorageReclaimVolume", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageAction_vacuumPaused(ctx context.Context, field graphql.CollectedField, obj *model.StorageAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageAction_vacuumPaused,
+		func(ctx context.Context) (any, error) {
+			return obj.VacuumPaused, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageAction_vacuumPaused(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _StorageAction_olderThanDays(ctx context.Context, field graphql.CollectedField, obj *model.StorageAction) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -84026,6 +84729,64 @@ func (ec *executionContext) fieldContext_StorageAction_bytes(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _StorageAction_plannedRecordings(ctx context.Context, field graphql.CollectedField, obj *model.StorageAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageAction_plannedRecordings,
+		func(ctx context.Context) (any, error) {
+			return obj.PlannedRecordings, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageAction_plannedRecordings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageAction_plannedBytes(ctx context.Context, field graphql.CollectedField, obj *model.StorageAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageAction_plannedBytes,
+		func(ctx context.Context) (any, error) {
+			return obj.PlannedBytes, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageAction_plannedBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _StorageActionConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.StorageActionConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -84173,6 +84934,18 @@ func (ec *executionContext) fieldContext_StorageActionEdge_node(_ context.Contex
 				return ec.fieldContext_StorageAction_freed(ctx, field)
 			case "volumes":
 				return ec.fieldContext_StorageAction_volumes(ctx, field)
+			case "step":
+				return ec.fieldContext_StorageAction_step(ctx, field)
+			case "stepAt":
+				return ec.fieldContext_StorageAction_stepAt(ctx, field)
+			case "cancelRequestedAt":
+				return ec.fieldContext_StorageAction_cancelRequestedAt(ctx, field)
+			case "cancelledBy":
+				return ec.fieldContext_StorageAction_cancelledBy(ctx, field)
+			case "reclaimVolumes":
+				return ec.fieldContext_StorageAction_reclaimVolumes(ctx, field)
+			case "vacuumPaused":
+				return ec.fieldContext_StorageAction_vacuumPaused(ctx, field)
 			case "olderThanDays":
 				return ec.fieldContext_StorageAction_olderThanDays(ctx, field)
 			case "before":
@@ -84185,6 +84958,10 @@ func (ec *executionContext) fieldContext_StorageActionEdge_node(_ context.Contex
 				return ec.fieldContext_StorageAction_recordings(ctx, field)
 			case "bytes":
 				return ec.fieldContext_StorageAction_bytes(ctx, field)
+			case "plannedRecordings":
+				return ec.fieldContext_StorageAction_plannedRecordings(ctx, field)
+			case "plannedBytes":
+				return ec.fieldContext_StorageAction_plannedBytes(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type StorageAction", field.Name)
 		},
@@ -85503,6 +86280,296 @@ func (ec *executionContext) fieldContext_StorageDisk_maxVolumes(_ context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _StorageReclaimVolume_id(ctx context.Context, field graphql.CollectedField, obj *model.StorageReclaimVolume) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageReclaimVolume_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageReclaimVolume_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageReclaimVolume",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageReclaimVolume_bucket(ctx context.Context, field graphql.CollectedField, obj *model.StorageReclaimVolume) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageReclaimVolume_bucket,
+		func(ctx context.Context) (any, error) {
+			return obj.Bucket, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageReclaimVolume_bucket(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageReclaimVolume",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageReclaimVolume_server(ctx context.Context, field graphql.CollectedField, obj *model.StorageReclaimVolume) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageReclaimVolume_server,
+		func(ctx context.Context) (any, error) {
+			return obj.Server, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageReclaimVolume_server(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageReclaimVolume",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageReclaimVolume_size(ctx context.Context, field graphql.CollectedField, obj *model.StorageReclaimVolume) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageReclaimVolume_size,
+		func(ctx context.Context) (any, error) {
+			return obj.Size, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageReclaimVolume_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageReclaimVolume",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageReclaimVolume_deletedBytes(ctx context.Context, field graphql.CollectedField, obj *model.StorageReclaimVolume) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageReclaimVolume_deletedBytes,
+		func(ctx context.Context) (any, error) {
+			return obj.DeletedBytes, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageReclaimVolume_deletedBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageReclaimVolume",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageReclaimVolume_state(ctx context.Context, field graphql.CollectedField, obj *model.StorageReclaimVolume) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageReclaimVolume_state,
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageReclaimVolume_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageReclaimVolume",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageReclaimVolume_freed(ctx context.Context, field graphql.CollectedField, obj *model.StorageReclaimVolume) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageReclaimVolume_freed,
+		func(ctx context.Context) (any, error) {
+			return obj.Freed, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageReclaimVolume_freed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageReclaimVolume",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageReclaimVolume_msg(ctx context.Context, field graphql.CollectedField, obj *model.StorageReclaimVolume) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageReclaimVolume_msg,
+		func(ctx context.Context) (any, error) {
+			return obj.Msg, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageReclaimVolume_msg(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageReclaimVolume",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageReclaimVolume_startedAt(ctx context.Context, field graphql.CollectedField, obj *model.StorageReclaimVolume) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageReclaimVolume_startedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.StartedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageReclaimVolume_startedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageReclaimVolume",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _StorageReclaimVolume_finishedAt(ctx context.Context, field graphql.CollectedField, obj *model.StorageReclaimVolume) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_StorageReclaimVolume_finishedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.FinishedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_StorageReclaimVolume_finishedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "StorageReclaimVolume",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _StorageRetention_enabled(ctx context.Context, field graphql.CollectedField, obj *model.StorageRetention) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -85671,6 +86738,18 @@ func (ec *executionContext) fieldContext_StorageRetention_lastRun(_ context.Cont
 				return ec.fieldContext_StorageAction_freed(ctx, field)
 			case "volumes":
 				return ec.fieldContext_StorageAction_volumes(ctx, field)
+			case "step":
+				return ec.fieldContext_StorageAction_step(ctx, field)
+			case "stepAt":
+				return ec.fieldContext_StorageAction_stepAt(ctx, field)
+			case "cancelRequestedAt":
+				return ec.fieldContext_StorageAction_cancelRequestedAt(ctx, field)
+			case "cancelledBy":
+				return ec.fieldContext_StorageAction_cancelledBy(ctx, field)
+			case "reclaimVolumes":
+				return ec.fieldContext_StorageAction_reclaimVolumes(ctx, field)
+			case "vacuumPaused":
+				return ec.fieldContext_StorageAction_vacuumPaused(ctx, field)
 			case "olderThanDays":
 				return ec.fieldContext_StorageAction_olderThanDays(ctx, field)
 			case "before":
@@ -85683,6 +86762,10 @@ func (ec *executionContext) fieldContext_StorageRetention_lastRun(_ context.Cont
 				return ec.fieldContext_StorageAction_recordings(ctx, field)
 			case "bytes":
 				return ec.fieldContext_StorageAction_bytes(ctx, field)
+			case "plannedRecordings":
+				return ec.fieldContext_StorageAction_plannedRecordings(ctx, field)
+			case "plannedBytes":
+				return ec.fieldContext_StorageAction_plannedBytes(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type StorageAction", field.Name)
 		},
@@ -111346,6 +112429,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "cancelStorageAction":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_cancelStorageAction(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "growStorageBucket":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_growStorageBucket(ctx, field)
@@ -114053,6 +115143,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "storageAction":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_storageAction(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "storageRetention":
 			field := field
 
@@ -115895,6 +117004,24 @@ func (ec *executionContext) _StorageAction(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "step":
+			out.Values[i] = ec._StorageAction_step(ctx, field, obj)
+		case "stepAt":
+			out.Values[i] = ec._StorageAction_stepAt(ctx, field, obj)
+		case "cancelRequestedAt":
+			out.Values[i] = ec._StorageAction_cancelRequestedAt(ctx, field, obj)
+		case "cancelledBy":
+			out.Values[i] = ec._StorageAction_cancelledBy(ctx, field, obj)
+		case "reclaimVolumes":
+			out.Values[i] = ec._StorageAction_reclaimVolumes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "vacuumPaused":
+			out.Values[i] = ec._StorageAction_vacuumPaused(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "olderThanDays":
 			out.Values[i] = ec._StorageAction_olderThanDays(ctx, field, obj)
 		case "before":
@@ -115910,6 +117037,16 @@ func (ec *executionContext) _StorageAction(ctx context.Context, sel ast.Selectio
 			}
 		case "bytes":
 			out.Values[i] = ec._StorageAction_bytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "plannedRecordings":
+			out.Values[i] = ec._StorageAction_plannedRecordings(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "plannedBytes":
+			out.Values[i] = ec._StorageAction_plannedBytes(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -116507,6 +117644,81 @@ func (ec *executionContext) _StorageDisk(ctx context.Context, sel ast.SelectionS
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var storageReclaimVolumeImplementors = []string{"StorageReclaimVolume"}
+
+func (ec *executionContext) _StorageReclaimVolume(ctx context.Context, sel ast.SelectionSet, obj *model.StorageReclaimVolume) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, storageReclaimVolumeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("StorageReclaimVolume")
+		case "id":
+			out.Values[i] = ec._StorageReclaimVolume_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bucket":
+			out.Values[i] = ec._StorageReclaimVolume_bucket(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "server":
+			out.Values[i] = ec._StorageReclaimVolume_server(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._StorageReclaimVolume_size(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deletedBytes":
+			out.Values[i] = ec._StorageReclaimVolume_deletedBytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._StorageReclaimVolume_state(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "freed":
+			out.Values[i] = ec._StorageReclaimVolume_freed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "msg":
+			out.Values[i] = ec._StorageReclaimVolume_msg(ctx, field, obj)
+		case "startedAt":
+			out.Values[i] = ec._StorageReclaimVolume_startedAt(ctx, field, obj)
+		case "finishedAt":
+			out.Values[i] = ec._StorageReclaimVolume_finishedAt(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -124880,6 +126092,32 @@ func (ec *executionContext) marshalNStorageDisk2ᚖgithubᚗcomᚋlogoscoreᚋlo
 		return graphql.Null
 	}
 	return ec._StorageDisk(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNStorageReclaimVolume2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐStorageReclaimVolumeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.StorageReclaimVolume) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNStorageReclaimVolume2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐStorageReclaimVolume(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNStorageReclaimVolume2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐStorageReclaimVolume(ctx context.Context, sel ast.SelectionSet, v *model.StorageReclaimVolume) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._StorageReclaimVolume(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNStorageRetention2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐStorageRetention(ctx context.Context, sel ast.SelectionSet, v model.StorageRetention) graphql.Marshaler {

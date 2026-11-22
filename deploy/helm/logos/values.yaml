@@ -537,6 +537,9 @@ external:
     # Its master (http://host:9333), for the Storage page; empty: the page
     # shows what core's records say alone.
     masterUrl: ""
+    # Its master's gRPC address (host:port), which a reclaim compacts
+    # volumes through; empty: masterUrl's host on its port plus 10000.
+    masterGrpc: ""
 
 # -----------------------------------------------------------------------------
 # Subchart configuration

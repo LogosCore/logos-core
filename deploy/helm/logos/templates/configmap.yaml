@@ -41,6 +41,7 @@ data:
   SEAWEEDFS_S3_ENDPOINT: {{ include "logos.seaweedfs.s3Endpoint" . | quote }}
   # The Storage page's SeaweedFS (its master's API takes no credentials).
   SEAWEEDFS_MASTER_URL: {{ include "logos.seaweedfs.masterUrl" . | quote }}
+  SEAWEEDFS_MASTER_GRPC: {{ include "logos.seaweedfs.masterGrpc" . | quote }}
 
   # ----- Hocuspocus integration -----
   HOCUSPOCUS_URL: {{ include "logos.hocuspocus.internalUrl" . | quote }}

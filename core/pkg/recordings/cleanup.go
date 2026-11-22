@@ -43,14 +43,17 @@ func (s *Service) ToCleanByOperation(ctx context.Context, before time.Time) ([]m
 // its files deleted; their tasks' lists are told. One a cleanup no longer
 // takes is passed over (another took it, it was deleted, or the encoder has
 // it). At the store's first failure it stops, that recording unmarked, and
-// says it: what it took before stays taken. It answers how many it took,
-// and their bytes.
+// says it: what it took before stays taken. ctx ending stops it before its
+// next recording (ctx's error): the one under way is taken whole. It
+// answers how many it took, and their bytes.
 func (s *Service) CleanUp(ctx context.Context, recs []models.Recording, cleanup uuid.UUID) (int64, int64, error) {
 	var taken, bytes int64
+	// A recording begun is taken whole, whatever ctx does meanwhile.
+	work := context.WithoutCancel(ctx)
 	tasks := map[uuid.UUID]bool{}
 	defer func() {
 		for id := range tasks {
-			if t, err := s.tasks.AddRecording(context.WithoutCancel(ctx), id, 0, 0); err == nil {
+			if t, err := s.tasks.AddRecording(work, id, 0, 0); err == nil {
 				s.publish(t)
 			}
 		}
@@ -60,15 +63,15 @@ func (s *Service) CleanUp(ctx context.Context, recs []models.Recording, cleanup 
 			return taken, bytes, err
 		}
 		// As it is now: its video may have come since the batch was read.
-		marked, err := s.repo.MarkCleaned(ctx, rec.RecordingID, cleanup, s.now())
+		marked, err := s.repo.MarkCleaned(work, rec.RecordingID, cleanup, s.now())
 		if err != nil {
 			return taken, bytes, fmt.Errorf("mark a recording cleaned up: %w", err)
 		}
 		if marked == nil {
 			continue
 		}
-		if err := s.dropAll(ctx, *marked); err != nil {
-			if uerr := s.repo.UnmarkCleaned(context.WithoutCancel(ctx), marked.RecordingID); uerr != nil {
+		if err := s.dropAll(work, *marked); err != nil {
+			if uerr := s.repo.UnmarkCleaned(work, marked.RecordingID); uerr != nil {
 				s.logger.Warn("A recording a cleanup did not take is still marked cleaned up",
 					zap.String("recording_id", marked.RecordingID.String()), zap.Error(uerr))
 			}

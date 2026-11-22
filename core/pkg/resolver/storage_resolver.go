@@ -28,6 +28,8 @@ type IStorageResolver interface {
 	StorageCleanupPreview(ctx context.Context, olderThanDays int, first *int, after *string) (*model.StorageCleanupPreview, error)
 	SetStorageRetention(ctx context.Context, enabled bool, olderThanDays int) (*model.StorageRetention, error)
 	CleanUpStorage(ctx context.Context, olderThanDays int, operationID *string) (*model.StorageAction, error)
+	StorageAction(ctx context.Context, id string) (*model.StorageAction, error)
+	CancelStorageAction(ctx context.Context, id string) (*model.StorageAction, error)
 }
 
 // StorageService is pkg/storage's service, as the resolver uses it.
@@ -41,6 +43,8 @@ type StorageService interface {
 	SetRetention(ctx context.Context, actor models.ModuleActor, enabled bool, days int) (storage.Retention, error)
 	CleanupPreview(ctx context.Context, days int, after string, first int) (storage.CleanupPreview, error)
 	CleanUp(ctx context.Context, actor models.ModuleActor, days int, operationID *uuid.UUID) (*models.StorageAction, error)
+	Action(ctx context.Context, id uuid.UUID) (*models.StorageAction, error)
+	Cancel(ctx context.Context, actor models.ModuleActor, id uuid.UUID) (*models.StorageAction, error)
 }
 
 type storageResolver struct{ svc StorageService }
@@ -232,14 +236,47 @@ func (r *storageResolver) CleanUpStorage(ctx context.Context, olderThanDays int,
 	return storageActionModel(a), nil
 }
 
+func (r *storageResolver) StorageAction(ctx context.Context, id string) (*model.StorageAction, error) {
+	aid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid action ID")
+	}
+	a, err := r.svc.Action(ctx, aid)
+	if errors.Is(err, storage.ErrUnknownAction) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return storageActionModel(a), nil
+}
+
+func (r *storageResolver) CancelStorageAction(ctx context.Context, id string) (*model.StorageAction, error) {
+	auth, err := refuseAgent(ctx)
+	if err != nil {
+		return nil, err
+	}
+	aid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid action ID")
+	}
+	a, err := r.svc.Cancel(ctx, managementActor(auth), aid)
+	if err != nil {
+		return nil, storageError(ctx, err)
+	}
+	return storageActionModel(a), nil
+}
+
 // storageError is an action's refusal as GraphQL says it.
 func storageError(ctx context.Context, err error) error {
 	switch {
 	case errors.Is(err, storage.ErrNotConfigured), errors.Is(err, storage.ErrUnknownBucket), errors.Is(err, storage.ErrBadAge),
-		errors.Is(err, storage.ErrUnknownOperation):
+		errors.Is(err, storage.ErrUnknownOperation), errors.Is(err, storage.ErrNotCancellable):
 		return moduleGQLError(ctx, errCodeBadUserInput, err.Error())
-	case errors.Is(err, storage.ErrRunning):
+	case errors.Is(err, storage.ErrRunning), errors.Is(err, storage.ErrNotRunning):
 		return moduleGQLError(ctx, errCodeConflict, err.Error())
+	case errors.Is(err, storage.ErrUnknownAction):
+		return moduleGQLError(ctx, errCodeNotFound, "action not found")
 	}
 	return err
 }
@@ -250,7 +287,17 @@ func storageActionModel(a *models.StorageAction) *model.StorageAction {
 		Actor:  &model.ModuleActor{Type: a.Actor.Type, ID: a.Actor.ID, Name: strPtr(a.Actor.Name)},
 		Status: a.Status, Error: strPtr(a.Err), StartedAt: a.StartedAt.UTC().Format(time.RFC3339Nano), FinishedAt: taskTime(a.FinishedAt),
 		Freed: int(a.Freed), Volumes: a.Volumes, Before: taskTime(a.Before), OperationName: strPtr(a.OperationName),
-		Recordings: int(a.Recordings), Bytes: int(a.Bytes)}
+		Recordings: int(a.Recordings), Bytes: int(a.Bytes), PlannedRecordings: int(a.PlannedRecordings), PlannedBytes: int(a.PlannedBytes),
+		Step: strPtr(a.Step), StepAt: taskTime(a.StepAt), CancelRequestedAt: taskTime(a.CancelRequestedAt), VacuumPaused: a.VacuumPaused,
+		ReclaimVolumes: []*model.StorageReclaimVolume{}}
+	if by := a.CancelledBy; by != nil {
+		m.CancelledBy = &model.ModuleActor{Type: by.Type, ID: by.ID, Name: strPtr(by.Name)}
+	}
+	for _, v := range a.ReclaimVolumes {
+		m.ReclaimVolumes = append(m.ReclaimVolumes, &model.StorageReclaimVolume{ID: int(v.ID), Bucket: v.Bucket, Server: v.Server,
+			Size: int(v.Size), DeletedBytes: int(v.Deleted), State: v.State, Freed: int(v.Freed), Msg: strPtr(v.Msg),
+			StartedAt: taskTime(v.StartedAt), FinishedAt: taskTime(v.FinishedAt)})
+	}
 	if a.OlderThanDays > 0 {
 		days := a.OlderThanDays
 		m.OlderThanDays = &days

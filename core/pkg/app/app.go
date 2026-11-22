@@ -357,7 +357,7 @@ func NewApp() (*App, error) {
 	// The Storage page: SeaweedFS's master (when set) and core's records of
 	// what it keeps in each of its buckets.
 	storageCfg := storage.DefaultConfig()
-	storageCfg.MasterURL = e.SeaweedFSMasterURL
+	storageCfg.MasterURL, storageCfg.MasterGRPC = e.SeaweedFSMasterURL, e.SeaweedFSMasterGRPC
 	storageCfg.Buckets = map[string]string{
 		models.StoragePurposeMinionFiles: e.MinionFileBucket, models.StoragePurposeRecordings: e.DesktopRecordingBucket,
 		models.StoragePurposeBuilds: e.BuildBucket, models.StoragePurposeWikiImages: e.WikiImageBucket,

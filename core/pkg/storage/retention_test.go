@@ -83,7 +83,7 @@ func newCleanupRig(t *testing.T, ops fakeOps) *cleanupRig {
 	store, repo := recordingstest.NewStore(), recordingstest.NewRepo()
 	recs := recordings.NewService(repo, recordingstest.NewTasks(models.MinionTask{TaskID: uuid.New()}), store, nil,
 		recordings.DefaultConfig(), zap.NewNop())
-	svc, actions := newService(t, "", fakeUsage{}, ops)
+	svc, actions := newService(t, nil, fakeUsage{}, ops)
 	policy := &fakePolicy{p: models.StorageRetention{OlderThanDays: models.DefaultRetentionDays}}
 	svc.WithRetention(policy, recs)
 	clock := &testClock{}
@@ -182,7 +182,7 @@ func TestCleanupPreview(t *testing.T) {
 	if _, err := g.svc.CleanupPreview(context.Background(), 30, "not a cursor", 10); !errors.Is(err, ErrBadCursor) {
 		t.Errorf("a bad cursor: %v", err)
 	}
-	plain, _ := newService(t, "", fakeUsage{}, nil)
+	plain, _ := newService(t, nil, fakeUsage{}, nil)
 	if _, err := plain.CleanupPreview(context.Background(), 30, "", 10); !errors.Is(err, ErrNoRetention) {
 		t.Errorf("without cleanups: %v", err)
 	}
@@ -211,7 +211,8 @@ func TestCleanUp(t *testing.T) {
 	}
 	a, err := g.svc.CleanUp(context.Background(), alice, 30, &red)
 	if err != nil || a.Status != models.StorageActionRunning || a.Action != models.StorageActionCleanup || a.Bucket != "desktop-recordings" ||
-		a.OlderThanDays != 30 || a.Before == nil || *a.OperationID != red || a.OperationName != "Red" {
+		a.OlderThanDays != 30 || a.Before == nil || *a.OperationID != red || a.OperationName != "Red" || a.PlannedRecordings != 3 ||
+		a.PlannedBytes != 60 {
 		t.Fatalf("started %+v %v", a, err)
 	}
 	done := g.ended(t, a.ActionID)
@@ -407,4 +408,54 @@ func (g *cleanupRig) lastCleanup(t *testing.T) models.StorageAction {
 		t.Fatalf("no cleanup: %v", err)
 	}
 	return *a
+}
+
+// gatedRecordings holds each batch a cleanup takes until the test lets it
+// go, saying each one that came.
+type gatedRecordings struct {
+	Recordings
+	started chan struct{}
+	gate    chan struct{}
+}
+
+func (g gatedRecordings) CleanUp(ctx context.Context, recs []models.Recording, cleanup uuid.UUID) (int64, int64, error) {
+	g.started <- struct{}{}
+	<-g.gate
+	return g.Recordings.CleanUp(ctx, recs, cleanup)
+}
+
+// Cancel stops a cleanup before its next recording: what it took stays
+// taken, the rest keep their files, and it ends cancelled, by whom.
+func TestCleanUpCancel(t *testing.T) {
+	op := uuid.New()
+	g := newCleanupRig(t, fakeOps{{OperationID: op, Name: "Red"}})
+	g.svc.cfg.CleanupBatch = 1
+	ids := []uuid.UUID{g.add(t, op, uuid.New(), 40*day, 10), g.add(t, op, uuid.New(), 39*day, 20), g.add(t, op, uuid.New(), 38*day, 30)}
+	gated := gatedRecordings{Recordings: g.svc.recs, started: make(chan struct{}, 4), gate: make(chan struct{})}
+	g.svc.recs = gated
+	alice := models.ModuleActor{Type: "user", ID: "u1", Name: "alice"}
+	bob := models.ModuleActor{Type: "user", ID: "u2", Name: "bob"}
+
+	a, err := g.svc.CleanUp(context.Background(), alice, 30, nil)
+	if err != nil || a.PlannedRecordings != 3 || a.PlannedBytes != 60 {
+		t.Fatalf("started %+v %v", a, err)
+	}
+	<-gated.started
+	gated.gate <- struct{}{}
+	<-gated.started
+	if got := g.actions.get(a.ActionID); got.Recordings != 1 || got.Bytes != 10 || got.Step != "taking recordings: 1 taken of about 3" {
+		t.Fatalf("after its first batch %+v", got)
+	}
+	if _, err := g.svc.Cancel(context.Background(), bob, a.ActionID); err != nil {
+		t.Fatal(err)
+	}
+	gated.gate <- struct{}{}
+	done := g.ended(t, a.ActionID)
+	if done.Status != models.StorageActionCancelled || done.Err != "" || done.Recordings != 1 || done.Bytes != 10 || done.CancelledBy.Name != "bob" ||
+		done.Step != "" {
+		t.Fatalf("ended %+v", done)
+	}
+	if g.kept(t, ids[0]) || !g.kept(t, ids[1]) || !g.kept(t, ids[2]) {
+		t.Fatal("a cancelled cleanup took what it had not reached")
+	}
 }

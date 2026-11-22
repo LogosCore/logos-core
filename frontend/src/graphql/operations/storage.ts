@@ -106,6 +106,50 @@ export const StorageActionFields = graphql(`
     operationName
     recordings
     bytes
+    plannedRecordings
+    plannedBytes
+    step
+    stepAt
+    cancelRequestedAt
+    cancelledBy {
+      type
+      id
+      name
+    }
+    vacuumPaused
+    reclaimVolumes {
+      state
+    }
+  }
+`)
+
+// One action as it is now, with a reclaim's volumes: its details, read again
+// while it runs.
+export const StorageActionQuery = graphql(`
+  query StorageAction($id: ID!) {
+    storageAction(id: $id) {
+      ...StorageActionFields
+      reclaimVolumes {
+        id
+        bucket
+        server
+        size
+        deletedBytes
+        state
+        freed
+        msg
+        startedAt
+        finishedAt
+      }
+    }
+  }
+`)
+
+export const CancelStorageActionMutation = graphql(`
+  mutation CancelStorageAction($id: ID!) {
+    cancelStorageAction(id: $id) {
+      ...StorageActionFields
+    }
   }
 `)
 

@@ -5,6 +5,7 @@ import {
   bucketAbout,
   bucketName,
   bucketWarnings,
+  cancellable,
   daysText,
   defaultBucket,
   deletedShare,
@@ -13,12 +14,14 @@ import {
   parseDays,
   purposeLabel,
   recordingsText,
+  reclaimCounts,
   storeBytes,
+  volumeStateLabel,
   volumesText,
-  warningMark,
   worstLevel,
   type StorageWarning,
 } from "./storage-values"
+import { warningMark } from "./warning-mark"
 
 const warning = (level: string, bucket: string | null = null): StorageWarning => ({ level, code: "c", bucket, message: "m" })
 
@@ -68,7 +71,7 @@ describe("kinds", () => {
 })
 
 describe("actions", () => {
-  const a = (over: Partial<Parameters<typeof actionResult>[0]>) => ({
+  const a = (over: Partial<Parameters<typeof actionResult>[0]>): Parameters<typeof actionResult>[0] => ({
     action: "reclaim",
     status: "succeeded",
     error: null,
@@ -76,14 +79,65 @@ describe("actions", () => {
     volumes: 0,
     recordings: 0,
     bytes: 0,
+    plannedRecordings: 0,
+    step: null,
+    cancelRequestedAt: null,
+    cancelledBy: null,
+    reclaimVolumes: [],
     ...over,
   })
-  it("says what an action did", () => {
-    expect(actionResult(a({ freed: 3 * 1024 * 1024 }))).toBe("freed 3.0 MB")
+  const vols = (...states: string[]) => states.map((state) => ({ state }))
+  const bob = { type: "user", id: "u2", name: "bob" }
+  it("says what a grow did", () => {
     expect(actionResult(a({ action: "grow", volumes: 1 }))).toBe("added 1 volume")
     expect(actionResult(a({ action: "grow", volumes: 2 }))).toBe("added 2 volumes")
-    expect(actionResult(a({ status: "running" }))).toMatch(/^running: SeaweedFS compacts/)
     expect(actionResult(a({ action: "grow", status: "failed", error: "SeaweedFS: only 0 volumes left" }))).toBe("SeaweedFS: only 0 volumes left")
+  })
+  it("says where a reclaim is, and what it freed from how many volumes", () => {
+    const mb = 1024 * 1024
+    expect(actionResult(a({ status: "running", step: "reading the volumes" }))).toBe("reading the volumes")
+    expect(
+      actionResult(
+        a({
+          status: "running",
+          step: "compacting volume 39 of minion-files (2 of 3)",
+          freed: 3 * mb,
+          reclaimVolumes: vols("compacted", "compacting", "waiting"),
+        }),
+      ),
+    ).toBe("compacting volume 39 of minion-files (2 of 3): 1 of 3 volumes done, freed 3.0 MB so far")
+    expect(
+      actionResult(a({ status: "running", step: "compacting volume 39", cancelRequestedAt: "t", reclaimVolumes: vols("compacting") })),
+    ).toBe("stopping after this volume (compacting volume 39): 0 of 1 volume done, freed 0 B so far")
+    expect(actionResult(a({ freed: 3 * mb, reclaimVolumes: vols("compacted", "compacted", "skipped") }))).toBe(
+      "freed 3.0 MB from 2 volumes, 1 skipped",
+    )
+    expect(actionResult(a({ freed: mb, reclaimVolumes: vols("compacted") }))).toBe("freed 1.0 MB from 1 volume")
+    expect(actionResult(a({}))).toBe("nothing to compact: deleted files held a tenth of no volume")
+    expect(
+      actionResult(a({ status: "failed", error: "1 of 2 volumes were not compacted: each says why", freed: mb, reclaimVolumes: vols("compacted", "failed") })),
+    ).toBe("1 of 2 volumes were not compacted: each says why (freed 1.0 MB before)")
+    expect(actionResult(a({ status: "failed", error: "core stopped before it ended" }))).toBe("core stopped before it ended")
+    expect(
+      actionResult(a({ status: "cancelled", cancelledBy: bob, freed: mb, reclaimVolumes: vols("compacted", "stopped", "stopped") })),
+    ).toBe("cancelled by bob: freed 1.0 MB from 1 of 3 volumes")
+  })
+  it("counts a reclaim's volumes, and says which actions stop", () => {
+    expect(reclaimCounts(vols("compacted", "skipped", "failed", "stopped", "waiting", "compacting"))).toEqual({
+      total: 6,
+      compacted: 1,
+      skipped: 1,
+      failed: 1,
+      stopped: 1,
+      done: 3,
+    })
+    expect(cancellable({ action: "reclaim", status: "running", cancelRequestedAt: null })).toBe(true)
+    expect(cancellable({ action: "cleanup", status: "running", cancelRequestedAt: null })).toBe(true)
+    expect(cancellable({ action: "reclaim", status: "running", cancelRequestedAt: "t" })).toBe(false)
+    expect(cancellable({ action: "reclaim", status: "succeeded", cancelRequestedAt: null })).toBe(false)
+    expect(cancellable({ action: "grow", status: "running", cancelRequestedAt: null })).toBe(false)
+    expect(volumeStateLabel("compacted")).toBe("compacted")
+    expect(volumeStateLabel("later")).toBe("later")
   })
   it("says what a cleanup took: so far while it runs, before it failed", () => {
     const c = (over: Partial<Parameters<typeof actionResult>[0]>) => a({ action: "cleanup", ...over })
@@ -96,6 +150,14 @@ describe("actions", () => {
       "core stopped before it ended (it took 2 recordings, 1.0 KB before)",
     )
     expect(actionResult(c({ status: "failed", error: "store down" }))).toBe("store down")
+    expect(actionResult(c({ status: "running", plannedRecordings: 12, recordings: 5, bytes: 1024 }))).toBe(
+      "running: took 5 of about 12 recordings, 1.0 KB so far",
+    )
+    expect(actionResult(c({ status: "running", plannedRecordings: 12, cancelRequestedAt: "t" }))).toBe(
+      "stopping after this recording: took 0 of about 12 recordings, 0 B so far",
+    )
+    expect(actionResult(c({ status: "cancelled", cancelledBy: bob, recordings: 1, bytes: 10 }))).toBe("cancelled by bob: took 1 recording, 10 B")
+    expect(actionResult(c({ status: "cancelled" }))).toBe("cancelled: took none")
   })
   it("names it", () => {
     const t = { olderThanDays: null, operationId: null, operationName: null }

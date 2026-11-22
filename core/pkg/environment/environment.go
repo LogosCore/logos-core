@@ -50,7 +50,11 @@ type EnvironmentSettings struct {
 	// SeaweedFSMasterURL is SeaweedFS's master (http://seaweedfs-master:9333):
 	// the Storage page's disk, volumes and buckets, and their maintenance
 	// (pkg/storage). Empty: the page shows what core's records say alone.
-	SeaweedFSMasterURL string
+	// SeaweedFSMasterGRPC is its gRPC address (host:port), which a reclaim
+	// compacts volumes through: empty, the master URL's host on its port
+	// plus 10000 (SeaweedFS's own default: 19333).
+	SeaweedFSMasterURL  string
+	SeaweedFSMasterGRPC string
 
 	// JWT
 	JWTSecretKey string
@@ -301,6 +305,7 @@ func init() {
 		SeaweedFSS3SecretKey: viper.GetString("SEAWEEDFS_S3_SECRET_KEY"),
 		SeaweedFSS3Endpoint:  viper.GetString("SEAWEEDFS_S3_ENDPOINT"),
 		SeaweedFSMasterURL:   viper.GetString("SEAWEEDFS_MASTER_URL"),
+		SeaweedFSMasterGRPC:  viper.GetString("SEAWEEDFS_MASTER_GRPC"),
 
 		// JWT
 		JWTSecretKey: viper.GetString("JWT_SECRET_KEY"),

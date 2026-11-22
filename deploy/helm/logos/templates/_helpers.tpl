@@ -226,6 +226,20 @@ none: the page shows what core's records say alone.
 {{- end -}}
 
 {{/*
+SeaweedFS's master's gRPC address, a reclaim's (it compacts volumes one at a
+time through it): the bundled chart's Service, on the master's grpcPort; with
+an external SeaweedFS, external.seaweedfs.masterGrpc, or empty (core then
+takes the master URL's host, its port plus 10000).
+*/}}
+{{- define "logos.seaweedfs.masterGrpc" -}}
+{{- if .Values.seaweedfs.enabled -}}
+{{- printf "seaweedfs-master.%s.svc.cluster.local:%d" .Release.Namespace (int (dig "master" "grpcPort" 19333 .Values.seaweedfs)) -}}
+{{- else -}}
+{{- .Values.external.seaweedfs.masterGrpc | default "" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 In-cluster Service hostname for the hocuspocus internal HTTP API.
 Used by core to call the disconnect / markdown-to-yjs endpoints.
 */}}

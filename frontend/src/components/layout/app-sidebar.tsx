@@ -18,7 +18,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { warningMark } from "@/components/storage/storage-values"
+import { warningMark } from "@/components/storage/warning-mark"
 import { Permissions } from "@/constants/permissions"
 import { useStorageWarnings } from "@/graphql/hooks/storage-warnings"
 import { useAuthStore } from "@/stores/auth"

@@ -88,42 +88,112 @@ export function worstLevel(warnings: readonly Pick<StorageWarning, "level">[]): 
   return null
 }
 
-/** The sidebar's mark: the warnings that need an admin (errors and warnings, not tips), and the worst of them. */
-export function warningMark(warnings: readonly Pick<StorageWarning, "level">[]): { count: number; level: "error" | "warning" } | null {
-  const needing = warnings.filter((w) => w.level === "error" || w.level === "warning")
-  if (needing.length === 0) return null
-  return { count: needing.length, level: needing.some((w) => w.level === "error") ? "error" : "warning" }
-}
 
 /** A bucket's warnings: those that name it. */
 export function bucketWarnings(warnings: readonly StorageWarning[], name: string): StorageWarning[] {
   return warnings.filter((w) => w.bucket === name)
 }
 
-type ActionResult = Pick<StorageActionFieldsFragment, "action" | "status" | "error" | "freed" | "volumes" | "recordings" | "bytes">
+type ActionResult = Pick<
+  StorageActionFieldsFragment,
+  "action" | "status" | "error" | "freed" | "volumes" | "recordings" | "bytes" | "plannedRecordings" | "step" | "cancelRequestedAt" | "cancelledBy"
+> & { reclaimVolumes: readonly { state: string }[] }
 
-/** What an action did, in words: its result, its error, or that it runs (a cleanup's: what it took so far). */
+/** What an action did, in words: its result, its error, or where a running one is. */
 export function actionResult(a: ActionResult): string {
   if (a.action === "cleanup") return cleanupResult(a)
+  if (a.action === "reclaim") return reclaimResult(a)
   switch (a.status) {
     case "running":
-      return a.action === "reclaim" ? "running: SeaweedFS compacts the volumes" : "running"
+      return "running"
     case "failed":
       return a.error ?? "failed"
   }
-  return a.action === "reclaim" ? `freed ${formatBytes(a.freed)}` : `added ${a.volumes} ${a.volumes === 1 ? "volume" : "volumes"}`
+  return `added ${a.volumes} ${a.volumes === 1 ? "volume" : "volumes"}`
 }
 
-/** A cleanup's result: the recordings it took and their bytes; so far while it runs; before it failed. */
+/** Who stopped an action, as its result says it. */
+function cancelledText(a: Pick<ActionResult, "cancelledBy">): string {
+  return a.cancelledBy ? `cancelled by ${a.cancelledBy.name ?? a.cancelledBy.id}` : "cancelled"
+}
+
+/** A reclaim's volumes counted: all, and those compacted, skipped, failed, stopped, done (one of the first three). */
+export function reclaimCounts(volumes: readonly { state: string }[]): {
+  total: number
+  compacted: number
+  skipped: number
+  failed: number
+  stopped: number
+  done: number
+} {
+  const n = (state: string) => volumes.filter((v) => v.state === state).length
+  const compacted = n("compacted")
+  const skipped = n("skipped")
+  const failed = n("failed")
+  return { total: volumes.length, compacted, skipped, failed, stopped: n("stopped"), done: compacted + skipped + failed }
+}
+
+function volumesWord(n: number): string {
+  return n === 1 ? "volume" : "volumes"
+}
+
+/** A reclaim's result: where it is, its volumes done and what it freed; what it freed in the end, and from how many. */
+function reclaimResult(a: ActionResult): string {
+  const c = reclaimCounts(a.reclaimVolumes)
+  const freed = `freed ${formatBytes(a.freed)}`
+  switch (a.status) {
+    case "running": {
+      const doing = a.step ?? "reading the volumes"
+      const sofar = c.total > 0 ? `: ${c.done} of ${c.total} ${volumesWord(c.total)} done, ${freed} so far` : ""
+      return a.cancelRequestedAt ? `stopping after this volume (${doing})${sofar}` : `${doing}${sofar}`
+    }
+    case "failed":
+      return `${a.error ?? "failed"}${a.freed > 0 ? ` (${freed} before)` : ""}`
+    case "cancelled":
+      return `${cancelledText(a)}: ${freed} from ${c.compacted} of ${c.total} ${volumesWord(c.total)}`
+  }
+  if (c.total === 0) return "nothing to compact: deleted files held a tenth of no volume"
+  return `${freed} from ${c.compacted} ${volumesWord(c.compacted)}${c.skipped > 0 ? `, ${c.skipped} skipped` : ""}`
+}
+
+/** A cleanup's result: the recordings it took and their bytes (of about how many, while it runs); before it failed or was stopped. */
 function cleanupResult(a: ActionResult): string {
   const took = a.recordings > 0 ? `took ${recordingsText(a.recordings)}, ${formatBytes(a.bytes)}` : null
   switch (a.status) {
-    case "running":
-      return took ? `running: ${took} so far` : "running: none taken yet"
+    case "running": {
+      const doing =
+        a.plannedRecordings > 0
+          ? `took ${a.recordings.toLocaleString("en-US")} of about ${recordingsText(a.plannedRecordings)}, ${formatBytes(a.bytes)} so far`
+          : took
+            ? `${took} so far`
+            : "none taken yet"
+      return a.cancelRequestedAt ? `stopping after this recording: ${doing}` : `running: ${doing}`
+    }
     case "failed":
       return `${a.error ?? "failed"}${took ? ` (it ${took} before)` : ""}`
+    case "cancelled":
+      return `${cancelledText(a)}: ${took ?? "took none"}`
   }
   return took ?? "took none"
+}
+
+/** Whether an admin may stop an action now: a reclaim or a cleanup that runs, not asked to stop yet. */
+export function cancellable(a: Pick<StorageActionFieldsFragment, "action" | "status" | "cancelRequestedAt">): boolean {
+  return a.status === "running" && (a.action === "reclaim" || a.action === "cleanup") && !a.cancelRequestedAt
+}
+
+const VOLUME_STATES: Record<string, string> = {
+  waiting: "waiting",
+  compacting: "compacting",
+  compacted: "compacted",
+  skipped: "skipped",
+  failed: "failed",
+  stopped: "stopped",
+}
+
+/** A reclaim's volume's state in words. */
+export function volumeStateLabel(state: string): string {
+  return VOLUME_STATES[state] ?? state
 }
 
 /** How many recordings, in words. */

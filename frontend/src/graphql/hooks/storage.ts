@@ -2,10 +2,12 @@ import { useEffect, useRef } from "react"
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
 import {
+  CancelStorageActionDocument,
   CleanUpStorageDocument,
   GrowStorageBucketDocument,
   ReclaimStorageDocument,
   SetStorageRetentionDocument,
+  StorageActionDocument,
   StorageActionsDocument,
   StorageCleanupPreviewDocument,
   StorageConsumersDocument,
@@ -24,6 +26,7 @@ export const storageKeys = {
   status: () => [...storageKeys.all, "status"] as const,
   consumers: (bucket: string, search: string) => [...storageKeys.all, "consumers", bucket, search] as const,
   actions: () => [...storageKeys.all, "actions"] as const,
+  action: (id: string) => [...storageKeys.all, "action", id] as const,
   retention: () => [...storageKeys.all, "retention"] as const,
   preview: (days: number) => [...storageKeys.all, "preview", days] as const,
 }
@@ -90,6 +93,16 @@ export function useStorageCleanupPreview(days: number | null, busy = false) {
   })
 }
 
+/** One action as it is now, a reclaim's volumes with it; every 2 seconds while it runs. Nothing while id is null. */
+export function useStorageAction(id: string | null) {
+  return useQuery({
+    queryKey: storageKeys.action(id ?? ""),
+    queryFn: () => graphqlClient(StorageActionDocument, { id: id ?? "" }),
+    enabled: id !== null,
+    refetchInterval: (query) => (query.state.data?.storageAction?.status === "running" ? 2_000 : false),
+  })
+}
+
 /** After an action: the store, its warnings and the actions, read again. */
 function useRefresh() {
   const queryClient = useQueryClient()
@@ -126,6 +139,15 @@ export function useSetStorageRetention() {
   const refresh = useRefresh()
   return useMutation({
     mutationFn: (v: { enabled: boolean; olderThanDays: number }) => graphqlClient(SetStorageRetentionDocument, v),
+    onSettled: refresh,
+  })
+}
+
+/** Asks a running reclaim or cleanup to stop: it stops before its next step. */
+export function useCancelStorageAction() {
+  const refresh = useRefresh()
+  return useMutation({
+    mutationFn: (id: string) => graphqlClient(CancelStorageActionDocument, { id }),
     onSettled: refresh,
   })
 }

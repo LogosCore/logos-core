@@ -16,6 +16,11 @@ func (r *mutationResolver) ReclaimStorage(ctx context.Context) (*model.StorageAc
 	return r.StorageResolver.ReclaimStorage(ctx)
 }
 
+// CancelStorageAction is the resolver for the cancelStorageAction field.
+func (r *mutationResolver) CancelStorageAction(ctx context.Context, id string) (*model.StorageAction, error) {
+	return r.StorageResolver.CancelStorageAction(ctx, id)
+}
+
 // GrowStorageBucket is the resolver for the growStorageBucket field.
 func (r *mutationResolver) GrowStorageBucket(ctx context.Context, bucket string) (*model.StorageAction, error) {
 	return r.StorageResolver.GrowStorageBucket(ctx, bucket)
@@ -44,6 +49,11 @@ func (r *queryResolver) StorageConsumers(ctx context.Context, bucket string, sea
 // StorageActions is the resolver for the storageActions field.
 func (r *queryResolver) StorageActions(ctx context.Context, first *int, after *string, last *int, before *string) (*model.StorageActionConnection, error) {
 	return r.StorageResolver.StorageActions(ctx, first, after, last, before)
+}
+
+// StorageAction is the resolver for the storageAction field.
+func (r *queryResolver) StorageAction(ctx context.Context, id string) (*model.StorageAction, error) {
+	return r.StorageResolver.StorageAction(ctx, id)
 }
 
 // StorageRetention is the resolver for the storageRetention field.

@@ -136,9 +136,9 @@ func TestIntegrationStorageActions(t *testing.T) {
 	if err := repo.Insert(ctx, mk(models.StorageActionReclaim, "")); err != nil {
 		t.Fatalf("a reclaim after the last ended: %v", err)
 	}
-	n, err := repo.EndRunning(ctx, "core stopped before it ended", time.Now().UTC())
-	if err != nil || n != 3 {
-		t.Fatalf("ended %d running: %v", n, err)
+	left, err := repo.EndRunning(ctx, "core stopped before it ended", time.Now().UTC())
+	if err != nil || len(left) != 3 || left[0].Status != models.StorageActionRunning {
+		t.Fatalf("ended %d running: %+v %v", len(left), left, err)
 	}
 
 	page, err := repo.FindWithCursor(ctx, nil, 3, true)
@@ -175,13 +175,18 @@ func TestIntegrationStorageCleanupActions(t *testing.T) {
 		t.Fatalf("none yet: %+v %v", last, err)
 	}
 	first := cleanup(models.RetentionActor, t0)
-	if err := repo.Progress(ctx, first.ActionID, 7, 700); err != nil {
+	if err := repo.Progress(ctx, first.ActionID, models.StorageActionProgress{Step: "taking recordings", StepAt: &t0, Recordings: 7,
+		Bytes: 700}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.Finish(ctx, first.ActionID, models.StorageActionSucceeded, "", 0, 0, t0); err != nil {
-		t.Fatal(err)
+	if got, err := repo.Get(ctx, first.ActionID); err != nil || got.Step != "taking recordings" || got.StepAt == nil || got.Recordings != 7 {
+		t.Fatalf("in progress %+v %v", got, err)
 	}
-	if err := repo.Progress(ctx, first.ActionID, 8, 800); !IsNotFound(err) {
+	finished, err := repo.Finish(ctx, first.ActionID, models.StorageActionSucceeded, "", 0, 0, t0)
+	if err != nil || finished.Step != "" || finished.StepAt != nil || finished.Recordings != 7 {
+		t.Fatalf("finished %+v %v", finished, err)
+	}
+	if err := repo.Progress(ctx, first.ActionID, models.StorageActionProgress{Recordings: 8, Bytes: 800}); !IsNotFound(err) {
 		t.Errorf("progress of one ended: %v", err)
 	}
 	alice := cleanup(models.ModuleActor{Type: "user", ID: "u1", Name: "alice"}, t0.Add(time.Hour))
@@ -225,5 +230,85 @@ func TestIntegrationStorageRetention(t *testing.T) {
 	}
 	if n, err := db.Collection(storageRetentionCollection).Find(ctx, bson.M{}).Count(); err != nil || n != 1 {
 		t.Fatalf("%d documents %v", n, err)
+	}
+}
+
+// A running reclaim or cleanup is asked to stop once (the first who asked
+// is kept), one that ended or a grow is not; a reclaim's volumes are kept
+// with its progress; a reclaim says whether it paused SeaweedFS's own
+// vacuum, until it says it resumed it.
+func TestIntegrationStorageCancelAndVolumes(t *testing.T) {
+	db := integrationDB(t)
+	repo := NewStorageActionRepository(db)
+	ctx := context.Background()
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	alice, bob := models.ModuleActor{Type: "user", ID: "u1", Name: "alice"}, models.ModuleActor{Type: "user", ID: "u2", Name: "bob"}
+	reclaim := &models.StorageAction{ActionID: uuid.New(), Action: models.StorageActionReclaim, Status: models.StorageActionRunning,
+		Actor: alice, StartedAt: at}
+	grow := &models.StorageAction{ActionID: uuid.New(), Action: models.StorageActionGrow, Bucket: "b", Status: models.StorageActionRunning,
+		Actor: alice, StartedAt: at}
+	for _, a := range []*models.StorageAction{reclaim, grow} {
+		if err := repo.Insert(ctx, a); err != nil {
+			t.Fatal(err)
+		}
+	}
+	vols := []models.StorageReclaimVolume{
+		{ID: 37, Bucket: "minion-files", Server: "volume:8080", Size: 100, Deleted: 40, State: models.ReclaimVolumeCompacted, Freed: 40,
+			StartedAt: &at, FinishedAt: &at},
+		{ID: 39, Server: "volume:8080", Size: 50, Deleted: 10, State: models.ReclaimVolumeWaiting},
+	}
+	if err := repo.Progress(ctx, reclaim.ActionID, models.StorageActionProgress{Step: "compacting volume 39", StepAt: &at, Freed: 40,
+		ReclaimVolumes: vols}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetVacuumPaused(ctx, reclaim.ActionID, true); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.Get(ctx, reclaim.ActionID)
+	if err != nil || got.Freed != 40 || len(got.ReclaimVolumes) != 2 || !got.VacuumPaused {
+		t.Fatalf("its progress %+v %v", got, err)
+	}
+	if v := got.ReclaimVolumes[0]; v.ID != 37 || v.Bucket != "minion-files" || v.Server != "volume:8080" || v.Size != 100 || v.Deleted != 40 ||
+		v.State != models.ReclaimVolumeCompacted || v.Freed != 40 || !v.StartedAt.Equal(at) || !v.FinishedAt.Equal(at) {
+		t.Fatalf("its first volume %+v", v)
+	}
+	if v := got.ReclaimVolumes[1]; v.ID != 39 || v.Bucket != "" || v.State != models.ReclaimVolumeWaiting || v.StartedAt != nil {
+		t.Fatalf("its second volume %+v", v)
+	}
+	if paused, err := repo.VacuumPaused(ctx); err != nil || len(paused) != 1 || paused[0].ActionID != reclaim.ActionID {
+		t.Fatalf("paused %+v %v", paused, err)
+	}
+
+	asked, err := repo.RequestCancel(ctx, reclaim.ActionID, bob, at)
+	if err != nil || asked.CancelRequestedAt == nil || !asked.CancelRequestedAt.Equal(at) || *asked.CancelledBy != bob {
+		t.Fatalf("asked %+v %v", asked, err)
+	}
+	if again, err := repo.RequestCancel(ctx, reclaim.ActionID, alice, at.Add(time.Minute)); err != nil || *again.CancelledBy != bob ||
+		!again.CancelRequestedAt.Equal(at) {
+		t.Fatalf("asked again %+v %v", again, err)
+	}
+	if _, err := repo.RequestCancel(ctx, grow.ActionID, bob, at); !errors.Is(err, ErrStorageActionNotCancellable) {
+		t.Fatalf("a grow: %v", err)
+	}
+	if _, err := repo.Finish(ctx, reclaim.ActionID, models.StorageActionCancelled, "", 40, 0, at); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.RequestCancel(ctx, reclaim.ActionID, bob, at); !errors.Is(err, ErrStorageActionNotRunning) {
+		t.Fatalf("one ended: %v", err)
+	}
+	if _, err := repo.RequestCancel(ctx, uuid.New(), bob, at); !IsNotFound(err) {
+		t.Fatalf("none: %v", err)
+	}
+	if _, err := repo.Get(ctx, uuid.New()); !IsNotFound(err) {
+		t.Fatalf("get none: %v", err)
+	}
+	if err := repo.SetVacuumPaused(ctx, reclaim.ActionID, false); err != nil {
+		t.Fatal(err)
+	}
+	if paused, _ := repo.VacuumPaused(ctx); len(paused) != 0 {
+		t.Fatalf("resumed, still paused %+v", paused)
+	}
+	if got, _ := repo.Get(ctx, reclaim.ActionID); got.Status != models.StorageActionCancelled || got.VacuumPaused || *got.CancelledBy != bob {
+		t.Fatalf("ended %+v", got)
 	}
 }

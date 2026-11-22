@@ -1744,22 +1744,30 @@ type SkillVersion struct {
 }
 
 type StorageAction struct {
-	ID            string       `json:"id"`
-	Action        string       `json:"action"`
-	Bucket        *string      `json:"bucket,omitempty"`
-	Actor         *ModuleActor `json:"actor"`
-	Status        string       `json:"status"`
-	Error         *string      `json:"error,omitempty"`
-	StartedAt     string       `json:"startedAt"`
-	FinishedAt    *string      `json:"finishedAt,omitempty"`
-	Freed         int          `json:"freed"`
-	Volumes       int          `json:"volumes"`
-	OlderThanDays *int         `json:"olderThanDays,omitempty"`
-	Before        *string      `json:"before,omitempty"`
-	OperationID   *string      `json:"operationId,omitempty"`
-	OperationName *string      `json:"operationName,omitempty"`
-	Recordings    int          `json:"recordings"`
-	Bytes         int          `json:"bytes"`
+	ID                string                  `json:"id"`
+	Action            string                  `json:"action"`
+	Bucket            *string                 `json:"bucket,omitempty"`
+	Actor             *ModuleActor            `json:"actor"`
+	Status            string                  `json:"status"`
+	Error             *string                 `json:"error,omitempty"`
+	StartedAt         string                  `json:"startedAt"`
+	FinishedAt        *string                 `json:"finishedAt,omitempty"`
+	Freed             int                     `json:"freed"`
+	Volumes           int                     `json:"volumes"`
+	Step              *string                 `json:"step,omitempty"`
+	StepAt            *string                 `json:"stepAt,omitempty"`
+	CancelRequestedAt *string                 `json:"cancelRequestedAt,omitempty"`
+	CancelledBy       *ModuleActor            `json:"cancelledBy,omitempty"`
+	ReclaimVolumes    []*StorageReclaimVolume `json:"reclaimVolumes"`
+	VacuumPaused      bool                    `json:"vacuumPaused"`
+	OlderThanDays     *int                    `json:"olderThanDays,omitempty"`
+	Before            *string                 `json:"before,omitempty"`
+	OperationID       *string                 `json:"operationId,omitempty"`
+	OperationName     *string                 `json:"operationName,omitempty"`
+	Recordings        int                     `json:"recordings"`
+	Bytes             int                     `json:"bytes"`
+	PlannedRecordings int                     `json:"plannedRecordings"`
+	PlannedBytes      int                     `json:"plannedBytes"`
 }
 
 type StorageActionConnection struct {
@@ -1840,6 +1848,19 @@ type StorageDisk struct {
 	Free       int     `json:"free"`
 	Volumes    int     `json:"volumes"`
 	MaxVolumes int     `json:"maxVolumes"`
+}
+
+type StorageReclaimVolume struct {
+	ID           int     `json:"id"`
+	Bucket       string  `json:"bucket"`
+	Server       string  `json:"server"`
+	Size         int     `json:"size"`
+	DeletedBytes int     `json:"deletedBytes"`
+	State        string  `json:"state"`
+	Freed        int     `json:"freed"`
+	Msg          *string `json:"msg,omitempty"`
+	StartedAt    *string `json:"startedAt,omitempty"`
+	FinishedAt   *string `json:"finishedAt,omitempty"`
 }
 
 type StorageRetention struct {

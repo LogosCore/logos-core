@@ -111,20 +111,36 @@ type StorageConsumerConnection {
 # policy's.
 type StorageAction {
   id: ID!
-  # reclaim (every bucket's volumes), grow (a volume added to bucket) or
-  # cleanup (a retention cleanup of recordings: bucket is theirs).
+  # reclaim (the volumes of every bucket), grow (a volume added to bucket)
+  # or cleanup (a retention cleanup of recordings: bucket is theirs).
   action: String!
   bucket: String
   # An admin, or the retention policy (type system, id retention_policy).
   actor: ModuleActor!
-  # running, succeeded or failed (error says why).
+  # running, succeeded, failed (error says why) or cancelled (cancelledBy;
+  # error says when the cancel left something to note).
   status: String!
   error: String
   startedAt: String!
   finishedAt: String
-  # A reclaim's bytes taken off the disk; a grow's volumes added.
+  # A reclaim's bytes taken off the disk, so far while it runs; a grow's
+  # volumes added.
   freed: Int!
   volumes: Int!
+  # What a running reclaim or cleanup does now, in a few words, and since
+  # when; null once it ended.
+  step: String
+  stepAt: String
+  # An admin asked a running reclaim or cleanup to stop, and who: it stops
+  # before its next step (a volume, a recording), and ends cancelled.
+  cancelRequestedAt: String
+  cancelledBy: ModuleActor
+  # A reclaim's volumes: those deleted files held a tenth of or more as it
+  # began, the most deleted first, each as it went. Empty for the others,
+  # and for a reclaim that found none.
+  reclaimVolumes: [StorageReclaimVolume!]!
+  # A reclaim paused SeaweedFS's own vacuum, and has not resumed it yet.
+  vacuumPaused: Boolean!
   # A cleanup's: the age it takes recordings at, in days, and so the time
   # they ended before; the operation it covers (null: every operation),
   # named as it was when it ran; the recordings it took and their bytes,
@@ -135,6 +151,30 @@ type StorageAction {
   operationName: String
   recordings: Int!
   bytes: Int!
+  # What a cleanup found to take as it began: it takes what still matches.
+  plannedRecordings: Int!
+  plannedBytes: Int!
+}
+
+# One volume a reclaim compacts.
+type StorageReclaimVolume {
+  id: Int!
+  # Its bucket ("" for SeaweedFS's own files), and the volume server it is
+  # read on (host:port).
+  bucket: String!
+  server: String!
+  # Its bytes as the reclaim found it, and those deleted files held.
+  size: Int!
+  deletedBytes: Int!
+  # waiting, compacting, compacted (freed: the bytes it took off the disk),
+  # skipped (it needed none once reached: msg says why), failed (msg says
+  # why) or stopped (the reclaim stopped before it, or as SeaweedFS
+  # compacted it).
+  state: String!
+  freed: Int!
+  msg: String
+  startedAt: String
+  finishedAt: String
 }
 
 type StorageActionEdge {
@@ -213,6 +253,11 @@ extend type Query {
   storageActions(first: Int = 50, after: String, last: Int, before: String): StorageActionConnection!
     @hasPermission(permission: "storage:read")
 
+  # One action as it is now, a running one's progress with it; null for
+  # none. Needs storage:read.
+  storageAction(id: ID!): StorageAction
+    @hasPermission(permission: "storage:read")
+
   # The retention policy. Needs storage:read.
   storageRetention: StorageRetention!
     @hasPermission(permission: "storage:read")
@@ -225,10 +270,19 @@ extend type Query {
 }
 
 extend type Mutation {
-  # Reclaims the space deleted files hold: compacts every volume, of every
-  # bucket, that they hold a tenth of. It runs in the background: the action
-  # comes back running. Needs storage:manage (admins).
+  # Reclaims the space deleted files hold: core compacts, one at a time,
+  # every volume of every bucket they hold a tenth of or more, the most
+  # deleted first, SeaweedFS's own vacuum paused meanwhile. It runs in the
+  # background for as long as it takes, each volume kept as it goes: the
+  # action comes back running. cancelStorageAction stops it. Needs
+  # storage:manage (admins).
   reclaimStorage: StorageAction!
+    @hasPermission(permission: "storage:manage")
+
+  # Stops a running reclaim or cleanup: it stops before its next step (a
+  # volume, a recording), what it did kept, and ends cancelled. A grow ends
+  # at once: there is nothing to stop. Needs storage:manage.
+  cancelStorageAction(id: ID!): StorageAction!
     @hasPermission(permission: "storage:manage")
 
   # Adds a writable volume to a bucket, one of core's or one SeaweedFS has.
@@ -246,8 +300,9 @@ extend type Mutation {
   # Starts a cleanup of the recordings that ended at least olderThanDays
   # ago (1 to 3650), of one operation (null: of every one), but those of
   # tasks marked important: their files are deleted, their records kept,
-  # marked cleaned up. It runs in the background: the action comes back
-  # running. One cleanup runs at a time. Needs storage:manage.
+  # marked cleaned up. It runs in the background for as long as it takes:
+  # the action comes back running. One cleanup runs at a time;
+  # cancelStorageAction stops it. Needs storage:manage.
   cleanUpStorage(olderThanDays: Int!, operationId: ID): StorageAction!
     @hasPermission(permission: "storage:manage")
 }

@@ -48,6 +48,30 @@ func (f *fakeStorage) CleanupPreview(_ context.Context, days int, _ string, _ in
 	return f.preview, f.pageErr
 }
 
+func (f *fakeStorage) Action(_ context.Context, id uuid.UUID) (*models.StorageAction, error) {
+	for i := range f.actions {
+		if f.actions[i].ActionID == id {
+			return &f.actions[i], nil
+		}
+	}
+	return nil, storage.ErrUnknownAction
+}
+
+func (f *fakeStorage) Cancel(_ context.Context, by models.ModuleActor, id uuid.UUID) (*models.StorageAction, error) {
+	f.by = by
+	if f.err != nil {
+		return nil, f.err
+	}
+	a, err := f.Action(context.Background(), id)
+	if err != nil {
+		return nil, err
+	}
+	at := time.Now()
+	out := *a
+	out.CancelRequestedAt, out.CancelledBy = &at, &by
+	return &out, nil
+}
+
 func (f *fakeStorage) CleanUp(_ context.Context, by models.ModuleActor, days int, op *uuid.UUID) (*models.StorageAction, error) {
 	f.by, f.days, f.op = by, days, op
 	if f.err != nil {
@@ -277,6 +301,70 @@ func TestStorageRetentionAndCleanups(t *testing.T) {
 		svc.pageErr = err
 		if _, got := r.StorageCleanupPreview(context.Background(), 30, nil, nil); codeOf(got) != errCodeBadUserInput {
 			t.Errorf("a preview, %v: code %q", err, codeOf(got))
+		}
+	}
+}
+
+// One action as GraphQL has it, its progress with it: what it does now, the
+// cancel asked, a reclaim's volumes, a cleanup's plan; none is null. Cancel
+// is the asking user's, never an agent key's; what the service refuses comes
+// back coded.
+func TestStorageActionAndCancel(t *testing.T) {
+	at := time.Date(2026, 11, 22, 10, 0, 0, 0, time.UTC)
+	bob := models.ModuleActor{Type: "user", ID: "u2", Name: "bob"}
+	reclaim := models.StorageAction{ActionID: uuid.New(), Action: models.StorageActionReclaim, Status: models.StorageActionRunning,
+		Actor: models.ModuleActor{Type: "user", ID: "u1", Name: "alice"}, StartedAt: at, Freed: 40, Step: "compacting volume 39 of minion-files (2 of 5)",
+		StepAt: &at, CancelRequestedAt: &at, CancelledBy: &bob, VacuumPaused: true,
+		ReclaimVolumes: []models.StorageReclaimVolume{
+			{ID: 37, Bucket: "minion-files", Server: "volume:8080", Size: 100, Deleted: 40, State: models.ReclaimVolumeCompacted, Freed: 40,
+				StartedAt: &at, FinishedAt: &at},
+			{ID: 39, Bucket: "", Server: "volume:8080", Size: 50, Deleted: 10, State: models.ReclaimVolumeFailed, Msg: "asked 3 times"},
+		}}
+	cleanup := models.StorageAction{ActionID: uuid.New(), Action: models.StorageActionCleanup, Status: models.StorageActionRunning,
+		StartedAt: at, PlannedRecordings: 12, PlannedBytes: 3400, Recordings: 2, Bytes: 100}
+	svc := &fakeStorage{actions: []models.StorageAction{reclaim, cleanup}}
+	r := NewStorageResolver(svc)
+
+	got, err := r.StorageAction(context.Background(), reclaim.ActionID.String())
+	if err != nil || got == nil || *got.Step != "compacting volume 39 of minion-files (2 of 5)" || *got.StepAt != "2026-11-22T10:00:00Z" ||
+		*got.CancelRequestedAt != "2026-11-22T10:00:00Z" || *got.CancelledBy.Name != "bob" || !got.VacuumPaused || len(got.ReclaimVolumes) != 2 {
+		t.Fatalf("a reclaim %+v %v", got, err)
+	}
+	if v := got.ReclaimVolumes[0]; v.ID != 37 || v.Bucket != "minion-files" || v.Server != "volume:8080" || v.Size != 100 || v.DeletedBytes != 40 ||
+		v.State != models.ReclaimVolumeCompacted || v.Freed != 40 || v.Msg != nil || *v.StartedAt != "2026-11-22T10:00:00Z" || v.FinishedAt == nil {
+		t.Fatalf("a volume %+v", v)
+	}
+	if v := got.ReclaimVolumes[1]; v.Bucket != "" || *v.Msg != "asked 3 times" || v.StartedAt != nil {
+		t.Fatalf("a volume failed %+v", v)
+	}
+	if got, _ := r.StorageAction(context.Background(), cleanup.ActionID.String()); got.PlannedRecordings != 12 || got.PlannedBytes != 3400 ||
+		got.ReclaimVolumes == nil || len(got.ReclaimVolumes) != 0 || got.Step != nil || got.CancelledBy != nil {
+		t.Fatalf("a cleanup %+v", got)
+	}
+	if got, err := r.StorageAction(context.Background(), uuid.NewString()); got != nil || err != nil {
+		t.Fatalf("none: %+v %v", got, err)
+	}
+	if _, err := r.StorageAction(context.Background(), "not an id"); codeOf(err) != errCodeBadUserInput {
+		t.Fatalf("a bad id: %v", err)
+	}
+
+	user := gqlctx.WithAuthInfo(context.Background(), gqlctx.AuthInfo{UserID: uuid.NewString(), Username: "carol", Roles: []string{"admin"}})
+	agent := gqlctx.WithAuthInfo(context.Background(), gqlctx.AuthInfo{UserID: uuid.NewString(), Agent: &gqlctx.AgentInfo{}})
+	if a, err := r.CancelStorageAction(user, cleanup.ActionID.String()); err != nil || svc.by.Name != "carol" || *a.CancelledBy.Name != "carol" {
+		t.Fatalf("cancelled %+v %v", a, err)
+	}
+	if _, err := r.CancelStorageAction(agent, cleanup.ActionID.String()); codeOf(err) != errCodeForbidden {
+		t.Fatalf("an agent's cancel: %v", err)
+	}
+	if _, err := r.CancelStorageAction(user, "not an id"); codeOf(err) != errCodeBadUserInput {
+		t.Fatalf("a bad id: %v", err)
+	}
+	for err, code := range map[error]string{
+		storage.ErrNotRunning: errCodeConflict, storage.ErrNotCancellable: errCodeBadUserInput, storage.ErrUnknownAction: errCodeNotFound,
+	} {
+		svc.err = err
+		if _, got := r.CancelStorageAction(user, cleanup.ActionID.String()); codeOf(got) != code {
+			t.Errorf("a cancel, %v: code %q, want %q", err, codeOf(got), code)
 		}
 	}
 }

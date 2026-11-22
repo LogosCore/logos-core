@@ -23,9 +23,11 @@ import (
 // it would take, by operation) and run it, for every operation or one; the
 // retention policy, one for every operation, runs one each day once an
 // admin turned it on. Each run is a storage action (cleanup): one at a
-// time, in the background, a batch at a time, what it took kept as it
-// goes. The bytes come back to the disk once reclaimed (Reclaim), or once
-// SeaweedFS compacts their volumes on its own.
+// time, in the background for as long as it takes, a batch at a time,
+// what it found to take as it began and what it took kept as it goes; an
+// admin's cancel stops it before its next recording. The bytes come back
+// to the disk once reclaimed (Reclaim), or once SeaweedFS compacts their
+// volumes on its own.
 
 // Recordings are the recordings cleanups take (recordings.Service).
 type Recordings interface {
@@ -275,7 +277,8 @@ func (s *Service) CleanUp(ctx context.Context, actor models.ModuleActor, days in
 	return s.startCleanup(ctx, actor, days, op)
 }
 
-// startCleanup keeps a cleanup's action, running, and runs it.
+// startCleanup keeps a cleanup's action, running, with what it finds to
+// take now, and runs it.
 func (s *Service) startCleanup(ctx context.Context, actor models.ModuleActor, days int, op *models.Operation) (*models.StorageAction, error) {
 	now := s.now()
 	before := s.before(days)
@@ -284,6 +287,15 @@ func (s *Service) startCleanup(ctx context.Context, actor models.ModuleActor, da
 	if op != nil {
 		a.OperationID, a.OperationName = &op.OperationID, op.Name
 	}
+	groups, err := s.recs.ToCleanByOperation(ctx, before)
+	if err != nil {
+		return nil, fmt.Errorf("the recordings a cleanup takes: %w", err)
+	}
+	for _, g := range groups {
+		if op == nil || g.OperationID == op.OperationID {
+			a.PlannedRecordings, a.PlannedBytes = a.PlannedRecordings+g.Recordings, a.PlannedBytes+g.Bytes
+		}
+	}
 	if err := s.actions.Insert(ctx, a); err != nil {
 		if errors.Is(err, repository.ErrStorageActionRunning) {
 			return nil, fmt.Errorf("a cleanup: %w", ErrRunning)
@@ -291,67 +303,53 @@ func (s *Service) startCleanup(ctx context.Context, actor models.ModuleActor, da
 		return nil, err
 	}
 	s.logger.Info("storage: cleaning up recordings", zap.String("action_id", a.ActionID.String()), zap.Int("older_than_days", days),
-		zap.String("operation", a.OperationName), zap.String("by", actor.Name))
+		zap.String("operation", a.OperationName), zap.Int64("planned", a.PlannedRecordings), zap.String("by", actor.Name))
+	out := *a
+	stop := s.track(a.ActionID)
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		ctx, cancel := context.WithTimeout(s.base, s.cfg.CleanupTimeout)
-		defer cancel()
-		taken, bytes, err := s.cleanUp(ctx, a)
+		defer s.untrack(a.ActionID)
 		status, why := models.StorageActionSucceeded, ""
+		err := s.cleanUp(stop, a)
 		switch {
-		case s.base.Err() != nil:
-			status, why = models.StorageActionFailed, "core stopped before it ended"
-		case ctx.Err() != nil:
-			status, why = models.StorageActionFailed, fmt.Sprintf("it ran past its limit, %s: what it did not reach waits for the next cleanup",
-				hours(s.cfg.CleanupTimeout))
+		case stop.Err() != nil || s.stopping(stop, a.ActionID):
+			status, why = s.stoppedStatus()
 		case err != nil:
 			status, why = models.StorageActionFailed, err.Error()
 		}
-		pctx, pcancel := context.WithTimeout(context.Background(), s.cfg.CallTimeout)
-		if err := s.actions.Progress(pctx, a.ActionID, taken, bytes); err != nil {
-			s.logger.Warn("storage: keep what a cleanup took", zap.String("action_id", a.ActionID.String()), zap.Error(err))
-		}
-		pcancel()
+		s.step(a, "")
 		s.finish(a, status, why, 0, 0)
 	}()
-	return a, nil
+	return &out, nil
 }
 
 // cleanUp takes a's recordings a batch at a time, keeping what it took as
-// it goes: what it took, and why it stopped short.
-func (s *Service) cleanUp(ctx context.Context, a *models.StorageAction) (int64, int64, error) {
-	var taken, bytes int64
+// it goes, until none is left or it is to stop (stop: before its next
+// recording); why it stopped short.
+func (s *Service) cleanUp(stop context.Context, a *models.StorageAction) error {
 	for {
-		recs, err := s.recs.ToClean(ctx, *a.Before, a.OperationID, int64(s.cfg.CleanupBatch))
+		if s.stopping(stop, a.ActionID) {
+			return nil
+		}
+		recs, err := s.recs.ToClean(stop, *a.Before, a.OperationID, int64(s.cfg.CleanupBatch))
 		if err != nil {
-			return taken, bytes, fmt.Errorf("find the recordings to take: %w", err)
+			return fmt.Errorf("find the recordings to take: %w", err)
 		}
 		if len(recs) == 0 {
-			return taken, bytes, nil
+			return nil
 		}
-		n, b, err := s.recs.CleanUp(ctx, recs, a.ActionID)
-		taken, bytes = taken+n, bytes+b
-		if n > 0 {
-			if perr := s.actions.Progress(ctx, a.ActionID, taken, bytes); perr != nil && ctx.Err() == nil {
-				s.logger.Warn("storage: keep what a cleanup took", zap.String("action_id", a.ActionID.String()), zap.Error(perr))
-			}
-		}
+		s.step(a, fmt.Sprintf("taking recordings: %d taken of about %d", a.Recordings, a.PlannedRecordings))
+		n, b, err := s.recs.CleanUp(stop, recs, a.ActionID)
+		a.Recordings, a.Bytes = a.Recordings+n, a.Bytes+b
+		s.step(a, fmt.Sprintf("taking recordings: %d taken of about %d", a.Recordings, a.PlannedRecordings))
 		if err != nil {
-			return taken, bytes, err
+			return err
 		}
 		if n == 0 {
 			// The batch went to others meanwhile (a delete, the encoder):
 			// asking again would bring the same.
-			return taken, bytes, nil
+			return nil
 		}
 	}
-}
-
-// hours is a span as a limit says it: 6h, or 90m.
-func hours(d time.Duration) string {
-	if d >= time.Hour && d%time.Hour == 0 {
-		return fmt.Sprintf("%dh", d/time.Hour)
-	}
-	return fmt.Sprintf("%dm", d/time.Minute)
 }
