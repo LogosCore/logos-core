@@ -89,6 +89,9 @@ type resolvers struct {
 	// minionTargets: where bind minions are reached; pkg/minionsync calls
 	// them.
 	minionTargets resolver.IMinionTargetResolver
+	// storage is the admins' Storage page: the object store and its
+	// maintenance (pkg/storage).
+	storage resolver.IStorageResolver
 }
 
 // buildControllers constructs every REST handler. Order is not significant
@@ -257,6 +260,7 @@ func (a *App) buildResolvers() *resolvers {
 			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync, a.minionSync, a.repos.MinionFeedback,
 			a.credentialRefs, a.minionTunnels, a.recordings, a.taskComposites()), a.endpoints), a.taskFactoryCommands()),
 		minionTargets: resolver.NewMinionTargetResolver(a.minionTargets, a.repos.Build, a.repos.Operation),
+		storage:       resolver.NewStorageResolver(a.storage),
 	}
 }
 

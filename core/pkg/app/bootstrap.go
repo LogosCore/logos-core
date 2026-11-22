@@ -107,6 +107,8 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		VPNTunnel:          repository.NewVPNTunnelRepository(db),
 		VPNKey:             repository.NewVPNKeyRepository(db),
 		FsListing:          repository.NewFsListingRepository(db),
+		StorageAction:      repository.NewStorageActionRepository(db),
+		StorageUsage:       repository.NewStorageUsageRepository(db),
 	}
 
 	// Every repository above declared its indexes as it was built. A failed

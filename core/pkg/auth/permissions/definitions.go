@@ -33,4 +33,9 @@ const (
 	ModuleActionInvokePermission     string = "module:action:invoke"      // run a low-risk declared action
 	ModuleActionInvokeHighPermission string = "module:action:invoke:high" // additionally required for risk "high"
 	ModuleLogsReadPermission         string = "module:logs:read"          // live tail of a module's logs
+
+	// Storage — the object store core keeps its files in (SeaweedFS): its
+	// buckets, disk and volumes (storage.graphql).
+	StorageReadPermission   string = "storage:read"   // admin: the store's state and what core keeps there
+	StorageManagePermission string = "storage:manage" // admin: its maintenance (reclaim space, add a volume)
 )

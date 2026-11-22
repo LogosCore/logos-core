@@ -534,6 +534,9 @@ external:
     username: ""
   seaweedfs:
     s3Endpoint: ""
+    # Its master (http://host:9333), for the Storage page; empty: the page
+    # shows what core's records say alone.
+    masterUrl: ""
 
 # -----------------------------------------------------------------------------
 # Subchart configuration

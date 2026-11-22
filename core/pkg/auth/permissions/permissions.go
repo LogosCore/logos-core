@@ -30,6 +30,9 @@ func GetPermissionsByRole(role string) ([]string, error) {
 			ModuleActionInvokePermission,
 			ModuleActionInvokeHighPermission,
 			ModuleLogsReadPermission,
+
+			StorageReadPermission,
+			StorageManagePermission,
 		}, nil
 	case "user":
 		return []string{

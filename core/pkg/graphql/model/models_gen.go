@@ -1742,6 +1742,99 @@ type SkillVersion struct {
 	ViaAgent           bool   `json:"viaAgent"`
 }
 
+type StorageAction struct {
+	ID         string       `json:"id"`
+	Action     string       `json:"action"`
+	Bucket     *string      `json:"bucket,omitempty"`
+	Actor      *ModuleActor `json:"actor"`
+	Status     string       `json:"status"`
+	Error      *string      `json:"error,omitempty"`
+	StartedAt  string       `json:"startedAt"`
+	FinishedAt *string      `json:"finishedAt,omitempty"`
+	Freed      int          `json:"freed"`
+	Volumes    int          `json:"volumes"`
+}
+
+type StorageActionConnection struct {
+	Edges      []*StorageActionEdge `json:"edges"`
+	PageInfo   *pagination.PageInfo `json:"pageInfo"`
+	TotalCount int                  `json:"totalCount"`
+}
+
+type StorageActionEdge struct {
+	Node   *StorageAction `json:"node"`
+	Cursor string         `json:"cursor"`
+}
+
+type StorageBucket struct {
+	Name            string   `json:"name"`
+	Purposes        []string `json:"purposes"`
+	Volumes         int      `json:"volumes"`
+	WritableVolumes int      `json:"writableVolumes"`
+	ReadOnlyVolumes int      `json:"readOnlyVolumes"`
+	Size            int      `json:"size"`
+	DeletedBytes    int      `json:"deletedBytes"`
+	Objects         int      `json:"objects"`
+	ObjectBytes     int      `json:"objectBytes"`
+}
+
+type StorageConsumer struct {
+	OperationID   *string `json:"operationId,omitempty"`
+	OperationName *string `json:"operationName,omitempty"`
+	Purpose       string  `json:"purpose"`
+	Kind          string  `json:"kind"`
+	Objects       int     `json:"objects"`
+	Bytes         int     `json:"bytes"`
+}
+
+type StorageConsumerConnection struct {
+	Edges      []*StorageConsumerEdge `json:"edges"`
+	PageInfo   *pagination.PageInfo   `json:"pageInfo"`
+	TotalCount int                    `json:"totalCount"`
+}
+
+type StorageConsumerEdge struct {
+	Node   *StorageConsumer `json:"node"`
+	Cursor string           `json:"cursor"`
+}
+
+type StorageDisk struct {
+	Node       string  `json:"node"`
+	Dir        *string `json:"dir,omitempty"`
+	Error      *string `json:"error,omitempty"`
+	Total      int     `json:"total"`
+	Used       int     `json:"used"`
+	Free       int     `json:"free"`
+	Volumes    int     `json:"volumes"`
+	MaxVolumes int     `json:"maxVolumes"`
+}
+
+type StorageSeaweedFs struct {
+	Configured bool    `json:"configured"`
+	Reachable  bool    `json:"reachable"`
+	Error      *string `json:"error,omitempty"`
+	Version    *string `json:"version,omitempty"`
+	Leader     *string `json:"leader,omitempty"`
+	Slots      int     `json:"slots"`
+	FreeSlots  int     `json:"freeSlots"`
+}
+
+type StorageStatus struct {
+	At           string            `json:"at"`
+	Seaweedfs    *StorageSeaweedFs `json:"seaweedfs"`
+	Disks        []*StorageDisk    `json:"disks"`
+	Buckets      []*StorageBucket  `json:"buckets"`
+	Warnings     []*StorageWarning `json:"warnings"`
+	RecordsError *string           `json:"recordsError,omitempty"`
+}
+
+type StorageWarning struct {
+	Level   string  `json:"level"`
+	Code    string  `json:"code"`
+	Bucket  *string `json:"bucket,omitempty"`
+	Message string  `json:"message"`
+}
+
 type Subscription struct {
 }
 

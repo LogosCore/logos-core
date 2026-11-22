@@ -34,12 +34,14 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/minionsync"
 	"github.com/logoscore/logos-core/core/pkg/miniontargets"
 	"github.com/logoscore/logos-core/core/pkg/miniontunnels"
+	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/modulegate"
 	"github.com/logoscore/logos-core/core/pkg/modulelogs"
 	"github.com/logoscore/logos-core/core/pkg/modulemgmt"
 	"github.com/logoscore/logos-core/core/pkg/recordings"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/skills"
+	"github.com/logoscore/logos-core/core/pkg/storage"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
 	transferjob "github.com/logoscore/logos-core/core/pkg/wikitransfer/job"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -109,6 +111,10 @@ type Repositories struct {
 	WikiTransferJob    repository.IWikiTransferJobRepository
 	Skill              repository.ISkillRepository
 	SkillSubscription  repository.ISkillSubscriptionRepository
+	// StorageAction keeps the store's maintenance actions; StorageUsage sums
+	// core's records of what it keeps there (pkg/storage).
+	StorageAction repository.IStorageActionRepository
+	StorageUsage  repository.IStorageUsageRepository
 }
 
 type App struct {
@@ -202,6 +208,9 @@ type App struct {
 	// name.
 	credentialRefs *credentialrefs.Resolver
 	stopTargets    context.CancelFunc
+	// storage reads the object store and core's records of what it keeps
+	// there, for the Storage page, and runs its maintenance.
+	storage *storage.Service
 
 	// Future integration points:
 	// sseManager       sse.ISSEManager
@@ -343,6 +352,17 @@ func NewApp() (*App, error) {
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildLog, buildSvc.HandleLog)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
 
+	// The Storage page: SeaweedFS's master (when set) and core's records of
+	// what it keeps in each of its buckets.
+	storageCfg := storage.DefaultConfig()
+	storageCfg.MasterURL = e.SeaweedFSMasterURL
+	storageCfg.Buckets = map[string]string{
+		models.StoragePurposeMinionFiles: e.MinionFileBucket, models.StoragePurposeRecordings: e.DesktopRecordingBucket,
+		models.StoragePurposeBuilds: e.BuildBucket, models.StoragePurposeWikiImages: e.WikiImageBucket,
+		models.StoragePurposeWikiFiles: e.WikiFileBucket, models.StoragePurposeSkills: e.SkillBucket,
+	}
+	storageSvc := storage.New(storageCfg, repos.StorageUsage, repos.StorageAction, repos.Operation, l.Named("storage"))
+
 	// --- Future integration patterns ---
 	//
 	// SSE (subscribes to event bus):
@@ -406,6 +426,7 @@ func NewApp() (*App, error) {
 		factoryLinks:    factoryLinks,
 		minionTargets:   minionTargets,
 		credentialRefs:  credentialRefs,
+		storage:         storageSvc,
 	}, nil
 }
 
@@ -509,6 +530,7 @@ func (a *App) startLifecycle() {
 	a.minionTunnels.Start(context.Background())
 	a.composites.Start()
 	a.factoryCommands.Start()
+	a.storage.Start()
 	stopTasks, stopDelegates := a.minionSync.WatchTasks(), a.minionSync.WatchDelegates()
 	a.stopTaskWatch = func() { stopTasks(); stopDelegates() }
 	targetsCtx, stopTargets := context.WithCancel(context.Background())
@@ -536,6 +558,9 @@ func (a *App) stopLifecycle() {
 	}
 	if a.factoryCommands != nil {
 		a.factoryCommands.Stop()
+	}
+	if a.storage != nil {
+		a.storage.Stop()
 	}
 	if a.minionFiles != nil {
 		a.minionFiles.Stop()

@@ -22,6 +22,7 @@ export const pageLoaders = {
   "/builds": () => import("@/pages/builds"),
   "/sessions": () => import("@/pages/minion-sessions"),
   "/ports": () => import("@/pages/ports"),
+  "/storage": () => import("@/pages/storage"),
   "/agents": () => import("@/pages/agents"),
   "/timeline": () => import("@/pages/timeline"),
 } as const

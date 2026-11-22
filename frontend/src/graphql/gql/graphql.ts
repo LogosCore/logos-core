@@ -1867,6 +1867,7 @@ export type Mutation = {
   disconnectMinionVPNClient: MinionTask;
   duplicateWikiDocument: WikiDocument;
   emptyWikiDocumentTrash: Scalars['Boolean']['output'];
+  growStorageBucket: StorageAction;
   importLocalPreferences: User;
   instantiateTemplate: WikiDocument;
   invokeModuleAction: ModuleActionInvocation;
@@ -1878,6 +1879,7 @@ export type Mutation = {
   publishOperatorFocus: Scalars['Boolean']['output'];
   purgeTask: Scalars['Boolean']['output'];
   queueMinionTask: MinionTask;
+  reclaimStorage: StorageAction;
   recordIconUse: User;
   regenerateAgentKey: AgentKeyWithSecret;
   regenerateMyAPIKey: ApiKeyWithSecret;
@@ -2211,6 +2213,11 @@ export type MutationDuplicateWikiDocumentArgs = {
 
 export type MutationEmptyWikiDocumentTrashArgs = {
   operationId: Scalars['ID']['input'];
+};
+
+
+export type MutationGrowStorageBucketArgs = {
+  bucket: Scalars['String']['input'];
 };
 
 
@@ -2796,6 +2803,9 @@ export type Query = {
   skillChangelog: SkillChangelog;
   skillRegistry: SkillRegistry;
   skillVersions: Array<SkillVersion>;
+  storageActions: StorageActionConnection;
+  storageConsumers: StorageConsumerConnection;
+  storageStatus: StorageStatus;
   task: Task;
   taskTrash: TaskConnection;
   tasks: TaskConnection;
@@ -3273,6 +3283,22 @@ export type QuerySkillVersionsArgs = {
 };
 
 
+export type QueryStorageActionsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryStorageConsumersArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  bucket: Scalars['String']['input'];
+  first?: InputMaybe<Scalars['Int']['input']>;
+  search?: InputMaybe<Scalars['String']['input']>;
+};
+
+
 export type QueryTaskArgs = {
   id: Scalars['ID']['input'];
 };
@@ -3644,6 +3670,99 @@ export type SkillVersion = {
 export type SortDirection =
   | 'ASC'
   | 'DESC';
+
+export type StorageAction = {
+  action: Scalars['String']['output'];
+  actor: ModuleActor;
+  bucket?: Maybe<Scalars['String']['output']>;
+  error?: Maybe<Scalars['String']['output']>;
+  finishedAt?: Maybe<Scalars['String']['output']>;
+  freed: Scalars['Int']['output'];
+  id: Scalars['ID']['output'];
+  startedAt: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  volumes: Scalars['Int']['output'];
+};
+
+export type StorageActionConnection = {
+  edges: Array<StorageActionEdge>;
+  pageInfo: PageInfo;
+  totalCount: Scalars['Int']['output'];
+};
+
+export type StorageActionEdge = {
+  cursor: Scalars['String']['output'];
+  node: StorageAction;
+};
+
+export type StorageBucket = {
+  deletedBytes: Scalars['Int']['output'];
+  name: Scalars['String']['output'];
+  objectBytes: Scalars['Int']['output'];
+  objects: Scalars['Int']['output'];
+  purposes: Array<Scalars['String']['output']>;
+  readOnlyVolumes: Scalars['Int']['output'];
+  size: Scalars['Int']['output'];
+  volumes: Scalars['Int']['output'];
+  writableVolumes: Scalars['Int']['output'];
+};
+
+export type StorageConsumer = {
+  bytes: Scalars['Int']['output'];
+  kind: Scalars['String']['output'];
+  objects: Scalars['Int']['output'];
+  operationId?: Maybe<Scalars['ID']['output']>;
+  operationName?: Maybe<Scalars['String']['output']>;
+  purpose: Scalars['String']['output'];
+};
+
+export type StorageConsumerConnection = {
+  edges: Array<StorageConsumerEdge>;
+  pageInfo: PageInfo;
+  totalCount: Scalars['Int']['output'];
+};
+
+export type StorageConsumerEdge = {
+  cursor: Scalars['String']['output'];
+  node: StorageConsumer;
+};
+
+export type StorageDisk = {
+  dir?: Maybe<Scalars['String']['output']>;
+  error?: Maybe<Scalars['String']['output']>;
+  free: Scalars['Int']['output'];
+  maxVolumes: Scalars['Int']['output'];
+  node: Scalars['String']['output'];
+  total: Scalars['Int']['output'];
+  used: Scalars['Int']['output'];
+  volumes: Scalars['Int']['output'];
+};
+
+export type StorageSeaweedFs = {
+  configured: Scalars['Boolean']['output'];
+  error?: Maybe<Scalars['String']['output']>;
+  freeSlots: Scalars['Int']['output'];
+  leader?: Maybe<Scalars['String']['output']>;
+  reachable: Scalars['Boolean']['output'];
+  slots: Scalars['Int']['output'];
+  version?: Maybe<Scalars['String']['output']>;
+};
+
+export type StorageStatus = {
+  at: Scalars['String']['output'];
+  buckets: Array<StorageBucket>;
+  disks: Array<StorageDisk>;
+  recordsError?: Maybe<Scalars['String']['output']>;
+  seaweedfs: StorageSeaweedFs;
+  warnings: Array<StorageWarning>;
+};
+
+export type StorageWarning = {
+  bucket?: Maybe<Scalars['String']['output']>;
+  code: Scalars['String']['output'];
+  level: Scalars['String']['output'];
+  message: Scalars['String']['output'];
+};
 
 export type Subscription = {
   agentActivity: AgentActivityEvent;
@@ -5685,6 +5804,48 @@ export type SkillChangedSubscriptionVariables = Exact<{ [key: string]: never; }>
 
 export type SkillChangedSubscription = { skillChanged: { action: EventAction, skillId: string, name: string } };
 
+export type StorageStatusQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type StorageStatusQuery = { storageStatus: { at: string, recordsError?: string | null, seaweedfs: { configured: boolean, reachable: boolean, error?: string | null, version?: string | null, leader?: string | null, slots: number, freeSlots: number }, disks: Array<{ node: string, dir?: string | null, error?: string | null, total: number, used: number, free: number, volumes: number, maxVolumes: number }>, buckets: Array<{ name: string, purposes: Array<string>, volumes: number, writableVolumes: number, readOnlyVolumes: number, size: number, deletedBytes: number, objects: number, objectBytes: number }>, warnings: Array<{ level: string, code: string, bucket?: string | null, message: string }> } };
+
+export type StorageWarningsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type StorageWarningsQuery = { storageStatus: { warnings: Array<{ level: string }> } };
+
+export type StorageConsumersQueryVariables = Exact<{
+  bucket: Scalars['String']['input'];
+  search?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type StorageConsumersQuery = { storageConsumers: { totalCount: number, edges: Array<{ cursor: string, node: { operationId?: string | null, operationName?: string | null, purpose: string, kind: string, objects: number, bytes: number } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+
+export type StorageActionFieldsFragment = { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, actor: { type: string, id: string, name?: string | null } };
+
+export type StorageActionsQueryVariables = Exact<{
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type StorageActionsQuery = { storageActions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, actor: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+
+export type ReclaimStorageMutationVariables = Exact<{ [key: string]: never; }>;
+
+
+export type ReclaimStorageMutation = { reclaimStorage: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, actor: { type: string, id: string, name?: string | null } } };
+
+export type GrowStorageBucketMutationVariables = Exact<{
+  bucket: Scalars['String']['input'];
+}>;
+
+
+export type GrowStorageBucketMutation = { growStorageBucket: { id: string, action: string, bucket?: string | null, status: string, error?: string | null, startedAt: string, finishedAt?: string | null, freed: number, volumes: number, actor: { type: string, id: string, name?: string | null } } };
+
 export type TaskFieldsFragment = { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null };
 
 export type TaskBacklinkFieldsFragment = { id: string, operationId: string, name: string, stage: TaskStage, status: TaskStatus, riskScore: number, profitScore: number, assignees: Array<{ id: string, username: string }> };
@@ -7631,6 +7792,24 @@ export const SessionFieldsFragmentDoc = new TypedDocumentString(`
   updatedAt
 }
     `, {"fragmentName":"SessionFields"}) as unknown as TypedDocumentString<SessionFieldsFragment, unknown>;
+export const StorageActionFieldsFragmentDoc = new TypedDocumentString(`
+    fragment StorageActionFields on StorageAction {
+  id
+  action
+  bucket
+  actor {
+    type
+    id
+    name
+  }
+  status
+  error
+  startedAt
+  finishedAt
+  freed
+  volumes
+}
+    `, {"fragmentName":"StorageActionFields"}) as unknown as TypedDocumentString<StorageActionFieldsFragment, unknown>;
 export const TaskFieldsFragmentDoc = new TypedDocumentString(`
     fragment TaskFields on Task {
   id
@@ -14887,6 +15066,157 @@ export const SkillChangedDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<SkillChangedSubscription, SkillChangedSubscriptionVariables>;
+export const StorageStatusDocument = new TypedDocumentString(`
+    query StorageStatus {
+  storageStatus {
+    at
+    recordsError
+    seaweedfs {
+      configured
+      reachable
+      error
+      version
+      leader
+      slots
+      freeSlots
+    }
+    disks {
+      node
+      dir
+      error
+      total
+      used
+      free
+      volumes
+      maxVolumes
+    }
+    buckets {
+      name
+      purposes
+      volumes
+      writableVolumes
+      readOnlyVolumes
+      size
+      deletedBytes
+      objects
+      objectBytes
+    }
+    warnings {
+      level
+      code
+      bucket
+      message
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<StorageStatusQuery, StorageStatusQueryVariables>;
+export const StorageWarningsDocument = new TypedDocumentString(`
+    query StorageWarnings {
+  storageStatus {
+    warnings {
+      level
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<StorageWarningsQuery, StorageWarningsQueryVariables>;
+export const StorageConsumersDocument = new TypedDocumentString(`
+    query StorageConsumers($bucket: String!, $search: String, $first: Int, $after: String) {
+  storageConsumers(bucket: $bucket, search: $search, first: $first, after: $after) {
+    edges {
+      cursor
+      node {
+        operationId
+        operationName
+        purpose
+        kind
+        objects
+        bytes
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    totalCount
+  }
+}
+    `) as unknown as TypedDocumentString<StorageConsumersQuery, StorageConsumersQueryVariables>;
+export const StorageActionsDocument = new TypedDocumentString(`
+    query StorageActions($first: Int, $after: String) {
+  storageActions(first: $first, after: $after) {
+    edges {
+      cursor
+      node {
+        ...StorageActionFields
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    totalCount
+  }
+}
+    fragment StorageActionFields on StorageAction {
+  id
+  action
+  bucket
+  actor {
+    type
+    id
+    name
+  }
+  status
+  error
+  startedAt
+  finishedAt
+  freed
+  volumes
+}`) as unknown as TypedDocumentString<StorageActionsQuery, StorageActionsQueryVariables>;
+export const ReclaimStorageDocument = new TypedDocumentString(`
+    mutation ReclaimStorage {
+  reclaimStorage {
+    ...StorageActionFields
+  }
+}
+    fragment StorageActionFields on StorageAction {
+  id
+  action
+  bucket
+  actor {
+    type
+    id
+    name
+  }
+  status
+  error
+  startedAt
+  finishedAt
+  freed
+  volumes
+}`) as unknown as TypedDocumentString<ReclaimStorageMutation, ReclaimStorageMutationVariables>;
+export const GrowStorageBucketDocument = new TypedDocumentString(`
+    mutation GrowStorageBucket($bucket: String!) {
+  growStorageBucket(bucket: $bucket) {
+    ...StorageActionFields
+  }
+}
+    fragment StorageActionFields on StorageAction {
+  id
+  action
+  bucket
+  actor {
+    type
+    id
+    name
+  }
+  status
+  error
+  startedAt
+  finishedAt
+  freed
+  volumes
+}`) as unknown as TypedDocumentString<GrowStorageBucketMutation, GrowStorageBucketMutationVariables>;
 export const TaskDocument = new TypedDocumentString(`
     query Task($id: ID!) {
   task(id: $id) {

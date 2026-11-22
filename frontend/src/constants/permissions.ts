@@ -31,6 +31,10 @@ export const Permissions = {
   MODULE_ACTION_INVOKE: 'module:action:invoke',
   MODULE_ACTION_INVOKE_HIGH: 'module:action:invoke:high',
   MODULE_LOGS_READ: 'module:logs:read',
+
+  // Storage (the object store core keeps its files in)
+  STORAGE_READ: 'storage:read',
+  STORAGE_MANAGE: 'storage:manage',
 } as const;
 
 /**

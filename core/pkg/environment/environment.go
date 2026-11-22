@@ -47,6 +47,10 @@ type EnvironmentSettings struct {
 	SeaweedFSS3AccessKey string
 	SeaweedFSS3SecretKey string
 	SeaweedFSS3Endpoint  string
+	// SeaweedFSMasterURL is SeaweedFS's master (http://seaweedfs-master:9333):
+	// the Storage page's disk, volumes and buckets, and their maintenance
+	// (pkg/storage). Empty: the page shows what core's records say alone.
+	SeaweedFSMasterURL string
 
 	// JWT
 	JWTSecretKey string
@@ -296,6 +300,7 @@ func init() {
 		SeaweedFSS3AccessKey: viper.GetString("SEAWEEDFS_S3_ACCESS_KEY"),
 		SeaweedFSS3SecretKey: viper.GetString("SEAWEEDFS_S3_SECRET_KEY"),
 		SeaweedFSS3Endpoint:  viper.GetString("SEAWEEDFS_S3_ENDPOINT"),
+		SeaweedFSMasterURL:   viper.GetString("SEAWEEDFS_MASTER_URL"),
 
 		// JWT
 		JWTSecretKey: viper.GetString("JWT_SECRET_KEY"),

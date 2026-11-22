@@ -18,8 +18,12 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { warningMark } from "@/components/storage/storage-values"
+import { Permissions } from "@/constants/permissions"
+import { useStorageWarnings } from "@/graphql/hooks/storage-warnings"
 import { useAuthStore } from "@/stores/auth"
 import { useScopedOperationStore } from "@/stores/scoped-operation"
+import { cn } from "@/lib/utils"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const user = useAuthStore((s) => s.user)
@@ -30,6 +34,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const visibleAdminItems = navigationAdminItems.filter(
     (item) => !item.permission || hasPermission(item.permission),
   )
+  // Storage is marked with the warnings that need an admin, in the worst's
+  // colour: writes failing, or about to.
+  const storage = useStorageWarnings(hasPermission(Permissions.STORAGE_READ))
+  const mark = warningMark(storage.data?.storageStatus.warnings ?? [])
+  const adminBadges = mark
+    ? {
+        "/storage": (
+          <span
+            className={cn("rounded px-1", mark.level === "error" ? "bg-red-500/15 text-red-700 dark:text-red-300" : "bg-amber-500/15 text-amber-700 dark:text-amber-300")}
+            title={`${mark.count} storage ${mark.count === 1 ? "warning" : "warnings"}`}
+          >
+            {mark.count}
+          </span>
+        ),
+      }
+    : undefined
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -61,7 +81,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </div>
         {visibleAdminItems.length > 0 && (
           <div className="mt-auto">
-            <NavMain items={visibleAdminItems} />
+            <NavMain items={visibleAdminItems} badges={adminBadges} />
           </div>
         )}
       </SidebarContent>

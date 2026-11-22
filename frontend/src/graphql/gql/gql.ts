@@ -226,6 +226,13 @@ type Documents = {
     "\n  mutation SnoozeSkill($name: String!, $version: Int!) {\n    snoozeSkill(name: $name, version: $version) {\n      id\n      snoozedVersion\n    }\n  }\n": typeof types.SnoozeSkillDocument,
     "\n  mutation RemoveSkill($name: String!) {\n    removeSkill(name: $name) {\n      id\n      name\n    }\n  }\n": typeof types.RemoveSkillDocument,
     "\n  subscription SkillChanged {\n    skillChanged {\n      action\n      skillId\n      name\n    }\n  }\n": typeof types.SkillChangedDocument,
+    "\n  query StorageStatus {\n    storageStatus {\n      at\n      recordsError\n      seaweedfs {\n        configured\n        reachable\n        error\n        version\n        leader\n        slots\n        freeSlots\n      }\n      disks {\n        node\n        dir\n        error\n        total\n        used\n        free\n        volumes\n        maxVolumes\n      }\n      buckets {\n        name\n        purposes\n        volumes\n        writableVolumes\n        readOnlyVolumes\n        size\n        deletedBytes\n        objects\n        objectBytes\n      }\n      warnings {\n        level\n        code\n        bucket\n        message\n      }\n    }\n  }\n": typeof types.StorageStatusDocument,
+    "\n  query StorageWarnings {\n    storageStatus {\n      warnings {\n        level\n      }\n    }\n  }\n": typeof types.StorageWarningsDocument,
+    "\n  query StorageConsumers($bucket: String!, $search: String, $first: Int, $after: String) {\n    storageConsumers(bucket: $bucket, search: $search, first: $first, after: $after) {\n      edges {\n        cursor\n        node {\n          operationId\n          operationName\n          purpose\n          kind\n          objects\n          bytes\n        }\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.StorageConsumersDocument,
+    "\n  fragment StorageActionFields on StorageAction {\n    id\n    action\n    bucket\n    actor {\n      type\n      id\n      name\n    }\n    status\n    error\n    startedAt\n    finishedAt\n    freed\n    volumes\n  }\n": typeof types.StorageActionFieldsFragmentDoc,
+    "\n  query StorageActions($first: Int, $after: String) {\n    storageActions(first: $first, after: $after) {\n      edges {\n        cursor\n        node {\n          ...StorageActionFields\n        }\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.StorageActionsDocument,
+    "\n  mutation ReclaimStorage {\n    reclaimStorage {\n      ...StorageActionFields\n    }\n  }\n": typeof types.ReclaimStorageDocument,
+    "\n  mutation GrowStorageBucket($bucket: String!) {\n    growStorageBucket(bucket: $bucket) {\n      ...StorageActionFields\n    }\n  }\n": typeof types.GrowStorageBucketDocument,
     "\n  fragment TaskFields on Task {\n    id\n    rev\n    operationId\n    name\n    description\n    riskScore\n    riskDescription\n    profitScore\n    profitDescription\n    stage\n    status\n    summary\n    assignees {\n      id\n      username\n    }\n    wikiReferences {\n      id\n      title\n      emoji\n    }\n    credentialReferences {\n      id\n      name\n      type\n    }\n    createdBy {\n      id\n      username\n    }\n    lastUpdatedBy {\n      id\n      username\n    }\n    lastUpdatedAt\n    deletedAt\n    doneAt\n    createdAt\n    updatedAt\n  }\n": typeof types.TaskFieldsFragmentDoc,
     "\n  fragment TaskBacklinkFields on Task {\n    id\n    operationId\n    name\n    stage\n    status\n    riskScore\n    profitScore\n    assignees {\n      id\n      username\n    }\n  }\n": typeof types.TaskBacklinkFieldsFragmentDoc,
     "\n  query Task($id: ID!) {\n    task(id: $id) {\n      ...TaskFields\n    }\n  }\n": typeof types.TaskDocument,
@@ -519,6 +526,13 @@ const documents: Documents = {
     "\n  mutation SnoozeSkill($name: String!, $version: Int!) {\n    snoozeSkill(name: $name, version: $version) {\n      id\n      snoozedVersion\n    }\n  }\n": types.SnoozeSkillDocument,
     "\n  mutation RemoveSkill($name: String!) {\n    removeSkill(name: $name) {\n      id\n      name\n    }\n  }\n": types.RemoveSkillDocument,
     "\n  subscription SkillChanged {\n    skillChanged {\n      action\n      skillId\n      name\n    }\n  }\n": types.SkillChangedDocument,
+    "\n  query StorageStatus {\n    storageStatus {\n      at\n      recordsError\n      seaweedfs {\n        configured\n        reachable\n        error\n        version\n        leader\n        slots\n        freeSlots\n      }\n      disks {\n        node\n        dir\n        error\n        total\n        used\n        free\n        volumes\n        maxVolumes\n      }\n      buckets {\n        name\n        purposes\n        volumes\n        writableVolumes\n        readOnlyVolumes\n        size\n        deletedBytes\n        objects\n        objectBytes\n      }\n      warnings {\n        level\n        code\n        bucket\n        message\n      }\n    }\n  }\n": types.StorageStatusDocument,
+    "\n  query StorageWarnings {\n    storageStatus {\n      warnings {\n        level\n      }\n    }\n  }\n": types.StorageWarningsDocument,
+    "\n  query StorageConsumers($bucket: String!, $search: String, $first: Int, $after: String) {\n    storageConsumers(bucket: $bucket, search: $search, first: $first, after: $after) {\n      edges {\n        cursor\n        node {\n          operationId\n          operationName\n          purpose\n          kind\n          objects\n          bytes\n        }\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.StorageConsumersDocument,
+    "\n  fragment StorageActionFields on StorageAction {\n    id\n    action\n    bucket\n    actor {\n      type\n      id\n      name\n    }\n    status\n    error\n    startedAt\n    finishedAt\n    freed\n    volumes\n  }\n": types.StorageActionFieldsFragmentDoc,
+    "\n  query StorageActions($first: Int, $after: String) {\n    storageActions(first: $first, after: $after) {\n      edges {\n        cursor\n        node {\n          ...StorageActionFields\n        }\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.StorageActionsDocument,
+    "\n  mutation ReclaimStorage {\n    reclaimStorage {\n      ...StorageActionFields\n    }\n  }\n": types.ReclaimStorageDocument,
+    "\n  mutation GrowStorageBucket($bucket: String!) {\n    growStorageBucket(bucket: $bucket) {\n      ...StorageActionFields\n    }\n  }\n": types.GrowStorageBucketDocument,
     "\n  fragment TaskFields on Task {\n    id\n    rev\n    operationId\n    name\n    description\n    riskScore\n    riskDescription\n    profitScore\n    profitDescription\n    stage\n    status\n    summary\n    assignees {\n      id\n      username\n    }\n    wikiReferences {\n      id\n      title\n      emoji\n    }\n    credentialReferences {\n      id\n      name\n      type\n    }\n    createdBy {\n      id\n      username\n    }\n    lastUpdatedBy {\n      id\n      username\n    }\n    lastUpdatedAt\n    deletedAt\n    doneAt\n    createdAt\n    updatedAt\n  }\n": types.TaskFieldsFragmentDoc,
     "\n  fragment TaskBacklinkFields on Task {\n    id\n    operationId\n    name\n    stage\n    status\n    riskScore\n    profitScore\n    assignees {\n      id\n      username\n    }\n  }\n": types.TaskBacklinkFieldsFragmentDoc,
     "\n  query Task($id: ID!) {\n    task(id: $id) {\n      ...TaskFields\n    }\n  }\n": types.TaskDocument,
@@ -1445,6 +1459,34 @@ export function graphql(source: "\n  mutation RemoveSkill($name: String!) {\n   
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  subscription SkillChanged {\n    skillChanged {\n      action\n      skillId\n      name\n    }\n  }\n"): typeof import('./graphql').SkillChangedDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query StorageStatus {\n    storageStatus {\n      at\n      recordsError\n      seaweedfs {\n        configured\n        reachable\n        error\n        version\n        leader\n        slots\n        freeSlots\n      }\n      disks {\n        node\n        dir\n        error\n        total\n        used\n        free\n        volumes\n        maxVolumes\n      }\n      buckets {\n        name\n        purposes\n        volumes\n        writableVolumes\n        readOnlyVolumes\n        size\n        deletedBytes\n        objects\n        objectBytes\n      }\n      warnings {\n        level\n        code\n        bucket\n        message\n      }\n    }\n  }\n"): typeof import('./graphql').StorageStatusDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query StorageWarnings {\n    storageStatus {\n      warnings {\n        level\n      }\n    }\n  }\n"): typeof import('./graphql').StorageWarningsDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query StorageConsumers($bucket: String!, $search: String, $first: Int, $after: String) {\n    storageConsumers(bucket: $bucket, search: $search, first: $first, after: $after) {\n      edges {\n        cursor\n        node {\n          operationId\n          operationName\n          purpose\n          kind\n          objects\n          bytes\n        }\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n"): typeof import('./graphql').StorageConsumersDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  fragment StorageActionFields on StorageAction {\n    id\n    action\n    bucket\n    actor {\n      type\n      id\n      name\n    }\n    status\n    error\n    startedAt\n    finishedAt\n    freed\n    volumes\n  }\n"): typeof import('./graphql').StorageActionFieldsFragmentDoc;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query StorageActions($first: Int, $after: String) {\n    storageActions(first: $first, after: $after) {\n      edges {\n        cursor\n        node {\n          ...StorageActionFields\n        }\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n"): typeof import('./graphql').StorageActionsDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation ReclaimStorage {\n    reclaimStorage {\n      ...StorageActionFields\n    }\n  }\n"): typeof import('./graphql').ReclaimStorageDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation GrowStorageBucket($bucket: String!) {\n    growStorageBucket(bucket: $bucket) {\n      ...StorageActionFields\n    }\n  }\n"): typeof import('./graphql').GrowStorageBucketDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

@@ -4,6 +4,7 @@ import {
   EthernetPortIcon,
   FileCode2Icon,
   HammerIcon,
+  HardDriveIcon,
   KanbanSquareIcon,
   MonitorDotIcon,
   PackageIcon,
@@ -107,6 +108,14 @@ export const navigationAdminItems: NavigationItem[] = [
     url: "/modules",
     permission: Permissions.MODULE_READ,
     icon: BlocksIcon,
+  },
+  // The object store core keeps its files in: the sidebar marks it with its
+  // warnings (app-sidebar.tsx).
+  {
+    title: "Storage",
+    url: "/storage",
+    permission: Permissions.STORAGE_READ,
+    icon: HardDriveIcon,
   },
   // Not an admin entry despite the group it sits in: publishing and
   // downloading a skill is open to anyone who can sign in. It lives down here

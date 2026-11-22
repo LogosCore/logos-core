@@ -212,6 +212,20 @@ endpoint.
 {{- end -}}
 
 {{/*
+SeaweedFS's master, for the Storage page: the bundled chart's Service is
+`seaweedfs-master` (not release-prefixed, as `seaweedfs-s3`), on the
+master's port. With an external SeaweedFS, external.seaweedfs.masterUrl, or
+none: the page shows what core's records say alone.
+*/}}
+{{- define "logos.seaweedfs.masterUrl" -}}
+{{- if .Values.seaweedfs.enabled -}}
+{{- printf "http://seaweedfs-master.%s.svc.cluster.local:%d" .Release.Namespace (int (dig "master" "port" 9333 .Values.seaweedfs)) -}}
+{{- else -}}
+{{- .Values.external.seaweedfs.masterUrl | default "" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 In-cluster Service hostname for the hocuspocus internal HTTP API.
 Used by core to call the disconnect / markdown-to-yjs endpoints.
 */}}

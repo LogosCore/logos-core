@@ -1,0 +1,167 @@
+# The object store core keeps its files in (docs: Core Infrastructure,
+# SeaweedFS), as admins see it on the Storage page (pkg/storage): SeaweedFS's
+# state, when core is set to reach its master (SEAWEEDFS_MASTER_URL); what
+# core's records say it keeps in each bucket; and what would make writes
+# fail. Core reads it once a minute.
+type StorageStatus {
+  # When core read it.
+  at: String!
+  seaweedfs: StorageSeaweedFS!
+  # The volume servers' disks.
+  disks: [StorageDisk!]!
+  # Core's buckets in its order, then those not core's, SeaweedFS's own
+  # last.
+  buckets: [StorageBucket!]!
+  # What an admin should know, the worst first.
+  warnings: [StorageWarning!]!
+  # Why core could not read its own records; null when it could.
+  recordsError: String
+}
+
+# SeaweedFS as its master says.
+type StorageSeaweedFS {
+  # Core has the master's URL; reachable: it answered, else error says why.
+  configured: Boolean!
+  reachable: Boolean!
+  error: String
+  version: String
+  leader: String
+  # The volumes the volume servers have room for (about one a GB of free
+  # disk), and those not taken: a bucket that needs a new volume when none
+  # is free fails its writes.
+  slots: Int!
+  freeSlots: Int!
+}
+
+# One of a volume server's disks: its bytes, whatever uses them.
+type StorageDisk {
+  # The volume server (host:port) and its directory; error says why its
+  # disks could not be read (no directory then).
+  node: String!
+  dir: String
+  error: String
+  total: Int!
+  used: Int!
+  free: Int!
+  # The server's volumes, and those it has room for.
+  volumes: Int!
+  maxVolumes: Int!
+}
+
+# One of the store's buckets: SeaweedFS's numbers for it (a bucket is a
+# collection), and core's records of what it keeps there.
+type StorageBucket {
+  # "" is SeaweedFS's own: volumes written outside any bucket.
+  name: String!
+  # What core keeps there: minion_files, recordings, builds, wiki_images,
+  # wiki_files, skills; empty for a bucket not core's.
+  purposes: [String!]!
+  # Its volumes, those new files go to, and those full or read-only; none
+  # before its first write.
+  volumes: Int!
+  writableVolumes: Int!
+  readOnlyVolumes: Int!
+  # Its volumes' bytes on disk, and the part of them deleted files hold
+  # until reclaimed (reclaimStorage).
+  size: Int!
+  deletedBytes: Int!
+  # What core's records say it keeps there.
+  objects: Int!
+  objectBytes: Int!
+}
+
+# Something about the store an admin should know.
+type StorageWarning {
+  # error (writes fail, or core cannot tell), warning (they will soon) or
+  # info (space to win back).
+  level: String!
+  code: String!
+  # The bucket it is about; null for the store's.
+  bucket: String
+  message: String!
+}
+
+# What core keeps in a bucket for one operation, of one kind.
+type StorageConsumer {
+  # Null for what is no operation's (skills); operationName null for an
+  # operation gone.
+  operationId: ID
+  operationName: String
+  purpose: String!
+  # Its kind within the purpose: minion files' upload, screenshot or
+  # download; recordings' desktop or terminal; builds' file or artifact;
+  # wiki images' image; wiki files' file; skills' version.
+  kind: String!
+  objects: Int!
+  bytes: Int!
+}
+
+type StorageConsumerEdge {
+  node: StorageConsumer!
+  cursor: String!
+}
+
+type StorageConsumerConnection {
+  edges: [StorageConsumerEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+# A maintenance action an admin ran on the store.
+type StorageAction {
+  id: ID!
+  # reclaim (every bucket's volumes) or grow (a volume added to bucket).
+  action: String!
+  bucket: String
+  actor: ModuleActor!
+  # running, succeeded or failed (error says why).
+  status: String!
+  error: String
+  startedAt: String!
+  finishedAt: String
+  # A reclaim's bytes taken off the disk; a grow's volumes added.
+  freed: Int!
+  volumes: Int!
+}
+
+type StorageActionEdge {
+  node: StorageAction!
+  cursor: String!
+}
+
+type StorageActionConnection {
+  edges: [StorageActionEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+extend type Query {
+  # The store as core last read it, at most a minute ago. Needs
+  # storage:read (admins).
+  storageStatus: StorageStatus!
+    @hasPermission(permission: "storage:read")
+
+  # What core keeps in a bucket, the largest first, a page at a time;
+  # search matches the operation's name and the kind. Needs storage:read.
+  storageConsumers(bucket: String!, search: String, first: Int = 50, after: String): StorageConsumerConnection!
+    @hasPermission(permission: "storage:read")
+
+  # The maintenance actions run on the store, the latest first. Needs
+  # storage:read.
+  storageActions(first: Int = 50, after: String, last: Int, before: String): StorageActionConnection!
+    @hasPermission(permission: "storage:read")
+}
+
+extend type Mutation {
+  # Reclaims the space deleted files hold: compacts every volume, of every
+  # bucket, that they hold a tenth of. It runs in the background: the action
+  # comes back running. Needs storage:manage (admins).
+  reclaimStorage: StorageAction!
+    @hasPermission(permission: "storage:manage")
+
+  # Adds a writable volume to a bucket, one of core's or one SeaweedFS has.
+  # A failure, as when no volume slot is free, is the action's. Needs
+  # storage:manage.
+  growStorageBucket(bucket: String!): StorageAction!
+    @hasPermission(permission: "storage:manage")
+}
