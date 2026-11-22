@@ -186,7 +186,7 @@ export function StoragePage() {
               <DialogDescription>
                 SeaweedFS compacts every volume, in every bucket, whose deleted files hold a tenth of it or more: their space comes back
                 to the disk. It runs in the background and rewrites those volumes, so the store answers slower until it ends. SeaweedFS
-                also does this on its own, past a third.
+                also does this on its own, past 30%.
               </DialogDescription>
             </DialogHeader>
           ) : confirm?.kind === "grow" ? (
