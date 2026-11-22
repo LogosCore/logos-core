@@ -208,7 +208,7 @@ function userOf(s: Session): string | null {
 const STANDING: Record<string, { label: string; className: string }> = {
   live: { label: "Live", className: "border-emerald-600/40 text-emerald-600 dark:text-emerald-400" },
   late: { label: "Late", className: "border-amber-600/40 text-amber-600 dark:text-amber-400" },
-  lost: { label: "Lost", className: "border-red-600/40 text-red-600 dark:text-red-400" },
+  lost: { label: "Lost", className: "border-muted-foreground/40 text-muted-foreground" },
 }
 
 /**
@@ -274,7 +274,7 @@ function SessionCard({ s }: { s: Session }) {
             className={cn(
               state === "live" && "text-emerald-600 dark:text-emerald-400",
               state === "late" && "text-amber-600 dark:text-amber-400",
-              state === "lost" && "text-red-600 dark:text-red-400",
+              state === "lost" && "text-muted-foreground",
             )}
             {...seenHover}
           >

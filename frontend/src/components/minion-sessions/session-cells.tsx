@@ -124,9 +124,9 @@ function PeerSeen({ lastSeen, count }: { lastSeen: string; count: number }) {
 }
 
 /**
- * Last seen: green while on time by its schedule, yellow once late, red once
- * lost; plain when the minion never said its schedule. Counts a silent
- * minion's seconds, on the shared one-second clock.
+ * Last seen: green while on time by its schedule, yellow once late, gray once
+ * lost; plain gray too when the minion never said its schedule. Counts a
+ * silent minion's seconds, on the shared one-second clock.
  */
 function LastSeen({ s }: { s: MinionSessionFieldsFragment }) {
   const now = useNow(1_000)
@@ -156,8 +156,7 @@ function LastSeen({ s }: { s: MinionSessionFieldsFragment }) {
         "flex min-w-0 items-baseline gap-1",
         state === "live" && "text-emerald-600 dark:text-emerald-400",
         state === "late" && "text-amber-600 dark:text-amber-400",
-        state === "lost" && "text-red-600 dark:text-red-400",
-        state === null && "text-muted-foreground",
+        (state === "lost" || state === null) && "text-muted-foreground",
       )}
       {...hover}
     >

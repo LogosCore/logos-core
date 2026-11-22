@@ -164,7 +164,7 @@ const CHECK_TRACK = `${CHECK_PX}px`
 // (session-mark-styles.css).
 // Pinned at the scroller's edge, over the row's px-4: the cell takes the
 // padding in (margin out, padding in), so it keeps its space and covers what
-// scrolls under it; the row's py-2 too, so it is the row's height.
+// scrolls under it; the row's ROW_PAD too, so it is the row's height.
 // A picked row's tint: a layer over the whole row, the pinned cells (z 1)
 // and the row's mark included, so a marked row shows its mark and the pick
 // at once, and picked rows next to each other make one block. Clicks go
@@ -173,12 +173,15 @@ const CHECK_TRACK = `${CHECK_PX}px`
 const PICK_TINT = "pointer-events-none absolute inset-0 z-[2] bg-primary/10"
 // The bar down the left edge of the row whose tab is in front.
 const ACTIVE_BAR = "before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary"
-const PIN_LEFT = "left-0 -ml-4 pl-4 -my-2 py-2 grid items-center self-stretch"
+// A row's padding above and below: rows kept low, as a process list's, so a
+// view holds more of them; the ⋯ button a line high (ContextMenuRow's line).
+const ROW_PAD = "py-0.5"
+const PIN_LEFT = "left-0 -ml-4 pl-4 -my-0.5 py-0.5 grid items-center self-stretch"
 // While selecting, the checkbox is pinned first (PIN_LEFT: the row's 16px
 // padding and its 20px track), and the pinned # after it, at 36px, taking in
 // the 12px gap before it (margin out, padding in) so nothing shows through.
 const PIN_AFTER_CHECK = "left-[36px] -ml-3 pl-3"
-const PIN_RIGHT = "right-0 -mr-4 pr-4 -my-2 py-2 flex items-center self-stretch"
+const PIN_RIGHT = "right-0 -mr-4 pr-4 -my-0.5 py-0.5 flex items-center self-stretch"
 const PINNED_HEADER = "sticky z-[2] bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-card))]"
 
 /** Where a column's filter editor is open: the column, and the element it hangs from. */
@@ -526,6 +529,7 @@ export function SessionsDatatable({
                   // While selecting, a drag or shift-click does not select text.
                   className={cn(
                     "group/row",
+                    ROW_PAD,
                     selecting && "select-none",
                     markRowClass(s.mark?.color),
                     pickedSet.has(s.id) && "relative",
@@ -539,7 +543,7 @@ export function SessionsDatatable({
                   // A double click interacts, as the menu's Interact does.
                   onDoubleClick={selecting ? undefined : () => onInteract(s)}
                   menuLabel="Session actions"
-                  menuButtonSize="icon-xs"
+                  menuButtonSize="line"
                   menu={
                     <SessionMenu
                       copyCell={copyCell}

@@ -25,8 +25,9 @@ export function ContextMenuRow({
   children,
 }: {
   gridCols: string
-  /** The ⋯ button's size: icon-xs keeps a one-line row one line. */
-  menuButtonSize?: "icon-xs" | "icon-sm"
+  /** The ⋯ button's size: icon-xs keeps a one-line row one line; line, a
+   *  low row's (py-0.5), as high as a line of its text (20px). */
+  menuButtonSize?: "line" | "icon-xs" | "icon-sm"
   style?: CSSProperties
   /** More classes for the row, e.g. a selected one's. */
   className?: string
@@ -47,7 +48,9 @@ export function ContextMenuRow({
   const menuButton = (
     <Button
       variant="ghost"
-      size={menuButtonSize}
+      size={menuButtonSize === "line" ? "icon-xs" : menuButtonSize}
+      // icon-xs is 24px: line takes it down to the row's line, in its place.
+      className={menuButtonSize === "line" ? "size-5" : undefined}
       aria-label={menuLabel}
       aria-haspopup="menu"
       aria-expanded={open && anchor !== null}
