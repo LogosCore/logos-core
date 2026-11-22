@@ -24,6 +24,7 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ArrowUpIcon,
+  CableIcon,
   Columns3Icon,
   CrosshairIcon,
   EyeOffIcon,
@@ -41,6 +42,7 @@ import {
   MoveHorizontalIcon,
   ListChecksIcon,
   LoaderIcon,
+  MessageSquareWarningIcon,
   PencilIcon,
   PinIcon,
   SquareTerminalIcon,
@@ -101,6 +103,7 @@ import {
 } from "./session-selection"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { SessionCell } from "./session-cells"
+import { FeedbackCounts } from "./feedback-parts"
 import { SessionFire } from "./session-fire"
 import { SessionFilterEditor } from "./session-filter-editor"
 import { SessionDescriptionDialog } from "./session-description-dialog"
@@ -1214,6 +1217,19 @@ function SessionMenu({
           <ContextMenuItem onClick={() => modals.open({ kind: "session", id: s.id })}>
             <MonitorDotIcon />
             Session details
+          </ContextMenuItem>
+          {/* The session's details on their tabs, in the tabs' order:
+              Connections (how many after), then Feedback (its unread
+              errors after). */}
+          <ContextMenuItem onClick={() => modals.open({ kind: "session", id: s.id, tab: "connections" })}>
+            <CableIcon />
+            Connections
+            {s.connCount > 0 && <span className="ml-auto pl-4 text-xs text-muted-foreground tabular-nums">{s.connCount}</span>}
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => modals.open({ kind: "session", id: s.id, tab: "feedback" })}>
+            <MessageSquareWarningIcon />
+            Feedback
+            <FeedbackCounts errors={s.feedbackErrors} className="ml-auto pl-4 text-xs" />
           </ContextMenuItem>
           <ContextMenuItem onClick={() => modals.open({ kind: "build", id: s.buildId })}>
             <HammerIcon />
