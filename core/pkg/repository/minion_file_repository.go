@@ -27,6 +27,10 @@ type IMinionFileRepository interface {
 	// FindByTask is a task's file, its latest when there were several: one
 	// it got, or one it took as its own (AlsoTasks).
 	FindByTask(ctx context.Context, taskID uuid.UUID) (*models.MinionFile, error)
+	// ListByTask are a task's files, oldest first, at most limit: those it
+	// got, took as its own (AlsoTasks), or adopted (a factory command's
+	// result's).
+	ListByTask(ctx context.Context, taskID uuid.UUID, limit int64) ([]models.MinionFile, error)
 	// AlsoForTask makes the files task from got to's as well.
 	AlsoForTask(ctx context.Context, from, to uuid.UUID) error
 	// AdoptForTask makes task files put for a task its own, as a file its
@@ -104,6 +108,13 @@ func (r *minionFileRepository) FindByTask(ctx context.Context, taskID uuid.UUID)
 		return nil, err
 	}
 	return &f, nil
+}
+
+func (r *minionFileRepository) ListByTask(ctx context.Context, taskID uuid.UUID, limit int64) ([]models.MinionFile, error) {
+	var out []models.MinionFile
+	err := r.coll.Find(ctx, bson.M{"$or": bson.A{bson.M{"task_id": taskID}, bson.M{"also_tasks": taskID}}}).
+		Sort("createAt", "file_id").Limit(limit).All(&out)
+	return out, err
 }
 
 func (r *minionFileRepository) AlsoForTask(ctx context.Context, from, to uuid.UUID) error {

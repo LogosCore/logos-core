@@ -55,6 +55,15 @@ export const BuildSchemaFields = graphql(`
         ...ModuleFieldDefFields
       }
     }
+    factoryCommands {
+      id
+      label
+      description
+      result
+      params {
+        ...ModuleFieldDefFields
+      }
+    }
     errorCodes {
       code
       label

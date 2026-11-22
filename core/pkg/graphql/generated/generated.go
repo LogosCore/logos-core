@@ -1114,6 +1114,7 @@ type ComplexityRoot struct {
 		FeedbackInfos     func(childComplexity int) int
 		FeedbackWarnings  func(childComplexity int) int
 		File              func(childComplexity int) int
+		Files             func(childComplexity int) int
 		ID                func(childComplexity int) int
 		ImportantAt       func(childComplexity int) int
 		ImportantBy       func(childComplexity int) int
@@ -2373,6 +2374,7 @@ type MinionTaskResolver interface {
 	Data(ctx context.Context, obj *model.MinionTask) (any, error)
 
 	File(ctx context.Context, obj *model.MinionTask) (*model.MinionFile, error)
+	Files(ctx context.Context, obj *model.MinionTask) ([]*model.MinionFile, error)
 
 	Document(ctx context.Context, obj *model.MinionTask) (string, error)
 
@@ -7285,6 +7287,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.File(childComplexity), true
+	case "MinionTask.files":
+		if e.ComplexityRoot.MinionTask.Files == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.Files(childComplexity), true
 	case "MinionTask.id":
 		if e.ComplexityRoot.MinionTask.ID == nil {
 			break
@@ -17177,6 +17185,10 @@ type MinionTask {
   # its picture), as far as it came; null for other tasks, or before its
   # first chunk.
   file: MinionFile
+  # A factory command's task's files (docs: contracts/factory-commands): the
+  # ones its factory's result named, which core keeps as the task's, oldest
+  # first. Empty for any other task, and until its result came.
+  files: [MinionFile!]!
   # The file core sends the minion for the task's file param (an upload),
   # and how far the minion has it; null for a task without one.
   upload: MinionTaskUpload
@@ -49695,6 +49707,71 @@ func (ec *executionContext) fieldContext_MinionTask_file(_ context.Context, fiel
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_files(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_files,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.MinionTask().Files(ctx, obj)
+		},
+		nil,
+		ec.marshalNMinionFile2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionFileᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_files(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionFile_id(ctx, field)
+			case "name":
+				return ec.fieldContext_MinionFile_name(ctx, field)
+			case "kind":
+				return ec.fieldContext_MinionFile_kind(ctx, field)
+			case "taskId":
+				return ec.fieldContext_MinionFile_taskId(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_MinionFile_sessionId(ctx, field)
+			case "width":
+				return ec.fieldContext_MinionFile_width(ctx, field)
+			case "height":
+				return ec.fieldContext_MinionFile_height(ctx, field)
+			case "display":
+				return ec.fieldContext_MinionFile_display(ctx, field)
+			case "thumb":
+				return ec.fieldContext_MinionFile_thumb(ctx, field)
+			case "size":
+				return ec.fieldContext_MinionFile_size(ctx, field)
+			case "received":
+				return ec.fieldContext_MinionFile_received(ctx, field)
+			case "sha256":
+				return ec.fieldContext_MinionFile_sha256(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionFile_state(ctx, field)
+			case "err":
+				return ec.fieldContext_MinionFile_err(ctx, field)
+			case "contentType":
+				return ec.fieldContext_MinionFile_contentType(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_MinionFile_createdAt(ctx, field)
+			case "doneAt":
+				return ec.fieldContext_MinionFile_doneAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionFile", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_upload(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -50410,6 +50487,8 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "file":
 				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "files":
+				return ec.fieldContext_MinionTask_files(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
 			case "stream":
@@ -64286,6 +64365,8 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "file":
 				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "files":
+				return ec.fieldContext_MinionTask_files(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
 			case "stream":
@@ -64455,6 +64536,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "file":
 				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "files":
+				return ec.fieldContext_MinionTask_files(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
 			case "stream":
@@ -64624,6 +64707,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTaskImportant(ctx con
 				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "file":
 				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "files":
+				return ec.fieldContext_MinionTask_files(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
 			case "stream":
@@ -64793,6 +64878,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelCap(ctx context
 				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "file":
 				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "files":
+				return ec.fieldContext_MinionTask_files(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
 			case "stream":
@@ -64962,6 +65049,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelRoutes(ctx cont
 				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "file":
 				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "files":
+				return ec.fieldContext_MinionTask_files(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
 			case "stream":
@@ -65196,6 +65285,8 @@ func (ec *executionContext) fieldContext_Mutation_disconnectMinionVPNClient(ctx 
 				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "file":
 				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "files":
+				return ec.fieldContext_MinionTask_files(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
 			case "stream":
@@ -74951,6 +75042,8 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "file":
 				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "files":
+				return ec.fieldContext_MinionTask_files(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
 			case "stream":
@@ -82662,6 +82755,8 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "file":
 				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "files":
+				return ec.fieldContext_MinionTask_files(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
 			case "stream":
@@ -103707,6 +103802,42 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 					}
 				}()
 				res = ec._MinionTask_file(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "files":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._MinionTask_files(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 

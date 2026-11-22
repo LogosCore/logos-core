@@ -65,6 +65,12 @@ func (r *minionTaskResolver) File(ctx context.Context, obj *model.MinionTask) (*
 	return r.MinionTaskResolver.File(ctx, obj.ID)
 }
 
+// Files is the resolver for the files field.
+func (r *minionTaskResolver) Files(ctx context.Context, obj *model.MinionTask) ([]*model.MinionFile, error) {
+	// A factory command's task's alone: no read for the others.
+	return r.MinionTaskResolver.Files(ctx, obj)
+}
+
 // Document is the resolver for the document field.
 func (r *minionTaskResolver) Document(ctx context.Context, obj *model.MinionTask) (string, error) {
 	return r.MinionTaskResolver.Document(ctx, obj.ID)

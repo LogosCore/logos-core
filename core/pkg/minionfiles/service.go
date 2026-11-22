@@ -376,6 +376,16 @@ func (s *Service) File(ctx context.Context, taskID uuid.UUID) (*models.MinionFil
 	return f, err
 }
 
+// maxFilesOfTask bounds the files FilesOfTask lists: a factory command's
+// result names protocol.MaxFactoryCommandFiles at most.
+const maxFilesOfTask = 100
+
+// FilesOfTask are a task's files, oldest first: a factory command's are those
+// its result named (AdoptFactoryFiles).
+func (s *Service) FilesOfTask(ctx context.Context, taskID uuid.UUID) ([]models.MinionFile, error) {
+	return s.files.ListByTask(ctx, taskID, maxFilesOfTask)
+}
+
 // FileByID is a file by its id, nil for none.
 func (s *Service) FileByID(ctx context.Context, fileID uuid.UUID) (*models.MinionFile, error) {
 	f, err := s.files.FindByID(ctx, fileID)

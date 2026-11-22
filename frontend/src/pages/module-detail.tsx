@@ -16,6 +16,7 @@ import { ModuleSyncIndicator } from "@/components/modules/management/module-sync
 import {
   BuildCommands,
   BuildErrorCodes,
+  BuildFactoryCommands,
   BuildParameters,
   BuildTargets,
   ConnectionSchema,
@@ -136,6 +137,7 @@ export function ModuleDetailPage() {
                 {build && <BuildTargets build={build} />}
                 {build && <BuildParameters build={build} />}
                 {build && build.commands.length > 0 && <BuildCommands build={build} />}
+                {build && build.factoryCommands.length > 0 && <BuildFactoryCommands build={build} />}
                 {build && build.errorCodes.length > 0 && <BuildErrorCodes build={build} />}
               </CardColumns>
             </div>
@@ -181,6 +183,7 @@ export function ModuleDetailPage() {
                   {build && <BuildTargets build={build} />}
                   {build && <BuildParameters build={build} />}
                   {build && build.commands.length > 0 && <BuildCommands build={build} />}
+                  {build && build.factoryCommands.length > 0 && <BuildFactoryCommands build={build} />}
                   {build && build.errorCodes.length > 0 && <BuildErrorCodes build={build} />}
                 </CardColumns>
               </TabsContent>

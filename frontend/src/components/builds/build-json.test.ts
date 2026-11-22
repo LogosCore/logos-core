@@ -30,6 +30,7 @@ const schema: BuildSchemaFieldsFragment = {
   compression: [],
   errorCodesPerBuild: false,
   persistedSessions: false,
+  factoryCommands: [],
   errorCodes: [],
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),

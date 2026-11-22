@@ -54,6 +54,8 @@ import { useSessionConnectionChoices } from "./use-connection-choices"
 import { TaskAs } from "./task-as"
 import { CompositeView } from "./composite-view"
 import { subtaskText } from "./composite-values"
+import { FACTORY } from "./factory-values"
+import { ResultFilesView } from "./result-files-view"
 
 // The right of a session's console: the task picked in the list, whole
 // (its command is the list's row): where it stands and who gave it, what can be done with it,
@@ -178,6 +180,8 @@ export function TaskDetail({
   const detail = outputQ.data?.minionTask
   const output = detail?.output ?? ""
   const data = (detail?.data as Record<string, unknown> | null | undefined) ?? null
+  // A factory command's task's files, those its result named: read with it.
+  const files = detail?.files ?? []
   // Its feedback, read when it has some, again as more comes or the
   // session's is marked read (unread ones are marked).
   // Information too, which marks the task in no list.
@@ -237,7 +241,7 @@ export function TaskDetail({
     t.dataTruncated ? "Cut at 4 MiB with the output: the rest was dropped." : null,
   ].filter((n): n is string => n !== null)
 
-  const [tab, setTab] = useState<"output" | "data" | "feedback" | "recordings" | "composite" | "json" | null>(null)
+  const [tab, setTab] = useState<"output" | "data" | "files" | "feedback" | "recordings" | "composite" | "json" | null>(null)
   // Data alone shows as data; with output, the output first. An upload
   // shows its progress first, whatever it prints, and a screenshot its
   // picture. Feedback and a desktop's or a terminal's recordings only when
@@ -245,11 +249,16 @@ export function TaskDetail({
   // A composite task opens on what its factory's code decided, until it has
   // output or data to show.
   const compositeShown = isComposite && (tab === "composite" || (tab === null && t.outputSize === 0 && !hasData))
+  // A factory command's task opens on its result's files when it printed
+  // nothing and gave no data.
+  const filesShown = files.length > 0 && (tab === "files" || (tab === null && t.outputSize === 0 && !hasData))
   const shown =
     tab === "json"
       ? "json"
       : compositeShown
         ? "composite"
+      : filesShown
+        ? "files"
       : tab === "recordings" && recorded
         ? "recordings"
       : tab === "feedback" && hasFeedback
@@ -264,7 +273,7 @@ export function TaskDetail({
   // The stored task, read while its tab is open, again as it changes.
   const documentQ = useMinionTaskDocument(
     t.id,
-    [t.state, t.parts, t.sendCount, t.ackedAt, t.cancelRequestedAt].join(":"),
+    [t.state, t.parts, t.sendCount, t.ackedAt, t.cancelRequestedAt, t.factory?.instance, t.factory?.acceptedAt, t.factory?.waiting].join(":"),
     shown === "json",
   )
   // The editor's code, ahead of the JSON tab or raw data being opened.
@@ -282,6 +291,14 @@ export function TaskDetail({
           {hasData && (
             <TabButton active={shown === "data"} onClick={() => setTab("data")}>
               {isDelegate ? "Delegate" : isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? (t.tunnel?.front === FRONT_FORWARD ? "Forward" : t.tunnel?.front === FRONT_TERMINAL ? "Terminal" : t.tunnel?.front === FRONT_VPN ? "VPN" : t.tunnel && isDesktopFront(t.tunnel.front) ? desktopName(t.tunnel.front) : "Proxy") : "Data"}
+            </TabButton>
+          )}
+          {files.length > 0 && (
+            <TabButton active={shown === "files"} onClick={() => setTab("files")} title="The files its factory's result named: kept with the task">
+              <span className="inline-flex items-center gap-1.5">
+                Files
+                <span className="text-muted-foreground tabular-nums">{files.length}</span>
+              </span>
             </TabButton>
           )}
           {recorded && (
@@ -358,7 +375,7 @@ export function TaskDetail({
               <BracesIcon />
             </Button>
           )}
-          {shown === "recordings" || shown === "composite" || (shown === "data" && (isTunnel || isDelegate)) ? null : shown === "data" ? (
+          {shown === "recordings" || shown === "composite" || shown === "files" || (shown === "data" && (isTunnel || isDelegate)) ? null : shown === "data" ? (
             <>
               <Button variant="ghost" size="icon-xs" title="Copy the data as JSON" aria-label="Copy the data" disabled={!data}
                 onClick={() => void copyToClipboard(JSON.stringify(data, null, 2), "data")}>
@@ -415,6 +432,8 @@ export function TaskDetail({
 
       {shown === "composite" ? (
         <CompositeView task={t} command={command} showingSubtasks={showingComposite === t.id} onShowComposite={onShowComposite} />
+      ) : shown === "files" ? (
+        <ResultFilesView key={t.id} files={files} />
       ) : shown === "recordings" ? (
         <RecordingsView key={t.id} task={t} canDelete={canMark} />
       ) : shown === "feedback" ? (
@@ -438,7 +457,9 @@ export function TaskDetail({
                 ? "No output."
                 : t.state === "COMPOSING"
                   ? "No output yet: its factory's code runs it, in core (the Composite tab)."
-                  : "Waiting for output…"
+                  : t.state === FACTORY && !t.factory?.acceptedAt
+                    ? "No output yet: no instance of its factory has taken it."
+                    : "Waiting for output…"
           }
           wrap={wrap}
           findSignal={findSignal}

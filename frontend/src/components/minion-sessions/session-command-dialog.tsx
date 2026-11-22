@@ -67,6 +67,7 @@ export function SessionCommandDialog({
             <code className="font-mono text-xs">{usage(command)}</code>
             {command.description && <span className="mt-1 block">{command.description}</span>}
             {command.composite && <CompositeLine uses={command.uses} />}
+            {command.factory && <span className="mt-1 block">Its factory runs it itself: nothing goes to the minion.</span>}
             <KindsLine kinds={command.kinds} connKind={connKind} />
           </>
         ) : (

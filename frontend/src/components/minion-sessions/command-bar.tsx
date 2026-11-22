@@ -54,6 +54,8 @@ export interface ConsoleCommand extends CommandDef {
   /** A composite command: the commands its subtasks run (docs: contracts/task-outsourcing). */
   composite?: boolean
   uses?: readonly string[]
+  /** A factory command: its factory runs it itself, and nothing goes to the minion (docs: contracts/factory-commands). */
+  factory?: boolean
   /** What its data is, one of core's results (dir_listing), if any. */
   result?: string | null
   /** What core can ask it to do, one of core's actions (list_dir), if any. */
@@ -470,6 +472,11 @@ export function CommandBar({
               {c.composite && (
                 <span className="shrink-0 text-xs text-violet-700 dark:text-violet-400" title={`Its factory's code runs ${(c.uses ?? []).join(", ")} as its subtasks`}>
                   composite
+                </span>
+              )}
+              {c.factory && (
+                <span className="shrink-0 text-xs text-violet-700 dark:text-violet-400" title="Its factory runs it itself: nothing goes to the minion">
+                  factory
                 </span>
               )}
               {c.legacy && (

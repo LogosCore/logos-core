@@ -108,6 +108,10 @@ type MinionTask {
   # its picture), as far as it came; null for other tasks, or before its
   # first chunk.
   file: MinionFile
+  # A factory command's task's files (docs: contracts/factory-commands): the
+  # ones its factory's result named, which core keeps as the task's, oldest
+  # first. Empty for any other task, and until its result came.
+  files: [MinionFile!]!
   # The file core sends the minion for the task's file param (an upload),
   # and how far the minion has it; null for a task without one.
   upload: MinionTaskUpload

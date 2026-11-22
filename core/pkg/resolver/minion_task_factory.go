@@ -154,6 +154,29 @@ func (r *minionTaskResolver) factoryFiles(ctx context.Context, op uuid.UUID, par
 	return out, nil
 }
 
+// Files are a factory command's task's files: those its factory's result
+// named, which core keeps as the task's (factorycommands' HandleResult),
+// oldest first. Another task has none here (a download's is its file), so
+// none is read for it; the parent query checked the caller.
+func (r *minionTaskResolver) Files(ctx context.Context, task *model.MinionTask) ([]*model.MinionFile, error) {
+	out := []*model.MinionFile{}
+	if task == nil || task.Factory == nil || r.files == nil {
+		return out, nil
+	}
+	tid, err := uuid.Parse(task.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid task ID")
+	}
+	files, err := r.files.FilesOfTask(ctx, tid)
+	if err != nil {
+		return nil, fmt.Errorf("load the task's files: %w", err)
+	}
+	for i := range files {
+		out = append(out, minionFileModel(&files[i]))
+	}
+	return out, nil
+}
+
 // toFactoryModel is where a factory command's task stands, as GraphQL shows
 // it.
 func toFactoryModel(f *models.MinionFactoryRun) *model.MinionTaskFactory {

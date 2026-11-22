@@ -1421,6 +1421,7 @@ export type MinionTask = {
   feedbackInfos: Scalars['Int']['output'];
   feedbackWarnings: Scalars['Int']['output'];
   file?: Maybe<MinionFile>;
+  files: Array<MinionFile>;
   id: Scalars['ID']['output'];
   importantAt?: Maybe<Scalars['String']['output']>;
   importantBy?: Maybe<Scalars['ID']['output']>;
@@ -4328,7 +4329,7 @@ export type DeleteMyApiKeyMutationVariables = Exact<{ [key: string]: never; }>;
 
 export type DeleteMyApiKeyMutation = { deleteMyAPIKey: boolean };
 
-export type BuildSchemaFieldsFragment = { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, compression: Array<string>, errorCodesPerBuild: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, num?: number | null, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, op: number, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, legacy: boolean, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, errorCodes: Array<{ code: number, label: string, description?: string | null, fixed: boolean }> };
+export type BuildSchemaFieldsFragment = { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, compression: Array<string>, errorCodesPerBuild: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, num?: number | null, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, op: number, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, legacy: boolean, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, factoryCommands: Array<{ id: string, label: string, description?: string | null, result?: string | null, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, errorCodes: Array<{ code: number, label: string, description?: string | null, fixed: boolean }> };
 
 export type BuildFileFieldsFragment = { id: string, operationId: string, name: string, size: number, sha256: string, mediaType?: string | null, createdAt: string };
 
@@ -4337,7 +4338,7 @@ export type BuildFieldsFragment = { id: string, operationId: string, persistedSe
 export type FactoryKindsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type FactoryKindsQuery = { factoryKinds: Array<{ moduleName: string, icon: string, iconLight: string, instances: number, schema: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, compression: Array<string>, errorCodesPerBuild: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, num?: number | null, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, op: number, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, legacy: boolean, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, errorCodes: Array<{ code: number, label: string, description?: string | null, fixed: boolean }> } }> };
+export type FactoryKindsQuery = { factoryKinds: Array<{ moduleName: string, icon: string, iconLight: string, instances: number, schema: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, compression: Array<string>, errorCodesPerBuild: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, num?: number | null, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, op: number, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, legacy: boolean, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, factoryCommands: Array<{ id: string, label: string, description?: string | null, result?: string | null, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, errorCodes: Array<{ code: number, label: string, description?: string | null, fixed: boolean }> } }> };
 
 export type BuildFilesQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4691,7 +4692,7 @@ export type MinionTaskQueryVariables = Exact<{
 }>;
 
 
-export type MinionTaskQuery = { minionTask?: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null } | null };
+export type MinionTaskQuery = { minionTask?: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null, factory?: { module: string, instance?: string | null, acceptedAt?: string | null, reportAt?: string | null, waiting?: string | null, waitingSince?: string | null, resultAt?: string | null } | null } | null };
 
 export type PublishOperatorFocusMutationVariables = Exact<{
   input: OperatorFocusInput;
@@ -5201,7 +5202,9 @@ export type MinionSessionTargetQueryVariables = Exact<{
 
 export type MinionSessionTargetQuery = { minionSession?: { id: string, operationId: string, connKind?: string | null, bindTarget?: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, delegateId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, delegate?: { id: string, number: number, host?: string | null, user?: string | null } | null, createdBy: { type: string, id: string, name?: string | null } } | null } | null };
 
-export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null };
+export type MinionFileFieldsFragment = { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean };
+
+export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null, factory?: { module: string, instance?: string | null, acceptedAt?: string | null, reportAt?: string | null, waiting?: string | null, waitingSince?: string | null, resultAt?: string | null } | null };
 
 export type MinionTunnelStreamsQueryVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -5235,7 +5238,7 @@ export type MinionTaskOutputQueryVariables = Exact<{
 }>;
 
 
-export type MinionTaskOutputQuery = { minionTask?: { id: string, output: string, outputUtf8: boolean, data?: unknown | null } | null };
+export type MinionTaskOutputQuery = { minionTask?: { id: string, output: string, outputUtf8: boolean, data?: unknown | null, files: Array<{ id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean }> } | null };
 
 export type MinionTaskFeedbackQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -5266,7 +5269,7 @@ export type MinionTasksQueryVariables = Exact<{
 }>;
 
 
-export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null }> } };
+export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null, factory?: { module: string, instance?: string | null, acceptedAt?: string | null, reportAt?: string | null, waiting?: string | null, waitingSince?: string | null, resultAt?: string | null } | null }> } };
 
 export type MinionTaskImportantCountQueryVariables = Exact<{
   sessionId: Scalars['ID']['input'];
@@ -5287,7 +5290,7 @@ export type MinionSessionCommandsQueryVariables = Exact<{
 }>;
 
 
-export type MinionSessionCommandsQuery = { minionSessionCommands: Array<{ id: string, label: string, description?: string | null, required: boolean, legacy: boolean, result?: string | null, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> };
+export type MinionSessionCommandsQuery = { minionSessionCommands: Array<{ id: string, label: string, description?: string | null, required: boolean, legacy: boolean, result?: string | null, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, factory: boolean, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> };
 
 export type MinionDesktopSettingsQueryVariables = Exact<{
   front: Scalars['String']['input'];
@@ -5303,14 +5306,14 @@ export type QueueMinionTaskMutationVariables = Exact<{
 }>;
 
 
-export type QueueMinionTaskMutation = { queueMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null } };
+export type QueueMinionTaskMutation = { queueMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null, factory?: { module: string, instance?: string | null, acceptedAt?: string | null, reportAt?: string | null, waiting?: string | null, waitingSince?: string | null, resultAt?: string | null } | null } };
 
 export type CancelMinionTaskMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null } };
+export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null, factory?: { module: string, instance?: string | null, acceptedAt?: string | null, reportAt?: string | null, waiting?: string | null, waitingSince?: string | null, resultAt?: string | null } | null } };
 
 export type SetMinionTaskImportantMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -5318,7 +5321,7 @@ export type SetMinionTaskImportantMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionTaskImportantMutation = { setMinionTaskImportant: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null } };
+export type SetMinionTaskImportantMutation = { setMinionTaskImportant: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null, factory?: { module: string, instance?: string | null, acceptedAt?: string | null, reportAt?: string | null, waiting?: string | null, waitingSince?: string | null, resultAt?: string | null } | null } };
 
 export type SetMinionTunnelCapMutationVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -5363,7 +5366,7 @@ export type MinionTaskChangedSubscriptionVariables = Exact<{
 }>;
 
 
-export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null } };
+export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, importantAt?: string | null, importantBy?: string | null, importantByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, feedbackInfos: number, recordings: number, parentId?: string | null, subtaskAs?: string | null, cleanup: boolean, resultOf?: string | null, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, kind?: string | null, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null, width?: number | null, height?: number | null, display?: string | null, thumb: boolean } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, delegate?: { held: boolean, stopIdle?: string | null, usedAt?: string | null, carried: number, waiting: number, serves: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }>, connections: Array<{ n: number, moduleName: string, kind: string, peer?: string | null, openedAt: string, session?: { id: string, number: number } | null }> } | null, tunnel?: { port: number, address?: string | null, front: string, desktop: boolean, login?: string | null, loginProblem?: string | null, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, program?: string | null, args?: string | null, rows?: number | null, cols?: number | null, socksBind: boolean, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, maxStreams: number, timeoutMs: number, kept: number, up: number, down: number, rttMs?: number | null, resendAfterMs?: number | null, routes?: Array<string> | null, vpnClients: Array<{ id: string, name: string, user: string, machine: string, os: string, arch: string, version: string, from: string, since: string, connected: boolean, open: number, streams: number, up: number, down: number }> } | null, composite?: { status?: string | null, ownOp?: string | null, ownArgs?: unknown | null, subtasksUnderWay: number, subtasksEnded: number, phase?: string | null, timerAt?: string | null, silentSince?: string | null, stoppedAt?: string | null, calls: number, ownEnd?: { state: string, ok: boolean, exit?: number | null, err?: string | null, at: string } | null } | null, factory?: { module: string, instance?: string | null, acceptedAt?: string | null, reportAt?: string | null, waiting?: string | null, waitingSince?: string | null, resultAt?: string | null } | null } };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -5407,14 +5410,14 @@ export type ModuleChangedSubscription = { moduleChanged: { action: EventAction, 
 
 export type ModuleFieldDefFieldsFragment = { key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null };
 
-export type ModuleDetailFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, agentless: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, target: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, compression: Array<string>, errorCodesPerBuild: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, num?: number | null, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, op: number, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, legacy: boolean, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, errorCodes: Array<{ code: number, label: string, description?: string | null, fixed: boolean }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null };
+export type ModuleDetailFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, agentless: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, target: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, compression: Array<string>, errorCodesPerBuild: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, num?: number | null, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, op: number, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, legacy: boolean, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, factoryCommands: Array<{ id: string, label: string, description?: string | null, result?: string | null, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, errorCodes: Array<{ code: number, label: string, description?: string | null, fixed: boolean }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
 export type ModuleQueryVariables = Exact<{
   instance: Scalars['ID']['input'];
 }>;
 
 
-export type ModuleQuery = { module?: { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, agentless: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, target: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, compression: Array<string>, errorCodesPerBuild: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, num?: number | null, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, op: number, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, legacy: boolean, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, errorCodes: Array<{ code: number, label: string, description?: string | null, fixed: boolean }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null } | null };
+export type ModuleQuery = { module?: { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, agentless: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, target: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, compression: Array<string>, errorCodesPerBuild: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, num?: number | null, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, op: number, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, legacy: boolean, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, factoryCommands: Array<{ id: string, label: string, description?: string | null, result?: string | null, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, errorCodes: Array<{ code: number, label: string, description?: string | null, fixed: boolean }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null } | null };
 
 export type ModuleActionInvocationFieldsFragment = { id: string, instance: string, action: string, params?: unknown | null, status: ModuleActionStatus, result?: unknown | null, error?: string | null, startedAt: string, finishedAt?: string | null, actor: { type: string, id: string, name?: string | null } };
 
@@ -5441,7 +5444,7 @@ export type UpdateModuleConfigMutationVariables = Exact<{
 }>;
 
 
-export type UpdateModuleConfigMutation = { updateModuleConfig: { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, agentless: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, target: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, compression: Array<string>, errorCodesPerBuild: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, num?: number | null, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, op: number, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, legacy: boolean, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, errorCodes: Array<{ code: number, label: string, description?: string | null, fixed: boolean }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null } };
+export type UpdateModuleConfigMutation = { updateModuleConfig: { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, agentless: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, target: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, compression: Array<string>, errorCodesPerBuild: boolean, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, num?: number | null, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, op: number, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, legacy: boolean, action?: string | null, kinds: Array<string>, composite: boolean, uses: Array<string>, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, factoryCommands: Array<{ id: string, label: string, description?: string | null, result?: string | null, params: Array<{ key: string, num?: number | null, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, advanced: boolean, platforms: Array<string>, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null, when?: { key: string, values: Array<string> } | null }> }>, errorCodes: Array<{ code: number, label: string, description?: string | null, fixed: boolean }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null } };
 
 export type InvokeModuleActionMutationVariables = Exact<{
   instance: Scalars['ID']['input'];
@@ -6961,6 +6964,24 @@ export const MinionTargetFieldsFragmentDoc = new TypedDocumentString(`
   updatedAt
 }
     `, {"fragmentName":"MinionTargetFields"}) as unknown as TypedDocumentString<MinionTargetFieldsFragment, unknown>;
+export const MinionFileFieldsFragmentDoc = new TypedDocumentString(`
+    fragment MinionFileFields on MinionFile {
+  id
+  name
+  kind
+  size
+  received
+  sha256
+  state
+  err
+  contentType
+  doneAt
+  width
+  height
+  display
+  thumb
+}
+    `, {"fragmentName":"MinionFileFields"}) as unknown as TypedDocumentString<MinionFileFieldsFragment, unknown>;
 export const MinionTaskFieldsFragmentDoc = new TypedDocumentString(`
     fragment MinionTaskFields on MinionTask {
   id
@@ -7010,20 +7031,7 @@ export const MinionTaskFieldsFragmentDoc = new TypedDocumentString(`
     since
   }
   file {
-    id
-    name
-    kind
-    size
-    received
-    sha256
-    state
-    err
-    contentType
-    doneAt
-    width
-    height
-    display
-    thumb
+    ...MinionFileFields
   }
   upload {
     fileId
@@ -7151,8 +7159,32 @@ export const MinionTaskFieldsFragmentDoc = new TypedDocumentString(`
     stoppedAt
     calls
   }
+  factory {
+    module
+    instance
+    acceptedAt
+    reportAt
+    waiting
+    waitingSince
+    resultAt
+  }
 }
-    `, {"fragmentName":"MinionTaskFields"}) as unknown as TypedDocumentString<MinionTaskFieldsFragment, unknown>;
+    fragment MinionFileFields on MinionFile {
+  id
+  name
+  kind
+  size
+  received
+  sha256
+  state
+  err
+  contentType
+  doneAt
+  width
+  height
+  display
+  thumb
+}`, {"fragmentName":"MinionTaskFields"}) as unknown as TypedDocumentString<MinionTaskFieldsFragment, unknown>;
 export const ModuleFieldsFragmentDoc = new TypedDocumentString(`
     fragment ModuleFields on Module {
   instance
@@ -7264,6 +7296,15 @@ export const BuildSchemaFieldsFragmentDoc = new TypedDocumentString(`
     kinds
     composite
     uses
+    params {
+      ...ModuleFieldDefFields
+    }
+  }
+  factoryCommands {
+    id
+    label
+    description
+    result
     params {
       ...ModuleFieldDefFields
     }
@@ -7420,6 +7461,15 @@ export const ModuleDetailFieldsFragmentDoc = new TypedDocumentString(`
     kinds
     composite
     uses
+    params {
+      ...ModuleFieldDefFields
+    }
+  }
+  factoryCommands {
+    id
+    label
+    description
+    result
     params {
       ...ModuleFieldDefFields
     }
@@ -8162,6 +8212,15 @@ export const FactoryKindsDocument = new TypedDocumentString(`
     kinds
     composite
     uses
+    params {
+      ...ModuleFieldDefFields
+    }
+  }
+  factoryCommands {
+    id
+    label
+    description
+    result
     params {
       ...ModuleFieldDefFields
     }
@@ -9784,7 +9843,23 @@ export const MinionTaskDocument = new TypedDocumentString(`
     ...MinionTaskFields
   }
 }
-    fragment MinionTaskFields on MinionTask {
+    fragment MinionFileFields on MinionFile {
+  id
+  name
+  kind
+  size
+  received
+  sha256
+  state
+  err
+  contentType
+  doneAt
+  width
+  height
+  display
+  thumb
+}
+fragment MinionTaskFields on MinionTask {
   id
   rev
   sessionId
@@ -9832,20 +9907,7 @@ export const MinionTaskDocument = new TypedDocumentString(`
     since
   }
   file {
-    id
-    name
-    kind
-    size
-    received
-    sha256
-    state
-    err
-    contentType
-    doneAt
-    width
-    height
-    display
-    thumb
+    ...MinionFileFields
   }
   upload {
     fileId
@@ -9972,6 +10034,15 @@ export const MinionTaskDocument = new TypedDocumentString(`
     silentSince
     stoppedAt
     calls
+  }
+  factory {
+    module
+    instance
+    acceptedAt
+    reportAt
+    waiting
+    waitingSince
+    resultAt
   }
 }`) as unknown as TypedDocumentString<MinionTaskQuery, MinionTaskQueryVariables>;
 export const PublishOperatorFocusDocument = new TypedDocumentString(`
@@ -12355,9 +12426,27 @@ export const MinionTaskOutputDocument = new TypedDocumentString(`
     output
     outputUtf8
     data
+    files {
+      ...MinionFileFields
+    }
   }
 }
-    `) as unknown as TypedDocumentString<MinionTaskOutputQuery, MinionTaskOutputQueryVariables>;
+    fragment MinionFileFields on MinionFile {
+  id
+  name
+  kind
+  size
+  received
+  sha256
+  state
+  err
+  contentType
+  doneAt
+  width
+  height
+  display
+  thumb
+}`) as unknown as TypedDocumentString<MinionTaskOutputQuery, MinionTaskOutputQueryVariables>;
 export const MinionTaskFeedbackDocument = new TypedDocumentString(`
     query MinionTaskFeedback($id: ID!) {
   minionTask(id: $id) {
@@ -12416,7 +12505,23 @@ export const MinionTasksDocument = new TypedDocumentString(`
     before
   }
 }
-    fragment MinionTaskFields on MinionTask {
+    fragment MinionFileFields on MinionFile {
+  id
+  name
+  kind
+  size
+  received
+  sha256
+  state
+  err
+  contentType
+  doneAt
+  width
+  height
+  display
+  thumb
+}
+fragment MinionTaskFields on MinionTask {
   id
   rev
   sessionId
@@ -12464,20 +12569,7 @@ export const MinionTasksDocument = new TypedDocumentString(`
     since
   }
   file {
-    id
-    name
-    kind
-    size
-    received
-    sha256
-    state
-    err
-    contentType
-    doneAt
-    width
-    height
-    display
-    thumb
+    ...MinionFileFields
   }
   upload {
     fileId
@@ -12605,6 +12697,15 @@ export const MinionTasksDocument = new TypedDocumentString(`
     stoppedAt
     calls
   }
+  factory {
+    module
+    instance
+    acceptedAt
+    reportAt
+    waiting
+    waitingSince
+    resultAt
+  }
 }`) as unknown as TypedDocumentString<MinionTasksQuery, MinionTasksQueryVariables>;
 export const MinionTaskImportantCountDocument = new TypedDocumentString(`
     query MinionTaskImportantCount($sessionId: ID!) {
@@ -12632,6 +12733,7 @@ export const MinionSessionCommandsDocument = new TypedDocumentString(`
     kinds
     composite
     uses
+    factory
     params {
       ...ModuleFieldDefFields
     }
@@ -12715,7 +12817,23 @@ export const QueueMinionTaskDocument = new TypedDocumentString(`
     ...MinionTaskFields
   }
 }
-    fragment MinionTaskFields on MinionTask {
+    fragment MinionFileFields on MinionFile {
+  id
+  name
+  kind
+  size
+  received
+  sha256
+  state
+  err
+  contentType
+  doneAt
+  width
+  height
+  display
+  thumb
+}
+fragment MinionTaskFields on MinionTask {
   id
   rev
   sessionId
@@ -12763,20 +12881,7 @@ export const QueueMinionTaskDocument = new TypedDocumentString(`
     since
   }
   file {
-    id
-    name
-    kind
-    size
-    received
-    sha256
-    state
-    err
-    contentType
-    doneAt
-    width
-    height
-    display
-    thumb
+    ...MinionFileFields
   }
   upload {
     fileId
@@ -12903,6 +13008,15 @@ export const QueueMinionTaskDocument = new TypedDocumentString(`
     silentSince
     stoppedAt
     calls
+  }
+  factory {
+    module
+    instance
+    acceptedAt
+    reportAt
+    waiting
+    waitingSince
+    resultAt
   }
 }`) as unknown as TypedDocumentString<QueueMinionTaskMutation, QueueMinionTaskMutationVariables>;
 export const CancelMinionTaskDocument = new TypedDocumentString(`
@@ -12911,7 +13025,23 @@ export const CancelMinionTaskDocument = new TypedDocumentString(`
     ...MinionTaskFields
   }
 }
-    fragment MinionTaskFields on MinionTask {
+    fragment MinionFileFields on MinionFile {
+  id
+  name
+  kind
+  size
+  received
+  sha256
+  state
+  err
+  contentType
+  doneAt
+  width
+  height
+  display
+  thumb
+}
+fragment MinionTaskFields on MinionTask {
   id
   rev
   sessionId
@@ -12959,20 +13089,7 @@ export const CancelMinionTaskDocument = new TypedDocumentString(`
     since
   }
   file {
-    id
-    name
-    kind
-    size
-    received
-    sha256
-    state
-    err
-    contentType
-    doneAt
-    width
-    height
-    display
-    thumb
+    ...MinionFileFields
   }
   upload {
     fileId
@@ -13099,6 +13216,15 @@ export const CancelMinionTaskDocument = new TypedDocumentString(`
     silentSince
     stoppedAt
     calls
+  }
+  factory {
+    module
+    instance
+    acceptedAt
+    reportAt
+    waiting
+    waitingSince
+    resultAt
   }
 }`) as unknown as TypedDocumentString<CancelMinionTaskMutation, CancelMinionTaskMutationVariables>;
 export const SetMinionTaskImportantDocument = new TypedDocumentString(`
@@ -13107,7 +13233,23 @@ export const SetMinionTaskImportantDocument = new TypedDocumentString(`
     ...MinionTaskFields
   }
 }
-    fragment MinionTaskFields on MinionTask {
+    fragment MinionFileFields on MinionFile {
+  id
+  name
+  kind
+  size
+  received
+  sha256
+  state
+  err
+  contentType
+  doneAt
+  width
+  height
+  display
+  thumb
+}
+fragment MinionTaskFields on MinionTask {
   id
   rev
   sessionId
@@ -13155,20 +13297,7 @@ export const SetMinionTaskImportantDocument = new TypedDocumentString(`
     since
   }
   file {
-    id
-    name
-    kind
-    size
-    received
-    sha256
-    state
-    err
-    contentType
-    doneAt
-    width
-    height
-    display
-    thumb
+    ...MinionFileFields
   }
   upload {
     fileId
@@ -13295,6 +13424,15 @@ export const SetMinionTaskImportantDocument = new TypedDocumentString(`
     silentSince
     stoppedAt
     calls
+  }
+  factory {
+    module
+    instance
+    acceptedAt
+    reportAt
+    waiting
+    waitingSince
+    resultAt
   }
 }`) as unknown as TypedDocumentString<SetMinionTaskImportantMutation, SetMinionTaskImportantMutationVariables>;
 export const SetMinionTunnelCapDocument = new TypedDocumentString(`
@@ -13340,7 +13478,23 @@ export const MinionTaskChangedDocument = new TypedDocumentString(`
     ...MinionTaskFields
   }
 }
-    fragment MinionTaskFields on MinionTask {
+    fragment MinionFileFields on MinionFile {
+  id
+  name
+  kind
+  size
+  received
+  sha256
+  state
+  err
+  contentType
+  doneAt
+  width
+  height
+  display
+  thumb
+}
+fragment MinionTaskFields on MinionTask {
   id
   rev
   sessionId
@@ -13388,20 +13542,7 @@ export const MinionTaskChangedDocument = new TypedDocumentString(`
     since
   }
   file {
-    id
-    name
-    kind
-    size
-    received
-    sha256
-    state
-    err
-    contentType
-    doneAt
-    width
-    height
-    display
-    thumb
+    ...MinionFileFields
   }
   upload {
     fileId
@@ -13528,6 +13669,15 @@ export const MinionTaskChangedDocument = new TypedDocumentString(`
     silentSince
     stoppedAt
     calls
+  }
+  factory {
+    module
+    instance
+    acceptedAt
+    reportAt
+    waiting
+    waitingSince
+    resultAt
   }
 }`) as unknown as TypedDocumentString<MinionTaskChangedSubscription, MinionTaskChangedSubscriptionVariables>;
 export const ModulesDocument = new TypedDocumentString(`
@@ -13728,6 +13878,15 @@ export const ModuleDocument = new TypedDocumentString(`
     kinds
     composite
     uses
+    params {
+      ...ModuleFieldDefFields
+    }
+  }
+  factoryCommands {
+    id
+    label
+    description
+    result
     params {
       ...ModuleFieldDefFields
     }
@@ -13958,6 +14117,15 @@ export const UpdateModuleConfigDocument = new TypedDocumentString(`
     kinds
     composite
     uses
+    params {
+      ...ModuleFieldDefFields
+    }
+  }
+  factoryCommands {
+    id
+    label
+    description
+    result
     params {
       ...ModuleFieldDefFields
     }

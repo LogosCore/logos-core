@@ -192,3 +192,55 @@ func TestFactoryCommandModels(t *testing.T) {
 		t.Fatal("a command marked factory")
 	}
 }
+
+// resultFiles are tasks' files in memory, as FilesOfTask lists them, and the
+// tasks they were asked for.
+type resultFiles struct {
+	TaskFiles
+	files []models.MinionFile
+	asked []uuid.UUID
+}
+
+func (f *resultFiles) FilesOfTask(_ context.Context, task uuid.UUID) ([]models.MinionFile, error) {
+	f.asked = append(f.asked, task)
+	var out []models.MinionFile
+	for _, x := range f.files {
+		if x.TaskID == task {
+			out = append(out, x)
+		}
+	}
+	return out, nil
+}
+
+// A factory command's task's files are those its result named, as core
+// lists them; another task's are not read (each row of a list would cost a
+// query), and are none.
+func TestFactoryCommandFiles(t *testing.T) {
+	task := uuid.New()
+	files := &resultFiles{files: []models.MinionFile{
+		{FileID: uuid.New(), TaskID: task, SessionID: uuid.New(), Name: "report.csv", Total: 12, Received: 12,
+			State: models.MinionFileComplete, ContentType: "text/csv", SHA256: []byte{1, 2}},
+		{FileID: uuid.New(), TaskID: task, Name: "summary.txt", Total: 3, Received: 3, State: models.MinionFileComplete},
+		{FileID: uuid.New(), TaskID: uuid.New(), Name: "another task's"},
+	}}
+	r := &minionTaskResolver{files: files}
+	ctx := context.Background()
+	factory := &model.MinionTaskFactory{Module: "example"}
+
+	got, err := r.Files(ctx, &model.MinionTask{ID: task.String(), Factory: factory})
+	if err != nil || len(got) != 2 || got[0].ID != files.files[0].FileID.String() || got[0].Name != "report.csv" || got[0].Size != 12 ||
+		got[0].Sha256 == nil || *got[0].Sha256 != "0102" || got[0].TaskID == nil || *got[0].TaskID != task.String() ||
+		got[0].ContentType == nil || *got[0].ContentType != "text/csv" || got[1].Name != "summary.txt" {
+		t.Fatalf("a factory command's task's files: %+v %v", got, err)
+	}
+	files.asked = nil
+	if got, err := r.Files(ctx, &model.MinionTask{ID: task.String()}); err != nil || got == nil || len(got) != 0 || len(files.asked) != 0 {
+		t.Fatalf("another task's: %+v %v, read for %v", got, err, files.asked)
+	}
+	if got, err := (&minionTaskResolver{}).Files(ctx, &model.MinionTask{ID: task.String(), Factory: factory}); err != nil || got == nil || len(got) != 0 {
+		t.Fatalf("no files service: %+v %v", got, err)
+	}
+	if _, err := r.Files(ctx, &model.MinionTask{ID: "x", Factory: factory}); err == nil {
+		t.Fatal("a bad task id read")
+	}
+}

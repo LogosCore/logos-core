@@ -234,4 +234,48 @@ func TestIntegrationAdoptFactoryFiles(t *testing.T) {
 	if f, err := files.FindByTask(ctx, task); err != nil || f.FileID != mine.FileID {
 		t.Fatalf("the task's file: %+v %v", f, err)
 	}
+	if got, err := files.ListByTask(ctx, task, 10); err != nil || len(got) != 1 || got[0].FileID != mine.FileID {
+		t.Fatalf("the task's files: %+v %v", got, err)
+	}
+}
+
+// A task's files, oldest first: those it got and those it took as its own,
+// none of another task's, at most limit.
+func TestIntegrationFilesOfTask(t *testing.T) {
+	db := integrationDB(t)
+	files := NewMinionFileRepository(db)
+	ctx := context.Background()
+	task, other := uuid.New(), uuid.New()
+	at := time.Date(2026, 11, 22, 10, 0, 0, 0, time.UTC)
+	mk := func(name string, of uuid.UUID, also []uuid.UUID, minute int) uuid.UUID {
+		f := &models.MinionFile{FileID: uuid.New(), OperationID: uuid.New(), TaskID: of, AlsoTasks: also, Xfer: uuid.New().NodeID(),
+			Name: name, State: models.MinionFileComplete, LastChunkAt: at}
+		f.CreateAt = at.Add(time.Duration(minute) * time.Minute)
+		if err := files.Insert(ctx, f); err != nil {
+			t.Fatal(err)
+		}
+		return f.FileID
+	}
+	second := mk("second", task, nil, 2)
+	first := mk("first", task, nil, 1)
+	taken := mk("taken", other, []uuid.UUID{task}, 3)
+	mk("another task's", other, nil, 0)
+	names := func(fs []models.MinionFile) []string {
+		out := make([]string, len(fs))
+		for i, f := range fs {
+			out[i] = f.Name
+		}
+		return out
+	}
+
+	got, err := files.ListByTask(ctx, task, 10)
+	if err != nil || len(got) != 3 || got[0].FileID != first || got[1].FileID != second || got[2].FileID != taken {
+		t.Fatalf("the task's files: %v %v", names(got), err)
+	}
+	if got, err := files.ListByTask(ctx, task, 2); err != nil || len(got) != 2 || got[1].FileID != second {
+		t.Fatalf("at most 2: %v %v", names(got), err)
+	}
+	if got, err := files.ListByTask(ctx, uuid.New(), 10); err != nil || len(got) != 0 {
+		t.Fatalf("a task with none: %v %v", names(got), err)
+	}
 }

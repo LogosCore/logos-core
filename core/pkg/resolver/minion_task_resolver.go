@@ -63,6 +63,9 @@ type IMinionTaskResolver interface {
 	// File is a file_download task's file (a screenshot task's picture),
 	// as far as it came; nil for none.
 	File(ctx context.Context, taskID string) (*model.MinionFile, error)
+	// Files are a factory command's task's files, those its result named,
+	// oldest first; none for another task (minion_task_factory.go).
+	Files(ctx context.Context, task *model.MinionTask) ([]*model.MinionFile, error)
 	// MinionFileStrings is a page of a kept file's printable strings.
 	MinionFileStrings(ctx context.Context, fileID string, after, first, minLength *int, encoding, search *string) (*model.MinionFileStringPage, error)
 	// MinionFiles is a page of an operation's files of a kind (its
@@ -236,6 +239,8 @@ type TaskCredentials interface {
 // (minionfiles.Service).
 type TaskFiles interface {
 	File(ctx context.Context, taskID uuid.UUID) (*models.MinionFile, error)
+	// FilesOfTask are a task's files, oldest first.
+	FilesOfTask(ctx context.Context, taskID uuid.UUID) ([]models.MinionFile, error)
 	FileByID(ctx context.Context, fileID uuid.UUID) (*models.MinionFile, error)
 	// TaskFile is an operation's task file, for a file param's value.
 	TaskFile(ctx context.Context, operationID uuid.UUID, id string) (*models.MinionFile, error)

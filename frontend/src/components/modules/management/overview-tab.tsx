@@ -172,6 +172,33 @@ export function BuildCommands({ build }: { build: Build }) {
 }
 
 /**
+ * The commands this factory instance runs itself (read-only; docs:
+ * contracts/factory-commands): every session of its builds has them, and
+ * nothing of them goes to a minion, so they have no op and no targets. Each
+ * one's id, label, description and params, in the factory's order.
+ */
+export function BuildFactoryCommands({ build }: { build: Build }) {
+  return (
+    <InfoCard title="Factory commands" note={build.factoryCommands.length} labelWidth={KEYS}>
+      <IdRows
+        rows={build.factoryCommands.map((c) => ({
+          id: c.id,
+          content: (
+            <>
+              <div>{c.label}</div>
+              {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
+              {c.params.length > 0 && (
+                <div className="text-xs text-muted-foreground">params {c.params.map((p) => p.key).join(", ")}</div>
+              )}
+            </>
+          ),
+        }))}
+      />
+    </InfoCard>
+  )
+}
+
+/**
  * The error codes this factory instance declared (read-only): what its
  * minions' exit codes mean when they stop on an error.
  */

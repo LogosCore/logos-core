@@ -1,5 +1,26 @@
 import { graphql } from "@/graphql/gql"
 
+// A file core keeps for a task: a download's, a screenshot's picture, one a
+// factory command's result named (MinionTask.files).
+export const MinionFileFields = graphql(`
+  fragment MinionFileFields on MinionFile {
+    id
+    name
+    kind
+    size
+    received
+    sha256
+    state
+    err
+    contentType
+    doneAt
+    width
+    height
+    display
+    thumb
+  }
+`)
+
 // The commands operators give a session's minion, and what it answered
 // (core: minion_tasks.graphql). Lists and live updates carry a task without
 // its output; the console reads the output of the task it shows
@@ -53,20 +74,7 @@ export const MinionTaskFields = graphql(`
       since
     }
     file {
-      id
-      name
-      kind
-      size
-      received
-      sha256
-      state
-      err
-      contentType
-      doneAt
-      width
-      height
-      display
-      thumb
+      ...MinionFileFields
     }
     upload {
       fileId
@@ -194,6 +202,15 @@ export const MinionTaskFields = graphql(`
       stoppedAt
       calls
     }
+    factory {
+      module
+      instance
+      acceptedAt
+      reportAt
+      waiting
+      waitingSince
+      resultAt
+    }
   }
 `)
 
@@ -277,6 +294,8 @@ export const DeleteRecordingMutation = graphql(`
   }
 `)
 
+// The task the console shows: its output and data, and a factory command's
+// task's files (none for another task, and none is read for it).
 export const MinionTaskOutputQuery = graphql(`
   query MinionTaskOutput($id: ID!) {
     minionTask(id: $id) {
@@ -284,6 +303,9 @@ export const MinionTaskOutputQuery = graphql(`
       output
       outputUtf8
       data
+      files {
+        ...MinionFileFields
+      }
     }
   }
 `)
@@ -360,6 +382,7 @@ export const MinionSessionCommandsQuery = graphql(`
       kinds
       composite
       uses
+      factory
       params {
         ...ModuleFieldDefFields
       }

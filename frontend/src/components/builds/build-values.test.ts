@@ -46,6 +46,7 @@ const schema: BuildSchemaFieldsFragment = {
   compression: [],
   persistedSessions: false,
   errorCodesPerBuild: true,
+  factoryCommands: [],
   errorCodes: [
     { code: 5, label: "No connection it can use", description: null, fixed: false },
     { code: 3, label: "Its config does not read", description: "Build it again.", fixed: false },

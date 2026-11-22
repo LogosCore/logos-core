@@ -1,9 +1,10 @@
-import { BanIcon, CheckIcon, CircleDashedIcon, LoaderIcon, SendIcon, StarIcon, WorkflowIcon, XIcon } from "lucide-react"
+import { BanIcon, CheckIcon, CircleDashedIcon, FactoryIcon, LoaderIcon, SendIcon, StarIcon, WorkflowIcon, XIcon } from "lucide-react"
 import { useSteadyTitle } from "@/hooks/use-steady-title"
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { clock, FINISHED, took, type Task } from "./task-actions"
 import { compositeStands, phaseWord } from "./composite-values"
+import { factoryHeld, factoryStands, ranOn } from "./factory-values"
 
 // Where a task stands, as the console's task list and the task it shows
 // draw it.
@@ -14,6 +15,8 @@ const STATE: Record<string, { icon: typeof CheckIcon; className: string; spin?: 
   RUNNING: { icon: LoaderIcon, className: "text-sky-600 dark:text-sky-400", spin: true },
   // A composite command's task while its factory's code decides, in core.
   COMPOSING: { icon: WorkflowIcon, className: "text-violet-600 dark:text-violet-400" },
+  // A factory command's task, which its factory runs itself, until it ends.
+  FACTORY: { icon: FactoryIcon, className: "text-violet-600 dark:text-violet-400" },
   DONE: { icon: CheckIcon, className: "text-emerald-600 dark:text-emerald-400" },
   FAILED: { icon: XIcon, className: "text-red-600 dark:text-red-400" },
   CANCELLED: { icon: BanIcon, className: "text-muted-foreground" },
@@ -33,21 +36,37 @@ function stateStyle(t: Task) {
 }
 
 /**
+ * Why a waiting task is held, for its amber and its hover: its minion
+ * cannot be reached (held), or no instance of its factory took a factory
+ * command's task (core's reason). Null for one that is not.
+ */
+function heldWhy(t: Task, held?: string | null): string | null {
+  return held && waits(t.state) ? held : factoryHeld(t)
+}
+
+/**
  * A task's state as an icon: a list row's. A command that exited non-zero
  * is marked as failed; a waiting task that cannot reach its minion (held,
- * the reason) in amber, the reason on hover.
+ * the reason), or a factory command's task no instance took, in amber, the
+ * reason on hover; one its factory runs pulses.
  */
 export function StateIcon({ t, className, held }: { t: Task; className?: string; held?: string | null }) {
   const s = stateStyle(t)
   const Icon = s.icon
-  const blocked = held && waits(t.state)
+  const why = heldWhy(t, held)
   // The reason counts the minutes the target has been out: held while
   // hovered (useSteadyTitle).
-  const hover = useSteadyTitle(blocked ? `Waiting: ${held}` : undefined)
+  const hover = useSteadyTitle(why ? `Waiting: ${why}` : undefined)
   return (
     <Icon
       aria-label={t.state.toLowerCase()}
-      className={cn("size-3.5 shrink-0", blocked ? HELD : s.className, s.spin && "animate-spin", className)}
+      className={cn(
+        "size-3.5 shrink-0",
+        why ? HELD : s.className,
+        s.spin && "animate-spin",
+        factoryStands(t)?.phase === "running" && "animate-pulse",
+        className,
+      )}
       onPointerEnter={hover.onPointerEnter}
       onPointerLeave={hover.onPointerLeave}
     >
@@ -68,15 +87,15 @@ export const STAR = "text-yellow-500 dark:text-yellow-400"
  */
 export function ImportantIcon({ t, className, held }: { t: Task; className?: string; held?: string | null }) {
   const s = stateStyle(t)
-  const blocked = held && waits(t.state)
-  const hover = useSteadyTitle(blocked ? `Waiting: ${held}` : undefined)
+  const why = heldWhy(t, held)
+  const hover = useSteadyTitle(why ? `Waiting: ${why}` : undefined)
   return (
     <StarIcon
       aria-label={`important, ${t.state.toLowerCase()}`}
       className={cn(
         "size-3.5 shrink-0",
-        blocked ? HELD : s === STATE.DONE ? STAR : s.className,
-        s.spin && "animate-pulse",
+        why ? HELD : s === STATE.DONE ? STAR : s.className,
+        (s.spin || factoryStands(t)?.phase === "running") && "animate-pulse",
         className,
       )}
       onPointerEnter={hover.onPointerEnter}
@@ -121,6 +140,9 @@ export function StateLabel({ t, held }: { t: Task; held?: string | null }) {
     case "COMPOSING":
       text = <span>{compositeStands(t) ?? "composing"}</span>
       break
+    case "FACTORY":
+      text = <FactoryStandText t={t} />
+      break
     case "DONE":
       text = <span>{t.exit != null ? `exit ${t.exit}` : "done"}</span>
       break
@@ -129,11 +151,17 @@ export function StateLabel({ t, held }: { t: Task; held?: string | null }) {
   }
   const s = STATE[t.state]
   const failedExit = t.state === "DONE" && t.exit != null && t.exit !== 0
+  const ran = ranOn(t)
   return (
     <span className="inline-flex items-center gap-1 text-xs">
       <StateIcon t={t} />
       <span className={failedExit ? STATE.FAILED.className : s?.className}>{text}</span>
       {took(t) && <span className={muted}>· {took(t)}</span>}
+      {ran && (
+        <span className={muted} title="Its factory ran it, on this instance: nothing went to the minion">
+          · ran on {ran}
+        </span>
+      )}
       {stopping && <span className="text-amber-600 dark:text-amber-400">· stopping{t.cancelReason && " (core)"}</span>}
       {phase && <span className="text-amber-600 dark:text-amber-400">· {phase}</span>}
       {t.composite?.silentSince && !FINISHED.has(t.state) && (
@@ -148,6 +176,36 @@ export function StateLabel({ t, held }: { t: Task; held?: string | null }) {
       )}
     </span>
   )
+}
+
+/**
+ * A factory command's task's words while it runs: why no instance took it
+ * (core's reason, amber, as a held task's), or the instance core offered it
+ * to, or that runs it.
+ */
+function FactoryStandText({ t }: { t: Task }) {
+  const s = factoryStands(t)
+  if (!s) return <span>its factory runs it</span>
+  switch (s.phase) {
+    case "waiting": {
+      const since = t.factory?.waitingSince
+      return s.why ? (
+        <span className={HELD} title={`No instance of ${s.module} took it${since ? ` since ${formatAbsolute(since)}` : ""}: core offers it again every 2 seconds`}>
+          waits: {s.why}
+        </span>
+      ) : (
+        <span title="Core offers it to its factory's instances, the fewest-loaded first, every 2 seconds until one takes it">
+          waits for an instance of {s.module}
+        </span>
+      )
+    }
+    case "offered":
+      return <span title="Core's call is out: the instance takes it, or core offers it to the next">offered to {s.instance}</span>
+    case "running": {
+      const at = t.factory?.acceptedAt
+      return <span title={`Its factory runs it: nothing goes to the minion${at ? `. Taken ${formatAbsolute(at)}` : ""}`}>{s.instance} runs it</span>
+    }
+  }
 }
 
 /** The times a task went through, short, each with its full time on hover. */

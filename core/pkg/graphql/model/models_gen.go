@@ -1207,6 +1207,7 @@ type MinionTask struct {
 	DataProblem       *string            `json:"dataProblem,omitempty"`
 	MissingParts      int                `json:"missingParts"`
 	File              *MinionFile        `json:"file,omitempty"`
+	Files             []*MinionFile      `json:"files"`
 	Upload            *MinionTaskUpload  `json:"upload,omitempty"`
 	Stream            *MinionTaskStream  `json:"stream,omitempty"`
 	Document          string             `json:"document"`
