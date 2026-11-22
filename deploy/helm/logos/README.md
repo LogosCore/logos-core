@@ -252,6 +252,7 @@ Credentials still come from `secrets.values` or `secrets.existingSecret`.
 | `core.config.minionFile.maxSize` | Largest file a minion sends core, or core sends a minion (2 GiB; at most 64 GiB); the minion-files Ingress follows it |
 | `core.operationalPorts.count` / `.first` / `.address` | [Operational ports](#operational-ports-get-a-service-of-their-own) for tunnel tasks' SOCKS proxies: `count` ports from `first` (none by default), and the host operators reach them at |
 | `core.operationalPorts.service.*` | Their Service: `type` (LoadBalancer), `annotations`, `loadBalancerSourceRanges` |
+| `core.builtinProcessMarks` | The deployment's built-in process marks (docs: Core Infrastructure, "Built-in process marks"), a list of `name` with `color`, `icon` or `emoji`; mounted as core's `/etc/logos/builtin-process-marks.json` (none by default) |
 | `guacd.enabled` / `guacd.image.*` / `guacd.resources` | [guacd](#guacd-draws-the-desktops), which draws the desktop fronts (on by default; they need operational ports) |
 | `ingress.minionTransfers.enabled` / `.annotations` | The transfer Ingresses (minion files and streams, build transfers; above), and annotations for them only |
 | `secrets.values.*` | Inline secret values (development only) |

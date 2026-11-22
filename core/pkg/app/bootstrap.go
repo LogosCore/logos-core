@@ -2,7 +2,10 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +23,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/events"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/minionfiles"
+	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/recordings"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/skills"
@@ -94,6 +98,7 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		MinionTarget:       repository.NewMinionTargetRepository(db),
 		MinionReservation:  repository.NewMinionSessionReservationRepository(db),
 		MinionMark:         repository.NewMinionSessionMarkRepository(db),
+		MinionProcessMark:  repository.NewMinionProcessMarkRepository(db),
 		MinionFolder:       repository.NewMinionSessionFolderRepository(db),
 		MinionTask:         repository.NewMinionTaskRepository(db),
 		MinionFile:         repository.NewMinionFileRepository(db),
@@ -405,6 +410,34 @@ func subscribeEventHandlers(
 	bus.Subscribe([]eventbus.Topic{eventbus.TopicOperationMemberUpdated}, disconnect)
 }
 
+// loadBuiltinProcessMarks reads the deployment's built-in process marks
+// (docs: core-infrastructure, "Built-in process marks"): none without the
+// file, or with an empty one; none, logged as an error, when it does not
+// read or is not a JSON array of marks; else the marks that check, each one
+// that does not logged and left out. Core starts either way: the marks are
+// what process lists show, and nothing else depends on them.
+func loadBuiltinProcessMarks(path string, l *zap.Logger) models.BuiltinProcessMarks {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		l.Info("built-in process marks: none, no file", zap.String("path", path))
+		return nil
+	}
+	if err != nil {
+		l.Error("built-in process marks: none, the file does not read", zap.String("path", path), zap.Error(err))
+		return nil
+	}
+	marks, skipped, err := models.ParseBuiltinProcessMarks(data)
+	if err != nil {
+		l.Error("built-in process marks: none, the file is not a JSON array of marks", zap.String("path", path), zap.Error(err))
+		return nil
+	}
+	for _, why := range skipped {
+		l.Warn("built-in process marks: a mark left out", zap.String("path", path), zap.String("why", why))
+	}
+	l.Info("built-in process marks read", zap.String("path", path), zap.Int("marks", len(marks)))
+	return marks
+}
+
 // runStartupBackfills brings legacy rows up to the current schema. Each is
 // idempotent and bounded by the number of rows still missing the field, so
 // subsequent boots do no work. A failure is logged, never fatal: a backfill
@@ -504,6 +537,14 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 		l.Warn("orphaned session marks sweep failed", zap.Error(err))
 	} else if n > 0 {
 		l.Info("orphaned session marks removed", zap.Int64("rows", n))
+	}
+	// Process marks outlive every process of their name on purpose; those of
+	// a user gone are orphans. Clearings stay, whatever the built-in marks:
+	// the deployment's file may have one again.
+	if n, err := repos.MinionProcessMark.RemoveOrphans(ctx); err != nil {
+		l.Warn("orphaned process marks sweep failed", zap.Error(err))
+	} else if n > 0 {
+		l.Info("orphaned process marks removed", zap.Int64("rows", n))
 	}
 }
 

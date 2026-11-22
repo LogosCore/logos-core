@@ -26,6 +26,10 @@ spec:
         {{- if not .Values.secrets.existingSecret }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
+        {{- if .Values.core.builtinProcessMarks }}
+        # Core reads its built-in process marks at start: a change rolls it.
+        checksum/process-marks: {{ include (print $.Template.BasePath "/core-process-marks-configmap.yaml") . | sha256sum }}
+        {{- end }}
         {{- with .Values.core.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -125,10 +129,23 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.core.builtinProcessMarks }}
+            # The deployment's built-in process marks, the one file core
+            # reads them from (docs: core-infrastructure).
+            - name: process-marks
+              mountPath: /etc/logos/builtin-process-marks.json
+              subPath: builtin-process-marks.json
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: {{ .Values.core.tmpSizeLimit | default "512Mi" | quote }}
+        {{- if .Values.core.builtinProcessMarks }}
+        - name: process-marks
+          configMap:
+            name: {{ include "logos.core.fullname" . }}-process-marks
+        {{- end }}
       {{- with .Values.core.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

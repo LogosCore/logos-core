@@ -871,29 +871,31 @@ type ComplexityRoot struct {
 	}
 
 	MinionProcess struct {
-		Arch      func(childComplexity int) int
-		CPUTime   func(childComplexity int) int
-		Children  func(childComplexity int) int
-		Cmdline   func(childComplexity int) int
-		Context   func(childComplexity int) int
-		Depth     func(childComplexity int) int
-		Guides    func(childComplexity int) int
-		Hidden    func(childComplexity int) int
-		Integrity func(childComplexity int) int
-		Last      func(childComplexity int) int
-		Memory    func(childComplexity int) int
-		Minion    func(childComplexity int) int
-		Name      func(childComplexity int) int
-		Path      func(childComplexity int) int
-		Pid       func(childComplexity int) int
-		Ppid      func(childComplexity int) int
-		Session   func(childComplexity int) int
-		Started   func(childComplexity int) int
-		State     func(childComplexity int) int
-		Stem      func(childComplexity int) int
-		Threads   func(childComplexity int) int
-		User      func(childComplexity int) int
-		X         func(childComplexity int) int
+		Arch        func(childComplexity int) int
+		BuiltinMark func(childComplexity int) int
+		CPUTime     func(childComplexity int) int
+		Children    func(childComplexity int) int
+		Cmdline     func(childComplexity int) int
+		Context     func(childComplexity int) int
+		Depth       func(childComplexity int) int
+		Guides      func(childComplexity int) int
+		Hidden      func(childComplexity int) int
+		Integrity   func(childComplexity int) int
+		Last        func(childComplexity int) int
+		Mark        func(childComplexity int) int
+		Memory      func(childComplexity int) int
+		Minion      func(childComplexity int) int
+		Name        func(childComplexity int) int
+		Path        func(childComplexity int) int
+		Pid         func(childComplexity int) int
+		Ppid        func(childComplexity int) int
+		Session     func(childComplexity int) int
+		Started     func(childComplexity int) int
+		State       func(childComplexity int) int
+		Stem        func(childComplexity int) int
+		Threads     func(childComplexity int) int
+		User        func(childComplexity int) int
+		X           func(childComplexity int) int
 	}
 
 	MinionProcessConnection struct {
@@ -908,6 +910,13 @@ type ComplexityRoot struct {
 	MinionProcessEdge struct {
 		Cursor func(childComplexity int) int
 		Node   func(childComplexity int) int
+	}
+
+	MinionProcessMark struct {
+		Builtin func(childComplexity int) int
+		Color   func(childComplexity int) int
+		Emoji   func(childComplexity int) int
+		Icon    func(childComplexity int) int
 	}
 
 	MinionSession struct {
@@ -1585,6 +1594,7 @@ type ComplexityRoot struct {
 		RemoveOperationMember         func(childComplexity int, operationID string, userID string) int
 		RemoveSkill                   func(childComplexity int, name string) int
 		ReorderWikiDocumentSiblings   func(childComplexity int, input model.ReorderWikiDocumentSiblingsInput) int
+		ResetMinionProcessMark        func(childComplexity int, name string) int
 		RestoreTask                   func(childComplexity int, id string) int
 		RestoreWikiDocument           func(childComplexity int, id string, cascade *bool) int
 		RestoreWikiDocumentBackup     func(childComplexity int, documentID string, backupID string) int
@@ -1592,6 +1602,7 @@ type ComplexityRoot struct {
 		RevokeSession                 func(childComplexity int, id string) int
 		SetAgentKeyEnabled            func(childComplexity int, id string, enabled bool) int
 		SetHiddenIdentities           func(childComplexity int, names []string) int
+		SetMinionProcessMark          func(childComplexity int, name string, mark *model.MinionSessionMarkInput) int
 		SetMinionSessionAddress       func(childComplexity int, id string, address *string) int
 		SetMinionSessionArchived      func(childComplexity int, id string, archived bool) int
 		SetMinionSessionDescription   func(childComplexity int, id string, description string) int
@@ -2674,6 +2685,8 @@ type MutationResolver interface {
 	QueueMinionTask(ctx context.Context, sessionID string, command string, args any) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
 	SetMinionTaskImportant(ctx context.Context, id string, important bool) (*model.MinionTask, error)
+	SetMinionProcessMark(ctx context.Context, name string, mark *model.MinionSessionMarkInput) (*model.MinionProcessMark, error)
+	ResetMinionProcessMark(ctx context.Context, name string) (*model.MinionProcessMark, error)
 	SetMinionTunnelCap(ctx context.Context, taskID string, cap int) (*model.MinionTask, error)
 	SetMinionTunnelRoutes(ctx context.Context, taskID string, routes []string) (*model.MinionTask, error)
 	CreateMinionVPNKey(ctx context.Context, taskID string) (*model.MinionVPNKey, error)
@@ -6378,6 +6391,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionProcess.Arch(childComplexity), true
+	case "MinionProcess.builtinMark":
+		if e.ComplexityRoot.MinionProcess.BuiltinMark == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.BuiltinMark(childComplexity), true
 	case "MinionProcess.cpuTime":
 		if e.ComplexityRoot.MinionProcess.CPUTime == nil {
 			break
@@ -6432,6 +6451,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionProcess.Last(childComplexity), true
+	case "MinionProcess.mark":
+		if e.ComplexityRoot.MinionProcess.Mark == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Mark(childComplexity), true
 	case "MinionProcess.memory":
 		if e.ComplexityRoot.MinionProcess.Memory == nil {
 			break
@@ -6560,6 +6585,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionProcessEdge.Node(childComplexity), true
+
+	case "MinionProcessMark.builtin":
+		if e.ComplexityRoot.MinionProcessMark.Builtin == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessMark.Builtin(childComplexity), true
+	case "MinionProcessMark.color":
+		if e.ComplexityRoot.MinionProcessMark.Color == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessMark.Color(childComplexity), true
+	case "MinionProcessMark.emoji":
+		if e.ComplexityRoot.MinionProcessMark.Emoji == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessMark.Emoji(childComplexity), true
+	case "MinionProcessMark.icon":
+		if e.ComplexityRoot.MinionProcessMark.Icon == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessMark.Icon(childComplexity), true
 
 	case "MinionSession.acting":
 		if e.ComplexityRoot.MinionSession.Acting == nil {
@@ -10144,6 +10194,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ReorderWikiDocumentSiblings(childComplexity, args["input"].(model.ReorderWikiDocumentSiblingsInput)), true
+	case "Mutation.resetMinionProcessMark":
+		if e.ComplexityRoot.Mutation.ResetMinionProcessMark == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_resetMinionProcessMark_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ResetMinionProcessMark(childComplexity, args["name"].(string)), true
 	case "Mutation.restoreTask":
 		if e.ComplexityRoot.Mutation.RestoreTask == nil {
 			break
@@ -10216,6 +10277,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetHiddenIdentities(childComplexity, args["names"].([]string)), true
+	case "Mutation.setMinionProcessMark":
+		if e.ComplexityRoot.Mutation.SetMinionProcessMark == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setMinionProcessMark_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetMinionProcessMark(childComplexity, args["name"].(string), args["mark"].(*model.MinionSessionMarkInput)), true
 	case "Mutation.setMinionSessionAddress":
 		if e.ComplexityRoot.Mutation.SetMinionSessionAddress == nil {
 			break
@@ -18978,6 +19050,21 @@ extend type Mutation {
   setMinionTaskImportant(id: ID!, important: Boolean!): MinionTask!
     @hasPermission(permission: "operation:member")
 
+  # Marks the processes of a name for the caller alone, in every process
+  # list of every operation (a name matches whatever its case: Firefox.exe
+  # is firefox.exe): a mark as a session's, in place of the name's built-in
+  # mark if it has one. null, or a mark with nothing set, clears it: none
+  # shows, the built-in one hidden too. Returns the mark that shows, null
+  # for none. Agent API keys are rejected.
+  setMinionProcessMark(name: String!, mark: MinionSessionMarkInput): MinionProcessMark
+    @hasPermission(permission: "user:update:own")
+
+  # Takes the caller's own mark on a name away, or their clearing of it: the
+  # name shows its built-in mark again. Returns the mark that shows, null
+  # for a name with no built-in mark. Agent API keys are rejected.
+  resetMinionProcessMark(name: String!): MinionProcessMark
+    @hasPermission(permission: "user:update:own")
+
   # Changes a running tunnel task's bandwidth cap: bytes a second each way,
   # over all of its streams, 0 for none. Needs operator.
   setMinionTunnelCap(taskId: ID!, cap: Int!): MinionTask!
@@ -19064,6 +19151,23 @@ type MinionProcess {
   hidden: Int!
   # Its processes are shown below it: its line goes down to them.
   stem: Boolean!
+  # The mark it shows the caller: their own on its name (setMinionProcessMark,
+  # theirs alone); else its name's built-in mark, unless they cleared it;
+  # null for none.
+  mark: MinionProcessMark
+  # Its name has a built-in mark (resetMinionProcessMark goes back to it).
+  builtinMark: Boolean!
+}
+
+# A mark on processes by name, as a process list shows it: a mark as a
+# session's (a color or a style, an icon or an emoji); builtin, core's own
+# mark of the name (models.BuiltinProcessMarks), which each user sees until
+# they clear it or set their own.
+type MinionProcessMark {
+  color: String
+  icon: String
+  emoji: String
+  builtin: Boolean!
 }
 
 type MinionProcessEdge {
@@ -22881,6 +22985,17 @@ func (ec *executionContext) field_Mutation_reorderWikiDocumentSiblings_args(ctx 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_resetMinionProcessMark_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_restoreTask_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -22959,6 +23074,22 @@ func (ec *executionContext) field_Mutation_setHiddenIdentities_args(ctx context.
 		return nil, err
 	}
 	args["names"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setMinionProcessMark_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "mark", ec.unmarshalOMinionSessionMarkInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionMarkInput)
+	if err != nil {
+		return nil, err
+	}
+	args["mark"] = arg1
 	return args, nil
 }
 
@@ -45079,6 +45210,74 @@ func (ec *executionContext) fieldContext_MinionProcess_stem(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionProcess_mark(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_mark,
+		func(ctx context.Context) (any, error) {
+			return obj.Mark, nil
+		},
+		nil,
+		ec.marshalOMinionProcessMark2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessMark,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_mark(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "color":
+				return ec.fieldContext_MinionProcessMark_color(ctx, field)
+			case "icon":
+				return ec.fieldContext_MinionProcessMark_icon(ctx, field)
+			case "emoji":
+				return ec.fieldContext_MinionProcessMark_emoji(ctx, field)
+			case "builtin":
+				return ec.fieldContext_MinionProcessMark_builtin(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionProcessMark", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_builtinMark(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_builtinMark,
+		func(ctx context.Context) (any, error) {
+			return obj.BuiltinMark, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_builtinMark(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionProcessConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -45339,6 +45538,10 @@ func (ec *executionContext) fieldContext_MinionProcessEdge_node(_ context.Contex
 				return ec.fieldContext_MinionProcess_hidden(ctx, field)
 			case "stem":
 				return ec.fieldContext_MinionProcess_stem(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionProcess_mark(ctx, field)
+			case "builtinMark":
+				return ec.fieldContext_MinionProcess_builtinMark(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionProcess", field.Name)
 		},
@@ -45370,6 +45573,122 @@ func (ec *executionContext) fieldContext_MinionProcessEdge_cursor(_ context.Cont
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcessMark_color(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessMark) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessMark_color,
+		func(ctx context.Context) (any, error) {
+			return obj.Color, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessMark_color(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessMark",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcessMark_icon(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessMark) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessMark_icon,
+		func(ctx context.Context) (any, error) {
+			return obj.Icon, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessMark_icon(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessMark",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcessMark_emoji(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessMark) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessMark_emoji,
+		func(ctx context.Context) (any, error) {
+			return obj.Emoji, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessMark_emoji(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessMark",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcessMark_builtin(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessMark) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessMark_builtin,
+		func(ctx context.Context) (any, error) {
+			return obj.Builtin, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessMark_builtin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessMark",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -67478,6 +67797,144 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTaskImportant(ctx con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_setMinionTaskImportant_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setMinionProcessMark(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_setMinionProcessMark,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetMinionProcessMark(ctx, fc.Args["name"].(string), fc.Args["mark"].(*model.MinionSessionMarkInput))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "user:update:own")
+				if err != nil {
+					var zeroVal *model.MinionProcessMark
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionProcessMark
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalOMinionProcessMark2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessMark,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_setMinionProcessMark(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "color":
+				return ec.fieldContext_MinionProcessMark_color(ctx, field)
+			case "icon":
+				return ec.fieldContext_MinionProcessMark_icon(ctx, field)
+			case "emoji":
+				return ec.fieldContext_MinionProcessMark_emoji(ctx, field)
+			case "builtin":
+				return ec.fieldContext_MinionProcessMark_builtin(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionProcessMark", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setMinionProcessMark_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_resetMinionProcessMark(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_resetMinionProcessMark,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ResetMinionProcessMark(ctx, fc.Args["name"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "user:update:own")
+				if err != nil {
+					var zeroVal *model.MinionProcessMark
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionProcessMark
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalOMinionProcessMark2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessMark,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_resetMinionProcessMark(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "color":
+				return ec.fieldContext_MinionProcessMark_color(ctx, field)
+			case "icon":
+				return ec.fieldContext_MinionProcessMark_icon(ctx, field)
+			case "emoji":
+				return ec.fieldContext_MinionProcessMark_emoji(ctx, field)
+			case "builtin":
+				return ec.fieldContext_MinionProcessMark_builtin(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionProcessMark", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_resetMinionProcessMark_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -109137,6 +109594,13 @@ func (ec *executionContext) _MinionProcess(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "mark":
+			out.Values[i] = ec._MinionProcess_mark(ctx, field, obj)
+		case "builtinMark":
+			out.Values[i] = ec._MinionProcess_builtinMark(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -109242,6 +109706,51 @@ func (ec *executionContext) _MinionProcessEdge(ctx context.Context, sel ast.Sele
 			}
 		case "cursor":
 			out.Values[i] = ec._MinionProcessEdge_cursor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionProcessMarkImplementors = []string{"MinionProcessMark"}
+
+func (ec *executionContext) _MinionProcessMark(ctx context.Context, sel ast.SelectionSet, obj *model.MinionProcessMark) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionProcessMarkImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionProcessMark")
+		case "color":
+			out.Values[i] = ec._MinionProcessMark_color(ctx, field, obj)
+		case "icon":
+			out.Values[i] = ec._MinionProcessMark_icon(ctx, field, obj)
+		case "emoji":
+			out.Values[i] = ec._MinionProcessMark_emoji(ctx, field, obj)
+		case "builtin":
+			out.Values[i] = ec._MinionProcessMark_builtin(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -113934,6 +114443,14 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "setMinionProcessMark":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setMinionProcessMark(ctx, field)
+			})
+		case "resetMinionProcessMark":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_resetMinionProcessMark(ctx, field)
+			})
 		case "setMinionTunnelCap":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setMinionTunnelCap(ctx, field)
@@ -129676,6 +130193,13 @@ func (ec *executionContext) marshalOMinionProcessFold2ᚖgithubᚗcomᚋlogoscor
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) marshalOMinionProcessMark2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessMark(ctx context.Context, sel ast.SelectionSet, v *model.MinionProcessMark) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MinionProcessMark(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOMinionProcessOrder2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessOrder(ctx context.Context, v any) (*model.MinionProcessOrder, error) {

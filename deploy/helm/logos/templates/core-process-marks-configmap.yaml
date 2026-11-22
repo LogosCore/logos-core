@@ -1,0 +1,15 @@
+{{- if and .Values.core.enabled .Values.core.builtinProcessMarks -}}
+# The deployment's built-in process marks (values: core.builtinProcessMarks),
+# as the JSON file core reads at start; mounted in core-deployment.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "logos.core.fullname" . }}-process-marks
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "logos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+data:
+  builtin-process-marks.json: |
+    {{- toPrettyJson .Values.core.builtinProcessMarks | nindent 4 }}
+{{- end -}}

@@ -28,6 +28,8 @@ import {
   MinionTaskImportantCountDocument,
   MinionTaskOutputDocument,
   MinionTaskProcessesDocument,
+  SetMinionProcessMarkDocument,
+  ResetMinionProcessMarkDocument,
   MinionTasksDocument,
   MinionTunnelStreamsDocument,
   QueueMinionTaskDocument,
@@ -35,6 +37,8 @@ import {
   SetMinionTunnelCapDocument,
   type RecordingsQuery,
   type MinionProcessFold,
+  type MinionSessionMarkInput,
+  type MinionTaskProcessesQuery,
   type MinionProcessOrder,
   type MinionTaskFieldsFragment,
   type MinionTasksQuery,
@@ -490,4 +494,48 @@ export function useMinionTaskSubscription(sessionId: string) {
       onData: (data) => upsertMinionTask(queryClient, data.minionTaskChanged),
     },
   )
+}
+
+/** A process's mark as a process list carries it. */
+type ProcessMark = MinionTaskProcessesQuery["minionTaskProcesses"]["edges"][number]["node"]["mark"]
+
+/**
+ * A mark set on the processes of a name, in every process list cached, of
+ * every task: each process of the name, whatever its case, takes it (null:
+ * none), as core gives it on the next read.
+ */
+export function applyProcessMark(qc: QueryClient, name: string, mark: ProcessMark) {
+  const key = name.trim().toLowerCase()
+  qc.setQueriesData<InfiniteData<MinionTaskProcessesQuery>>({ queryKey: [...minionTaskKeys.all, "processes"] }, (old) =>
+    old
+      ? {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            minionTaskProcesses: {
+              ...page.minionTaskProcesses,
+              edges: page.minionTaskProcesses.edges.map((e) => (e.node.name.toLowerCase() === key ? { ...e, node: { ...e.node, mark } } : e)),
+            },
+          })),
+        }
+      : old,
+  )
+}
+
+/** Goes back to a name's built-in mark (the caller's own, or their clearing, taken away), in every list at once. */
+export function useResetMinionProcessMark() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (name: string) => graphqlClient(ResetMinionProcessMarkDocument, { name }),
+    onSuccess: (data, name) => applyProcessMark(qc, name, data.resetMinionProcessMark ?? null),
+  })
+}
+
+/** Marks the processes of a name for the caller (null clears it), in every list at once. */
+export function useSetMinionProcessMark() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { name: string; mark: MinionSessionMarkInput | null }) => graphqlClient(SetMinionProcessMarkDocument, v),
+    onSuccess: (data, v) => applyProcessMark(qc, v.name, data.setMinionProcessMark ?? null),
+  })
 }

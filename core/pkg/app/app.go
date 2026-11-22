@@ -95,6 +95,7 @@ type Repositories struct {
 	MinionTarget       repository.IMinionTargetRepository
 	MinionReservation  repository.IMinionSessionReservationRepository
 	MinionMark         repository.IMinionSessionMarkRepository
+	MinionProcessMark  repository.IMinionProcessMarkRepository
 	MinionFolder       repository.IMinionSessionFolderRepository
 	MinionTask         repository.IMinionTaskRepository
 	MinionFile         repository.IMinionFileRepository
@@ -150,6 +151,9 @@ type App struct {
 	// operator-authored skill bundles, stored as opaque zips.
 	skillService    *skills.Service
 	sweepersEnabled bool // master switch from WIKI_SWEEPER_ENABLED
+	// builtinProcessMarks are the deployment's own marks on processes, read
+	// once at start (models.BuiltinProcessMarksFile); nil, none.
+	builtinProcessMarks models.BuiltinProcessMarks
 	// transferRunner executes wiki export/import jobs in the background.
 	transferRunner *transferjob.Runner
 	// Attachment upload controllers are built here because the transfer
@@ -383,6 +387,10 @@ func NewApp() (*App, error) {
 
 	subscribeEventHandlers(ctx, l, repos, bus, wikiSvc.hpClient)
 
+	// The deployment's built-in process marks, read once (docs:
+	// core-infrastructure, "Built-in process marks").
+	builtinProcessMarks := loadBuiltinProcessMarks(models.BuiltinProcessMarksFile, l)
+
 	return &App{
 		logger:          l,
 		db:              infra.db,
@@ -432,6 +440,8 @@ func NewApp() (*App, error) {
 		minionTargets:   minionTargets,
 		credentialRefs:  credentialRefs,
 		storage:         storageSvc,
+
+		builtinProcessMarks: builtinProcessMarks,
 	}, nil
 }
 

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { DocumentIconPicker } from "@/components/wiki/document-icon-picker"
+import { markColorCodeTitle } from "@/components/wiki/icon-code-names"
 import type { MinionSessionMarkInput } from "@/graphql/gql/graphql"
 import { cn } from "@/lib/utils"
 import {
@@ -18,7 +19,10 @@ import {
 
 // An operator's mark on sessions: a color that tints the row and an icon (or
 // emoji) beside the number. Marks are the operator's own; nobody else sees
-// them. One dialog marks one session or many alike.
+// them. One dialog marks one session or many alike (or a process name). Each
+// choice's tooltip says its value as code writes it ("color: red-strong",
+// "icon: Flame", "emoji: 🦊 (U+1F98A)"): a deployment's built-in process
+// marks file is written so (docs: core-infrastructure).
 
 export interface SessionMarkTarget {
   /** What is being marked, for the title: "Session #12", "4 sessions". */
@@ -27,6 +31,10 @@ export interface SessionMarkTarget {
   mark: MinionSessionMarkInput | null
   /** Many sessions: offers clearing their marks, whatever they are. */
   many?: boolean
+  /** What the mark does, under the title; the sessions' by default. */
+  description?: string
+  /** A second way out beside clearing it (a process name's: back to its built-in mark). */
+  reset?: { label: string; run: () => Promise<void> }
   /** Saves the mark (null clears it); resolves once saved. */
   save: (mark: MinionSessionMarkInput | null) => Promise<void>
 }
@@ -61,6 +69,20 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
     }
   }
   const hadMark = target.many || !!(target.mark?.color || target.mark?.icon || target.mark?.emoji)
+  // Read here, not in the handler: the compiler reads what a handler uses at render.
+  const resetTo = target.reset
+  const reset = async (run: () => Promise<void>) => {
+    setError(null)
+    setPending(true)
+    try {
+      await run()
+      onClose()
+    } catch (err) {
+      setError(errorMessage(err, "Failed to reset the mark"))
+    } finally {
+      setPending(false)
+    }
+  }
   return (
     <form
       className="flex flex-col gap-4"
@@ -71,7 +93,9 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
     >
       <DialogHeader>
         <DialogTitle>Mark {target.title}</DialogTitle>
-        <DialogDescription>A color or a style for the row, and an icon beside the number. Only you see your marks.</DialogDescription>
+        <DialogDescription>
+          {target.description ?? "A color or a style for the row, and an icon beside the number. Only you see your marks."}
+        </DialogDescription>
       </DialogHeader>
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
@@ -90,7 +114,7 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
               role="radio"
               aria-checked={color === c.id}
               aria-label={c.label}
-              title={c.label}
+              title={markColorCodeTitle(c.label, c.id)}
               onClick={() => setColor(color === c.id ? "" : c.id)}
               style={{
                 ...markColorVars(c.id),
@@ -113,7 +137,7 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
               role="radio"
               aria-checked={color === st.id}
               aria-label={st.label}
-              title={st.label}
+              title={markColorCodeTitle(st.label, st.id)}
               onClick={() => setColor(color === st.id ? "" : st.id)}
               style={
                 {
@@ -147,6 +171,7 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
             }}
             allowAdaptive={false}
             hideColors
+            codeNames
             // No icon yet: an empty slot to fill, not the wiki's page glyph
             // (which read as an icon already chosen). Also the picker's
             // "No icon" tile.
@@ -178,10 +203,19 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
       </div>
       {error && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error}</div>}
       <DialogFooter>
-        {hadMark && (
-          <Button type="button" variant="ghost" className="sm:mr-auto" disabled={pending} onClick={() => void submit(null)}>
-            {target.many ? "Clear marks" : "Clear mark"}
-          </Button>
+        {(hadMark || resetTo) && (
+          <div className="flex gap-2 sm:mr-auto">
+            {hadMark && (
+              <Button type="button" variant="ghost" disabled={pending} onClick={() => void submit(null)}>
+                {target.many ? "Clear marks" : "Clear mark"}
+              </Button>
+            )}
+            {resetTo && (
+              <Button type="button" variant="ghost" disabled={pending} onClick={() => void reset(resetTo.run)}>
+                {resetTo.label}
+              </Button>
+            )}
+          </div>
         )}
         <Button type="button" variant="outline" onClick={onClose}>
           Cancel

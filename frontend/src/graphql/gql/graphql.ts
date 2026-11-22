@@ -1095,6 +1095,7 @@ export type MinionListenerEvent = {
 
 export type MinionProcess = {
   arch?: Maybe<Scalars['String']['output']>;
+  builtinMark: Scalars['Boolean']['output'];
   children: Scalars['Int']['output'];
   cmdline?: Maybe<Scalars['String']['output']>;
   context: Scalars['Boolean']['output'];
@@ -1104,6 +1105,7 @@ export type MinionProcess = {
   hidden: Scalars['Int']['output'];
   integrity?: Maybe<Scalars['String']['output']>;
   last: Scalars['Boolean']['output'];
+  mark?: Maybe<MinionProcessMark>;
   memory?: Maybe<Scalars['Int']['output']>;
   minion: Scalars['Boolean']['output'];
   name: Scalars['String']['output'];
@@ -1137,6 +1139,13 @@ export type MinionProcessFold =
   | 'ALL'
   | 'NONE'
   | 'SYSTEM';
+
+export type MinionProcessMark = {
+  builtin: Scalars['Boolean']['output'];
+  color?: Maybe<Scalars['String']['output']>;
+  emoji?: Maybe<Scalars['String']['output']>;
+  icon?: Maybe<Scalars['String']['output']>;
+};
 
 export type MinionProcessOrder =
   | 'CPU_TIME'
@@ -1944,6 +1953,7 @@ export type Mutation = {
   removeOperationMember: Operation;
   removeSkill: Skill;
   reorderWikiDocumentSiblings: Array<WikiDocument>;
+  resetMinionProcessMark?: Maybe<MinionProcessMark>;
   restoreTask: Task;
   restoreWikiDocument: WikiDocument;
   restoreWikiDocumentBackup: WikiDocument;
@@ -1951,6 +1961,7 @@ export type Mutation = {
   revokeSession: Scalars['Boolean']['output'];
   setAgentKeyEnabled: AgentKey;
   setHiddenIdentities: User;
+  setMinionProcessMark?: Maybe<MinionProcessMark>;
   setMinionSessionAddress: MinionSession;
   setMinionSessionArchived: MinionSession;
   setMinionSessionDescription: MinionSession;
@@ -2388,6 +2399,11 @@ export type MutationReorderWikiDocumentSiblingsArgs = {
 };
 
 
+export type MutationResetMinionProcessMarkArgs = {
+  name: Scalars['String']['input'];
+};
+
+
 export type MutationRestoreTaskArgs = {
   id: Scalars['ID']['input'];
 };
@@ -2418,6 +2434,12 @@ export type MutationSetAgentKeyEnabledArgs = {
 
 export type MutationSetHiddenIdentitiesArgs = {
   names: Array<Scalars['String']['input']>;
+};
+
+
+export type MutationSetMinionProcessMarkArgs = {
+  mark?: InputMaybe<MinionSessionMarkInput>;
+  name: Scalars['String']['input'];
 };
 
 
@@ -5665,7 +5687,22 @@ export type MinionTaskProcessesQueryVariables = Exact<{
 }>;
 
 
-export type MinionTaskProcessesQuery = { minionTaskProcesses: { totalCount: number, sep: string, hidden: number, systemTrees: number, edges: Array<{ cursor: string, node: { pid: number, ppid?: number | null, name: string, path?: string | null, cmdline?: string | null, user?: string | null, started?: string | null, session?: number | null, integrity?: string | null, arch?: string | null, threads?: number | null, memory?: number | null, cpuTime?: number | null, state?: string | null, depth: number, children: number, minion: boolean, context: boolean, last: boolean, guides: Array<boolean>, hidden: number, stem: boolean } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MinionTaskProcessesQuery = { minionTaskProcesses: { totalCount: number, sep: string, hidden: number, systemTrees: number, edges: Array<{ cursor: string, node: { pid: number, ppid?: number | null, name: string, path?: string | null, cmdline?: string | null, user?: string | null, started?: string | null, session?: number | null, integrity?: string | null, arch?: string | null, threads?: number | null, memory?: number | null, cpuTime?: number | null, state?: string | null, depth: number, children: number, minion: boolean, context: boolean, last: boolean, guides: Array<boolean>, hidden: number, stem: boolean, builtinMark: boolean, mark?: { color?: string | null, icon?: string | null, emoji?: string | null, builtin: boolean } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+
+export type SetMinionProcessMarkMutationVariables = Exact<{
+  name: Scalars['String']['input'];
+  mark?: InputMaybe<MinionSessionMarkInput>;
+}>;
+
+
+export type SetMinionProcessMarkMutation = { setMinionProcessMark?: { color?: string | null, icon?: string | null, emoji?: string | null, builtin: boolean } | null };
+
+export type ResetMinionProcessMarkMutationVariables = Exact<{
+  name: Scalars['String']['input'];
+}>;
+
+
+export type ResetMinionProcessMarkMutation = { resetMinionProcessMark?: { color?: string | null, icon?: string | null, emoji?: string | null, builtin: boolean } | null };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -14194,6 +14231,13 @@ export const MinionTaskProcessesDocument = new TypedDocumentString(`
         guides
         hidden
         stem
+        mark {
+          color
+          icon
+          emoji
+          builtin
+        }
+        builtinMark
       }
     }
     pageInfo {
@@ -14207,6 +14251,26 @@ export const MinionTaskProcessesDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<MinionTaskProcessesQuery, MinionTaskProcessesQueryVariables>;
+export const SetMinionProcessMarkDocument = new TypedDocumentString(`
+    mutation SetMinionProcessMark($name: String!, $mark: MinionSessionMarkInput) {
+  setMinionProcessMark(name: $name, mark: $mark) {
+    color
+    icon
+    emoji
+    builtin
+  }
+}
+    `) as unknown as TypedDocumentString<SetMinionProcessMarkMutation, SetMinionProcessMarkMutationVariables>;
+export const ResetMinionProcessMarkDocument = new TypedDocumentString(`
+    mutation ResetMinionProcessMark($name: String!) {
+  resetMinionProcessMark(name: $name) {
+    color
+    icon
+    emoji
+    builtin
+  }
+}
+    `) as unknown as TypedDocumentString<ResetMinionProcessMarkMutation, ResetMinionProcessMarkMutationVariables>;
 export const ModulesDocument = new TypedDocumentString(`
     query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {
   modules(

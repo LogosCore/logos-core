@@ -521,6 +521,13 @@ export const MinionTaskProcessesQuery = graphql(`
           guides
           hidden
           stem
+          mark {
+            color
+            icon
+            emoji
+            builtin
+          }
+          builtinMark
         }
       }
       pageInfo {
@@ -531,6 +538,33 @@ export const MinionTaskProcessesQuery = graphql(`
       sep
       hidden
       systemTrees
+    }
+  }
+`)
+
+// Marks the processes of a name for the caller alone, in every process list
+// (core matches the name whatever its case): a mark as a session's, in place
+// of the name's built-in one; null clears it (the built-in one hidden too).
+export const SetMinionProcessMarkMutation = graphql(`
+  mutation SetMinionProcessMark($name: String!, $mark: MinionSessionMarkInput) {
+    setMinionProcessMark(name: $name, mark: $mark) {
+      color
+      icon
+      emoji
+      builtin
+    }
+  }
+`)
+
+// Goes back to a name's built-in mark: the caller's own, or their clearing,
+// taken away.
+export const ResetMinionProcessMarkMutation = graphql(`
+  mutation ResetMinionProcessMark($name: String!) {
+    resetMinionProcessMark(name: $name) {
+      color
+      icon
+      emoji
+      builtin
     }
   }
 `)

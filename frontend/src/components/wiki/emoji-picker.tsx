@@ -1,6 +1,7 @@
-import data from "@emoji-mart/data";
+import data, { type EmojiMartData } from "@emoji-mart/data";
 import { Picker } from "emoji-mart";
 import { useEffect, useRef } from "react";
+import { emojiNames, retitleEmojis } from "@/components/wiki/icon-code-names";
 
 // Thin React wrapper around emoji-mart's vanilla Picker.
 //
@@ -37,6 +38,10 @@ export interface EmojiPickerProps {
   theme: "light" | "dark";
   previewPosition?: "none" | "top" | "bottom";
   skinTonePosition?: "none" | "preview" | "search";
+  /** An emoji's tooltip, from its name and the emoji itself: in place of
+   *  emoji-mart's (its name alone, while the preview is off). Read once, when
+   *  the picker is built. */
+  titleOf?: (name: string, native: string) => string;
 }
 
 /** Emoji-mart emits a much larger object; these are the fields we rely on. */
@@ -46,16 +51,25 @@ export interface EmojiSelection {
 }
 
 /** Structural type for the constructed picker — the library exports the class
- *  but types its instances loosely. */
+ *  but types its instances loosely. It is a custom element with an open shadow
+ *  root, attached by its constructor, which it draws in. */
 interface PickerInstance {
   update: (props: Record<string, unknown>) => void;
+  shadowRoot: ShadowRoot | null;
 }
+
+// emoji-mart's names by emoji, built the first time a picker titles its emoji.
+// The dataset's typings declare its interfaces but not the default export,
+// which at run time is the JSON itself.
+let names: Map<string, string> | undefined;
+const dataset = data as unknown as EmojiMartData;
 
 export function EmojiPicker({
   onEmojiSelect,
   theme,
   previewPosition = "none",
   skinTonePosition = "none",
+  titleOf,
 }: EmojiPickerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<PickerInstance | null>(null);
@@ -71,14 +85,14 @@ export function EmojiPicker({
   // Construction options are captured once. Everything that can change at
   // runtime is applied through update() in the effect below instead, so the
   // picker is never rebuilt (which would lose scroll position and focus).
-  const initialRef = useRef({ theme, previewPosition, skinTonePosition });
+  const initialRef = useRef({ theme, previewPosition, skinTonePosition, titleOf });
 
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
 
     const initial = initialRef.current;
-    pickerRef.current = new Picker({
+    const picker = new Picker({
       data,
       theme: initial.theme,
       previewPosition: initial.previewPosition,
@@ -86,8 +100,35 @@ export function EmojiPicker({
       onEmojiSelect: (emoji: EmojiSelection) => onSelectRef.current(emoji),
       ref: hostRef,
     }) as unknown as PickerInstance;
+    pickerRef.current = picker;
+
+    // The caller's tooltips, on each emoji as emoji-mart draws it (the first
+    // rows, rows scrolled to, search results), before the pointer arrives.
+    // Not on a hover: Chromium fires no mouseover from one element to another
+    // inside a shadow root, so a hover listener saw only the first emoji the
+    // pointer reached. The records of the observer's own title writes are
+    // dropped, so they start no pass of their own.
+    let titles: MutationObserver | undefined;
+    const root = picker.shadowRoot;
+    const titleOf = initial.titleOf;
+    if (titleOf && root !== null) {
+      const named = (names ??= emojiNames(dataset));
+      const retitle = () => {
+        retitleEmojis(root, named, titleOf);
+        titles?.takeRecords();
+      };
+      titles = new MutationObserver(retitle);
+      titles.observe(root, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["aria-label", "title"],
+      });
+      retitle();
+    }
 
     return () => {
+      titles?.disconnect();
       pickerRef.current = null;
       host.replaceChildren();
     };

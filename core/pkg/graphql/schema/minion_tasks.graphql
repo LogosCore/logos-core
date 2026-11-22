@@ -728,6 +728,21 @@ extend type Mutation {
   setMinionTaskImportant(id: ID!, important: Boolean!): MinionTask!
     @hasPermission(permission: "operation:member")
 
+  # Marks the processes of a name for the caller alone, in every process
+  # list of every operation (a name matches whatever its case: Firefox.exe
+  # is firefox.exe): a mark as a session's, in place of the name's built-in
+  # mark if it has one. null, or a mark with nothing set, clears it: none
+  # shows, the built-in one hidden too. Returns the mark that shows, null
+  # for none. Agent API keys are rejected.
+  setMinionProcessMark(name: String!, mark: MinionSessionMarkInput): MinionProcessMark
+    @hasPermission(permission: "user:update:own")
+
+  # Takes the caller's own mark on a name away, or their clearing of it: the
+  # name shows its built-in mark again. Returns the mark that shows, null
+  # for a name with no built-in mark. Agent API keys are rejected.
+  resetMinionProcessMark(name: String!): MinionProcessMark
+    @hasPermission(permission: "user:update:own")
+
   # Changes a running tunnel task's bandwidth cap: bytes a second each way,
   # over all of its streams, 0 for none. Needs operator.
   setMinionTunnelCap(taskId: ID!, cap: Int!): MinionTask!
@@ -814,6 +829,23 @@ type MinionProcess {
   hidden: Int!
   # Its processes are shown below it: its line goes down to them.
   stem: Boolean!
+  # The mark it shows the caller: their own on its name (setMinionProcessMark,
+  # theirs alone); else its name's built-in mark, unless they cleared it;
+  # null for none.
+  mark: MinionProcessMark
+  # Its name has a built-in mark (resetMinionProcessMark goes back to it).
+  builtinMark: Boolean!
+}
+
+# A mark on processes by name, as a process list shows it: a mark as a
+# session's (a color or a style, an icon or an emoji); builtin, core's own
+# mark of the name (models.BuiltinProcessMarks), which each user sees until
+# they clear it or set their own.
+type MinionProcessMark {
+  color: String
+  icon: String
+  emoji: String
+  builtin: Boolean!
 }
 
 type MinionProcessEdge {

@@ -15,6 +15,7 @@ import {
   MonitorCogIcon,
   OctagonXIcon,
   RefreshCwIcon,
+  TagIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -30,14 +31,19 @@ import { SearchInput } from "@/components/ui/search-input"
 import { SortableHeader } from "@/components/ui/sortable-header"
 import { VirtualizedDataTable, dataTableRowClass } from "@/components/ui/virtualized-data-table"
 import type { MinionProcessFold, MinionProcessOrder } from "@/graphql/gql/graphql"
-import { PROCESS_PAGE, useMinionTaskProcesses } from "@/graphql/hooks/minion-tasks"
+import { PROCESS_PAGE, useMinionTaskProcesses, useResetMinionProcessMark, useSetMinionProcessMark } from "@/graphql/hooks/minion-tasks"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { toggleSort, type DataTableSort } from "@/lib/data-table-sort"
 import { formatDateTime } from "@/lib/date-format"
 import { formatBytes } from "@/lib/format-bytes"
+import { preloadable, useLoaded } from "@/lib/preloadable"
 import { cn } from "@/lib/utils"
 import { ActionItem, type MenuCommand } from "./action-menu"
 import type { KillTarget } from "./kill-dialog"
+import { MarkIcon } from "./mark-icon"
+import { SessionFire } from "./session-fire"
+import { MARK_TONE_CLASSES, isMarkColor, markColorVars, markRowClass } from "./session-mark-colors"
+import type { SessionMarkTarget } from "./session-mark-dialog"
 import { cpuTimeText, folderOf, processNotes, startedSeconds, toggled, treeLines, userText, type ProcessRow } from "./process-list"
 
 // A process_list task's view (docs: contracts/task-results-and-actions.md,
@@ -47,7 +53,9 @@ import { cpuTimeText, folderOf, processNotes, startedSeconds, toggled, treeLines
 // other way), and Tree toggles back and forth. In the tree, with no search,
 // a process's toggle folds away those under it, and the toolbar folds all,
 // the operating system's own trees, or none; core folds them, nothing folded
-// at first. Its columns, pid, name, user and command line, keep their widths
+// at first. A user marks processes by name ("Mark by name…": a color or a
+// style, an icon or an emoji, as sessions are marked), theirs alone, in
+// every process list. Its columns, pid, name, user and command line, keep their widths
 // as it scrolls: a value too long for one is cut, whole in its title, and a
 // click on a row opens it, its values whole, wrapped, and its memory, CPU
 // time, threads and start under its command line. A process's actions are
@@ -142,6 +150,10 @@ export function ProcessListView({
   const [menuFor, setMenuFor] = useState<number | null>(null)
   // The rows opened by a click, by pid: their values whole.
   const [opened, setOpened] = useState<ReadonlySet<number>>(() => new Set())
+  // A process name being marked, in the mark dialog until it is saved.
+  const [marking, setMarking] = useState<SessionMarkTarget | null>(null)
+  const markProcesses = useSetMinionProcessMark()
+  const resetProcesses = useResetMinionProcessMark()
   // Whose processes are folded away, and the pids folded the other way.
   const [fold, setFold] = useState<MinionProcessFold>("NONE")
   const [flip, setFlip] = useState<ReadonlySet<number>>(() => new Set())
@@ -340,13 +352,18 @@ export function ProcessListView({
                           toggleOpen(p.pid)
                         }
                       }}
+                      // The caller's mark on its name: a tint or a style, as a session's row takes it.
+                      style={markColorVars(p.mark?.color)}
                       className={dataTableRowClass(
                         cols,
                         cn(
                           ROW_PAD,
                           "cursor-pointer",
-                          // Open: its values from the top, each cell's first line beside the name's.
-                          open && "items-start bg-muted/30",
+                          markRowClass(p.mark?.color),
+                          // Open: its values from the top, each cell's first line beside the
+                          // name's; tinted, unless its mark tints it.
+                          open && "items-start",
+                          open && !p.mark?.color && "bg-muted/30",
                           p.context && "text-muted-foreground",
                           menuFor === p.pid && "bg-muted",
                         ),
@@ -374,6 +391,28 @@ export function ProcessListView({
                   <ProcessMenu
                     p={p}
                     sep={sep}
+                    onMark={() =>
+                      setMarking({
+                        title: `“${p.name}”`,
+                        mark: p.mark ? { color: p.mark.color, icon: p.mark.icon, emoji: p.mark.emoji } : null,
+                        description: p.mark?.builtin
+                          ? `Its built-in mark: every user sees it on the processes named ${p.name} (whatever its case), in every process list, until they set their own or clear it. Only you see your marks.`
+                          : `A color or a style for every process named ${p.name} (whatever its case), and an icon beside its name, in every process list of every operation. Only you see your marks.`,
+                        save: async (mark) => {
+                          await markProcesses.mutateAsync({ name: p.name, mark })
+                        },
+                        // Its name has a built-in mark your own (or your clearing) hides.
+                        reset:
+                          p.builtinMark && !p.mark?.builtin
+                            ? {
+                                label: "Use the built-in mark",
+                                run: async () => {
+                                  await resetProcesses.mutateAsync(p.name)
+                                },
+                              }
+                            : undefined,
+                      })
+                    }
                     onKill={onKill}
                     killCommands={killCommands}
                     onOpenPath={onOpenPath}
@@ -387,8 +426,18 @@ export function ProcessListView({
           }}
         />
       )}
+      {marking && <MarkDialog target={marking} onClose={() => setMarking(null)} />}
     </div>
   )
+}
+
+// The mark dialog's code (its icon picker and their catalogs) comes with the
+// first marking, not with the list.
+const markDialogCode = preloadable(() => import("./session-mark-dialog"))
+
+function MarkDialog({ target, onClose }: { target: SessionMarkTarget; onClose: () => void }) {
+  const code = useLoaded(markDialogCode)
+  return code && <code.SessionMarkDialog target={target} onClose={onClose} />
 }
 
 /**
@@ -423,10 +472,16 @@ function ProcessCells({
   const folded = p.hidden > 0
   return (
     <>
-      <span className={cn("font-mono text-xs tabular-nums", low)}>{p.pid}</span>
+      {/* data-cell: a mark's style draws on each cell (session-mark-styles.css);
+          an On Fire row's fire burns behind them all, from the first. */}
+      <span data-cell className={cn("font-mono text-xs tabular-nums", low)}>
+        {p.mark?.color === "on-fire" && <SessionFire />}
+        {p.pid}
+      </span>
       {/* In the tree the cell takes the row's full height (its padding
           its own), so its lines join the rows above and below. */}
       <span
+        data-cell
         className={cn("flex min-w-0 items-baseline gap-1.5", open && "flex-wrap", tree && "relative -my-0.5 self-stretch py-0.5")}
         style={tree ? { paddingLeft: (p.depth + 1) * INDENT } : undefined}
       >
@@ -448,6 +503,11 @@ function ProcessCells({
             {folded ? <ChevronRightIcon className="size-3" /> : <ChevronDownIcon className="size-3" />}
           </button>
         )}
+        {(p.mark?.icon || p.mark?.emoji) && (
+          <span data-mark-icon className={cn("shrink-0 self-center", isMarkColor(p.mark.color) && MARK_TONE_CLASSES)}>
+            <MarkIcon icon={p.mark.icon} emoji={p.mark.emoji} size={14} />
+          </span>
+        )}
         <span className={open ? "[overflow-wrap:anywhere]" : "truncate"} title={p.path ?? p.name}>
           {p.name}
         </span>
@@ -467,10 +527,11 @@ function ProcessCells({
           </span>
         ))}
       </span>
-      <span className={cn("text-xs", open ? "whitespace-normal [overflow-wrap:anywhere]" : "truncate", low)} title={open ? undefined : who}>
+      <span data-cell className={cn("text-xs", open ? "whitespace-normal [overflow-wrap:anywhere]" : "truncate", low)} title={open ? undefined : who}>
         {who}
       </span>
       <span
+        data-cell
         className={cn("font-mono text-xs text-muted-foreground", open ? "whitespace-pre-wrap [overflow-wrap:anywhere]" : "truncate", low)}
         title={open ? undefined : line}
       >
@@ -536,10 +597,11 @@ function TreeLines({ p, toggle }: { p: ProcessRow; toggle: boolean }) {
   })
 }
 
-/** A process's menu: copying what it is; Kill; on its path, List its folder and Download. */
+/** A process's menu: marking its name; copying what it is; Kill; on its path, List its folder and Download. */
 function ProcessMenu({
   p,
   sep,
+  onMark,
   onKill,
   killCommands,
   onOpenPath,
@@ -549,6 +611,8 @@ function ProcessMenu({
 }: {
   p: ProcessRow
   sep: string
+  /** Opens the mark dialog for its name: the caller's own mark, as anyone may. */
+  onMark: () => void
   onKill?: (target: KillTarget, commandId: string) => void
   killCommands: readonly MenuCommand[]
   onOpenPath?: (path: string, commandId?: string) => void
@@ -565,6 +629,11 @@ function ProcessMenu({
     (path && onDownload && downloadCommands.length > 0)
   return (
     <>
+      <ContextMenuItem onClick={onMark} title={`Mark every process named ${p.name}, in every process list`}>
+        <TagIcon />
+        Mark by name…
+      </ContextMenuItem>
+      <ContextMenuSeparator />
       <ContextMenuItem onClick={() => void copyToClipboard(String(p.pid), "pid")}>
         <CopyIcon />
         Copy pid

@@ -3,16 +3,21 @@ package resolver
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
+	"github.com/logoscore/logos-core/core/pkg/logger"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/processlist"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/taskdata"
 	"github.com/logoscore/logos-golang-protocol/protocol"
+	"go.uber.org/zap"
 )
 
 // A process_list task's processes as its view pages them (docs:
@@ -97,13 +102,116 @@ func (r *minionTaskResolver) MinionTaskProcesses(ctx context.Context, taskID str
 	out := &model.MinionProcessConnection{Edges: []*model.MinionProcessEdge{}, TotalCount: page.Total, Sep: sep, Hidden: page.Hidden,
 		SystemTrees: page.SystemTrees,
 		PageInfo:    &pagination.PageInfo{HasNextPage: page.More, HasPreviousPage: q.After != ""}}
+	marks := r.callerProcessMarks(ctx)
 	for i, row := range page.Rows {
-		out.Edges = append(out.Edges, &model.MinionProcessEdge{Node: processModel(row), Cursor: page.Cursor(i)})
+		node := processModel(row)
+		node.Mark = r.processMarkFor(marks, row.Name)
+		_, node.BuiltinMark = r.builtinMarks.Of(row.Name)
+		out.Edges = append(out.Edges, &model.MinionProcessEdge{Node: node, Cursor: page.Cursor(i)})
 	}
 	if n := len(out.Edges); n > 0 {
 		out.PageInfo.StartCursor, out.PageInfo.EndCursor = &out.Edges[0].Cursor, &out.Edges[n-1].Cursor
 	}
 	return out, nil
+}
+
+// WithTaskProcessMarks gives the task resolver the users' marks on
+// processes by name, and the deployment's own (builtins): process lists show
+// the caller's, else the built-in one, and setMinionProcessMark sets theirs.
+func WithTaskProcessMarks(r IMinionTaskResolver, marks repository.IMinionProcessMarkRepository, builtins models.BuiltinProcessMarks) IMinionTaskResolver {
+	if tr, ok := r.(*minionTaskResolver); ok {
+		tr.processMarks, tr.builtinMarks = marks, builtins
+	}
+	return r
+}
+
+// callerProcessMarks are the caller's marks on processes, by key
+// (models.ProcessMarkKey): read once for a page. None when they do not read:
+// the list shows unmarked rather than failing.
+func (r *minionTaskResolver) callerProcessMarks(ctx context.Context) map[string]models.MinionProcessMark {
+	if r.processMarks == nil {
+		return nil
+	}
+	uid, err := callerUserID(ctx)
+	if err != nil {
+		return nil
+	}
+	marks, err := r.processMarks.ForUser(ctx, uid)
+	if err != nil {
+		logger.From(ctx).Warn("process marks: read", zap.Error(err))
+		return nil
+	}
+	return marks
+}
+
+// processMarkFor is the mark the processes of a name show the caller: their
+// own (an empty one, a clearing: none, the built-in mark hidden too); else
+// the name's built-in mark; nil for none.
+func (r *minionTaskResolver) processMarkFor(own map[string]models.MinionProcessMark, name string) *model.MinionProcessMark {
+	if m, ok := own[models.ProcessMarkKey(name)]; ok {
+		if m.Empty() {
+			return nil
+		}
+		return &model.MinionProcessMark{Color: strPtr(m.Color), Icon: strPtr(m.Icon), Emoji: strPtr(m.Emoji)}
+	}
+	if b, ok := r.builtinMarks.Of(name); ok {
+		return &model.MinionProcessMark{Color: strPtr(b.Color), Icon: strPtr(b.Icon), Emoji: strPtr(b.Emoji), Builtin: true}
+	}
+	return nil
+}
+
+// markerOf is the caller of a mark's change and the name it is for: a
+// person (not an agent key: a mark is a person's), a name of 1 to 255
+// bytes.
+func (r *minionTaskResolver) markerOf(ctx context.Context, name string) (uuid.UUID, string, error) {
+	if gqlctx.AuthFromContext(ctx).Agent != nil || r.processMarks == nil {
+		return uuid.Nil, "", moduleGQLError(ctx, errCodeForbidden, "forbidden")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > models.MaxProcessMarkName {
+		return uuid.Nil, "", moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("name: a process's name, 1 to %d bytes", models.MaxProcessMarkName))
+	}
+	uid, err := callerUserID(ctx)
+	return uid, name, err
+}
+
+// SetMinionProcessMark marks the processes of a name for the caller alone,
+// in every process list, in place of the name's built-in mark. An empty
+// mark clears it: kept, where it hides a built-in mark; removed, where there
+// is none to hide. It returns the mark that shows, nil for none.
+func (r *minionTaskResolver) SetMinionProcessMark(ctx context.Context, name string, mark *model.MinionSessionMarkInput) (*model.MinionProcessMark, error) {
+	uid, name, err := r.markerOf(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	color, icon, emoji := markOf(mark)
+	if why := models.ValidateSessionMark(color, icon, emoji); why != "" {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "mark: "+why)
+	}
+	own := models.MinionProcessMark{Name: name, Color: color, Icon: icon, Emoji: emoji}
+	if _, builtin := r.builtinMarks.Of(name); own.Empty() && !builtin {
+		err = r.processMarks.Remove(ctx, uid, name)
+	} else {
+		err = r.processMarks.Set(ctx, uid, name, color, icon, emoji)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("mark the processes: %w", err)
+	}
+	return r.processMarkFor(map[string]models.MinionProcessMark{models.ProcessMarkKey(name): own}, name), nil
+}
+
+// ResetMinionProcessMark takes the caller's own mark on a name away, or
+// their clearing of it: the name shows its built-in mark again, which it
+// returns (nil for a name with none).
+func (r *minionTaskResolver) ResetMinionProcessMark(ctx context.Context, name string) (*model.MinionProcessMark, error) {
+	uid, name, err := r.markerOf(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.processMarks.Remove(ctx, uid, name); err != nil {
+		return nil, fmt.Errorf("reset the processes' mark: %w", err)
+	}
+	return r.processMarkFor(nil, name), nil
 }
 
 // processModel is a row as GraphQL has it: its start time RFC 3339, its x

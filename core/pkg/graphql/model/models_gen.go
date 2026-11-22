@@ -877,29 +877,31 @@ type MinionListenerEvent struct {
 }
 
 type MinionProcess struct {
-	Pid       int     `json:"pid"`
-	Ppid      *int    `json:"ppid,omitempty"`
-	Name      string  `json:"name"`
-	Path      *string `json:"path,omitempty"`
-	Cmdline   *string `json:"cmdline,omitempty"`
-	User      *string `json:"user,omitempty"`
-	Started   *string `json:"started,omitempty"`
-	Session   *int    `json:"session,omitempty"`
-	Integrity *string `json:"integrity,omitempty"`
-	Arch      *string `json:"arch,omitempty"`
-	Threads   *int    `json:"threads,omitempty"`
-	Memory    *int    `json:"memory,omitempty"`
-	CPUTime   *int    `json:"cpuTime,omitempty"`
-	State     *string `json:"state,omitempty"`
-	X         any     `json:"x,omitempty"`
-	Depth     int     `json:"depth"`
-	Children  int     `json:"children"`
-	Minion    bool    `json:"minion"`
-	Context   bool    `json:"context"`
-	Last      bool    `json:"last"`
-	Guides    []bool  `json:"guides"`
-	Hidden    int     `json:"hidden"`
-	Stem      bool    `json:"stem"`
+	Pid         int                `json:"pid"`
+	Ppid        *int               `json:"ppid,omitempty"`
+	Name        string             `json:"name"`
+	Path        *string            `json:"path,omitempty"`
+	Cmdline     *string            `json:"cmdline,omitempty"`
+	User        *string            `json:"user,omitempty"`
+	Started     *string            `json:"started,omitempty"`
+	Session     *int               `json:"session,omitempty"`
+	Integrity   *string            `json:"integrity,omitempty"`
+	Arch        *string            `json:"arch,omitempty"`
+	Threads     *int               `json:"threads,omitempty"`
+	Memory      *int               `json:"memory,omitempty"`
+	CPUTime     *int               `json:"cpuTime,omitempty"`
+	State       *string            `json:"state,omitempty"`
+	X           any                `json:"x,omitempty"`
+	Depth       int                `json:"depth"`
+	Children    int                `json:"children"`
+	Minion      bool               `json:"minion"`
+	Context     bool               `json:"context"`
+	Last        bool               `json:"last"`
+	Guides      []bool             `json:"guides"`
+	Hidden      int                `json:"hidden"`
+	Stem        bool               `json:"stem"`
+	Mark        *MinionProcessMark `json:"mark,omitempty"`
+	BuiltinMark bool               `json:"builtinMark"`
 }
 
 type MinionProcessConnection struct {
@@ -914,6 +916,13 @@ type MinionProcessConnection struct {
 type MinionProcessEdge struct {
 	Node   *MinionProcess `json:"node"`
 	Cursor string         `json:"cursor"`
+}
+
+type MinionProcessMark struct {
+	Color   *string `json:"color,omitempty"`
+	Icon    *string `json:"icon,omitempty"`
+	Emoji   *string `json:"emoji,omitempty"`
+	Builtin bool    `json:"builtin"`
 }
 
 type MinionSession struct {

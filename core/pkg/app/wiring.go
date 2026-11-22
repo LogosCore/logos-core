@@ -256,9 +256,10 @@ func (a *App) buildResolvers() *resolvers {
 		builds: resolver.NewBuildResolver(a.builds, a.repos.Operation),
 		minionSessions: resolver.WithSessionChannelSchemas(resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences, a.repos.MinionReservation, a.repos.MinionMark, a.repos.Build, a.eventBus,
 			a.repos.MinionTask, a.minionSync, a.repos.MinionFeedback, a.repos.MinionIdentity, a.repos.MinionFolder, a.repos.ModuleRegistry), a.endpoints),
-		minionTasks: resolver.WithTaskFactoryCommands(resolver.WithTaskChannelSchemas(resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
-			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync, a.minionSync, a.repos.MinionFeedback,
-			a.credentialRefs, a.minionTunnels, a.recordings, a.taskComposites()), a.endpoints), a.taskFactoryCommands()),
+		minionTasks: resolver.WithTaskProcessMarks(resolver.WithTaskFactoryCommands(resolver.WithTaskChannelSchemas(resolver.NewMinionTaskResolver(a.repos.MinionTask,
+			a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry, a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser,
+			a.repos.MinionTarget, a.minionSync, a.minionSync, a.repos.MinionFeedback, a.credentialRefs, a.minionTunnels, a.recordings, a.taskComposites()), a.endpoints),
+			a.taskFactoryCommands()), a.repos.MinionProcessMark, a.builtinProcessMarks),
 		minionTargets: resolver.NewMinionTargetResolver(a.minionTargets, a.repos.Build, a.repos.Operation),
 		storage:       resolver.NewStorageResolver(a.storage),
 	}

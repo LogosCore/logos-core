@@ -86,6 +86,8 @@ type IMinionTaskResolver interface {
 	// Desktops' recordings (desktop_recording_resolver.go): a task's, a
 	// page at a time; one deleted.
 	Recordings(ctx context.Context, taskID string, last *int, before *string) (*model.RecordingPage, error)
+	SetMinionProcessMark(ctx context.Context, name string, mark *model.MinionSessionMarkInput) (*model.MinionProcessMark, error)
+	ResetMinionProcessMark(ctx context.Context, name string) (*model.MinionProcessMark, error)
 	MinionTaskProcesses(ctx context.Context, taskID string, search *string, order *model.MinionProcessOrder, desc *bool, first *int,
 		after *string, fold *model.MinionProcessFold, flip []int) (*model.MinionProcessConnection, error)
 	DeleteRecording(ctx context.Context, id string) (bool, error)
@@ -177,6 +179,12 @@ type minionTaskResolver struct {
 	// factory runs factory commands' tasks; nil, a session has no factory
 	// commands.
 	factory TaskFactoryCommands
+	// processMarks are the users' marks on processes by name; nil, process
+	// lists show none and none can be set.
+	processMarks repository.IMinionProcessMarkRepository
+	// builtinMarks are the deployment's own marks on processes, read at start
+	// (models.BuiltinProcessMarksFile); nil, none.
+	builtinMarks models.BuiltinProcessMarks
 }
 
 // TaskComposites runs composite commands' tasks (composites.Service): one

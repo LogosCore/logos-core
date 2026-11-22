@@ -91,6 +91,16 @@ func (r *mutationResolver) SetMinionTaskImportant(ctx context.Context, id string
 	return r.MinionTaskResolver.SetMinionTaskImportant(ctx, id, important)
 }
 
+// SetMinionProcessMark is the resolver for the setMinionProcessMark field.
+func (r *mutationResolver) SetMinionProcessMark(ctx context.Context, name string, mark *model.MinionSessionMarkInput) (*model.MinionProcessMark, error) {
+	return r.MinionTaskResolver.SetMinionProcessMark(ctx, name, mark)
+}
+
+// ResetMinionProcessMark is the resolver for the resetMinionProcessMark field.
+func (r *mutationResolver) ResetMinionProcessMark(ctx context.Context, name string) (*model.MinionProcessMark, error) {
+	return r.MinionTaskResolver.ResetMinionProcessMark(ctx, name)
+}
+
 // SetMinionTunnelCap is the resolver for the setMinionTunnelCap field.
 func (r *mutationResolver) SetMinionTunnelCap(ctx context.Context, taskID string, cap int) (*model.MinionTask, error) {
 	return r.MinionTaskResolver.SetMinionTunnelCap(ctx, taskID, cap)

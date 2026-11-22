@@ -128,6 +128,20 @@ core:
       # networks, here or with the network in front.
       loadBalancerSourceRanges: []
 
+  # Built-in process marks (docs: core-infrastructure, "Built-in process
+  # marks"): the deployment's own marks on processes by name, which every
+  # user sees in process lists until they clear one or set their own. Each
+  # is a name and a color (or a style), an icon or an emoji. Written to a
+  # ConfigMap mounted as core's /etc/logos/builtin-process-marks.json, which
+  # core reads at start (a change rolls its pod). None by default.
+  builtinProcessMarks: []
+  #  - name: lsass.exe
+  #    color: red-strong
+  #    icon: ShieldAlert
+  #  - name: sshd
+  #    color: blue-soft
+  #    emoji: "🔑"
+
   # Application configuration — non-secret env vars. These map 1:1 to the
   # variables consumed by core/pkg/environment/environment.go.
   config:

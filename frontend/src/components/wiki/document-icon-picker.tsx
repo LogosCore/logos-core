@@ -46,6 +46,7 @@ import {
   type WikiIconColor,
 } from "@/components/wiki/icon-color-palette";
 import { cn } from "@/lib/utils";
+import { emojiCodeTitle, iconCodeTitle } from "@/components/wiki/icon-code-names";
 
 // The emoji picker and its dataset are some 600 KB. This picker sits on
 // every page that shows a document or host icon, and most of its uses never
@@ -107,6 +108,10 @@ interface DocumentIconPickerProps {
   /** Leaves out the color swatches, for callers that color the icon by
    *  something else (a session mark's color). */
   hideColors?: boolean;
+  /** Tooltips say each icon's and emoji's value as code writes it ("icon:
+   *  Flame", "emoji: 🦊 (U+1F98A)"), for a choice someone may write by hand
+   *  (a built-in process mark). */
+  codeNames?: boolean;
 }
 
 export function DocumentIconPicker({
@@ -121,6 +126,7 @@ export function DocumentIconPicker({
   defaultIconName,
   derivedDefault,
   hideColors = false,
+  codeNames = false,
 }: DocumentIconPickerProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const { resolvedTheme } = useTheme();
@@ -219,6 +225,7 @@ export function DocumentIconPicker({
                 theme={resolvedTheme === "dark" ? "dark" : "light"}
                 previewPosition="none"
                 skinTonePosition="none"
+                titleOf={codeNames ? emojiCodeTitle : undefined}
               />
             </Suspense>
           </TabsContent>
@@ -238,6 +245,7 @@ export function DocumentIconPicker({
               derivedDefaultSelected={!value.emoji && !value.icon}
               onPick={handleIconPick}
               onPickDerivedDefault={handleDerivedDefaultPick}
+              codeNames={codeNames}
             />
           </TabsContent>
         </Tabs>
@@ -262,6 +270,8 @@ interface IconGridProps {
   derivedDefaultSelected?: boolean;
   onPick: (name: string) => void;
   onPickDerivedDefault?: () => void;
+  /** Tooltips say each icon's name as code writes it. See DocumentIconPicker.codeNames. */
+  codeNames?: boolean;
 }
 
 // Cap on the ranked result list, so a query like "a" doesn't try to lazy-load
@@ -284,6 +294,7 @@ function IconGrid({
   derivedDefaultSelected = false,
   onPick,
   onPickDerivedDefault,
+  codeNames = false,
 }: IconGridProps) {
   const [search, setSearch] = useState("");
   // Snapshot frequent icons on mount. The picker remounts each time the
@@ -370,6 +381,7 @@ function IconGrid({
               <GridSection heading="Frequently used">
                 {frequentNames.map((name) => (
                   <ExtendedIconButton
+                    codeNames={codeNames}
                     key={name}
                     name={name}
                     selected={name === selectedName}
@@ -391,6 +403,7 @@ function IconGrid({
             {showDefault && defaultIconName && (
               <GridSection heading="Default">
                 <ExtendedIconButton
+                    codeNames={codeNames}
                   name={defaultIconName}
                   selected={selectedName === defaultIconName}
                   previewColor={previewColor}
@@ -432,6 +445,7 @@ function IconGrid({
                       without the grid having to know which it is holding. */}
                   {results.names.map((name) => (
                     <ExtendedIconButton
+                    codeNames={codeNames}
                       key={name}
                       name={name}
                       selected={name === selectedName}
@@ -447,6 +461,7 @@ function IconGrid({
                   <GridSection key={group.label} heading={group.label}>
                     {group.icons.map((entry) => (
                       <IconButton
+                        codeNames={codeNames}
                         key={entry.name}
                         entry={entry}
                         selected={entry.name === selectedName}
@@ -466,6 +481,7 @@ function IconGrid({
                       const name = toSimpleIconName(entry.slug);
                       return (
                         <ExtendedIconButton
+                    codeNames={codeNames}
                           key={name}
                           name={name}
                           selected={name === selectedName}
@@ -543,6 +559,7 @@ interface IconButtonProps {
   selected: boolean;
   previewColor: string;
   onPick: (name: string) => void;
+  codeNames?: boolean;
 }
 
 function IconButton({
@@ -550,6 +567,7 @@ function IconButton({
   selected,
   previewColor,
   onPick,
+  codeNames = false,
 }: IconButtonProps) {
   const Icon = entry.component;
   // Inline color overrides text-foreground / text-primary classes; falls back
@@ -559,6 +577,7 @@ function IconButton({
   return (
     <PickerTile
       label={entry.name}
+      title={codeNames ? iconCodeTitle(entry.name) : undefined}
       selected={selected}
       onClick={() => onPick(entry.name)}
     >
@@ -655,6 +674,7 @@ interface ExtendedIconButtonProps {
   selected: boolean;
   previewColor: string;
   onPick: (name: string) => void;
+  codeNames?: boolean;
 }
 
 /**
@@ -667,9 +687,15 @@ function ExtendedIconButton({
   selected,
   previewColor,
   onPick,
+  codeNames = false,
 }: ExtendedIconButtonProps) {
   return (
-    <PickerTile label={name} selected={selected} onClick={() => onPick(name)}>
+    <PickerTile
+      label={name}
+      title={codeNames ? iconCodeTitle(name) : undefined}
+      selected={selected}
+      onClick={() => onPick(name)}
+    >
       <DocumentIcon icon={name} color={previewColor} size={20} />
     </PickerTile>
   );
