@@ -9,7 +9,7 @@ type: application
 
 # Chart version — bump on any change to the chart, its values included:
 # publish-helm.yml pushes it under this version on every change.
-version: 0.3.5
+version: 0.3.6
 
 # Default app version — pinned to the image tag the chart deploys when
 # `*.image.tag` is left unset. Override per environment via values.
