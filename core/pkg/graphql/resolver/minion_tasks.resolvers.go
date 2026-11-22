@@ -162,8 +162,8 @@ func (r *queryResolver) Recordings(ctx context.Context, taskID string, last *int
 }
 
 // MinionTaskProcesses is the resolver for the minionTaskProcesses field.
-func (r *queryResolver) MinionTaskProcesses(ctx context.Context, taskID string, search *string, order *model.MinionProcessOrder, desc *bool, first *int, after *string) (*model.MinionProcessConnection, error) {
-	return r.MinionTaskResolver.MinionTaskProcesses(ctx, taskID, search, order, desc, first, after)
+func (r *queryResolver) MinionTaskProcesses(ctx context.Context, taskID string, search *string, order *model.MinionProcessOrder, desc *bool, first *int, after *string, fold *model.MinionProcessFold, flip []int) (*model.MinionProcessConnection, error) {
+	return r.MinionTaskResolver.MinionTaskProcesses(ctx, taskID, search, order, desc, first, after, fold, flip)
 }
 
 // MinionFileStrings is the resolver for the minionFileStrings field.

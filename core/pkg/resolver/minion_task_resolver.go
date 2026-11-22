@@ -87,7 +87,7 @@ type IMinionTaskResolver interface {
 	// page at a time; one deleted.
 	Recordings(ctx context.Context, taskID string, last *int, before *string) (*model.RecordingPage, error)
 	MinionTaskProcesses(ctx context.Context, taskID string, search *string, order *model.MinionProcessOrder, desc *bool, first *int,
-		after *string) (*model.MinionProcessConnection, error)
+		after *string, fold *model.MinionProcessFold, flip []int) (*model.MinionProcessConnection, error)
 	DeleteRecording(ctx context.Context, id string) (bool, error)
 	OperationalPorts(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error)
 	// LoadPort is a task's port, for a subscriber: nil when it has none.

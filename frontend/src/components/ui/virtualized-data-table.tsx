@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react"
+import { useMemo, useRef, type ReactNode } from "react"
 import { Virtuoso } from "react-virtuoso"
 import { LoaderIcon } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -37,6 +37,15 @@ interface VirtualizedDataTableProps<T> {
   emptyState: ReactNode
   // Plural noun for the end-of-list footer: "No more {entityNoun} to load".
   entityNoun: string
+  // Drawn straight in its pane (a task's view), edge to edge: no card around
+  // it, no border or rounding of its own.
+  bare?: boolean
+  // Wider than its pane, it scrolls sideways rather than squeezing its
+  // columns: how narrow it goes is its grid's (gridCols with min-w-min:
+  // the sum of its tracks' minimums, rows and header alike). The header
+  // follows the rows; both keep room for the vertical scrollbar, so they
+  // are the same width and stay aligned to the right end.
+  scrollX?: boolean
 }
 
 export function VirtualizedDataTable<T>({
@@ -50,7 +59,10 @@ export function VirtualizedDataTable<T>({
   renderRow,
   emptyState,
   entityNoun,
+  bare = false,
+  scrollX = false,
 }: VirtualizedDataTableProps<T>) {
+  const headerRef = useRef<HTMLDivElement>(null)
   const slowLoad = useDelayedFlag(isLoading, PLACEHOLDER_DELAY_MS)
   const showEmpty = !isLoading && items.length === 0
   const showList = !isLoading && items.length > 0
@@ -82,8 +94,8 @@ export function VirtualizedDataTable<T>({
   )
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
-      <div className="shrink-0 border-b bg-muted/50">
+    <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", !bare && "rounded-lg border bg-card")}>
+      <div ref={headerRef} className={cn("shrink-0 border-b bg-muted/50", scrollX && "overflow-hidden [scrollbar-gutter:stable]")}>
         <div
           className={`grid ${gridCols} gap-3 px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide`}
         >
@@ -113,7 +125,14 @@ export function VirtualizedDataTable<T>({
               if (hasNextPage && !isFetchingNextPage) fetchNextPage()
             }}
             overscan={200}
-            style={{ height: "100%" }}
+            style={scrollX ? { height: "100%", scrollbarGutter: "stable" } : { height: "100%" }}
+            onScroll={
+              scrollX
+                ? (e) => {
+                    if (headerRef.current) headerRef.current.scrollLeft = e.currentTarget.scrollLeft
+                  }
+                : undefined
+            }
             className="min-h-0 flex-1"
             itemContent={(index, item) => renderRow(item, index)}
             components={components}

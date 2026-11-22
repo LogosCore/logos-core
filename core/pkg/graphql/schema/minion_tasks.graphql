@@ -687,13 +687,15 @@ extend type Query {
     @hasPermission(permission: "operation:member")
 
   # A page of a process_list task's processes (docs: Task Results and
-  # Actions, process_list), at most first (50 by default, 500 at most)
+  # Actions, process_list), at most first (50 by default, 2000 at most)
   # after a page's cursor: ordered as order says (desc: the other way, those
   # without a value last either way), searched by name, pid, user, path and
-  # command line (in the tree, each match with its ancestors). totalCount
-  # counts the matches. Needs at least viewer.
+  # command line (in the tree, each match with its ancestors). In the tree
+  # with no search, fold says whose processes are folded away and flip the
+  # pids folded the other way. totalCount counts the matches, those folds
+  # hide too. Needs at least viewer.
   minionTaskProcesses(taskId: ID!, search: String, order: MinionProcessOrder = TREE, desc: Boolean = false, first: Int = 50,
-    after: String): MinionProcessConnection!
+    after: String, fold: MinionProcessFold = NONE, flip: [Int!]): MinionProcessConnection!
     @hasPermission(permission: "operation:member")
 
   # A page of the printable strings in a kept file, read from after (0, or
@@ -802,6 +804,16 @@ type MinionProcess {
   minion: Boolean!
   # Shown in the tree for a match below it, not matching itself.
   context: Boolean!
+  # The lines that draw the tree to it: last, it is the last of its parent's
+  # processes shown (its parent's line ends at it); guides, for each level
+  # above its parent's, from the top, whether a line goes on down there.
+  # A root has neither, nor has a row of a flat list.
+  last: Boolean!
+  guides: [Boolean!]!
+  # How many processes under it a fold hides (0: not folded).
+  hidden: Int!
+  # Its processes are shown below it: its line goes down to them.
+  stem: Boolean!
 }
 
 type MinionProcessEdge {
@@ -815,6 +827,11 @@ type MinionProcessConnection {
   totalCount: Int!
   # The host's path separator, as the list says it: "/" or "\\".
   sep: String!
+  # How many processes folds hide.
+  hidden: Int!
+  # How many of the operating system's own trees the list has: what fold
+  # SYSTEM folds.
+  systemTrees: Int!
 }
 
 # How a process list is ordered: as a tree (each process under its parent,
@@ -828,4 +845,14 @@ enum MinionProcessOrder {
   CPU_TIME
   STARTED
   THREADS
+}
+
+# Whose processes a process tree folds away, before flip turns some the
+# other way: none, the operating system's own trees (its kernel's threads on
+# Linux, kthreadd; on Windows its kernel's processes, System, and its
+# services, services.exe), or all.
+enum MinionProcessFold {
+  NONE
+  SYSTEM
+  ALL
 }

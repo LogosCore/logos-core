@@ -1,36 +1,113 @@
-import { useState } from "react"
-import { CopyIcon, CpuIcon, DownloadIcon, FolderOpenIcon, ListTreeIcon, OctagonXIcon, RefreshCwIcon } from "lucide-react"
+import { Fragment, useState } from "react"
+import {
+  ArrowDownIcon,
+  ArrowDownUpIcon,
+  ArrowUpIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
+  CopyIcon,
+  CpuIcon,
+  DownloadIcon,
+  FolderOpenIcon,
+  ListTreeIcon,
+  MonitorCogIcon,
+  OctagonXIcon,
+  RefreshCwIcon,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { SearchInput } from "@/components/ui/search-input"
 import { SortableHeader } from "@/components/ui/sortable-header"
 import { VirtualizedDataTable, dataTableRowClass } from "@/components/ui/virtualized-data-table"
-import type { MinionProcessOrder } from "@/graphql/gql/graphql"
-import { useMinionTaskProcesses } from "@/graphql/hooks/minion-tasks"
+import type { MinionProcessFold, MinionProcessOrder } from "@/graphql/gql/graphql"
+import { PROCESS_PAGE, useMinionTaskProcesses } from "@/graphql/hooks/minion-tasks"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
-import type { DataTableSort } from "@/lib/data-table-sort"
+import { toggleSort, type DataTableSort } from "@/lib/data-table-sort"
 import { formatDateTime } from "@/lib/date-format"
 import { formatBytes } from "@/lib/format-bytes"
 import { cn } from "@/lib/utils"
 import { ActionItem, type MenuCommand } from "./action-menu"
 import type { KillTarget } from "./kill-dialog"
-import { cpuTimeText, folderOf, processNotes, startedSeconds, userText, type ProcessRow } from "./process-list"
+import { cpuTimeText, folderOf, processNotes, startedSeconds, toggled, treeLines, userText, type ProcessRow } from "./process-list"
 
 // A process_list task's view (docs: contracts/task-results-and-actions.md,
 // process_list): the host's processes, read from core a page at a time,
 // ordered and searched there: a tree at first, each process under its
-// parent; a column's header sorts them flat by it (again: the other way),
-// and Tree goes back. A process's actions are in its context menu: Kill
-// (kill_process), and on its path List its folder (list_dir) and Download
-// (download_file); Refresh lists them again (list_processes).
+// parent; a column's header, or Sort, lists them flat by it (again: the
+// other way), and Tree toggles back and forth. In the tree, with no search,
+// a process's toggle folds away those under it, and the toolbar folds all,
+// the operating system's own trees, or none; core folds them, nothing folded
+// at first. Its columns, pid, name, user and command line, keep their widths
+// as it scrolls: a value too long for one is cut, whole in its title, and a
+// click on a row opens it, its values whole, wrapped, and its memory, CPU
+// time, threads and start under its command line. A process's actions are
+// in its context menu: Kill (kill_process), and on its path List its folder
+// (list_dir) and Download (download_file); Refresh lists them again
+// (list_processes).
 
-const COLS = "grid-cols-[4.5rem_minmax(0,1.5fr)_minmax(0,1fr)_5.5rem_4.5rem_4rem_9.5rem_minmax(0,2fr)]"
+// The columns' widths, which hold as the table scrolls. The width there is
+// goes to them in this order: the pid and the name, whole (the name with
+// room for the tree's indent and its notes); the user, up to its most (a
+// grid grows a track with a fixed most before a flexible one: Windows'
+// users say their domain, integrity and session, "NT AUTHORITY\SYSTEM ·
+// system · session 0", a Unix host's are short names); the command line,
+// the rest. Past their least (min-w-min: the user's least and 12rem of
+// command line) the table scrolls sideways.
+function colsFor(sep: string): string {
+  return sep === "\\"
+    ? "grid-cols-[4.5rem_22rem_minmax(8rem,18rem)_minmax(12rem,1fr)] min-w-min"
+    : "grid-cols-[4.5rem_22rem_minmax(6rem,10rem)_minmax(12rem,1fr)] min-w-min"
+}
 
-/** The tree: the order until a column's header sorts the list flat. */
+/** The tree: the order until a column's header (or Sort, or Tree turned off) lists them flat. */
 const TREE: DataTableSort<MinionProcessOrder> = { field: "TREE", direction: "ASC" }
 
-/** How far a level of the tree indents its processes. */
-const INDENT = 14
+/** Flat, as Tree turned off lists them: by pid. */
+const FLAT: DataTableSort<MinionProcessOrder> = { field: "PID", direction: "ASC" }
+
+/** What Sort orders by, the columns' and the values an open row shows; the largest or the latest first where that is the first ask. */
+const SORTS: readonly { field: Exclude<MinionProcessOrder, "TREE">; label: string; first: "ASC" | "DESC" }[] = [
+  { field: "PID", label: "PID", first: "ASC" },
+  { field: "NAME", label: "Name", first: "ASC" },
+  { field: "USER", label: "User", first: "ASC" },
+  { field: "MEMORY", label: "Memory", first: "DESC" },
+  { field: "CPU_TIME", label: "CPU time", first: "DESC" },
+  { field: "THREADS", label: "Threads", first: "DESC" },
+  { field: "STARTED", label: "Started", first: "DESC" },
+]
+
+/**
+ * How far a level of the tree indents its processes. Each column of it is
+ * a level's: a process's corner in its parent's, its fold toggle in its
+ * own, its name past that.
+ */
+const INDENT = 16
+
+/**
+ * A row's padding above and below (py-0.5): rows kept low, so a view holds
+ * more of them. The name cell takes it back (-my-0.5 py-0.5) to span the
+ * row's full height, and the tree's corners sit past it.
+ */
+const ROW_PAD = "py-0.5"
+
+/** Where a tree's corner turns to the name: the middle of its first line (the row's padding, 2px, then half a line, 10px), in an open row too. */
+const CORNER_Y = 12
+
+/** A fold toggle's box, centred in its process's column on its first line. */
+const TOGGLE = 14
+
+/** The most rows a read after a fold takes in its first page (core's most). */
+const MAX_FIRST = 2000
 
 export function ProcessListView({
   task,
@@ -63,41 +140,149 @@ export function ProcessListView({
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState(TREE)
   const [menuFor, setMenuFor] = useState<number | null>(null)
-  const q = useMinionTaskProcesses(task.id, { search, order: sort.field, desc: sort.direction === "DESC" }, `${task.dataParts}:${task.state}`)
+  // The rows opened by a click, by pid: their values whole.
+  const [opened, setOpened] = useState<ReadonlySet<number>>(() => new Set())
+  // Whose processes are folded away, and the pids folded the other way.
+  const [fold, setFold] = useState<MinionProcessFold>("NONE")
+  const [flip, setFlip] = useState<ReadonlySet<number>>(() => new Set())
+  // The first page's size: after a fold, as many rows as there were, so the
+  // list read again stays where it was.
+  const [firstSize, setFirstSize] = useState(PROCESS_PAGE)
+  const q = useMinionTaskProcesses(
+    task.id,
+    { search, order: sort.field, desc: sort.direction === "DESC", fold, flip: [...flip].sort((a, b) => a - b) },
+    `${task.dataParts}:${task.state}`,
+    firstSize,
+  )
   const first = q.data?.pages[0]?.minionTaskProcesses
   const rows = q.data?.pages.flatMap((p) => p.minionTaskProcesses.edges.map((e) => e.node)) ?? []
   const sep = first?.sep ?? "/"
+  // The host's widths (its users' are longer on Windows), the same for every row.
+  const cols = colsFor(sep)
   const total = first?.totalCount ?? 0
+  const hidden = first?.hidden ?? 0
   const searching = search.trim() !== ""
   const tree = sort.field === "TREE"
+  const sorted = SORTS.find((s) => s.field === sort.field)
+  // Folds are the tree's, a search's aside (it shows every match).
+  const folding = tree && !searching
+  const keepPlace = () => setFirstSize(Math.min(Math.max(PROCESS_PAGE, rows.length + PROCESS_PAGE / 2), MAX_FIRST))
+  const foldAs = (f: MinionProcessFold) => {
+    keepPlace()
+    setFold(f)
+    setFlip(new Set())
+  }
+  // A click opens a row, another cuts it again; not one that ends a
+  // selection of its text (to copy a part of it).
+  const toggleOpen = (pid: number) => {
+    if (window.getSelection()?.toString()) return
+    setOpened((s) => toggled(s, pid))
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1 text-xs">
         <span className="text-muted-foreground tabular-nums">
           {first ? `${total.toLocaleString("en-US")} ${searching ? (total === 1 ? "match" : "matches") : total === 1 ? "process" : "processes"}` : ""}
+          {hidden > 0 && ` · ${hidden.toLocaleString("en-US")} folded`}
         </span>
         <SearchInput
           value={search}
-          onValueChange={setSearch}
+          onValueChange={(v) => {
+            setSearch(v)
+            setFirstSize(PROCESS_PAGE)
+          }}
           placeholder="Search name, pid, user, path, command line..."
-          title="Matches the name, the pid, the user, the path and the command line; in the tree, each match shows under its ancestors"
-          className="w-72"
+          title="Matches the name, the pid, the user, the path and the command line; in the tree, each match shows under its ancestors, folds aside"
+          className="relative w-72"
         />
         <Button
           variant={tree ? "secondary" : "ghost"}
           size="xs"
           aria-pressed={tree}
-          onClick={() => setSort(TREE)}
+          onClick={() => setSort(tree ? FLAT : TREE)}
           title={
             tree
-              ? "Each process under its parent, siblings in the order they started: a column's header sorts them flat by it"
-              : "Show each process under its parent again"
+              ? "A tree: each process under its parent, siblings in the order they started. Click to list them flat, by pid; Sort or a column's header sorts them"
+              : "Show each process under its parent"
           }
         >
           <ListTreeIcon />
           Tree
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant={tree ? "ghost" : "secondary"}
+                size="xs"
+                title={
+                  sorted
+                    ? `Sorted by ${sorted.label.toLowerCase()}, ${sort.direction === "DESC" ? "the largest or the latest first" : "the smallest or the earliest first"}`
+                    : "List them flat, sorted by a value: memory, CPU time and more"
+                }
+              >
+                <ArrowDownUpIcon />
+                {sorted ? sorted.label : "Sort"}
+                {sorted && (sort.direction === "DESC" ? <ArrowDownIcon /> : <ArrowUpIcon />)}
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="start" className="min-w-40">
+            {/* A label must sit in a group, or Base UI throws. */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Sort flat by</DropdownMenuLabel>
+              {SORTS.map((s) => (
+                <DropdownMenuItem key={s.field} onClick={() => setSort(toggleSort(sort, s.field, s.first))}>
+                  {s.label}
+                  {s.field === sort.field && (
+                    <span className="ml-auto text-muted-foreground">
+                      {sort.direction === "DESC" ? <ArrowDownIcon className="size-3.5" /> : <ArrowUpIcon className="size-3.5" />}
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {folding && (
+          <>
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={fold === "ALL" && flip.size === 0}
+              onClick={() => foldAs("ALL")}
+              title="Fold every process: the roots alone show, each toggle unfolds one"
+            >
+              <ChevronsDownUpIcon />
+              Fold all
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={!first?.systemTrees || (fold === "SYSTEM" && flip.size === 0)}
+              onClick={() => foldAs("SYSTEM")}
+              title={
+                first?.systemTrees
+                  ? "Fold the operating system's own trees: its kernel's threads on Linux (kthreadd); its kernel's processes (System) and its services (services.exe) on Windows"
+                  : "This list has none of the operating system's own trees"
+              }
+            >
+              <MonitorCogIcon />
+              Fold system trees
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={fold === "NONE" && flip.size === 0}
+              onClick={() => foldAs("NONE")}
+              title="Unfold every process"
+            >
+              <ChevronsUpDownIcon />
+              Unfold all
+            </Button>
+          </>
+        )}
         <span className="flex-1" />
         {onRefresh && refreshCommands.length > 0 && (
           <Button
@@ -114,40 +299,76 @@ export function ProcessListView({
       {q.error ? (
         <div className="m-3 rounded-md bg-destructive/15 p-3 text-sm text-destructive">{q.error.message}</div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col p-3">
-          <VirtualizedDataTable
-            items={rows}
-            isLoading={q.isLoading}
-            isFetchingNextPage={q.isFetchingNextPage}
-            hasNextPage={q.hasNextPage}
-            fetchNextPage={() => void q.fetchNextPage()}
-            gridCols={COLS}
-            entityNoun="processes"
-            header={
-              <>
-                <SortableHeader label="PID" field="PID" sort={sort} onSortChange={setSort} />
-                <SortableHeader label="Name" field="NAME" sort={sort} onSortChange={setSort} />
-                <SortableHeader label="User" field="USER" sort={sort} onSortChange={setSort} />
-                {/* The largest first, as the latest started: the first ask of each. */}
-                <SortableHeader label="Memory" field="MEMORY" sort={sort} onSortChange={setSort} initialDirection="DESC" className="justify-self-end" />
-                <SortableHeader label="CPU" field="CPU_TIME" sort={sort} onSortChange={setSort} initialDirection="DESC" className="justify-self-end" />
-                <SortableHeader label="Threads" field="THREADS" sort={sort} onSortChange={setSort} initialDirection="DESC" className="justify-self-end" />
-                <SortableHeader label="Started" field="STARTED" sort={sort} onSortChange={setSort} initialDirection="DESC" />
-                <div>Command line</div>
-              </>
-            }
-            emptyState={
-              <>
-                <CpuIcon className="size-8 opacity-50" />
-                <p className="text-sm">{searching ? "No process matches." : "The list holds no process."}</p>
-              </>
-            }
-            renderRow={(p) => (
-              <ContextMenu onOpenChange={(open) => setMenuFor(open ? p.pid : null)}>
+        <VirtualizedDataTable
+          bare
+          scrollX
+          items={rows}
+          isLoading={q.isLoading}
+          isFetchingNextPage={q.isFetchingNextPage}
+          hasNextPage={q.hasNextPage}
+          fetchNextPage={() => void q.fetchNextPage()}
+          gridCols={cols}
+          entityNoun="processes"
+          header={
+            <>
+              <SortableHeader label="PID" field="PID" sort={sort} onSortChange={setSort} />
+              <SortableHeader label="Name" field="NAME" sort={sort} onSortChange={setSort} />
+              <SortableHeader label="User" field="USER" sort={sort} onSortChange={setSort} />
+              <div>Command line</div>
+            </>
+          }
+          emptyState={
+            <>
+              <CpuIcon className="size-8 opacity-50" />
+              <p className="text-sm">{searching ? "No process matches." : "The list holds no process."}</p>
+            </>
+          }
+          renderRow={(p) => {
+            const open = opened.has(p.pid)
+            return (
+              <ContextMenu onOpenChange={(o) => setMenuFor(o ? p.pid : null)}>
                 <ContextMenuTrigger
-                  render={<div className={dataTableRowClass(COLS, cn(p.context && "text-muted-foreground", menuFor === p.pid && "bg-muted"))} />}
+                  render={
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={open}
+                      onClick={() => toggleOpen(p.pid)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          toggleOpen(p.pid)
+                        }
+                      }}
+                      className={dataTableRowClass(
+                        cols,
+                        cn(
+                          ROW_PAD,
+                          "cursor-pointer",
+                          // Open: its values from the top, each cell's first line beside the name's.
+                          open && "items-start bg-muted/30",
+                          p.context && "text-muted-foreground",
+                          menuFor === p.pid && "bg-muted",
+                        ),
+                      )}
+                    />
+                  }
                 >
-                  <ProcessCells p={p} hostArch={hostArch} tree={tree} />
+                  <ProcessCells
+                    p={p}
+                    hostArch={hostArch}
+                    windows={sep === "\\"}
+                    tree={tree}
+                    open={open}
+                    onFold={
+                      folding && p.children > 0
+                        ? () => {
+                            keepPlace()
+                            setFlip((s) => toggled(s, p.pid))
+                          }
+                        : undefined
+                    }
+                  />
                 </ContextMenuTrigger>
                 <ContextMenuContent>
                   <ProcessMenu
@@ -162,49 +383,157 @@ export function ProcessListView({
                   />
                 </ContextMenuContent>
               </ContextMenu>
-            )}
-          />
-        </div>
+            )
+          }}
+        />
       )}
     </div>
   )
 }
 
-/** A process's cells: pid; name, indented by depth in the tree, with its notes; user; memory; CPU time; threads; started; command line. */
-function ProcessCells({ p, hostArch, tree }: { p: ProcessRow; hostArch?: string | null; tree: boolean }) {
-  const notes = processNotes(p, hostArch)
+/**
+ * A process's cells: pid; name, indented and drawn to its parent in the
+ * tree, its fold toggle before it, with how many a fold hides and its
+ * notes; user; command line. Cut to their columns, whole in their titles;
+ * in an open row whole, wrapped (the command line keeping its spaces), its
+ * memory, CPU time, threads and start under its command line, the small
+ * ones a little lower, on the name's first line.
+ */
+function ProcessCells({
+  p,
+  hostArch,
+  windows,
+  tree,
+  open,
+  onFold,
+}: {
+  p: ProcessRow
+  hostArch?: string | null
+  /** The host is Windows (the list's separator is "\\"). */
+  windows: boolean
+  tree: boolean
+  open: boolean
+  /** Folds or unfolds those under it; absent where it has none, or folds do not apply. */
+  onFold?: () => void
+}) {
+  const notes = processNotes(p, hostArch, windows)
   const who = userText(p)
   const line = p.cmdline ?? p.path ?? ""
+  const low = open && "pt-0.5"
+  const folded = p.hidden > 0
   return (
     <>
-      <span className="font-mono text-xs tabular-nums">{p.pid}</span>
-      <span className="flex min-w-0 items-baseline gap-1.5" style={tree ? { paddingLeft: p.depth * INDENT } : undefined}>
-        <span className="truncate" title={p.path ?? p.name}>
+      <span className={cn("font-mono text-xs tabular-nums", low)}>{p.pid}</span>
+      {/* In the tree the cell takes the row's full height (its padding
+          its own), so its lines join the rows above and below. */}
+      <span
+        className={cn("flex min-w-0 items-baseline gap-1.5", open && "flex-wrap", tree && "relative -my-0.5 self-stretch py-0.5")}
+        style={tree ? { paddingLeft: (p.depth + 1) * INDENT } : undefined}
+      >
+        {tree && <TreeLines p={p} toggle={!!onFold} />}
+        {onFold && (
+          <button
+            type="button"
+            aria-expanded={!folded}
+            aria-label={folded ? "Unfold" : "Fold"}
+            title={folded ? `Unfold: show the ${p.hidden.toLocaleString("en-US")} under it` : "Fold: hide those under it"}
+            onClick={(e) => {
+              e.stopPropagation()
+              onFold()
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="absolute flex cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            style={{ left: p.depth * INDENT + (INDENT - TOGGLE) / 2, top: CORNER_Y - TOGGLE / 2, width: TOGGLE, height: TOGGLE }}
+          >
+            {folded ? <ChevronRightIcon className="size-3" /> : <ChevronDownIcon className="size-3" />}
+          </button>
+        )}
+        <span className={open ? "[overflow-wrap:anywhere]" : "truncate"} title={p.path ?? p.name}>
           {p.name}
         </span>
+        {folded && (
+          <span className="shrink-0 rounded bg-muted px-1 text-xs text-muted-foreground tabular-nums" title={`${p.hidden.toLocaleString("en-US")} folded under it`}>
+            +{p.hidden.toLocaleString("en-US")}
+          </span>
+        )}
         {p.minion && (
           <span className="shrink-0 rounded bg-sky-500/15 px-1 text-xs text-sky-700 dark:text-sky-300" title="This session's minion's own process">
-            this minion
+            self
           </span>
         )}
         {notes.map((n) => (
-          <span key={n} className="shrink-0 rounded bg-muted px-1 text-xs text-muted-foreground">
-            {n}
+          <span key={n.text} className="shrink-0 rounded bg-muted px-1 text-xs text-muted-foreground" title={n.title}>
+            {n.text}
           </span>
         ))}
       </span>
-      <span className="truncate text-xs" title={who}>
+      <span className={cn("text-xs", open ? "whitespace-normal [overflow-wrap:anywhere]" : "truncate", low)} title={open ? undefined : who}>
         {who}
       </span>
-      <span className="text-right text-xs tabular-nums">{p.memory !== null && p.memory !== undefined ? formatBytes(p.memory) : ""}</span>
-      <span className="text-right text-xs tabular-nums">{cpuTimeText(p.cpuTime)}</span>
-      <span className="text-right text-xs tabular-nums">{p.threads ?? ""}</span>
-      <span className="truncate text-xs tabular-nums">{p.started ? formatDateTime(p.started) : ""}</span>
-      <span className="truncate font-mono text-xs text-muted-foreground" title={line}>
+      <span
+        className={cn("font-mono text-xs text-muted-foreground", open ? "whitespace-pre-wrap [overflow-wrap:anywhere]" : "truncate", low)}
+        title={open ? undefined : line}
+      >
         {line}
+        {open && <ProcessStats p={p} />}
       </span>
     </>
   )
+}
+
+/** What an open row shows under its command line: its memory, CPU time, threads and start, each named (those the list has). */
+function ProcessStats({ p }: { p: ProcessRow }) {
+  const stats = [
+    { name: "Memory", value: p.memory !== null && p.memory !== undefined ? formatBytes(p.memory) : "" },
+    { name: "CPU time", value: cpuTimeText(p.cpuTime) },
+    { name: "Threads", value: p.threads !== null && p.threads !== undefined ? String(p.threads) : "" },
+    { name: "Started", value: p.started ? formatDateTime(p.started) : "" },
+  ].filter((s) => s.value !== "")
+  if (stats.length === 0) return null
+  return (
+    <span className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 font-sans whitespace-normal tabular-nums">
+      {stats.map((s) => (
+        <span key={s.name}>
+          {s.name} <span className="text-foreground">{s.value}</span>
+        </span>
+      ))}
+    </span>
+  )
+}
+
+/**
+ * The tree's lines in a name cell, as core says them (treeLines), each in
+ * its level's column: a rail, or a corner's upright, the row's full height
+ * and a pixel past its border, so it joins the next row's; an elbow's
+ * ending where the corner turns, at the name's first line, to the process's
+ * toggle where it has one, else to the name; a stem from below the toggle
+ * down to its processes.
+ */
+function TreeLines({ p, toggle }: { p: ProcessRow; toggle: boolean }) {
+  const below = toggle ? CORNER_Y + TOGGLE / 2 : CORNER_Y
+  return treeLines(p).map((l) => {
+    const x = l.level * INDENT + INDENT / 2
+    // The corner's arm: across its own column to the toggle's box, or on to the name.
+    const arm = toggle ? INDENT - INDENT / 2 + (INDENT - TOGGLE) / 2 : INDENT + INDENT / 2 - 3
+    return (
+      <Fragment key={`${l.kind}${l.level}`}>
+        <span
+          aria-hidden
+          className="absolute w-px bg-muted-foreground/40"
+          style={
+            l.kind === "elbow"
+              ? { left: x, top: 0, height: CORNER_Y }
+              : l.kind === "stem"
+                ? { left: x, top: below, bottom: -1 }
+                : { left: x, top: 0, bottom: -1 }
+          }
+        />
+        {(l.kind === "tee" || l.kind === "elbow") && (
+          <span aria-hidden className="absolute h-px bg-muted-foreground/40" style={{ left: x, top: CORNER_Y, width: arm }} />
+        )}
+      </Fragment>
+    )
+  })
 }
 
 /** A process's menu: copying what it is; Kill; on its path, List its folder and Download. */

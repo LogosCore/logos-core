@@ -34,6 +34,7 @@ import {
   SetMinionTaskImportantDocument,
   SetMinionTunnelCapDocument,
   type RecordingsQuery,
+  type MinionProcessFold,
   type MinionProcessOrder,
   type MinionTaskFieldsFragment,
   type MinionTasksQuery,
@@ -81,18 +82,28 @@ export const minionTaskKeys = {
   processes: (taskId: string, view: ProcessesView) => [...minionTaskKeys.all, "processes", taskId, view] as const,
 }
 
-/** How a process list is read: searched by core, ordered (desc: the other way). */
+/**
+ * How a process list is read: searched by core, ordered (desc: the other
+ * way); in the tree, folded as fold says, flip's pids the other way.
+ */
 export interface ProcessesView {
   search: string
   order: MinionProcessOrder
   desc: boolean
+  fold: MinionProcessFold
+  flip: readonly number[]
 }
 
+/** The rows a page of a process list reads, after the first. */
+export const PROCESS_PAGE = 100
+
 /**
- * A process_list task's processes, a page of 100 at a time, ordered and
- * searched by core; read again when version (its parts, its state) moves.
+ * A process_list task's processes, a page of 100 at a time (the first of
+ * firstSize: after a fold, as many as the view had, so it stays where it
+ * was), ordered, searched and folded by core; read again when version (its
+ * parts, its state) moves.
  */
-export function useMinionTaskProcesses(taskId: string, view: ProcessesView, version: string, enabled = true) {
+export function useMinionTaskProcesses(taskId: string, view: ProcessesView, version: string, firstSize = PROCESS_PAGE, enabled = true) {
   return useInfiniteQuery({
     queryKey: [...minionTaskKeys.processes(taskId, view), version],
     queryFn: ({ pageParam }) =>
@@ -101,7 +112,9 @@ export function useMinionTaskProcesses(taskId: string, view: ProcessesView, vers
         search: view.search.trim() || null,
         order: view.order,
         desc: view.desc,
-        first: 100,
+        fold: view.fold,
+        flip: [...view.flip],
+        first: pageParam === undefined ? firstSize : PROCESS_PAGE,
         after: pageParam,
       }),
     initialPageParam: undefined as string | undefined,

@@ -40,19 +40,81 @@ export function startedSeconds(started: string | null | undefined): number {
   return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000)
 }
 
+/** A note beside a process's name: its words, and what they mean (its title). */
+export interface ProcessNote {
+  text: string
+  title: string
+}
+
+/** The states a note says, what each means (docs: process_list). */
+const STATES: Record<string, string> = {
+  waiting: "Waiting in the kernel, and no signal wakes it (D): on a disk or a network share, say",
+  stopped: "Stopped: by a signal, or every thread of it suspended",
+  zombie: "Ended, its parent yet to reap it: only its entry is left",
+}
+
+/** Architectures in words (the list says them as Go does: 386, arm, amd64, arm64). */
+const ARCHES: Record<string, string> = { "386": "32-bit", arm: "32-bit ARM", amd64: "x64", arm64: "ARM64" }
+
 /**
  * The notes beside a process's name: its state where it is not running or
  * sleeping, and its architecture where it is not the host's (a 32-bit
- * process on 64-bit Windows).
+ * process on 64-bit Windows: "32-bit"), each with its meaning; windows,
+ * the host is Windows (a list whose separator is "\\").
  */
-export function processNotes(p: Pick<ProcessRow, "state" | "arch">, hostArch: string | null | undefined): string[] {
-  const notes: string[] = []
-  if (p.state && p.state !== "running" && p.state !== "sleeping") notes.push(p.state)
-  if (p.arch && hostArch && p.arch !== hostArch) notes.push(p.arch)
+export function processNotes(p: Pick<ProcessRow, "state" | "arch">, hostArch: string | null | undefined, windows = false): ProcessNote[] {
+  const notes: ProcessNote[] = []
+  if (p.state && p.state !== "running" && p.state !== "sleeping") {
+    notes.push({ text: p.state, title: STATES[p.state] ?? `Its state: ${p.state}` })
+  }
+  if (p.arch && hostArch && p.arch !== hostArch) {
+    const text = ARCHES[p.arch] ?? p.arch
+    const host = ARCHES[hostArch] ?? hostArch
+    // "An x64", "an ARM64"; "a 32-bit".
+    const a = /^([aeio]|x\d)/i.test(text) ? "An" : "A"
+    const wow = windows && (p.arch === "386" || p.arch === "arm") ? ": Windows runs it under WOW64, its layer for 32-bit programs" : ""
+    notes.push({ text, title: `${a} ${text} program (${p.arch}) on this ${host} host${wow}` })
+  }
   return notes
 }
 
-/** Who a process runs as, with its integrity and its Windows session where the list has them. */
+/**
+ * Who a process runs as, with its Windows session, and its integrity where
+ * it says more than who: Windows' levels; on Unix the level is its uid's
+ * (root, or user), so only root for an account of another name (uid 0 as
+ * "toor").
+ */
 export function userText(p: Pick<ProcessRow, "user" | "integrity" | "session">): string {
-  return [p.user, p.integrity, p.session !== null && p.session !== undefined ? `session ${p.session}` : null].filter(Boolean).join(" · ")
+  const integrity = p.integrity === "user" || (p.integrity === "root" && p.user === "root") ? null : p.integrity
+  return [p.user, integrity, p.session !== null && p.session !== undefined ? `session ${p.session}` : null].filter(Boolean).join(" · ")
+}
+
+/**
+ * A line of the tree in a process's name cell, at a level's column: a rail
+ * (top to bottom: that level's process has more shown after it), a tee
+ * (├: its own corner, its parent's line going on below it), an elbow
+ * (└: its own corner, the last of its parent's), or a stem (in its own
+ * column, from its fold toggle down to its processes below).
+ */
+export interface TreeLine {
+  level: number
+  kind: "rail" | "tee" | "elbow" | "stem"
+}
+
+/** The lines that draw the tree to a process, as core says them: its guides' rails, its own corner (a root has none), its stem. */
+export function treeLines(p: Pick<ProcessRow, "depth" | "last" | "guides" | "stem">): TreeLine[] {
+  const lines: TreeLine[] = []
+  p.guides.forEach((on, level) => {
+    if (on) lines.push({ level, kind: "rail" })
+  })
+  if (p.depth > 0) lines.push({ level: p.depth - 1, kind: p.last ? "elbow" : "tee" })
+  if (p.stem) lines.push({ level: p.depth, kind: "stem" })
+  return lines
+}
+
+/** set with pid turned the other way: added where it was not in it, taken out where it was. */
+export function toggled(set: ReadonlySet<number>, pid: number): ReadonlySet<number> {
+  const next = new Set(set)
+  if (!next.delete(pid)) next.add(pid)
+  return next
 }

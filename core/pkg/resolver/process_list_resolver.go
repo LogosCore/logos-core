@@ -19,16 +19,18 @@ import (
 // contracts/task-results-and-actions.md, process_list): read from the
 // task's parts, ordered, searched and paged by core (pkg/processlist).
 
+// At most a page of 2000: after a fold the view reads again, in one page,
+// as many rows as it had, so it stays where it was.
 const (
 	defaultProcessPage = 50
-	maxProcessPage     = 500
+	maxProcessPage     = 2000
 )
 
 // MinionTaskProcesses is a page of a process_list task's processes, for a
 // viewer of its session's operation; this session's minion's own marked by
-// its latest hello's pid.
+// its latest hello's pid; folded as fold and flip say.
 func (r *minionTaskResolver) MinionTaskProcesses(ctx context.Context, taskID string, search *string, order *model.MinionProcessOrder,
-	desc *bool, first *int, after *string) (*model.MinionProcessConnection, error) {
+	desc *bool, first *int, after *string, fold *model.MinionProcessFold, flip []int) (*model.MinionProcessConnection, error) {
 	tid, err := uuid.Parse(taskID)
 	if err != nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid task ID")
@@ -66,6 +68,17 @@ func (r *minionTaskResolver) MinionTaskProcesses(ctx context.Context, taskID str
 	if after != nil {
 		q.After = *after
 	}
+	if fold != nil {
+		q.Fold = processlist.Fold(*fold)
+	}
+	if len(flip) > 0 {
+		q.Flip = make(map[uint64]bool, len(flip))
+		for _, pid := range flip {
+			if pid >= 0 {
+				q.Flip[uint64(pid)] = true
+			}
+		}
+	}
 	parts, err := r.parts(ctx, taskID)
 	if err != nil {
 		return nil, err
@@ -81,8 +94,9 @@ func (r *minionTaskResolver) MinionTaskProcesses(ctx context.Context, taskID str
 	if err != nil {
 		return nil, err
 	}
-	out := &model.MinionProcessConnection{Edges: []*model.MinionProcessEdge{}, TotalCount: page.Total, Sep: sep,
-		PageInfo: &pagination.PageInfo{HasNextPage: page.More, HasPreviousPage: q.After != ""}}
+	out := &model.MinionProcessConnection{Edges: []*model.MinionProcessEdge{}, TotalCount: page.Total, Sep: sep, Hidden: page.Hidden,
+		SystemTrees: page.SystemTrees,
+		PageInfo:    &pagination.PageInfo{HasNextPage: page.More, HasPreviousPage: q.After != ""}}
 	for i, row := range page.Rows {
 		out.Edges = append(out.Edges, &model.MinionProcessEdge{Node: processModel(row), Cursor: page.Cursor(i)})
 	}
@@ -99,7 +113,8 @@ func processModel(row processlist.Row) *model.MinionProcess {
 	m := &model.MinionProcess{Pid: int(p.PID), Name: p.Name, Path: strPtr(p.Path), Cmdline: strPtr(p.Cmdline), User: strPtr(p.User),
 		Integrity: strPtr(p.Integrity), Arch: strPtr(p.Arch), State: strPtr(p.State), Depth: row.Depth, Children: row.Children,
 		Minion: row.Minion, Context: row.Context, Ppid: intPtrOf(p.PPID), Session: intPtrOf(p.Session), Threads: intPtrOf(p.Threads),
-		Memory: intPtrOf(p.Memory), CPUTime: intPtrOf(p.CPUTime)}
+		Memory: intPtrOf(p.Memory), CPUTime: intPtrOf(p.CPUTime), Last: row.Last, Guides: append([]bool{}, row.Guides...), Hidden: row.Hidden,
+		Stem: row.Stem}
 	if p.Started != nil {
 		at := time.Unix(*p.Started, 0).UTC().Format(time.RFC3339)
 		m.Started = &at

@@ -1100,7 +1100,10 @@ export type MinionProcess = {
   context: Scalars['Boolean']['output'];
   cpuTime?: Maybe<Scalars['Int']['output']>;
   depth: Scalars['Int']['output'];
+  guides: Array<Scalars['Boolean']['output']>;
+  hidden: Scalars['Int']['output'];
   integrity?: Maybe<Scalars['String']['output']>;
+  last: Scalars['Boolean']['output'];
   memory?: Maybe<Scalars['Int']['output']>;
   minion: Scalars['Boolean']['output'];
   name: Scalars['String']['output'];
@@ -1110,6 +1113,7 @@ export type MinionProcess = {
   session?: Maybe<Scalars['Int']['output']>;
   started?: Maybe<Scalars['String']['output']>;
   state?: Maybe<Scalars['String']['output']>;
+  stem: Scalars['Boolean']['output'];
   threads?: Maybe<Scalars['Int']['output']>;
   user?: Maybe<Scalars['String']['output']>;
   x?: Maybe<Scalars['JSON']['output']>;
@@ -1117,8 +1121,10 @@ export type MinionProcess = {
 
 export type MinionProcessConnection = {
   edges: Array<MinionProcessEdge>;
+  hidden: Scalars['Int']['output'];
   pageInfo: PageInfo;
   sep: Scalars['String']['output'];
+  systemTrees: Scalars['Int']['output'];
   totalCount: Scalars['Int']['output'];
 };
 
@@ -1126,6 +1132,11 @@ export type MinionProcessEdge = {
   cursor: Scalars['String']['output'];
   node: MinionProcess;
 };
+
+export type MinionProcessFold =
+  | 'ALL'
+  | 'NONE'
+  | 'SYSTEM';
 
 export type MinionProcessOrder =
   | 'CPU_TIME'
@@ -3183,6 +3194,8 @@ export type QueryMinionTaskProcessesArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   desc?: InputMaybe<Scalars['Boolean']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
+  flip?: InputMaybe<Array<Scalars['Int']['input']>>;
+  fold?: InputMaybe<MinionProcessFold>;
   order?: InputMaybe<MinionProcessOrder>;
   search?: InputMaybe<Scalars['String']['input']>;
   taskId: Scalars['ID']['input'];
@@ -5647,10 +5660,12 @@ export type MinionTaskProcessesQueryVariables = Exact<{
   desc?: InputMaybe<Scalars['Boolean']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   after?: InputMaybe<Scalars['String']['input']>;
+  fold?: InputMaybe<MinionProcessFold>;
+  flip?: InputMaybe<Array<Scalars['Int']['input']> | Scalars['Int']['input']>;
 }>;
 
 
-export type MinionTaskProcessesQuery = { minionTaskProcesses: { totalCount: number, sep: string, edges: Array<{ cursor: string, node: { pid: number, ppid?: number | null, name: string, path?: string | null, cmdline?: string | null, user?: string | null, started?: string | null, session?: number | null, integrity?: string | null, arch?: string | null, threads?: number | null, memory?: number | null, cpuTime?: number | null, state?: string | null, depth: number, children: number, minion: boolean, context: boolean } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MinionTaskProcessesQuery = { minionTaskProcesses: { totalCount: number, sep: string, hidden: number, systemTrees: number, edges: Array<{ cursor: string, node: { pid: number, ppid?: number | null, name: string, path?: string | null, cmdline?: string | null, user?: string | null, started?: string | null, session?: number | null, integrity?: string | null, arch?: string | null, threads?: number | null, memory?: number | null, cpuTime?: number | null, state?: string | null, depth: number, children: number, minion: boolean, context: boolean, last: boolean, guides: Array<boolean>, hidden: number, stem: boolean } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -14143,7 +14158,7 @@ fragment MinionTaskFields on MinionTask {
   }
 }`) as unknown as TypedDocumentString<MinionTaskChangedSubscription, MinionTaskChangedSubscriptionVariables>;
 export const MinionTaskProcessesDocument = new TypedDocumentString(`
-    query MinionTaskProcesses($taskId: ID!, $search: String, $order: MinionProcessOrder, $desc: Boolean, $first: Int, $after: String) {
+    query MinionTaskProcesses($taskId: ID!, $search: String, $order: MinionProcessOrder, $desc: Boolean, $first: Int, $after: String, $fold: MinionProcessFold, $flip: [Int!]) {
   minionTaskProcesses(
     taskId: $taskId
     search: $search
@@ -14151,6 +14166,8 @@ export const MinionTaskProcessesDocument = new TypedDocumentString(`
     desc: $desc
     first: $first
     after: $after
+    fold: $fold
+    flip: $flip
   ) {
     edges {
       cursor
@@ -14173,6 +14190,10 @@ export const MinionTaskProcessesDocument = new TypedDocumentString(`
         children
         minion
         context
+        last
+        guides
+        hidden
+        stem
       }
     }
     pageInfo {
@@ -14181,6 +14202,8 @@ export const MinionTaskProcessesDocument = new TypedDocumentString(`
     }
     totalCount
     sep
+    hidden
+    systemTrees
   }
 }
     `) as unknown as TypedDocumentString<MinionTaskProcessesQuery, MinionTaskProcessesQueryVariables>;

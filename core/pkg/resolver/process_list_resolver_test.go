@@ -48,7 +48,7 @@ func TestMinionTaskProcesses(t *testing.T) {
 	}
 
 	two := 2
-	page, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, &two, nil)
+	page, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, &two, nil, nil, nil)
 	if err != nil || page.TotalCount != 3 || page.Sep != "/" || len(page.Edges) != 2 || !page.PageInfo.HasNextPage || page.PageInfo.HasPreviousPage {
 		t.Fatalf("first page %+v %v", page, err)
 	}
@@ -60,30 +60,47 @@ func TestMinionTaskProcesses(t *testing.T) {
 		*minion.Ppid != 1 || minion.X.(map[string]any)["cgroup"].(map[string]any)["$bytes"] != "AQI=" {
 		t.Fatalf("the minion %+v", minion)
 	}
-	rest, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, &two, page.PageInfo.EndCursor)
+	rest, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, &two, page.PageInfo.EndCursor, nil, nil)
 	if err != nil || len(rest.Edges) != 1 || rest.Edges[0].Node.Name != "bash" || rest.PageInfo.HasNextPage {
 		t.Fatalf("the page after %+v %v", rest, err)
 	}
+	// The tree's lines across pages: the minion, the first of systemd's
+	// two, and bash, its last on the next page; a root's none.
+	if root.Last || root.Guides == nil || len(root.Guides) != 0 || minion.Last || len(minion.Guides) != 0 || !rest.Edges[0].Node.Last {
+		t.Fatalf("lines: root %v %v, minion %v %v, bash %v", root.Last, root.Guides, minion.Last, minion.Guides, rest.Edges[0].Node.Last)
+	}
+	// Folded: systemd (its pid flipped), its two hidden; Fold All folds it
+	// too, its flip unfolding it.
+	none, all := model.MinionProcessFoldNone, model.MinionProcessFoldAll
+	folded, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, nil, nil, &none, []int{1})
+	if err != nil || len(folded.Edges) != 1 || folded.Edges[0].Node.Hidden != 2 || folded.Hidden != 2 || folded.TotalCount != 3 ||
+		folded.Edges[0].Node.Stem || folded.SystemTrees != 0 {
+		t.Fatalf("folded %+v %v", folded, err)
+	}
+	if unfolded, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, nil, nil, &all, []int{1}); err != nil ||
+		len(unfolded.Edges) != 3 || !unfolded.Edges[0].Node.Stem || unfolded.Hidden != 0 {
+		t.Fatalf("fold all, systemd flipped %+v %v", unfolded, err)
+	}
 	byName, yes, search := model.MinionProcessOrderName, true, "b"
-	sorted, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), &search, &byName, &yes, nil, nil)
+	sorted, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), &search, &byName, &yes, nil, nil, nil, nil)
 	if err != nil || sorted.TotalCount != 2 || sorted.Edges[0].Node.Name != "bob-minion" || sorted.Edges[1].Node.Name != "bash" {
 		t.Fatalf("searched, by name the other way %+v %v", sorted, err)
 	}
 
-	if _, err := r.MinionTaskProcesses(as(uuid.New()), task.TaskID.String(), nil, nil, nil, nil, nil); err == nil {
+	if _, err := r.MinionTaskProcesses(as(uuid.New()), task.TaskID.String(), nil, nil, nil, nil, nil, nil, nil); err == nil {
 		t.Error("listed for one not in the operation")
 	}
 	zero, bad := 0, "x"
-	if _, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, &zero, nil); codeOf(err) != errCodeBadUserInput {
+	if _, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, &zero, nil, nil, nil); codeOf(err) != errCodeBadUserInput {
 		t.Errorf("first 0: %v", err)
 	}
-	if _, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, nil, &bad); codeOf(err) != errCodeBadUserInput {
+	if _, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, nil, &bad, nil, nil); codeOf(err) != errCodeBadUserInput {
 		t.Errorf("a bad cursor: %v", err)
 	}
 	other := task
 	other.Result = protocol.ResultVolumes
 	r.tasks = taskParts{oneTask: oneTask{task: other}}
-	if _, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, nil, nil); codeOf(err) != errCodeBadUserInput {
+	if _, err := r.MinionTaskProcesses(as(viewer), task.TaskID.String(), nil, nil, nil, nil, nil, nil, nil); codeOf(err) != errCodeBadUserInput {
 		t.Errorf("a volumes task: %v", err)
 	}
 }

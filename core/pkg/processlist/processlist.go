@@ -32,6 +32,16 @@ const (
 	OrderThreads Order = "THREADS"
 )
 
+// Fold is which of a tree's processes have theirs folded away (GraphQL's
+// MinionProcessFold), before a query's Flip turns some the other way.
+type Fold string
+
+const (
+	FoldNone   Fold = "NONE"
+	FoldSystem Fold = "SYSTEM" // the operating system's own trees (systemTree)
+	FoldAll    Fold = "ALL"
+)
+
 // Row is a process as a page shows it.
 type Row struct {
 	protocol.Process
@@ -43,11 +53,25 @@ type Row struct {
 	// tree for a match below it, not matching itself.
 	Minion  bool
 	Context bool
+	// The lines that draw the tree to it: Last, it is the last of its
+	// parent's processes shown (its parent's line ends at it); Guides, for
+	// each level above its parent's, from the top, whether a line goes on
+	// down there (that level's process has more shown after it). A root
+	// has neither, nor does a row of a flat list.
+	Last   bool
+	Guides []bool
+	// Hidden is how many processes under it a fold hides (0: not folded);
+	// Stem, its processes are shown below it (its line goes down to them).
+	Hidden int
+	Stem   bool
 }
 
 // Query is what a page asks: a search (by name, pid, user, path and command
 // line), an order and its way, the cursor it follows (none: the first
 // page), how many rows, and the pid of this session's minion (0: none).
+// In the tree with no search, Fold says whose processes are folded away,
+// and Flip the pids folded the other way (a search shows every match, folds
+// aside).
 type Query struct {
 	Search    string
 	Order     Order
@@ -55,14 +79,20 @@ type Query struct {
 	After     string
 	First     int
 	MinionPID uint64
+	Fold      Fold
+	Flip      map[uint64]bool
 }
 
-// Page is a page of rows: Total is how many processes match, More whether
-// rows follow the page.
+// Page is a page of rows: Total is how many processes match (those folds
+// hide too), More whether rows follow the page, Hidden how many folds hide,
+// SystemTrees how many of the operating system's own trees the list has
+// (what Fold System folds).
 type Page struct {
-	Rows  []Row
-	Total int
-	More  bool
+	Rows        []Row
+	Total       int
+	More        bool
+	Hidden      int
+	SystemTrees int
 	// start is the first row's place in the order.
 	start int
 }
@@ -114,12 +144,20 @@ func List(procs []protocol.Process, q Query) (Page, error) {
 	search := strings.ToLower(strings.TrimSpace(q.Search))
 	match := func(p protocol.Process) bool { return search == "" || matches(p, search) }
 	var rows []Row
+	hidden := 0
 	if q.Order == OrderTree || q.Order == "" {
-		rows = tree(procs, match, q.MinionPID)
+		var fold func(protocol.Process) bool
+		if search == "" && (q.Fold == FoldSystem || q.Fold == FoldAll || len(q.Flip) > 0) {
+			fold = func(p protocol.Process) bool {
+				folded := q.Fold == FoldAll || q.Fold == FoldSystem && systemTree(p)
+				return folded != q.Flip[p.PID]
+			}
+		}
+		rows, hidden = tree(procs, match, q.MinionPID, fold)
 	} else {
 		rows = flat(procs, match, q)
 	}
-	page := Page{start: min(from, len(rows))}
+	page := Page{start: min(from, len(rows)), Total: hidden, Hidden: hidden, SystemTrees: systemTrees(procs)}
 	for _, r := range rows {
 		if !r.Context {
 			page.Total++
@@ -185,9 +223,43 @@ func parents(procs []protocol.Process) []int {
 	return parent
 }
 
+// systemTree reports whether a process heads one of the operating system's
+// own trees, which Fold System folds: its kernel's threads on Linux
+// (kthreadd), on Windows its kernel's processes (System, pid 4) and its
+// services (services.exe).
+func systemTree(p protocol.Process) bool {
+	switch strings.ToLower(p.Name) {
+	case "kthreadd", "services.exe":
+		return true
+	case "system":
+		return p.PID == 4
+	}
+	return false
+}
+
+// systemTrees is how many processes head a system tree with processes
+// under it.
+func systemTrees(procs []protocol.Process) int {
+	parents := map[uint64]bool{}
+	for _, p := range procs {
+		if p.PPID != nil && *p.PPID != p.PID {
+			parents[*p.PPID] = true
+		}
+	}
+	n := 0
+	for _, p := range procs {
+		if parents[p.PID] && systemTree(p) {
+			n++
+		}
+	}
+	return n
+}
+
 // tree is the processes matched, and their ancestors, depth first: each
-// under its parent, siblings in the order they started.
-func tree(procs []protocol.Process, match func(protocol.Process) bool, minion uint64) []Row {
+// under its parent, siblings in the order they started. Where fold says a
+// process is folded (it is not nil without a search), those under it are
+// not shown: their count is its Hidden, and all those counts the int.
+func tree(procs []protocol.Process, match func(protocol.Process) bool, minion uint64, fold func(protocol.Process) bool) ([]Row, int) {
 	parent := parents(procs)
 	kids := make([][]int, len(procs))
 	var roots []int
@@ -212,26 +284,67 @@ func tree(procs []protocol.Process, match func(protocol.Process) bool, minion ui
 			}
 		}
 	}
-	type frame struct{ i, depth int }
-	stack := make([]frame, 0, len(roots))
-	for k := len(roots) - 1; k >= 0; k-- {
-		stack = append(stack, frame{roots[k], 0})
+	// A frame is a process to draw, with its depth and its lines: whether
+	// it is the last of its siblings shown, and its guides (shared by them).
+	type frame struct {
+		i, depth int
+		last     bool
+		guides   []bool
 	}
+	// push stacks the shown of list, the first on top.
+	push := func(stack []frame, list []int, depth int, guides []bool) []frame {
+		list = slices.DeleteFunc(slices.Clone(list), func(i int) bool { return !shown[i] })
+		for k := len(list) - 1; k >= 0; k-- {
+			stack = append(stack, frame{list[k], depth, k == len(list)-1, guides})
+		}
+		return stack
+	}
+	// under is how many processes each has below it, what its fold hides:
+	// summed up from the leaves, the processes in reverse depth-first order.
+	var under []int
+	if fold != nil {
+		under = make([]int, len(procs))
+		order := make([]int, 0, len(procs))
+		for walk := slices.Clone(roots); len(walk) > 0; {
+			i := walk[len(walk)-1]
+			walk = append(walk[:len(walk)-1], kids[i]...)
+			order = append(order, i)
+		}
+		for _, i := range slices.Backward(order) {
+			if parent[i] >= 0 {
+				under[parent[i]] += under[i] + 1
+			}
+		}
+	}
+	stack := push(nil, roots, 0, nil)
 	var rows []Row
+	hidden := 0
 	for len(stack) > 0 {
 		f := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
-		if !shown[f.i] {
+		p := procs[f.i]
+		row := Row{Process: p, Depth: f.depth, Children: len(kids[f.i]), Minion: minion != 0 && p.PID == minion, Context: !matched[f.i]}
+		if f.depth > 0 {
+			row.Last, row.Guides = f.last, f.guides
+		}
+		if fold != nil && len(kids[f.i]) > 0 && fold(p) {
+			row.Hidden = under[f.i]
+			hidden += under[f.i]
+			rows = append(rows, row)
 			continue
 		}
-		p := procs[f.i]
-		rows = append(rows, Row{Process: p, Depth: f.depth, Children: len(kids[f.i]), Minion: minion != 0 && p.PID == minion,
-			Context: !matched[f.i]})
-		for k := len(kids[f.i]) - 1; k >= 0; k-- {
-			stack = append(stack, frame{kids[f.i][k], f.depth + 1})
+		// Its processes' guides: its own, then its line going on below it
+		// unless it is the last; a root draws no line.
+		var guides []bool
+		if f.depth > 0 {
+			guides = append(slices.Clone(f.guides), !f.last)
 		}
+		before := len(stack)
+		stack = push(stack, kids[f.i], f.depth+1, guides)
+		row.Stem = len(stack) > before
+		rows = append(rows, row)
 	}
-	return rows
+	return rows, hidden
 }
 
 // flat is the processes matched, ordered by a column: those without a value

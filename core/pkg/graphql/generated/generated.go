@@ -877,7 +877,10 @@ type ComplexityRoot struct {
 		Cmdline   func(childComplexity int) int
 		Context   func(childComplexity int) int
 		Depth     func(childComplexity int) int
+		Guides    func(childComplexity int) int
+		Hidden    func(childComplexity int) int
 		Integrity func(childComplexity int) int
+		Last      func(childComplexity int) int
 		Memory    func(childComplexity int) int
 		Minion    func(childComplexity int) int
 		Name      func(childComplexity int) int
@@ -887,16 +890,19 @@ type ComplexityRoot struct {
 		Session   func(childComplexity int) int
 		Started   func(childComplexity int) int
 		State     func(childComplexity int) int
+		Stem      func(childComplexity int) int
 		Threads   func(childComplexity int) int
 		User      func(childComplexity int) int
 		X         func(childComplexity int) int
 	}
 
 	MinionProcessConnection struct {
-		Edges      func(childComplexity int) int
-		PageInfo   func(childComplexity int) int
-		Sep        func(childComplexity int) int
-		TotalCount func(childComplexity int) int
+		Edges       func(childComplexity int) int
+		Hidden      func(childComplexity int) int
+		PageInfo    func(childComplexity int) int
+		Sep         func(childComplexity int) int
+		SystemTrees func(childComplexity int) int
+		TotalCount  func(childComplexity int) int
 	}
 
 	MinionProcessEdge struct {
@@ -1776,7 +1782,7 @@ type ComplexityRoot struct {
 		MinionTargets                      func(childComplexity int, operationID string, search *string, buildID *string, states []string, first *int, after *string, last *int, before *string) int
 		MinionTask                         func(childComplexity int, id string) int
 		MinionTaskImportantCount           func(childComplexity int, sessionID string) int
-		MinionTaskProcesses                func(childComplexity int, taskID string, search *string, order *model.MinionProcessOrder, desc *bool, first *int, after *string) int
+		MinionTaskProcesses                func(childComplexity int, taskID string, search *string, order *model.MinionProcessOrder, desc *bool, first *int, after *string, fold *model.MinionProcessFold, flip []int) int
 		MinionTasks                        func(childComplexity int, sessionID string, last *int, before *string, search *string, important *bool, composite *string) int
 		MinionTunnelStreams                func(childComplexity int, taskID string, last *int, before *string, search *string, state *string) int
 		Minions                            func(childComplexity int, operationID string) int
@@ -2790,7 +2796,7 @@ type QueryResolver interface {
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
 	MinionDesktopSettings(ctx context.Context, front string) ([]*model.ModuleField, error)
 	Recordings(ctx context.Context, taskID string, last *int, before *string) (*model.RecordingPage, error)
-	MinionTaskProcesses(ctx context.Context, taskID string, search *string, order *model.MinionProcessOrder, desc *bool, first *int, after *string) (*model.MinionProcessConnection, error)
+	MinionTaskProcesses(ctx context.Context, taskID string, search *string, order *model.MinionProcessOrder, desc *bool, first *int, after *string, fold *model.MinionProcessFold, flip []int) (*model.MinionProcessConnection, error)
 	MinionFileStrings(ctx context.Context, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) (*model.MinionFileStringPage, error)
 	Module(ctx context.Context, instance string) (*models.Module, error)
 	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
@@ -6402,12 +6408,30 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionProcess.Depth(childComplexity), true
+	case "MinionProcess.guides":
+		if e.ComplexityRoot.MinionProcess.Guides == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Guides(childComplexity), true
+	case "MinionProcess.hidden":
+		if e.ComplexityRoot.MinionProcess.Hidden == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Hidden(childComplexity), true
 	case "MinionProcess.integrity":
 		if e.ComplexityRoot.MinionProcess.Integrity == nil {
 			break
 		}
 
 		return e.ComplexityRoot.MinionProcess.Integrity(childComplexity), true
+	case "MinionProcess.last":
+		if e.ComplexityRoot.MinionProcess.Last == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Last(childComplexity), true
 	case "MinionProcess.memory":
 		if e.ComplexityRoot.MinionProcess.Memory == nil {
 			break
@@ -6462,6 +6486,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionProcess.State(childComplexity), true
+	case "MinionProcess.stem":
+		if e.ComplexityRoot.MinionProcess.Stem == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcess.Stem(childComplexity), true
 	case "MinionProcess.threads":
 		if e.ComplexityRoot.MinionProcess.Threads == nil {
 			break
@@ -6487,6 +6517,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionProcessConnection.Edges(childComplexity), true
+	case "MinionProcessConnection.hidden":
+		if e.ComplexityRoot.MinionProcessConnection.Hidden == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessConnection.Hidden(childComplexity), true
 	case "MinionProcessConnection.pageInfo":
 		if e.ComplexityRoot.MinionProcessConnection.PageInfo == nil {
 			break
@@ -6499,6 +6535,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionProcessConnection.Sep(childComplexity), true
+	case "MinionProcessConnection.systemTrees":
+		if e.ComplexityRoot.MinionProcessConnection.SystemTrees == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionProcessConnection.SystemTrees(childComplexity), true
 	case "MinionProcessConnection.totalCount":
 		if e.ComplexityRoot.MinionProcessConnection.TotalCount == nil {
 			break
@@ -11467,7 +11509,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MinionTaskProcesses(childComplexity, args["taskId"].(string), args["search"].(*string), args["order"].(*model.MinionProcessOrder), args["desc"].(*bool), args["first"].(*int), args["after"].(*string)), true
+		return e.ComplexityRoot.Query.MinionTaskProcesses(childComplexity, args["taskId"].(string), args["search"].(*string), args["order"].(*model.MinionProcessOrder), args["desc"].(*bool), args["first"].(*int), args["after"].(*string), args["fold"].(*model.MinionProcessFold), args["flip"].([]int)), true
 	case "Query.minionTasks":
 		if e.ComplexityRoot.Query.MinionTasks == nil {
 			break
@@ -18895,13 +18937,15 @@ extend type Query {
     @hasPermission(permission: "operation:member")
 
   # A page of a process_list task's processes (docs: Task Results and
-  # Actions, process_list), at most first (50 by default, 500 at most)
+  # Actions, process_list), at most first (50 by default, 2000 at most)
   # after a page's cursor: ordered as order says (desc: the other way, those
   # without a value last either way), searched by name, pid, user, path and
-  # command line (in the tree, each match with its ancestors). totalCount
-  # counts the matches. Needs at least viewer.
+  # command line (in the tree, each match with its ancestors). In the tree
+  # with no search, fold says whose processes are folded away and flip the
+  # pids folded the other way. totalCount counts the matches, those folds
+  # hide too. Needs at least viewer.
   minionTaskProcesses(taskId: ID!, search: String, order: MinionProcessOrder = TREE, desc: Boolean = false, first: Int = 50,
-    after: String): MinionProcessConnection!
+    after: String, fold: MinionProcessFold = NONE, flip: [Int!]): MinionProcessConnection!
     @hasPermission(permission: "operation:member")
 
   # A page of the printable strings in a kept file, read from after (0, or
@@ -19010,6 +19054,16 @@ type MinionProcess {
   minion: Boolean!
   # Shown in the tree for a match below it, not matching itself.
   context: Boolean!
+  # The lines that draw the tree to it: last, it is the last of its parent's
+  # processes shown (its parent's line ends at it); guides, for each level
+  # above its parent's, from the top, whether a line goes on down there.
+  # A root has neither, nor has a row of a flat list.
+  last: Boolean!
+  guides: [Boolean!]!
+  # How many processes under it a fold hides (0: not folded).
+  hidden: Int!
+  # Its processes are shown below it: its line goes down to them.
+  stem: Boolean!
 }
 
 type MinionProcessEdge {
@@ -19023,6 +19077,11 @@ type MinionProcessConnection {
   totalCount: Int!
   # The host's path separator, as the list says it: "/" or "\\".
   sep: String!
+  # How many processes folds hide.
+  hidden: Int!
+  # How many of the operating system's own trees the list has: what fold
+  # SYSTEM folds.
+  systemTrees: Int!
 }
 
 # How a process list is ordered: as a tree (each process under its parent,
@@ -19036,6 +19095,16 @@ enum MinionProcessOrder {
   CPU_TIME
   STARTED
   THREADS
+}
+
+# Whose processes a process tree folds away, before flip turns some the
+# other way: none, the operating system's own trees (its kernel's threads on
+# Linux, kthreadd; on Windows its kernel's processes, System, and its
+# services, services.exe), or all.
+enum MinionProcessFold {
+  NONE
+  SYSTEM
+  ALL
 }
 `, BuiltIn: false},
 	{Name: "../schema/module_logs.graphql", Input: `# =============================================================================
@@ -24447,6 +24516,16 @@ func (ec *executionContext) field_Query_minionTaskProcesses_args(ctx context.Con
 		return nil, err
 	}
 	args["after"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "fold", ec.unmarshalOMinionProcessFold2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessFold)
+	if err != nil {
+		return nil, err
+	}
+	args["fold"] = arg6
+	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "flip", ec.unmarshalOInt2ᚕintᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["flip"] = arg7
 	return args, nil
 }
 
@@ -44884,6 +44963,122 @@ func (ec *executionContext) fieldContext_MinionProcess_context(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionProcess_last(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_last,
+		func(ctx context.Context) (any, error) {
+			return obj.Last, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_last(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_guides(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_guides,
+		func(ctx context.Context) (any, error) {
+			return obj.Guides, nil
+		},
+		nil,
+		ec.marshalNBoolean2ᚕboolᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_guides(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_hidden(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_hidden,
+		func(ctx context.Context) (any, error) {
+			return obj.Hidden, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_hidden(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcess_stem(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcess_stem,
+		func(ctx context.Context) (any, error) {
+			return obj.Stem, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcess_stem(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionProcessConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -45016,6 +45211,64 @@ func (ec *executionContext) fieldContext_MinionProcessConnection_sep(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionProcessConnection_hidden(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessConnection_hidden,
+		func(ctx context.Context) (any, error) {
+			return obj.Hidden, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessConnection_hidden(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionProcessConnection_systemTrees(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionProcessConnection_systemTrees,
+		func(ctx context.Context) (any, error) {
+			return obj.SystemTrees, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionProcessConnection_systemTrees(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionProcessConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionProcessEdge_node(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcessEdge) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -45078,6 +45331,14 @@ func (ec *executionContext) fieldContext_MinionProcessEdge_node(_ context.Contex
 				return ec.fieldContext_MinionProcess_minion(ctx, field)
 			case "context":
 				return ec.fieldContext_MinionProcess_context(ctx, field)
+			case "last":
+				return ec.fieldContext_MinionProcess_last(ctx, field)
+			case "guides":
+				return ec.fieldContext_MinionProcess_guides(ctx, field)
+			case "hidden":
+				return ec.fieldContext_MinionProcess_hidden(ctx, field)
+			case "stem":
+				return ec.fieldContext_MinionProcess_stem(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionProcess", field.Name)
 		},
@@ -78584,7 +78845,7 @@ func (ec *executionContext) _Query_minionTaskProcesses(ctx context.Context, fiel
 		ec.fieldContext_Query_minionTaskProcesses,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MinionTaskProcesses(ctx, fc.Args["taskId"].(string), fc.Args["search"].(*string), fc.Args["order"].(*model.MinionProcessOrder), fc.Args["desc"].(*bool), fc.Args["first"].(*int), fc.Args["after"].(*string))
+			return ec.Resolvers.Query().MinionTaskProcesses(ctx, fc.Args["taskId"].(string), fc.Args["search"].(*string), fc.Args["order"].(*model.MinionProcessOrder), fc.Args["desc"].(*bool), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["fold"].(*model.MinionProcessFold), fc.Args["flip"].([]int))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -78627,6 +78888,10 @@ func (ec *executionContext) fieldContext_Query_minionTaskProcesses(ctx context.C
 				return ec.fieldContext_MinionProcessConnection_totalCount(ctx, field)
 			case "sep":
 				return ec.fieldContext_MinionProcessConnection_sep(ctx, field)
+			case "hidden":
+				return ec.fieldContext_MinionProcessConnection_hidden(ctx, field)
+			case "systemTrees":
+				return ec.fieldContext_MinionProcessConnection_systemTrees(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionProcessConnection", field.Name)
 		},
@@ -108852,6 +109117,26 @@ func (ec *executionContext) _MinionProcess(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "last":
+			out.Values[i] = ec._MinionProcess_last(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "guides":
+			out.Values[i] = ec._MinionProcess_guides(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hidden":
+			out.Values[i] = ec._MinionProcess_hidden(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "stem":
+			out.Values[i] = ec._MinionProcess_stem(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -108903,6 +109188,16 @@ func (ec *executionContext) _MinionProcessConnection(ctx context.Context, sel as
 			}
 		case "sep":
 			out.Values[i] = ec._MinionProcessConnection_sep(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hidden":
+			out.Values[i] = ec._MinionProcessConnection_hidden(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "systemTrees":
+			out.Values[i] = ec._MinionProcessConnection_systemTrees(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -124024,6 +124319,36 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
+func (ec *executionContext) unmarshalNBoolean2ᚕboolᚄ(ctx context.Context, v any) ([]bool, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]bool, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNBoolean2bool(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNBoolean2ᚕboolᚄ(ctx context.Context, sel ast.SelectionSet, v []bool) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNBoolean2bool(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) marshalNBuild2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuild(ctx context.Context, sel ast.SelectionSet, v model.Build) graphql.Marshaler {
 	return ec._Build(ctx, sel, &v)
 }
@@ -129197,6 +129522,42 @@ func (ec *executionContext) marshalOID2ᚖstring(ctx context.Context, sel ast.Se
 	return res
 }
 
+func (ec *executionContext) unmarshalOInt2ᚕintᚄ(ctx context.Context, v any) ([]int, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]int, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNInt2int(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOInt2ᚕintᚄ(ctx context.Context, sel ast.SelectionSet, v []int) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNInt2int(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v any) (*int, error) {
 	if v == nil {
 		return nil, nil
@@ -129299,6 +129660,22 @@ func (ec *executionContext) marshalOMinionListener2ᚖgithubᚗcomᚋlogoscore�
 		return graphql.Null
 	}
 	return ec._MinionListener(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOMinionProcessFold2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessFold(ctx context.Context, v any) (*model.MinionProcessFold, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.MinionProcessFold)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOMinionProcessFold2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessFold(ctx context.Context, sel ast.SelectionSet, v *model.MinionProcessFold) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalOMinionProcessOrder2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcessOrder(ctx context.Context, v any) (*model.MinionProcessOrder, error) {

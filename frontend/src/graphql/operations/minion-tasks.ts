@@ -485,8 +485,17 @@ export const MinionTaskChangedSubscription = graphql(`
 // A process_list task's processes, a page at a time, ordered and searched by
 // core (docs: Task Results and Actions, process_list).
 export const MinionTaskProcessesQuery = graphql(`
-  query MinionTaskProcesses($taskId: ID!, $search: String, $order: MinionProcessOrder, $desc: Boolean, $first: Int, $after: String) {
-    minionTaskProcesses(taskId: $taskId, search: $search, order: $order, desc: $desc, first: $first, after: $after) {
+  query MinionTaskProcesses(
+    $taskId: ID!
+    $search: String
+    $order: MinionProcessOrder
+    $desc: Boolean
+    $first: Int
+    $after: String
+    $fold: MinionProcessFold
+    $flip: [Int!]
+  ) {
+    minionTaskProcesses(taskId: $taskId, search: $search, order: $order, desc: $desc, first: $first, after: $after, fold: $fold, flip: $flip) {
       edges {
         cursor
         node {
@@ -508,6 +517,10 @@ export const MinionTaskProcessesQuery = graphql(`
           children
           minion
           context
+          last
+          guides
+          hidden
+          stem
         }
       }
       pageInfo {
@@ -516,6 +529,8 @@ export const MinionTaskProcessesQuery = graphql(`
       }
       totalCount
       sep
+      hidden
+      systemTrees
     }
   }
 `)

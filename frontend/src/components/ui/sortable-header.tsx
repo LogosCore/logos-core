@@ -15,9 +15,12 @@ import { cn } from "@/lib/utils"
 //   <SortableHeader label="Name" field="NAME" sort={sort} onSortChange={set} />
 //
 // Typography (text-xs, uppercase, muted) is inherited from the header row;
-// the button only adds the interaction affordances. The active column is
-// emphasized and shows its direction; inactive sortable columns show a faint
-// both-ways chevron so they're discoverable as sortable.
+// the button only adds the interaction affordances. Its case it takes back
+// by hand: browsers give a button text-transform: none, which Tailwind's
+// preflight leaves, so its label showed as typed beside the plain headers'
+// uppercase. The active column is emphasized and shows its direction;
+// inactive sortable columns show a faint both-ways chevron so they're
+// discoverable as sortable.
 interface SortableHeaderProps<TField extends string> {
   label: ReactNode
   field: TField
@@ -48,7 +51,7 @@ export function SortableHeader<TField extends string>({
       className={cn(
         // -mx-1 lets the click target bleed past the label without shifting
         // the column's text alignment relative to plain headers.
-        "-mx-1 flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 transition-colors select-none hover:bg-muted hover:text-foreground",
+        "-mx-1 flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 [text-transform:inherit] transition-colors select-none hover:bg-muted hover:text-foreground",
         isActive && "text-foreground",
         className,
       )}

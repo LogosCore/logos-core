@@ -2,6 +2,8 @@ package processlist
 
 import (
 	"errors"
+	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -115,6 +117,138 @@ func TestTree(t *testing.T) {
 	}
 	if r := p.Rows[slices.IndexFunc(p.Rows, func(r Row) bool { return r.Name == "systemd" })]; r.Children != 2 {
 		t.Errorf("systemd's children: %d", r.Children)
+	}
+}
+
+// drawn is rows as a tree's lines draw them, a row a line: a guide on
+// ("│") or off for each level above its parent's, then its own corner
+// ("├", or "└" for the last), then its name.
+func drawn(rows []Row) string {
+	var b strings.Builder
+	for _, r := range rows {
+		for _, on := range r.Guides {
+			b.WriteString(map[bool]string{true: "│ ", false: "  "}[on])
+		}
+		if r.Depth > 0 {
+			b.WriteString(map[bool]string{true: "└ ", false: "├ "}[r.Last])
+		}
+		b.WriteString(r.Name)
+		if r.Hidden > 0 {
+			fmt.Fprintf(&b, " +%d", r.Hidden)
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// The tree's lines: each process's corner, the last of its siblings
+// closing its parent's line, and the lines that go on past it; each level's
+// its own (a deep one's guides are not another's). A search draws the rows
+// it shows: a match's ancestors close their lines at it.
+func TestTreeLines(t *testing.T) {
+	procs := lined()
+	want := `init
+├ a
+│ └ a1
+│   └ a11
+└ b
+  ├ b1
+  │ └ b11
+  └ b2
+other-root
+`
+	if got := drawn(all(t, procs, Query{Order: OrderTree}).Rows); got != want {
+		t.Fatalf("tree\n%s\nwant\n%s", got, want)
+	}
+	want = `init
+└ a
+  └ a1
+    └ a11
+`
+	if got := drawn(all(t, procs, Query{Order: OrderTree, Search: "a11"}).Rows); got != want {
+		t.Fatalf("searched\n%s\nwant\n%s", got, want)
+	}
+	for _, r := range all(t, procs, Query{Order: OrderPID}).Rows {
+		if r.Last || r.Guides != nil {
+			t.Fatalf("a flat row with lines: %+v", r)
+		}
+	}
+}
+
+// Folds: a process folded shows, those under it hidden (counted: its own,
+// and all folds'), the lines as before; Fold All leaves the roots, a flip
+// unfolds one; a search shows every match, folds aside, and a flat list has
+// none. The total counts the processes folds hide.
+func TestFold(t *testing.T) {
+	for _, c := range []struct {
+		q      Query
+		want   string
+		hidden int
+	}{
+		{Query{Flip: map[uint64]bool{3: true}}, "init\n├ a\n│ └ a1\n│   └ a11\n└ b +3\nother-root\n", 3},
+		{Query{Fold: FoldAll}, "init +7\nother-root\n", 7},
+		{Query{Fold: FoldAll, Flip: map[uint64]bool{1: true, 9: true}}, "init\n├ a +2\n└ b +3\nother-root\n", 5},
+		{Query{Fold: FoldAll, Search: "a11"}, "init\n└ a\n  └ a1\n    └ a11\n", 0},
+	} {
+		c.q.Order = OrderTree
+		p := all(t, lined(), c.q)
+		if got := drawn(p.Rows); got != c.want || p.Hidden != c.hidden || p.Total != map[bool]int{true: 1, false: 9}[c.q.Search != ""] {
+			t.Errorf("%+v:\n%s(hidden %d, total %d)\nwant\n%s(hidden %d)", c.q, got, p.Hidden, p.Total, c.want, c.hidden)
+		}
+	}
+	// A stem below each process whose processes show, none below a folded one.
+	stems := map[string]bool{}
+	for _, r := range all(t, lined(), Query{Order: OrderTree, Flip: map[uint64]bool{3: true}}).Rows {
+		stems[r.Name] = r.Stem
+	}
+	if !maps.Equal(stems, map[string]bool{"init": true, "a": true, "a1": true, "a11": false, "b": false, "other-root": false}) {
+		t.Errorf("stems %v", stems)
+	}
+	if p := all(t, lined(), Query{Order: OrderPID, Fold: FoldAll}); len(p.Rows) != 9 || p.Hidden != 0 {
+		t.Errorf("a flat list folded: %d rows, hidden %d", len(p.Rows), p.Hidden)
+	}
+}
+
+// Fold System folds the operating system's own trees: the kernel's threads
+// on Linux; System (pid 4) and services.exe on Windows, not another
+// "system"; a flip unfolds one. The list says how many it has.
+func TestFoldSystem(t *testing.T) {
+	if p := all(t, host(), Query{Order: OrderTree, Fold: FoldSystem}); !strings.Contains(drawn(p.Rows), "kthreadd +1\n") || p.SystemTrees != 1 {
+		t.Errorf("Linux:\n%s(system trees %d)", drawn(p.Rows), p.SystemTrees)
+	}
+	win := []protocol.Process{
+		{PID: 0, PPID: u(0), Name: "System Idle Process"},
+		{PID: 4, PPID: u(0), Name: "System"},
+		{PID: 120, PPID: u(4), Name: "Registry"},
+		{PID: 700, Name: "wininit.exe"},
+		{PID: 880, PPID: u(700), Name: "services.exe"},
+		{PID: 990, PPID: u(880), Name: "svchost.exe"},
+		{PID: 1000, PPID: u(700), Name: "lsass.exe"},
+		{PID: 5000, Name: "system"},
+		{PID: 5001, PPID: u(5000), Name: "child"},
+	}
+	want := "System Idle Process\n└ System +1\nwininit.exe\n├ services.exe +1\n└ lsass.exe\nsystem\n└ child\n"
+	if p := all(t, win, Query{Order: OrderTree, Fold: FoldSystem}); drawn(p.Rows) != want || p.SystemTrees != 2 || p.Hidden != 2 {
+		t.Errorf("Windows:\n%s(system trees %d, hidden %d)\nwant\n%s", drawn(p.Rows), p.SystemTrees, p.Hidden, want)
+	}
+	if p := all(t, win, Query{Order: OrderTree, Fold: FoldSystem, Flip: map[uint64]bool{880: true}}); !strings.Contains(drawn(p.Rows), "├ services.exe\n│ └ svchost.exe\n") {
+		t.Errorf("services.exe flipped:\n%s", drawn(p.Rows))
+	}
+}
+
+// lined is a tree for the lines and the folds: init's a (a1, a11 below) and
+// b (b1, its b11, and b2), and another root.
+func lined() []protocol.Process {
+	return []protocol.Process{
+		{PID: 1, Name: "init"},
+		{PID: 2, PPID: u(1), Name: "a", Started: i(10)},
+		{PID: 3, PPID: u(1), Name: "b", Started: i(20)},
+		{PID: 4, PPID: u(2), Name: "a1"},
+		{PID: 5, PPID: u(3), Name: "b1", Started: i(1)},
+		{PID: 6, PPID: u(3), Name: "b2", Started: i(2)},
+		{PID: 7, PPID: u(4), Name: "a11"},
+		{PID: 8, PPID: u(5), Name: "b11"},
+		{PID: 9, Name: "other-root"},
 	}
 }
 

@@ -896,13 +896,19 @@ type MinionProcess struct {
 	Children  int     `json:"children"`
 	Minion    bool    `json:"minion"`
 	Context   bool    `json:"context"`
+	Last      bool    `json:"last"`
+	Guides    []bool  `json:"guides"`
+	Hidden    int     `json:"hidden"`
+	Stem      bool    `json:"stem"`
 }
 
 type MinionProcessConnection struct {
-	Edges      []*MinionProcessEdge `json:"edges"`
-	PageInfo   *pagination.PageInfo `json:"pageInfo"`
-	TotalCount int                  `json:"totalCount"`
-	Sep        string               `json:"sep"`
+	Edges       []*MinionProcessEdge `json:"edges"`
+	PageInfo    *pagination.PageInfo `json:"pageInfo"`
+	TotalCount  int                  `json:"totalCount"`
+	Sep         string               `json:"sep"`
+	Hidden      int                  `json:"hidden"`
+	SystemTrees int                  `json:"systemTrees"`
 }
 
 type MinionProcessEdge struct {
@@ -2657,6 +2663,63 @@ func (e *HostSortField) UnmarshalJSON(b []byte) error {
 }
 
 func (e HostSortField) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type MinionProcessFold string
+
+const (
+	MinionProcessFoldNone   MinionProcessFold = "NONE"
+	MinionProcessFoldSystem MinionProcessFold = "SYSTEM"
+	MinionProcessFoldAll    MinionProcessFold = "ALL"
+)
+
+var AllMinionProcessFold = []MinionProcessFold{
+	MinionProcessFoldNone,
+	MinionProcessFoldSystem,
+	MinionProcessFoldAll,
+}
+
+func (e MinionProcessFold) IsValid() bool {
+	switch e {
+	case MinionProcessFoldNone, MinionProcessFoldSystem, MinionProcessFoldAll:
+		return true
+	}
+	return false
+}
+
+func (e MinionProcessFold) String() string {
+	return string(e)
+}
+
+func (e *MinionProcessFold) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = MinionProcessFold(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid MinionProcessFold", str)
+	}
+	return nil
+}
+
+func (e MinionProcessFold) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *MinionProcessFold) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e MinionProcessFold) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil
