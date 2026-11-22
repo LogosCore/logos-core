@@ -48,7 +48,8 @@ func NewRecordingController(recs RecordingFiles, opRepo gqlctx.OperationFinder, 
 // saved as desktop-<front>-<task>-<number>.guac. A terminal's: an
 // asciicast v2 (what the process wrote, what was typed, the terminal's
 // sizes), which asciinema plays, saved as terminal-<task>-<number>.cast.
-// One still recording reads as far as core kept it. An attachment.
+// One still recording reads as far as core kept it; 410 for one a
+// retention cleanup took (its files are deleted). An attachment.
 //
 //	@Summary		Download a desktop's or a terminal's recording
 //	@Tags			Minion tasks
@@ -81,8 +82,11 @@ func (rc *RecordingController) File(c *gin.Context) {
 	}
 	if err != nil {
 		status := http.StatusInternalServerError
-		if errors.Is(err, recordings.ErrNothing) {
+		switch {
+		case errors.Is(err, recordings.ErrNothing):
 			status = http.StatusConflict
+		case errors.Is(err, recordings.ErrCleaned):
+			status = http.StatusGone
 		}
 		c.JSON(status, responses.NewErrorResponse("%s", err.Error()))
 		return
@@ -139,7 +143,8 @@ func (rc *RecordingController) video(c *gin.Context, id uuid.UUID) {
 // Keys handles GET /api/v1/recordings/{id}/keys: a converted desktop
 // recording's keys (recordings.RecordingKeys: guacd's first sync, and each
 // key instruction's keysym, pressed and timestamp), for anyone who can see
-// its operation; 409 for one that is not a video.
+// its operation; 409 for one that is not a video, 410 for one a retention
+// cleanup took.
 //
 //	@Summary		A desktop recording's keys, once it is a video
 //	@Tags			Minion tasks
@@ -168,8 +173,11 @@ func (rc *RecordingController) Keys(c *gin.Context) {
 	}
 	if err != nil {
 		status := http.StatusInternalServerError
-		if errors.Is(err, recordings.ErrNotVideo) {
+		switch {
+		case errors.Is(err, recordings.ErrNotVideo):
 			status = http.StatusConflict
+		case errors.Is(err, recordings.ErrCleaned):
+			status = http.StatusGone
 		}
 		c.JSON(status, responses.NewErrorResponse("%s", err.Error()))
 		return

@@ -2,7 +2,8 @@ import { graphql } from "@/graphql/gql"
 
 // The admins' Storage page (core: storage.graphql): the object store core
 // keeps its files in, as core read it at most a minute ago; what core keeps
-// in each bucket, by operation; and the store's maintenance.
+// in each bucket, by operation; the store's maintenance; and the retention
+// cleanups of recordings, an admin's or the retention policy's.
 
 export const StorageStatusQuery = graphql(`
   query StorageStatus {
@@ -99,6 +100,12 @@ export const StorageActionFields = graphql(`
     finishedAt
     freed
     volumes
+    olderThanDays
+    before
+    operationId
+    operationName
+    recordings
+    bytes
   }
 `)
 
@@ -131,6 +138,74 @@ export const ReclaimStorageMutation = graphql(`
 export const GrowStorageBucketMutation = graphql(`
   mutation GrowStorageBucket($bucket: String!) {
     growStorageBucket(bucket: $bucket) {
+      ...StorageActionFields
+    }
+  }
+`)
+
+export const StorageRetentionFields = graphql(`
+  fragment StorageRetentionFields on StorageRetention {
+    enabled
+    olderThanDays
+    updatedAt
+    updatedBy {
+      type
+      id
+      name
+    }
+    lastRun {
+      ...StorageActionFields
+    }
+    nextRunAt
+  }
+`)
+
+export const StorageRetentionQuery = graphql(`
+  query StorageRetention {
+    storageRetention {
+      ...StorageRetentionFields
+    }
+  }
+`)
+
+export const StorageCleanupPreviewQuery = graphql(`
+  query StorageCleanupPreview($olderThanDays: Int!, $first: Int, $after: String) {
+    storageCleanupPreview(olderThanDays: $olderThanDays, first: $first, after: $after) {
+      olderThanDays
+      before
+      recordings
+      bytes
+      operations {
+        edges {
+          cursor
+          node {
+            operationId
+            operationName
+            recordings
+            bytes
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        totalCount
+      }
+    }
+  }
+`)
+
+export const SetStorageRetentionMutation = graphql(`
+  mutation SetStorageRetention($enabled: Boolean!, $olderThanDays: Int!) {
+    setStorageRetention(enabled: $enabled, olderThanDays: $olderThanDays) {
+      ...StorageRetentionFields
+    }
+  }
+`)
+
+export const CleanUpStorageMutation = graphql(`
+  mutation CleanUpStorage($olderThanDays: Int!, $operationId: ID) {
+    cleanUpStorage(olderThanDays: $olderThanDays, operationId: $operationId) {
       ...StorageActionFields
     }
   }

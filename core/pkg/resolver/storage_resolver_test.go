@@ -24,6 +24,42 @@ type fakeStorage struct {
 	// by is who ran the last action, bucket its bucket.
 	by     models.ModuleActor
 	bucket string
+	// ret is the retention policy, preview a cleanup's; days, op and
+	// enabled what the last cleanup or policy was asked for.
+	ret     storage.Retention
+	preview storage.CleanupPreview
+	days    int
+	op      *uuid.UUID
+	enabled bool
+}
+
+func (f *fakeStorage) Retention(context.Context) (storage.Retention, error) { return f.ret, f.err }
+
+func (f *fakeStorage) SetRetention(_ context.Context, by models.ModuleActor, enabled bool, days int) (storage.Retention, error) {
+	f.by, f.enabled, f.days = by, enabled, days
+	if f.err != nil {
+		return storage.Retention{}, f.err
+	}
+	return f.ret, nil
+}
+
+func (f *fakeStorage) CleanupPreview(_ context.Context, days int, _ string, _ int) (storage.CleanupPreview, error) {
+	f.days = days
+	return f.preview, f.pageErr
+}
+
+func (f *fakeStorage) CleanUp(_ context.Context, by models.ModuleActor, days int, op *uuid.UUID) (*models.StorageAction, error) {
+	f.by, f.days, f.op = by, days, op
+	if f.err != nil {
+		return nil, f.err
+	}
+	before := time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC)
+	a := &models.StorageAction{ActionID: uuid.New(), Action: models.StorageActionCleanup, Bucket: "desktop-recordings", Actor: by,
+		Status: models.StorageActionRunning, StartedAt: time.Now(), OlderThanDays: days, Before: &before}
+	if op != nil {
+		a.OperationID, a.OperationName = op, "Red"
+	}
+	return a, nil
 }
 
 func (f *fakeStorage) Status(context.Context) storage.Snapshot { return f.snap }
@@ -152,6 +188,95 @@ func TestStorageActionsByUsers(t *testing.T) {
 		svc.err = err
 		if _, got := r.ReclaimStorage(user); codeOf(got) != code {
 			t.Errorf("%v: code %q, want %q", err, codeOf(got), code)
+		}
+	}
+}
+
+// The retention policy and the cleanups as GraphQL has them: set and run by
+// the user who asks, never an agent key; the age and the operation checked;
+// a preview's operations a page at a time, one gone unnamed.
+func TestStorageRetentionAndCleanups(t *testing.T) {
+	at := time.Date(2026, 11, 22, 10, 0, 0, 0, time.UTC)
+	next := at.Add(24 * time.Hour)
+	op := uuid.New()
+	last := models.StorageAction{ActionID: uuid.New(), Action: models.StorageActionCleanup, Actor: models.RetentionActor,
+		Status: models.StorageActionSucceeded, StartedAt: at, FinishedAt: &at, OlderThanDays: 30, Before: &at, Recordings: 12, Bytes: 3400}
+	svc := &fakeStorage{ret: storage.Retention{Policy: models.StorageRetention{Enabled: true, OlderThanDays: 30, UpdatedAt: &at,
+		UpdatedBy: &models.ModuleActor{Type: "user", ID: "u1", Name: "alice"}}, LastRun: &last, NextRun: &next}}
+	r := NewStorageResolver(svc)
+	got, err := r.StorageRetention(context.Background())
+	if err != nil || !got.Enabled || got.OlderThanDays != 30 || *got.UpdatedAt != "2026-11-22T10:00:00Z" || *got.UpdatedBy.Name != "alice" ||
+		*got.NextRunAt != "2026-11-23T10:00:00Z" || got.LastRun == nil || got.LastRun.Actor.ID != "retention_policy" ||
+		*got.LastRun.OlderThanDays != 30 || got.LastRun.OperationID != nil || got.LastRun.Recordings != 12 || got.LastRun.Bytes != 3400 ||
+		*got.LastRun.Before != "2026-11-22T10:00:00Z" {
+		t.Fatalf("retention %+v %v", got, err)
+	}
+	svc.ret = storage.Retention{Policy: models.StorageRetention{OlderThanDays: 30}}
+	if got, _ := r.StorageRetention(context.Background()); got.Enabled || got.UpdatedAt != nil || got.UpdatedBy != nil || got.LastRun != nil ||
+		got.NextRunAt != nil {
+		t.Fatalf("before anyone set it %+v", got)
+	}
+
+	user := gqlctx.WithAuthInfo(context.Background(), gqlctx.AuthInfo{UserID: uuid.NewString(), Username: "alice", Roles: []string{"admin"}})
+	agent := gqlctx.WithAuthInfo(context.Background(), gqlctx.AuthInfo{UserID: uuid.NewString(), Agent: &gqlctx.AgentInfo{}})
+	if _, err := r.SetStorageRetention(user, true, 45); err != nil || svc.by.Name != "alice" || !svc.enabled || svc.days != 45 {
+		t.Fatalf("set by %+v: %v", svc, err)
+	}
+	if _, err := r.SetStorageRetention(agent, true, 45); codeOf(err) != errCodeForbidden {
+		t.Fatalf("an agent's policy: %v", err)
+	}
+
+	id := op.String()
+	a, err := r.CleanUpStorage(user, 30, &id)
+	if err != nil || svc.op == nil || *svc.op != op || svc.by.Name != "alice" || a.Action != models.StorageActionCleanup ||
+		*a.OlderThanDays != 30 || *a.OperationID != id || *a.OperationName != "Red" || *a.Before != "2026-10-23T10:00:00Z" || a.Recordings != 0 {
+		t.Fatalf("a cleanup of one operation %+v %v", a, err)
+	}
+	if a, err := r.CleanUpStorage(user, 30, nil); err != nil || svc.op != nil || a.OperationID != nil || a.OperationName != nil {
+		t.Fatalf("a cleanup of every operation %+v %v", a, err)
+	}
+	bad := "not an id"
+	if _, err := r.CleanUpStorage(user, 30, &bad); codeOf(err) != errCodeBadUserInput {
+		t.Fatalf("a bad operation id: %v", err)
+	}
+	if _, err := r.CleanUpStorage(agent, 30, nil); codeOf(err) != errCodeForbidden {
+		t.Fatalf("an agent's cleanup: %v", err)
+	}
+	for err, code := range map[error]string{
+		storage.ErrBadAge: errCodeBadUserInput, storage.ErrUnknownOperation: errCodeBadUserInput, storage.ErrRunning: errCodeConflict,
+	} {
+		svc.err = err
+		if _, got := r.CleanUpStorage(user, 30, nil); codeOf(got) != code {
+			t.Errorf("a cleanup, %v: code %q, want %q", err, codeOf(got), code)
+		}
+	}
+	svc.err = storage.ErrBadAge
+	if _, err := r.SetStorageRetention(user, true, 0); codeOf(err) != errCodeBadUserInput {
+		t.Fatalf("a policy at 0 days: %v", err)
+	}
+	svc.err = nil
+
+	svc.preview = storage.CleanupPreview{OlderThanDays: 30, Before: at, Recordings: 5, Bytes: 900, Total: 2, More: true,
+		Operations: []storage.CleanupOperation{{OperationID: op, OperationName: "Red", Recordings: 4, Bytes: 800}}}
+	p, err := r.StorageCleanupPreview(context.Background(), 30, nil, nil)
+	if err != nil || svc.days != 30 || p.OlderThanDays != 30 || p.Recordings != 5 || p.Bytes != 900 || p.Before != "2026-11-22T10:00:00Z" ||
+		p.Operations.TotalCount != 2 || !p.Operations.PageInfo.HasNextPage || len(p.Operations.Edges) != 1 ||
+		p.Operations.Edges[0].Node.OperationID != id || *p.Operations.Edges[0].Node.OperationName != "Red" ||
+		p.Operations.Edges[0].Node.Recordings != 4 || *p.Operations.PageInfo.EndCursor != p.Operations.Edges[0].Cursor {
+		t.Fatalf("preview %+v %v", p, err)
+	}
+	svc.preview.Operations[0].OperationName = ""
+	if p, _ := r.StorageCleanupPreview(context.Background(), 30, nil, nil); p.Operations.Edges[0].Node.OperationName != nil {
+		t.Fatalf("an operation gone is named %q", *p.Operations.Edges[0].Node.OperationName)
+	}
+	zero := 0
+	if _, err := r.StorageCleanupPreview(context.Background(), 30, &zero, nil); codeOf(err) != errCodeBadUserInput {
+		t.Fatalf("first 0: %v", err)
+	}
+	for _, err := range []error{storage.ErrBadCursor, storage.ErrBadAge} {
+		svc.pageErr = err
+		if _, got := r.StorageCleanupPreview(context.Background(), 30, nil, nil); codeOf(got) != errCodeBadUserInput {
+			t.Errorf("a preview, %v: code %q", err, codeOf(got))
 		}
 	}
 }

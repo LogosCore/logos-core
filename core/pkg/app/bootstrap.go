@@ -109,6 +109,7 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		FsListing:          repository.NewFsListingRepository(db),
 		StorageAction:      repository.NewStorageActionRepository(db),
 		StorageUsage:       repository.NewStorageUsageRepository(db),
+		StorageRetention:   repository.NewStorageRetentionRepository(db),
 	}
 
 	// Every repository above declared its indexes as it was built. A failed

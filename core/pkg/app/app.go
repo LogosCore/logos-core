@@ -115,6 +115,8 @@ type Repositories struct {
 	// core's records of what it keeps there (pkg/storage).
 	StorageAction repository.IStorageActionRepository
 	StorageUsage  repository.IStorageUsageRepository
+	// StorageRetention keeps the retention policy of recordings.
+	StorageRetention repository.IStorageRetentionRepository
 }
 
 type App struct {
@@ -361,7 +363,10 @@ func NewApp() (*App, error) {
 		models.StoragePurposeBuilds: e.BuildBucket, models.StoragePurposeWikiImages: e.WikiImageBucket,
 		models.StoragePurposeWikiFiles: e.WikiFileBucket, models.StoragePurposeSkills: e.SkillBucket,
 	}
-	storageSvc := storage.New(storageCfg, repos.StorageUsage, repos.StorageAction, repos.Operation, l.Named("storage"))
+	// Its retention cleanups take recordings alone (docs: Storage, Retention
+	// cleanups).
+	storageSvc := storage.New(storageCfg, repos.StorageUsage, repos.StorageAction, repos.Operation, l.Named("storage")).
+		WithRetention(repos.StorageRetention, recordingSvc)
 
 	// --- Future integration patterns ---
 	//

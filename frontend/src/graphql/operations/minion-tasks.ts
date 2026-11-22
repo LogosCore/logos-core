@@ -280,6 +280,7 @@ export const RecordingsQuery = graphql(`
         videoError
         end
         msg
+        cleanedAt
         path
       }
       before

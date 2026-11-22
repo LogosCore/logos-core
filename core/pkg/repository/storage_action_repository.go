@@ -31,6 +31,11 @@ type IStorageActionRepository interface {
 	Insert(ctx context.Context, a *models.StorageAction) error
 	// Finish ends a running action with status: why it failed, what it did.
 	Finish(ctx context.Context, id uuid.UUID, status, why string, freed int64, volumes int, at time.Time) (*models.StorageAction, error)
+	// Progress keeps what a running cleanup took so far: its recordings,
+	// and their bytes.
+	Progress(ctx context.Context, id uuid.UUID, recordings, bytes int64) error
+	// Last is the latest action of a kind actor ran: nil for none.
+	Last(ctx context.Context, action string, actor models.ModuleActor) (*models.StorageAction, error)
 	// EndRunning fails every action still running, saying why: a core that
 	// stopped while they ran no longer knows how they went.
 	EndRunning(ctx context.Context, why string, at time.Time) (int64, error)
@@ -79,6 +84,23 @@ func (r *storageActionRepository) Finish(ctx context.Context, id uuid.UUID, stat
 		return nil, err
 	}
 	return &after, nil
+}
+
+func (r *storageActionRepository) Progress(ctx context.Context, id uuid.UUID, recordings, bytes int64) error {
+	return r.coll.UpdateOne(ctx, bson.M{"action_id": id, "status": models.StorageActionRunning},
+		bson.M{"$set": bson.M{"recordings": recordings, "bytes": bytes}})
+}
+
+func (r *storageActionRepository) Last(ctx context.Context, action string, actor models.ModuleActor) (*models.StorageAction, error) {
+	var a models.StorageAction
+	err := r.coll.Find(ctx, bson.M{"action": action, "actor.type": actor.Type, "actor.id": actor.ID}).Sort("-started_at").One(&a)
+	if IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
 }
 
 func (r *storageActionRepository) EndRunning(ctx context.Context, why string, at time.Time) (int64, error) {

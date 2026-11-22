@@ -544,7 +544,8 @@ type MinionFileStringPage {
 # A desktop's: what it showed, and the operator's mouse and keys (a
 # view-only one's has none), in Guacamole's format. A terminal's: what the
 # process wrote, what was typed, and the terminal's sizes, as an asciicast
-# (v2). Kept until its operation is deleted, or an operator deletes it.
+# (v2). Kept until its operation is deleted, or an operator deletes it; a
+# retention cleanup deletes its files and keeps the record (cleanedAt).
 type Recording {
   id: ID!
   taskId: ID!
@@ -604,9 +605,13 @@ type Recording {
   # the process's exit, or why it did not open.
   end: String
   msg: String
+  # When a retention cleanup took it (docs: Storage, Retention cleanups):
+  # its files are deleted, so it no longer plays or downloads, and size and
+  # videoSize are what it held; null while it keeps them.
+  cleanedAt: String
   # Its file: Guacamole's session recording (what guacd's own recordings
   # are, which guacenc makes a video of), or an asciicast (which asciinema
-  # plays): a path under /api/v1.
+  # plays): a path under /api/v1 (410 once a cleanup took it).
   path: String!
 }
 

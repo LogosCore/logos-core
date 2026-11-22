@@ -21,6 +21,16 @@ func (r *mutationResolver) GrowStorageBucket(ctx context.Context, bucket string)
 	return r.StorageResolver.GrowStorageBucket(ctx, bucket)
 }
 
+// SetStorageRetention is the resolver for the setStorageRetention field.
+func (r *mutationResolver) SetStorageRetention(ctx context.Context, enabled bool, olderThanDays int) (*model.StorageRetention, error) {
+	return r.StorageResolver.SetStorageRetention(ctx, enabled, olderThanDays)
+}
+
+// CleanUpStorage is the resolver for the cleanUpStorage field.
+func (r *mutationResolver) CleanUpStorage(ctx context.Context, olderThanDays int, operationID *string) (*model.StorageAction, error) {
+	return r.StorageResolver.CleanUpStorage(ctx, olderThanDays, operationID)
+}
+
 // StorageStatus is the resolver for the storageStatus field.
 func (r *queryResolver) StorageStatus(ctx context.Context) (*model.StorageStatus, error) {
 	return r.StorageResolver.StorageStatus(ctx)
@@ -34,4 +44,14 @@ func (r *queryResolver) StorageConsumers(ctx context.Context, bucket string, sea
 // StorageActions is the resolver for the storageActions field.
 func (r *queryResolver) StorageActions(ctx context.Context, first *int, after *string, last *int, before *string) (*model.StorageActionConnection, error) {
 	return r.StorageResolver.StorageActions(ctx, first, after, last, before)
+}
+
+// StorageRetention is the resolver for the storageRetention field.
+func (r *queryResolver) StorageRetention(ctx context.Context) (*model.StorageRetention, error) {
+	return r.StorageResolver.StorageRetention(ctx)
+}
+
+// StorageCleanupPreview is the resolver for the storageCleanupPreview field.
+func (r *queryResolver) StorageCleanupPreview(ctx context.Context, olderThanDays int, first *int, after *string) (*model.StorageCleanupPreview, error) {
+	return r.StorageResolver.StorageCleanupPreview(ctx, olderThanDays, first, after)
 }

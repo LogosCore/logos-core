@@ -1,4 +1,5 @@
 import type { RecordingsQuery } from "@/graphql/gql/graphql"
+import { formatDateTime } from "@/lib/date-format"
 import { formatBytes } from "@/lib/format-bytes"
 import type { Tone } from "./tunnel-values"
 
@@ -7,7 +8,8 @@ import type { Tone } from "./tunnel-values"
 // opened in the web app, or each terminal session, recorded by core as it
 // went. A desktop's plays in Guacamole's own player, what was typed read
 // from its key events; a terminal's (an asciicast) in xterm.js, as the
-// Terminal tab shows one (cast-values.ts).
+// Terminal tab shows one (cast-values.ts). One a retention cleanup took
+// (docs: Storage, Retention cleanups) is listed, and no longer plays.
 
 export type Recording = RecordingsQuery["recordings"]["recordings"][number]
 
@@ -50,18 +52,23 @@ export function videoNote(r: Pick<Recording, "video" | "videoError">): { text: s
   return null
 }
 
-/** Whether a recording plays: it ended, and holds something. */
-export function playable(r: Pick<Recording, "state" | "size">): boolean {
-  return r.state === SAVED && r.size > 0
+/** Whether a retention cleanup took its files: its record stays, it no longer plays or downloads. */
+export function isCleaned(r: Pick<Recording, "cleanedAt">): boolean {
+  return r.cleanedAt != null
+}
+
+/** Whether a recording plays: it ended, holds something, and keeps its files. */
+export function playable(r: Pick<Recording, "state" | "size" | "cleanedAt">): boolean {
+  return r.state === SAVED && r.size > 0 && !isCleaned(r)
 }
 
 /** Whether its file downloads: anything kept of it, ended or not. */
-export function downloadable(r: Pick<Recording, "state" | "size">): boolean {
-  return r.state !== FAILED && r.size > 0
+export function downloadable(r: Pick<Recording, "state" | "size" | "cleanedAt">): boolean {
+  return r.state !== FAILED && r.size > 0 && !isCleaned(r)
 }
 
 /** A recording's state as the list says it: what it is, its tone, and why. */
-export function recordingState(r: Pick<Recording, "state" | "end" | "msg" | "size" | "lost">): {
+export function recordingState(r: Pick<Recording, "state" | "end" | "msg" | "size" | "lost" | "cleanedAt">): {
   label: string
   tone: Tone
   detail: string | null
@@ -70,6 +77,7 @@ export function recordingState(r: Pick<Recording, "state" | "end" | "msg" | "siz
   const said = (...parts: (string | null | undefined)[]) => parts.filter((p) => p).join("; ") || null
   if (r.state === RECORDING) return { label: "recording", tone: "good", detail: lost }
   if (r.state === FAILED) return { label: "did not open", tone: "bad", detail: r.msg ?? null }
+  if (r.cleanedAt) return { label: "cleaned up", tone: "muted", detail: `a retention cleanup deleted its files ${formatDateTime(r.cleanedAt)}` }
   if (r.size === 0) return { label: "nothing recorded", tone: "muted", detail: said(r.msg, lost) }
   switch (r.end) {
     case "closed":

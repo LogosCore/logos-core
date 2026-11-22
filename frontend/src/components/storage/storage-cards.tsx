@@ -1,14 +1,23 @@
 import type { ReactNode } from "react"
-import { CircleAlertIcon, InfoIcon, PlusIcon, TriangleAlertIcon } from "lucide-react"
+import { CircleAlertIcon, EraserIcon, InfoIcon, PencilIcon, PlusIcon, TriangleAlertIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InfoCard, LabelRow, NoteRow } from "@/components/ui/info-card"
+import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
+import type { StorageRetentionFieldsFragment } from "@/graphql/gql/graphql"
+import { useNow } from "@/hooks/use-now"
 import { formatDateTime, formatTime } from "@/lib/date-format"
 import { formatBytes } from "@/lib/format-bytes"
 import { cn } from "@/lib/utils"
 import {
+  actionResult,
   bucketAbout,
   bucketName,
+  daysText,
   deletedShare,
+  MAX_RETENTION_DAYS,
+  nextRunText,
+  recordingsText,
   volumesText,
   type StorageBucket,
   type StorageDisk,
@@ -17,7 +26,9 @@ import {
 } from "./storage-values"
 
 // The Storage page's cards: SeaweedFS as its master says, each volume
-// server's disk, and each bucket with what core keeps there.
+// server's disk, each bucket with what core keeps there; and the retention
+// cleanups' (docs: Storage, Retention cleanups): the policy, and a cleanup
+// run now.
 
 const LABELS = "w-36"
 
@@ -179,6 +190,157 @@ export function BucketCard({
           </span>
         </NoteRow>
       ))}
+    </InfoCard>
+  )
+}
+
+/**
+ * The retention policy, one for every operation: on or off, its age, its
+ * last cleanup and when the next runs; Edit, for an admin who may set it.
+ */
+export function RetentionCard({ retention: r, onEdit }: { retention: StorageRetentionFieldsFragment; onEdit?: () => void }) {
+  const now = useNow(30_000)
+  const last = r.lastRun
+  return (
+    <InfoCard
+      title="Retention policy"
+      note="every operation"
+      labelWidth={LABELS}
+      actions={
+        onEdit && (
+          <Button variant="ghost" size="xs" onClick={onEdit} title="Turn the policy on or off, and set its age">
+            <PencilIcon />
+            Edit
+          </Button>
+        )
+      }
+    >
+      <LabelRow label="State">
+        {r.enabled ? (
+          <span className="text-emerald-700 dark:text-emerald-300">on: core cleans up each day</span>
+        ) : (
+          <span>off: core cleans up nothing on its own</span>
+        )}
+      </LabelRow>
+      <LabelRow label="Age">
+        <span className="tabular-nums">{daysText(r.olderThanDays)}</span>
+        <span className="block text-xs text-muted-foreground">
+          Recordings that ended earlier lose their files; those of tasks marked important keep them.
+        </span>
+      </LabelRow>
+      <LabelRow label="Last cleanup">
+        {last ? (
+          <>
+            <span className="tabular-nums">{formatDateTime(last.startedAt)}</span>
+            <span className={cn("block text-xs", last.status === "failed" ? "text-red-700 dark:text-red-300" : "text-muted-foreground")}>
+              {actionResult(last)}
+            </span>
+          </>
+        ) : (
+          <span className="text-muted-foreground">none yet</span>
+        )}
+      </LabelRow>
+      {r.enabled && (
+        <LabelRow label="Next cleanup">
+          <span className="tabular-nums">{nextRunText(r.nextRunAt, now)}</span>
+        </LabelRow>
+      )}
+      <LabelRow label="Set by">
+        {r.updatedBy ? (
+          <span>
+            {r.updatedBy.name ?? r.updatedBy.id}
+            {r.updatedAt && <span className="text-muted-foreground tabular-nums">, {formatDateTime(r.updatedAt)}</span>}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">no one yet</span>
+        )}
+      </LabelRow>
+    </InfoCard>
+  )
+}
+
+/** What a cleanup at an age would take now, in all: null while it is read. */
+export interface CleanupTotals {
+  recordings: number
+  bytes: number
+  operations: number
+}
+
+/**
+ * A cleanup now: its age, what it would take at it, and the cleanup of every
+ * operation's recordings (one operation's from the table below it).
+ */
+export function CleanupCard({
+  days,
+  onDays,
+  ageError,
+  totals,
+  onCleanUp,
+  busy,
+}: {
+  /** The age as typed, and its error: null for an age that reads. */
+  days: string
+  onDays: (v: string) => void
+  ageError: string | null
+  totals: CleanupTotals | null
+  /** Cleans up every operation's; absent while there is nothing to take. */
+  onCleanUp?: () => void
+  /** A cleanup runs: none starts until it ended. */
+  busy: boolean
+}) {
+  return (
+    <InfoCard
+      title="Clean up now"
+      note="recordings alone"
+      labelWidth={LABELS}
+      actions={
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={onCleanUp}
+          disabled={!onCleanUp || busy}
+          title={busy ? "A cleanup runs: one at a time" : "Clean up the recordings of every operation that ended this long ago"}
+        >
+          <EraserIcon />
+          Clean up every operation
+        </Button>
+      }
+    >
+      <LabelRow label="Ended at least">
+        <span className="flex items-baseline gap-2">
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={MAX_RETENTION_DAYS}
+            value={days}
+            onChange={(e) => onDays(e.target.value)}
+            aria-label="Age in days"
+            aria-invalid={ageError !== null}
+            className="h-7 w-24 self-center tabular-nums"
+          />
+          <span>days ago</span>
+        </span>
+        {ageError && <span className="block text-xs text-red-700 dark:text-red-300">{ageError}</span>}
+      </LabelRow>
+      <LabelRow label="It would take">
+        {ageError ? (
+          <span className="text-muted-foreground">—</span>
+        ) : totals === null ? (
+          <Skeleton className="h-4 w-48" />
+        ) : totals.recordings === 0 ? (
+          <span className="text-muted-foreground">nothing at this age</span>
+        ) : (
+          <span className="tabular-nums">
+            {recordingsText(totals.recordings)}, {formatBytes(totals.bytes)}, in {totals.operations}{" "}
+            {totals.operations === 1 ? "operation" : "operations"}
+          </span>
+        )}
+      </LabelRow>
+      <NoteRow>
+        Each recording taken loses its files, and keeps its record, marked cleaned up: nothing is kept elsewhere. Those of tasks marked
+        important, and those still recording, are kept. Reclaim space then gives the disk the bytes back.
+      </NoteRow>
     </InfoCard>
   )
 }

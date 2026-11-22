@@ -12,7 +12,8 @@
 // dropped (the recording's lost bytes: it plays past them). A recording is
 // read as its parts one after another. One whose core stopped is ended by
 // the next sweep. Recordings stay in their bucket until their operation is
-// deleted, or an operator deletes one.
+// deleted, an operator deletes one, or a retention cleanup takes their
+// files (cleanup.go).
 package recordings
 
 import (
@@ -225,6 +226,9 @@ func (s *Service) Open(ctx context.Context, id uuid.UUID) (io.ReadCloser, *model
 	if rec.State == models.RecordingStateFailed {
 		return nil, rec, ErrNothing
 	}
+	if rec.CleanedAt != nil {
+		return nil, rec, ErrCleaned
+	}
 	return &partsReader{ctx: ctx, store: s.store, id: rec.RecordingID, n: rec.Parts}, rec, nil
 }
 
@@ -241,7 +245,9 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) (*models.Recording, 
 	if rec.State == models.RecordingStateRecording {
 		return rec, ErrRecording
 	}
-	s.dropAll(ctx, *rec)
+	if rec.CleanedAt == nil {
+		_ = s.dropAll(ctx, *rec)
+	}
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return rec, err
 	}
@@ -284,29 +290,43 @@ func (s *Service) DeleteByOperation(ctx context.Context, operationID uuid.UUID) 
 		return err
 	}
 	for _, rec := range recs {
-		s.dropAll(ctx, rec)
+		if rec.CleanedAt == nil {
+			_ = s.dropAll(ctx, rec)
+		}
 	}
 	return s.repo.DeleteByOperationID(ctx, operationID)
 }
 
-// dropAll deletes what a recording keeps: its parts, and its video and keys.
-func (s *Service) dropAll(ctx context.Context, rec models.Recording) {
-	s.dropParts(ctx, rec)
-	_ = s.store.Delete(ctx, videoKey(rec.RecordingID))
-	_ = s.store.Delete(ctx, keysKey(rec.RecordingID))
+// dropAll deletes what a recording keeps: its parts, and its video and
+// keys. It tries each, and says the store's first failure.
+func (s *Service) dropAll(ctx context.Context, rec models.Recording) error {
+	err := s.dropParts(ctx, rec)
+	for _, key := range []string{videoKey(rec.RecordingID), keysKey(rec.RecordingID)} {
+		if derr := s.store.Delete(ctx, key); derr != nil && err == nil {
+			err = derr
+		}
+	}
+	return err
 }
 
 // dropParts deletes a recording's parts: those it says, and any past them
-// (kept as its core stopped, before it said so).
-func (s *Service) dropParts(ctx context.Context, rec models.Recording) {
+// (kept as its core stopped, before it said so). It tries each, and says
+// the store's first failure.
+func (s *Service) dropParts(ctx context.Context, rec models.Recording) error {
+	var err error
+	keep := func(derr error) {
+		if derr != nil && err == nil {
+			err = derr
+		}
+	}
 	for n := 0; n < rec.Parts; n++ {
-		_ = s.store.Delete(ctx, partKey(rec.RecordingID, n))
+		keep(s.store.Delete(ctx, partKey(rec.RecordingID, n)))
 	}
 	for n := rec.Parts; ; n++ {
-		if _, err := s.store.Head(ctx, partKey(rec.RecordingID, n)); err != nil {
-			return
+		if _, herr := s.store.Head(ctx, partKey(rec.RecordingID, n)); herr != nil {
+			return err
 		}
-		_ = s.store.Delete(ctx, partKey(rec.RecordingID, n))
+		keep(s.store.Delete(ctx, partKey(rec.RecordingID, n)))
 	}
 }
 

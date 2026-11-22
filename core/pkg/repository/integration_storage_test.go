@@ -10,14 +10,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // Core's records of what it keeps in the object store, summed by purpose,
 // operation and kind: a file kept, or coming (its bytes so far); a
 // recording's video once converted, else its parts; a build's files and an
 // artifact not deleted; the wiki's attachments not deleted; every skill
-// version. What holds no object is left out: a minion file that failed, an
-// artifact an operator deleted, an attachment deleted, a build with none.
+// version. What holds no object is left out: a minion file that failed, a
+// recording a retention cleanup took, an artifact an operator deleted, an
+// attachment deleted, a build with none.
 func TestIntegrationStorageUsage(t *testing.T) {
 	db := integrationDB(t)
 	ctx := context.Background()
@@ -44,7 +46,8 @@ func TestIntegrationStorageUsage(t *testing.T) {
 	insert(recordingCollection,
 		&models.Recording{RecordingID: uuid.New(), OperationID: opB, Front: "rdp", Size: 500},
 		&models.Recording{RecordingID: uuid.New(), OperationID: opB, Front: "vnc", Size: 900, Video: "done", VideoSize: 200},
-		&models.Recording{RecordingID: uuid.New(), OperationID: opB, Front: "terminal", Size: 40})
+		&models.Recording{RecordingID: uuid.New(), OperationID: opB, Front: "terminal", Size: 40},
+		&models.Recording{RecordingID: uuid.New(), OperationID: opB, Front: "rdp", Size: 9999, CleanedAt: &now})
 	insert(buildFileCollection, &models.BuildFile{FileID: uuid.New(), OperationID: opA, Size: 11})
 	insert(buildCollection,
 		&models.Build{BuildID: uuid.New(), OperationID: opA, Artifact: &models.BuildArtifact{Size: 1000, ObjectKey: "artifacts/a"}},
@@ -150,5 +153,77 @@ func TestIntegrationStorageActions(t *testing.T) {
 	}
 	if total, err := repo.Count(ctx); err != nil || total != 4 {
 		t.Fatalf("count %d %v", total, err)
+	}
+}
+
+// A cleanup's progress is kept while it runs; the latest cleanup an actor
+// ran is found by its actor, not another's.
+func TestIntegrationStorageCleanupActions(t *testing.T) {
+	db := integrationDB(t)
+	repo := NewStorageActionRepository(db)
+	ctx := context.Background()
+	t0 := time.Now().UTC().Truncate(time.Millisecond)
+	cleanup := func(actor models.ModuleActor, at time.Time) *models.StorageAction {
+		a := &models.StorageAction{ActionID: uuid.New(), Action: models.StorageActionCleanup, Bucket: "desktop-recordings", Actor: actor,
+			Status: models.StorageActionRunning, StartedAt: at, OlderThanDays: 30}
+		if err := repo.Insert(ctx, a); err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	if last, err := repo.Last(ctx, models.StorageActionCleanup, models.RetentionActor); last != nil || err != nil {
+		t.Fatalf("none yet: %+v %v", last, err)
+	}
+	first := cleanup(models.RetentionActor, t0)
+	if err := repo.Progress(ctx, first.ActionID, 7, 700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Finish(ctx, first.ActionID, models.StorageActionSucceeded, "", 0, 0, t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Progress(ctx, first.ActionID, 8, 800); !IsNotFound(err) {
+		t.Errorf("progress of one ended: %v", err)
+	}
+	alice := cleanup(models.ModuleActor{Type: "user", ID: "u1", Name: "alice"}, t0.Add(time.Hour))
+	last, err := repo.Last(ctx, models.StorageActionCleanup, models.RetentionActor)
+	if err != nil || last == nil || last.ActionID != first.ActionID || last.Recordings != 7 || last.Bytes != 700 || last.OlderThanDays != 30 {
+		t.Fatalf("the policy's last %+v %v", last, err)
+	}
+	if last, _ := repo.Last(ctx, models.StorageActionCleanup, alice.Actor); last == nil || last.ActionID != alice.ActionID {
+		t.Fatalf("alice's last %+v", last)
+	}
+	if last, _ := repo.Last(ctx, models.StorageActionReclaim, models.RetentionActor); last != nil {
+		t.Fatalf("a reclaim by the policy %+v", last)
+	}
+}
+
+// The retention policy: off at 30 days before anyone set it; set, it reads
+// back as set; set again, it is replaced.
+func TestIntegrationStorageRetention(t *testing.T) {
+	db := integrationDB(t)
+	repo := NewStorageRetentionRepository(db)
+	ctx := context.Background()
+	if err := db.IndexSetupErr(); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := repo.Get(ctx); err != nil || p.Enabled || p.OlderThanDays != models.DefaultRetentionDays || p.UpdatedAt != nil {
+		t.Fatalf("before anyone set it %+v %v", p, err)
+	}
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	by := models.ModuleActor{Type: "user", ID: "u1", Name: "alice"}
+	if err := repo.Set(ctx, models.StorageRetention{Enabled: true, OlderThanDays: 45, UpdatedAt: &at, UpdatedBy: &by}); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := repo.Get(ctx); err != nil || !p.Enabled || p.OlderThanDays != 45 || !p.UpdatedAt.Equal(at) || *p.UpdatedBy != by {
+		t.Fatalf("set %+v %v", p, err)
+	}
+	if err := repo.Set(ctx, models.StorageRetention{OlderThanDays: 60, UpdatedAt: &at, UpdatedBy: &by}); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := repo.Get(ctx); p.Enabled || p.OlderThanDays != 60 {
+		t.Fatalf("set again %+v", p)
+	}
+	if n, err := db.Collection(storageRetentionCollection).Find(ctx, bson.M{}).Count(); err != nil || n != 1 {
+		t.Fatalf("%d documents %v", n, err)
 	}
 }

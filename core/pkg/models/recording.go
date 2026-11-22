@@ -14,7 +14,8 @@ import (
 // recorded is in the recordings bucket (DESKTOP_RECORDING_BUCKET, named
 // when desktops alone were recorded, as this collection is), in parts as
 // core kept it (pkg/recordings), in its Format. Kept until its operation
-// is deleted, or an operator deletes it.
+// is deleted, or an operator deletes it; a retention cleanup deletes its
+// files and keeps the record (CleanedAt).
 type Recording struct {
 	field.DefaultField `bson:",inline"`
 
@@ -89,6 +90,31 @@ type Recording struct {
 	VideoTries  int        `bson:"video_tries,omitempty" json:"video_tries,omitempty"`
 	VideoNextAt *time.Time `bson:"video_next_at,omitempty" json:"video_next_at,omitempty"`
 	VideoLease  *time.Time `bson:"video_lease,omitempty" json:"video_lease,omitempty"`
+
+	// CleanedAt is when a retention cleanup took it (docs: Storage,
+	// Retention cleanups): its files are deleted, its parts or its video
+	// and keys, and the record stays, so its task still lists it; it no
+	// longer plays. CleanedBy is the cleanup (the storage action that ran
+	// it). Nil while it keeps its files.
+	CleanedAt *time.Time `bson:"cleaned_at,omitempty" json:"cleaned_at,omitempty"`
+	CleanedBy *uuid.UUID `bson:"cleaned_by,omitempty" json:"cleaned_by,omitempty"`
+}
+
+// StoredBytes is what it holds in its bucket: its video's bytes once it is
+// one, else its parts'.
+func (r *Recording) StoredBytes() int64 {
+	if r.VideoSize > 0 {
+		return r.VideoSize
+	}
+	return r.Size
+}
+
+// RecordingsToClean is what a retention cleanup would take of one
+// operation's recordings: how many, and their bytes (StoredBytes).
+type RecordingsToClean struct {
+	OperationID uuid.UUID `bson:"_id" json:"operation_id"`
+	Recordings  int64     `bson:"recordings" json:"recordings"`
+	Bytes       int64     `bson:"bytes" json:"bytes"`
 }
 
 // A desktop recording's video (Recording.Video).

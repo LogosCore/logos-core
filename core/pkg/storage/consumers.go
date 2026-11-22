@@ -21,8 +21,30 @@ type consumerCursor struct {
 
 // ConsumerCursor is c's place in its bucket's list.
 func ConsumerCursor(c Consumer) string {
-	b, _ := json.Marshal(consumerCursor{Bytes: c.Bytes, Name: c.OperationName, Key: c.key()})
+	return encodeCursor(consumerCursor{Bytes: c.Bytes, Name: c.OperationName, Key: c.key()})
+}
+
+// encodeCursor is a place in a list as a cursor says it.
+func encodeCursor(c consumerCursor) string {
+	b, _ := json.Marshal(c)
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// parseCursor reads a cursor: nil for none (""), ErrBadCursor for one that
+// does not read.
+func parseCursor(after string) (*consumerCursor, error) {
+	if after == "" {
+		return nil, nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(after)
+	if err != nil {
+		return nil, ErrBadCursor
+	}
+	var c consumerCursor
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return nil, ErrBadCursor
+	}
+	return &c, nil
 }
 
 // ConsumerPage is a page of a bucket's consumers.
@@ -37,17 +59,9 @@ type ConsumerPage struct {
 // most first after the cursor after (none: from the start); search keeps
 // those whose operation's name or kind holds it.
 func (s Snapshot) Consumers(bucket, search, after string, first int) (ConsumerPage, error) {
-	var from *consumerCursor
-	if after != "" {
-		raw, err := base64.RawURLEncoding.DecodeString(after)
-		if err != nil {
-			return ConsumerPage{}, ErrBadCursor
-		}
-		var c consumerCursor
-		if err := json.Unmarshal(raw, &c); err != nil {
-			return ConsumerPage{}, ErrBadCursor
-		}
-		from = &c
+	from, err := parseCursor(after)
+	if err != nil {
+		return ConsumerPage{}, err
 	}
 	q := strings.ToLower(strings.TrimSpace(search))
 	page := ConsumerPage{Consumers: []Consumer{}}
@@ -56,7 +70,7 @@ func (s Snapshot) Consumers(bucket, search, after string, first int) (ConsumerPa
 			continue
 		}
 		page.Total++
-		if from != nil && !follows(c, *from) {
+		if from != nil && !follows(c.Bytes, c.OperationName, c.key(), *from) {
 			continue
 		}
 		if len(page.Consumers) == first {
@@ -68,14 +82,15 @@ func (s Snapshot) Consumers(bucket, search, after string, first int) (ConsumerPa
 	return page, nil
 }
 
-// follows reports whether c comes after cursor in a bucket's order
-// (compareConsumers).
-func follows(c Consumer, cursor consumerCursor) bool {
+// follows reports whether what has bytes, name and key comes after cursor
+// in a list the most bytes first, then by name and key (compareConsumers,
+// compareCleanups).
+func follows(bytes int64, name, key string, cursor consumerCursor) bool {
 	switch {
-	case c.Bytes != cursor.Bytes:
-		return c.Bytes < cursor.Bytes
-	case c.OperationName != cursor.Name:
-		return c.OperationName > cursor.Name
+	case bytes != cursor.Bytes:
+		return bytes < cursor.Bytes
+	case name != cursor.Name:
+		return name > cursor.Name
 	}
-	return c.key() > cursor.Key
+	return key > cursor.Key
 }

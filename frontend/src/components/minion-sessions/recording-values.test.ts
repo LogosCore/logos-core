@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   downloadable,
   formatClock,
+  isCleaned,
   lineAt,
   playable,
   recordingFileName,
@@ -117,6 +118,20 @@ describe("a recording's state", () => {
     expect(playable({ state: "SAVED", size: 0 })).toBe(false)
     expect(downloadable({ state: "RECORDING", size: 100 })).toBe(true)
     expect(downloadable({ state: "FAILED", size: 0 })).toBe(false)
+  })
+
+  test("a retention cleanup took its files: it is listed, says when, and neither plays nor downloads", () => {
+    const cleaned = { ...r, cleanedAt: "2026-11-22T10:00:00Z" }
+    expect(isCleaned(cleaned)).toBe(true)
+    expect(isCleaned({ cleanedAt: undefined })).toBe(false)
+    expect(isCleaned({ cleanedAt: null })).toBe(false)
+    expect(playable(cleaned)).toBe(false)
+    expect(downloadable(cleaned)).toBe(false)
+    const state = recordingState(cleaned)
+    expect(state.label).toBe("cleaned up")
+    expect(state.tone).toBe("muted")
+    expect(state.detail).toMatch(/^a retention cleanup deleted its files 2026\.11\.22 \d\d:00:00$/)
+    expect(recordingState({ ...cleaned, lost: 2048 }).label).toBe("cleaned up")
   })
 })
 

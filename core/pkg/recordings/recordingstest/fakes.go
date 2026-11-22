@@ -18,12 +18,14 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-// Store keeps objects in memory; Fail makes the next Fail puts fail.
+// Store keeps objects in memory; Fail makes the next Fail puts fail, and
+// FailDeletes the next deletes.
 type Store struct {
-	mu   sync.Mutex
-	objs map[string][]byte
-	fail int
-	puts int
+	mu          sync.Mutex
+	objs        map[string][]byte
+	fail        int
+	failDeletes int
+	puts        int
 }
 
 func NewStore() *Store { return &Store{objs: map[string][]byte{}} }
@@ -32,6 +34,13 @@ func NewStore() *Store { return &Store{objs: map[string][]byte{}} }
 func (f *Store) Fail(n int) {
 	f.mu.Lock()
 	f.fail = n
+	f.mu.Unlock()
+}
+
+// FailDeletes makes the next n deletes fail.
+func (f *Store) FailDeletes(n int) {
+	f.mu.Lock()
+	f.failDeletes = n
 	f.mu.Unlock()
 }
 
@@ -78,6 +87,10 @@ func (f *Store) Head(_ context.Context, key string) (blob.ObjectInfo, error) {
 func (f *Store) Delete(_ context.Context, key string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.failDeletes > 0 {
+		f.failDeletes--
+		return errors.New("store down")
+	}
 	delete(f.objs, key)
 	return nil
 }
@@ -95,13 +108,24 @@ func (f *Store) Keys() []string {
 }
 
 // Repo keeps recordings in memory, the fields Save sets as the
-// repository sets them.
+// repository sets them; Important marks their tasks.
 type Repo struct {
-	mu   sync.Mutex
-	recs map[uuid.UUID]*models.Recording
+	mu        sync.Mutex
+	recs      map[uuid.UUID]*models.Recording
+	important map[uuid.UUID]bool
 }
 
-func NewRepo() *Repo { return &Repo{recs: map[uuid.UUID]*models.Recording{}} }
+func NewRepo() *Repo {
+	return &Repo{recs: map[uuid.UUID]*models.Recording{}, important: map[uuid.UUID]bool{}}
+}
+
+// Important marks a task important, or not: a cleanup passes over the
+// recordings of one that is.
+func (f *Repo) Important(taskID uuid.UUID, important bool) {
+	f.mu.Lock()
+	f.important[taskID] = important
+	f.mu.Unlock()
+}
 
 // Len is how many it keeps.
 func (f *Repo) Len() int {
@@ -202,7 +226,8 @@ func (f *Repo) ClaimToConvert(_ context.Context, now, lease time.Time) (*models.
 	for _, r := range f.recs {
 		lapsed := r.Video == models.RecordingVideoConverting && r.VideoLease != nil && r.VideoLease.Before(now)
 		due := r.VideoNextAt == nil || !r.VideoNextAt.After(now)
-		if r.State != models.RecordingStateSaved || r.Format == models.RecordingFormatAsciicast || !(r.Video == "" || lapsed) || !due {
+		if r.State != models.RecordingStateSaved || r.Format == models.RecordingFormatAsciicast || !(r.Video == "" || lapsed) || !due ||
+			r.CleanedAt != nil {
 			continue
 		}
 		if pick == nil || r.StartedAt.Before(pick.StartedAt) {
@@ -225,6 +250,84 @@ func (f *Repo) Save(_ context.Context, id uuid.UUID, set bson.M) error {
 		return qmgo.ErrNoSuchDocuments
 	}
 	apply(r, set)
+	return nil
+}
+
+func (f *Repo) SaveKept(_ context.Context, id uuid.UUID, set bson.M) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, ok := f.recs[id]
+	if !ok || r.CleanedAt != nil {
+		return qmgo.ErrNoSuchDocuments
+	}
+	apply(r, set)
+	return nil
+}
+
+// cleanable is whether a cleanup takes r, as the repository says: saved
+// before before, holding something, its files kept, not converting at now.
+func cleanable(r *models.Recording, before, now time.Time) bool {
+	converting := r.Video == models.RecordingVideoConverting && (r.VideoLease == nil || !r.VideoLease.Before(now))
+	return r.State == models.RecordingStateSaved && r.EndedAt != nil && !r.EndedAt.After(before) && r.CleanedAt == nil &&
+		(r.Size > 0 || r.VideoSize > 0) && !converting
+}
+
+// ToClean are the recordings a cleanup takes, their tasks not important,
+// the oldest first.
+func (f *Repo) ToClean(_ context.Context, before, now time.Time, op *uuid.UUID, limit int64) ([]models.Recording, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []models.Recording{}
+	for _, r := range f.recs {
+		if cleanable(r, before, now) && !f.important[r.TaskID] && (op == nil || r.OperationID == *op) {
+			out = append(out, *r)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].EndedAt.Before(*out[j].EndedAt) })
+	if int64(len(out)) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (f *Repo) ToCleanByOperation(ctx context.Context, before, now time.Time) ([]models.RecordingsToClean, error) {
+	recs, _ := f.ToClean(ctx, before, now, nil, 1<<30)
+	by := map[uuid.UUID]*models.RecordingsToClean{}
+	out := []models.RecordingsToClean{}
+	for _, r := range recs {
+		g, ok := by[r.OperationID]
+		if !ok {
+			g = &models.RecordingsToClean{OperationID: r.OperationID}
+			by[r.OperationID] = g
+		}
+		g.Recordings++
+		g.Bytes += r.StoredBytes()
+	}
+	for _, g := range by {
+		out = append(out, *g)
+	}
+	return out, nil
+}
+
+func (f *Repo) MarkCleaned(_ context.Context, id, cleanup uuid.UUID, at time.Time) (*models.Recording, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, ok := f.recs[id]
+	converting := ok && r.Video == models.RecordingVideoConverting && (r.VideoLease == nil || !r.VideoLease.Before(at))
+	if !ok || r.State != models.RecordingStateSaved || r.CleanedAt != nil || converting {
+		return nil, nil
+	}
+	r.CleanedAt, r.CleanedBy = &at, &cleanup
+	c := *r
+	return &c, nil
+}
+
+func (f *Repo) UnmarkCleaned(_ context.Context, id uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r, ok := f.recs[id]; ok {
+		r.CleanedAt, r.CleanedBy = nil, nil
+	}
 	return nil
 }
 

@@ -199,6 +199,35 @@ func (f *fakeActions) Finish(_ context.Context, id uuid.UUID, status, why string
 	return nil, errors.New("not found")
 }
 
+func (f *fakeActions) Progress(_ context.Context, id uuid.UUID, recordings, bytes int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.list {
+		if f.list[i].ActionID == id && f.list[i].Status == models.StorageActionRunning {
+			f.list[i].Recordings, f.list[i].Bytes = recordings, bytes
+			return nil
+		}
+	}
+	return repository.ErrNotFound
+}
+
+func (f *fakeActions) Last(_ context.Context, action string, actor models.ModuleActor) (*models.StorageAction, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var last *models.StorageAction
+	for i := range f.list {
+		a := &f.list[i]
+		if a.Action == action && a.Actor.Type == actor.Type && a.Actor.ID == actor.ID && (last == nil || a.StartedAt.After(last.StartedAt)) {
+			last = a
+		}
+	}
+	if last == nil {
+		return nil, nil
+	}
+	out := *last
+	return &out, nil
+}
+
 func (f *fakeActions) EndRunning(_ context.Context, why string, at time.Time) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -241,6 +270,15 @@ type fakeOps []models.Operation
 
 func (f fakeOps) FindAll(context.Context, string, int64, int64, *uuid.UUID) ([]models.Operation, error) {
 	return f, nil
+}
+
+func (f fakeOps) FindByID(_ context.Context, id uuid.UUID) (models.Operation, error) {
+	for _, op := range f {
+		if op.OperationID == id {
+			return op, nil
+		}
+	}
+	return models.Operation{}, repository.ErrNotFound
 }
 
 // coreBuckets are core's buckets as the environment names them by default.

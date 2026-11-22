@@ -290,13 +290,15 @@ func (s *Service) convert(ctx context.Context, rec *models.Recording) error {
 		_ = s.store.Delete(ctx, videoKey(rec.RecordingID))
 		return fmt.Errorf("keep its keys: %w", err)
 	}
-	if err := s.repo.Save(ctx, rec.RecordingID, bson.M{"video": models.RecordingVideoConverted, "video_size": int64(len(video)),
+	// A recording deleted meanwhile, or taken by a retention cleanup (whose
+	// conversion outlived its lease), keeps no video.
+	if err := s.repo.SaveKept(ctx, rec.RecordingID, bson.M{"video": models.RecordingVideoConverted, "video_size": int64(len(video)),
 		"video_error": "", "video_lease": nil, "video_next_at": nil, "parts": 0}); err != nil {
 		_ = s.store.Delete(ctx, videoKey(rec.RecordingID))
 		_ = s.store.Delete(ctx, keysKey(rec.RecordingID))
 		return fmt.Errorf("say it is a video: %w", err)
 	}
-	s.dropParts(ctx, *rec)
+	_ = s.dropParts(ctx, *rec)
 	rec.Video, rec.VideoSize, rec.Parts = models.RecordingVideoConverted, int64(len(video)), 0
 	if t, err := s.tasks.AddRecording(ctx, rec.TaskID, 0, 0); err == nil {
 		s.publish(t)
@@ -313,6 +315,9 @@ func (s *Service) Video(ctx context.Context, id uuid.UUID) ([]byte, *models.Reco
 	rec, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, nil, err
+	}
+	if rec.CleanedAt != nil {
+		return nil, rec, ErrCleaned
 	}
 	if rec.Video != models.RecordingVideoConverted {
 		return nil, rec, ErrNotVideo
@@ -331,6 +336,9 @@ func (s *Service) Keys(ctx context.Context, id uuid.UUID) (io.ReadCloser, *model
 	rec, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, nil, err
+	}
+	if rec.CleanedAt != nil {
+		return nil, rec, ErrCleaned
 	}
 	if rec.Video != models.RecordingVideoConverted {
 		return nil, rec, ErrNotVideo

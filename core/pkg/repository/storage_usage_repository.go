@@ -50,10 +50,10 @@ var storageUsageSources = []storageUsageSource{
 		}, "default": "download"}},
 		bytes: "$received"},
 	// The desktops' and the terminals' recordings: a converted one's video,
-	// else its parts.
-	{purpose: models.StoragePurposeRecordings, collection: recordingCollection, match: bson.M{},
+	// else its parts. One a retention cleanup took holds nothing.
+	{purpose: models.StoragePurposeRecordings, collection: recordingCollection, match: bson.M{"cleaned_at": bson.M{"$exists": false}},
 		kind:  bson.M{"$cond": bson.A{bson.M{"$eq": bson.A{"$front", "terminal"}}, "terminal", "desktop"}},
-		bytes: bson.M{"$cond": bson.A{bson.M{"$gt": bson.A{"$video_size", 0}}, "$video_size", "$size"}}},
+		bytes: recordingBytes},
 	// A build's files, and its artifact until an operator deleted its bytes.
 	{purpose: models.StoragePurposeBuilds, collection: buildFileCollection, match: bson.M{}, kind: "file", bytes: "$size"},
 	{purpose: models.StoragePurposeBuilds, collection: buildCollection,

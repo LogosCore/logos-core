@@ -2,9 +2,21 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { HardDriveIcon, LoaderIcon, SparklesIcon } from "lucide-react"
 import { errorMessage } from "@/components/modules/management/api-errors"
-import { BucketCard, DiskCard, SeaweedFSCard, StorageWarnings } from "@/components/storage/storage-cards"
-import { ActionsTable, ConsumersEmpty, ConsumersTable } from "@/components/storage/storage-tables"
-import { bucketName, bucketWarnings, defaultBucket, purposeLabel, storeBytes } from "@/components/storage/storage-values"
+import { RetentionDialog } from "@/components/storage/retention-dialog"
+import { BucketCard, CleanupCard, DiskCard, RetentionCard, SeaweedFSCard, StorageWarnings } from "@/components/storage/storage-cards"
+import { ActionsTable, CleanupTable, ConsumersEmpty, ConsumersTable, type CleanupOperation } from "@/components/storage/storage-tables"
+import {
+  bucketName,
+  bucketWarnings,
+  daysText,
+  DEFAULT_RETENTION_DAYS,
+  defaultBucket,
+  MAX_RETENTION_DAYS,
+  parseDays,
+  purposeLabel,
+  recordingsText,
+  storeBytes,
+} from "@/components/storage/storage-values"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { SearchInput } from "@/components/ui/search-input"
@@ -12,33 +24,57 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Permissions } from "@/constants/permissions"
-import { useGrowStorageBucket, useReclaimStorage, useStorageActions, useStorageConsumers, useStorageStatus } from "@/graphql/hooks/storage"
+import {
+  useCleanUpStorage,
+  useGrowStorageBucket,
+  useReclaimStorage,
+  useRefreshWhenEnded,
+  useStorageActions,
+  useStorageCleanupPreview,
+  useStorageConsumers,
+  useStorageRetention,
+  useStorageStatus,
+} from "@/graphql/hooks/storage"
 import { useConnectionNodes } from "@/hooks/use-connection-nodes"
+import { useDebounced } from "@/hooks/use-debounced"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { formatBytes } from "@/lib/format-bytes"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/stores/auth"
 
-type Tab = "overview" | "consumers" | "activity"
+type Tab = "overview" | "consumers" | "retention" | "activity"
+
+/** What the confirm dialog asks for: a reclaim, a volume for a bucket, or a cleanup (of one operation's, or every one's). */
+type Confirm =
+  | { kind: "reclaim" }
+  | { kind: "grow"; bucket: string }
+  | { kind: "cleanup"; days: number; operation: CleanupOperation | null; recordings: number; bytes: number }
 
 /**
  * The admins' Storage page (core: storage.graphql): the object store core
- * keeps its files in, as core read it at most a minute ago. Three tabs: the
+ * keeps its files in, as core read it at most a minute ago. Four tabs: the
  * overview (the store's warnings; SeaweedFS and its disks on the left, each
  * bucket with what core keeps there on the right), what core keeps by
- * operation, and the maintenance run (Reclaim space, Add a volume).
+ * operation, the retention cleanups of recordings (the policy, and a cleanup
+ * now, previewed by operation), and the maintenance run (Reclaim space, Add
+ * a volume, cleanups).
  */
 export function StoragePage() {
   usePageMetadata({ title: "Storage", icon: { kind: "lucide", component: HardDriveIcon } })
   const canManage = useAuthStore((s) => s.hasPermission)(Permissions.STORAGE_MANAGE)
   const actionsQ = useStorageActions()
   const actions = useConnectionNodes(actionsQ.data, (p) => p.storageActions)
+  const running = actions.some((a) => a.status === "running")
   const reclaiming = actions.some((a) => a.action === "reclaim" && a.status === "running")
-  const statusQ = useStorageStatus(actions.some((a) => a.status === "running"))
+  const cleaning = actions.some((a) => a.action === "cleanup" && a.status === "running")
+  useRefreshWhenEnded(running)
+  const statusQ = useStorageStatus(running)
   const status = statusQ.data?.storageStatus
   const reclaim = useReclaimStorage()
   const grow = useGrowStorageBucket()
-  const [confirm, setConfirm] = useState<{ kind: "reclaim" } | { kind: "grow"; bucket: string } | null>(null)
+  const cleanUp = useCleanUpStorage()
+  const [confirm, setConfirm] = useState<Confirm | null>(null)
+  const [editing, setEditing] = useState(false)
   const [tab, setTab] = useState<Tab>("overview")
   const [picked, setPicked] = useState<string | null>(null)
   const [search, setSearch] = useState("")
@@ -48,6 +84,22 @@ export function StoragePage() {
   const consumersQ = useStorageConsumers(bucket, q)
   const consumers = useConnectionNodes(consumersQ.data, (p) => p.storageConsumers)
   const maintains = canManage && !!status?.seaweedfs.reachable
+  const held = tab === "consumers" || tab === "activity"
+
+  // The retention tab: the policy, and what a cleanup at the age typed would
+  // take now (read once the typing stops).
+  const retentionQ = useStorageRetention(cleaning)
+  const retention = retentionQ.data?.storageRetention
+  const [days, setDays] = useState(String(DEFAULT_RETENTION_DAYS))
+  const age = parseDays(days)
+  const shownAge = useDebounced(age, 400)
+  const previewQ = useStorageCleanupPreview(tab === "retention" && canManage ? shownAge : null, cleaning)
+  const previewOps = previewQ.data?.pages.flatMap((p) => p.storageCleanupPreview.operations.edges.map((e) => e.node)) ?? []
+  const preview = previewQ.data?.pages[0]?.storageCleanupPreview
+  const totals =
+    preview && shownAge === age && preview.olderThanDays === age
+      ? { recordings: preview.recordings, bytes: preview.bytes, operations: preview.operations.totalCount }
+      : null
 
   const runReclaim = () =>
     void reclaim.mutateAsync().then(
@@ -56,6 +108,14 @@ export function StoragePage() {
         setTab("activity")
       },
       (err: unknown) => toast.error(errorMessage(err, "Could not reclaim space")),
+    )
+  const runCleanup = (c: Extract<Confirm, { kind: "cleanup" }>) =>
+    void cleanUp.mutateAsync({ olderThanDays: c.days, operationId: c.operation?.operationId ?? null }).then(
+      () => {
+        toast.success("Cleaning up recordings in the background. Activity says what it took when it ends.")
+        setTab("activity")
+      },
+      (err: unknown) => toast.error(errorMessage(err, "Could not start the cleanup")),
     )
   const runGrow = (name: string) =>
     void grow.mutateAsync(name).then(
@@ -69,10 +129,11 @@ export function StoragePage() {
 
   return (
     // The lists' tabs hold the page to the viewport (min-h-0), their tables
-    // filling what is left below the tab row; the overview's cards keep their
-    // height, and the page scrolls.
-    <div className={cn("flex flex-1 flex-col gap-2 p-2", tab !== "overview" && "min-h-0")}>
-      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className={cn("flex flex-col gap-2", tab !== "overview" && "min-h-0 flex-1")}>
+    // filling what is left below the tab row; the overview's and the
+    // retention's cards keep their height, and the page scrolls (the
+    // retention's table has a height of its own).
+    <div className={cn("flex flex-1 flex-col gap-2 p-2", held && "min-h-0")}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className={cn("flex flex-col gap-2", held && "min-h-0 flex-1")}>
         <div className="flex flex-wrap items-center gap-2">
           <TabsList>
             <TabsTrigger value="overview">
@@ -80,6 +141,7 @@ export function StoragePage() {
               Overview
             </TabsTrigger>
             <TabsTrigger value="consumers">What core keeps</TabsTrigger>
+            <TabsTrigger value="retention">Retention</TabsTrigger>
             <TabsTrigger value="activity">
               Activity
               {actionsQ.data && (
@@ -167,6 +229,51 @@ export function StoragePage() {
             emptyState={<ConsumersEmpty searching={q !== ""} />}
           />
         </TabsContent>
+        <TabsContent value="retention" className="flex flex-none flex-col gap-4">
+          {retentionQ.error ? (
+            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{retentionQ.error.message}</div>
+          ) : !retention ? (
+            <Skeleton className="h-48 w-full" />
+          ) : (
+            <div className="grid items-start gap-4 lg:grid-cols-2">
+              <RetentionCard retention={retention} onEdit={canManage ? () => setEditing(true) : undefined} />
+              {canManage && (
+                <CleanupCard
+                  days={days}
+                  onDays={setDays}
+                  ageError={age === null ? `A whole number of days, 1 to ${MAX_RETENTION_DAYS.toLocaleString("en-US")}` : null}
+                  totals={previewQ.error ? null : totals}
+                  busy={cleaning}
+                  onCleanUp={
+                    age !== null && totals && totals.recordings > 0
+                      ? () => setConfirm({ kind: "cleanup", days: age, operation: null, recordings: totals.recordings, bytes: totals.bytes })
+                      : undefined
+                  }
+                />
+              )}
+            </div>
+          )}
+          {canManage &&
+            (previewQ.error ? (
+              <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{previewQ.error.message}</div>
+            ) : (
+              <div className="flex h-[28rem] flex-none flex-col">
+                <CleanupTable
+                  operations={age === null ? [] : previewOps}
+                  isLoading={previewQ.isLoading}
+                  isFetchingNextPage={previewQ.isFetchingNextPage}
+                  hasNextPage={previewQ.hasNextPage}
+                  fetchNextPage={() => void previewQ.fetchNextPage()}
+                  busy={cleaning}
+                  onCleanUp={
+                    age !== null && totals
+                      ? (o) => setConfirm({ kind: "cleanup", days: age, operation: o, recordings: o.recordings, bytes: o.bytes })
+                      : undefined
+                  }
+                />
+              </div>
+            ))}
+        </TabsContent>
         <TabsContent value="activity" className="flex min-h-0 flex-col">
           <ActionsTable
             actions={actions}
@@ -197,23 +304,39 @@ export function StoragePage() {
                 slots. It gives a bucket with no writable volume one again, or room before much is written to it.
               </DialogDescription>
             </DialogHeader>
+          ) : confirm?.kind === "cleanup" ? (
+            <DialogHeader>
+              <DialogTitle>
+                {confirm.operation ? `Clean up ${confirm.operation.operationName ?? "an operation gone"}'s recordings` : "Clean up every operation's recordings"}
+              </DialogTitle>
+              <DialogDescription>
+                Core deletes the files of the recordings that ended at least {daysText(confirm.days)} ago
+                {confirm.operation ? ` in ${confirm.operation.operationName ?? "this operation"}` : ", in every operation"}:{" "}
+                {recordingsText(confirm.recordings)}, {formatBytes(confirm.bytes)} now. Their records stay, marked cleaned up, and nothing
+                is kept elsewhere; those of tasks marked important are kept. It runs in the background: Reclaim space then gives the disk
+                the bytes back.
+              </DialogDescription>
+            </DialogHeader>
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirm(null)}>
               Cancel
             </Button>
             <Button
+              variant={confirm?.kind === "cleanup" ? "destructive" : "default"}
               onClick={() => {
                 if (confirm?.kind === "reclaim") runReclaim()
                 if (confirm?.kind === "grow") runGrow(confirm.bucket)
+                if (confirm?.kind === "cleanup") runCleanup(confirm)
                 setConfirm(null)
               }}
             >
-              {confirm?.kind === "grow" ? "Add a volume" : "Reclaim space"}
+              {confirm?.kind === "grow" ? "Add a volume" : confirm?.kind === "cleanup" ? "Clean up" : "Reclaim space"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {retention && <RetentionDialog retention={retention} open={editing} onOpenChange={setEditing} />}
     </div>
   )
 }

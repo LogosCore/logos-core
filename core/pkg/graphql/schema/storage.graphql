@@ -1,8 +1,8 @@
-# The object store core keeps its files in (docs: Core Infrastructure,
-# SeaweedFS), as admins see it on the Storage page (pkg/storage): SeaweedFS's
-# state, when core is set to reach its master (SEAWEEDFS_MASTER_URL); what
-# core's records say it keeps in each bucket; and what would make writes
-# fail. Core reads it once a minute.
+# The object store core keeps its files in (docs: Storage), as admins see it
+# on the Storage page (pkg/storage): SeaweedFS's state, when core is set to
+# reach its master (SEAWEEDFS_MASTER_URL); what core's records say it keeps
+# in each bucket; and what would make writes fail. Core reads it once a
+# minute.
 type StorageStatus {
   # When core read it.
   at: String!
@@ -107,12 +107,15 @@ type StorageConsumerConnection {
   totalCount: Int!
 }
 
-# A maintenance action an admin ran on the store.
+# A maintenance action run on the store: an admin's, or the retention
+# policy's.
 type StorageAction {
   id: ID!
-  # reclaim (every bucket's volumes) or grow (a volume added to bucket).
+  # reclaim (every bucket's volumes), grow (a volume added to bucket) or
+  # cleanup (a retention cleanup of recordings: bucket is theirs).
   action: String!
   bucket: String
+  # An admin, or the retention policy (type system, id retention_policy).
   actor: ModuleActor!
   # running, succeeded or failed (error says why).
   status: String!
@@ -122,6 +125,16 @@ type StorageAction {
   # A reclaim's bytes taken off the disk; a grow's volumes added.
   freed: Int!
   volumes: Int!
+  # A cleanup's: the age it takes recordings at, in days, and so the time
+  # they ended before; the operation it covers (null: every operation),
+  # named as it was when it ran; the recordings it took and their bytes,
+  # as it goes.
+  olderThanDays: Int
+  before: String
+  operationId: ID
+  operationName: String
+  recordings: Int!
+  bytes: Int!
 }
 
 type StorageActionEdge {
@@ -131,6 +144,55 @@ type StorageActionEdge {
 
 type StorageActionConnection {
   edges: [StorageActionEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+# The retention policy (docs: Storage, Retention cleanups), one for every
+# operation: on, core runs a cleanup each day of the recordings that ended
+# olderThanDays ago, but those of tasks marked important. Off until an
+# admin turns it on.
+type StorageRetention {
+  enabled: Boolean!
+  olderThanDays: Int!
+  # Who set it last, and when: null before anyone did.
+  updatedAt: String
+  updatedBy: ModuleActor
+  # Its last cleanup, and when the next is due (null while it is off): a
+  # day after the last began, an hour after one that failed ended.
+  lastRun: StorageAction
+  nextRunAt: String
+}
+
+# What a cleanup would take now: the recordings that ended before before
+# (olderThanDays ago), but those of tasks marked important and those still
+# recording; in all, and by operation.
+type StorageCleanupPreview {
+  olderThanDays: Int!
+  before: String!
+  recordings: Int!
+  bytes: Int!
+  # The operations it takes recordings of, the most bytes first, a page at
+  # a time.
+  operations: StorageCleanupOperationConnection!
+}
+
+# What a cleanup would take of one operation's recordings.
+type StorageCleanupOperation {
+  operationId: ID!
+  # Null for an operation gone.
+  operationName: String
+  recordings: Int!
+  bytes: Int!
+}
+
+type StorageCleanupOperationEdge {
+  node: StorageCleanupOperation!
+  cursor: String!
+}
+
+type StorageCleanupOperationConnection {
+  edges: [StorageCleanupOperationEdge!]!
   pageInfo: PageInfo!
   totalCount: Int!
 }
@@ -150,6 +212,16 @@ extend type Query {
   # storage:read.
   storageActions(first: Int = 50, after: String, last: Int, before: String): StorageActionConnection!
     @hasPermission(permission: "storage:read")
+
+  # The retention policy. Needs storage:read.
+  storageRetention: StorageRetention!
+    @hasPermission(permission: "storage:read")
+
+  # What a cleanup at an age in days (1 to 3650) would take now, its
+  # operations a page at a time. Nothing is deleted. Needs storage:manage
+  # (admins).
+  storageCleanupPreview(olderThanDays: Int!, first: Int = 50, after: String): StorageCleanupPreview!
+    @hasPermission(permission: "storage:manage")
 }
 
 extend type Mutation {
@@ -163,5 +235,19 @@ extend type Mutation {
   # A failure, as when no volume slot is free, is the action's. Needs
   # storage:manage.
   growStorageBucket(bucket: String!): StorageAction!
+    @hasPermission(permission: "storage:manage")
+
+  # Turns the retention policy on or off, at an age in days (1 to 3650).
+  # Turned on, its first cleanup starts now, unless it ran within the day.
+  # Needs storage:manage.
+  setStorageRetention(enabled: Boolean!, olderThanDays: Int!): StorageRetention!
+    @hasPermission(permission: "storage:manage")
+
+  # Starts a cleanup of the recordings that ended at least olderThanDays
+  # ago (1 to 3650), of one operation (null: of every one), but those of
+  # tasks marked important: their files are deleted, their records kept,
+  # marked cleaned up. It runs in the background: the action comes back
+  # running. One cleanup runs at a time. Needs storage:manage.
+  cleanUpStorage(olderThanDays: Int!, operationId: ID): StorageAction!
     @hasPermission(permission: "storage:manage")
 }

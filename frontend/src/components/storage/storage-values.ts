@@ -1,8 +1,11 @@
 import type { StorageActionFieldsFragment, StorageStatusQuery } from "@/graphql/gql/graphql"
+import { formatDateTime } from "@/lib/date-format"
 import { formatBytes } from "@/lib/format-bytes"
 
 // What the Storage page says of the store (core: storage.graphql): its
-// buckets by what core keeps there, the kinds of records, the warnings' marks.
+// buckets by what core keeps there, the kinds of records, the warnings' marks,
+// the actions run, and the retention cleanups (docs: Storage, Retention
+// cleanups).
 
 export type StorageStatus = StorageStatusQuery["storageStatus"]
 export type StorageBucket = StorageStatus["buckets"][number]
@@ -97,8 +100,11 @@ export function bucketWarnings(warnings: readonly StorageWarning[], name: string
   return warnings.filter((w) => w.bucket === name)
 }
 
-/** What an action did, in words: its result, its error, or that it runs. */
-export function actionResult(a: Pick<StorageActionFieldsFragment, "action" | "status" | "error" | "freed" | "volumes">): string {
+type ActionResult = Pick<StorageActionFieldsFragment, "action" | "status" | "error" | "freed" | "volumes" | "recordings" | "bytes">
+
+/** What an action did, in words: its result, its error, or that it runs (a cleanup's: what it took so far). */
+export function actionResult(a: ActionResult): string {
+  if (a.action === "cleanup") return cleanupResult(a)
   switch (a.status) {
     case "running":
       return a.action === "reclaim" ? "running: SeaweedFS compacts the volumes" : "running"
@@ -108,7 +114,57 @@ export function actionResult(a: Pick<StorageActionFieldsFragment, "action" | "st
   return a.action === "reclaim" ? `freed ${formatBytes(a.freed)}` : `added ${a.volumes} ${a.volumes === 1 ? "volume" : "volumes"}`
 }
 
-/** An action in words: Reclaim space, or Add a volume to a bucket. */
-export function actionTitle(a: Pick<StorageActionFieldsFragment, "action" | "bucket">): string {
+/** A cleanup's result: the recordings it took and their bytes; so far while it runs; before it failed. */
+function cleanupResult(a: ActionResult): string {
+  const took = a.recordings > 0 ? `took ${recordingsText(a.recordings)}, ${formatBytes(a.bytes)}` : null
+  switch (a.status) {
+    case "running":
+      return took ? `running: ${took} so far` : "running: none taken yet"
+    case "failed":
+      return `${a.error ?? "failed"}${took ? ` (it ${took} before)` : ""}`
+  }
+  return took ?? "took none"
+}
+
+/** How many recordings, in words. */
+export function recordingsText(n: number): string {
+  return `${n.toLocaleString("en-US")} ${n === 1 ? "recording" : "recordings"}`
+}
+
+/** An action in words: Reclaim space, Add a volume to a bucket, or a cleanup's age and the operations it covers. */
+export function actionTitle(a: Pick<StorageActionFieldsFragment, "action" | "bucket" | "olderThanDays" | "operationId" | "operationName">): string {
+  if (a.action === "cleanup") {
+    const where = a.operationId === null ? "every operation" : (a.operationName ?? "an operation gone")
+    return `Clean up recordings (${daysText(a.olderThanDays ?? 0)}, ${where})`
+  }
   return a.action === "reclaim" ? "Reclaim space" : `Add a volume to ${bucketName(a.bucket ?? "")}`
+}
+
+/** The most days a cleanup's age may be (core: storage.MaxRetentionDays). */
+export const MAX_RETENTION_DAYS = 3650
+
+/** The age a cleanup is offered at, the policy's before anyone set it (core: models.DefaultRetentionDays). */
+export const DEFAULT_RETENTION_DAYS = 30
+
+/** The days an age input holds: a whole number, 1 to MAX_RETENTION_DAYS; null for anything else. */
+export function parseDays(input: string): number | null {
+  const t = input.trim()
+  if (!/^\d+$/.test(t)) return null
+  const n = Number(t)
+  return n >= 1 && n <= MAX_RETENTION_DAYS ? n : null
+}
+
+/** An age in words. */
+export function daysText(n: number): string {
+  return `${n.toLocaleString("en-US")} ${n === 1 ? "day" : "days"}`
+}
+
+/**
+ * When the policy's next cleanup runs, in words: its time, or that it is due
+ * (core looks every 10 minutes, and at once when it is turned on); null while
+ * the policy is off.
+ */
+export function nextRunText(nextRunAt: string | null | undefined, now: number): string | null {
+  if (!nextRunAt) return null
+  return Date.parse(nextRunAt) <= now ? "due: it starts within minutes" : formatDateTime(nextRunAt)
 }

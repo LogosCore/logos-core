@@ -6,8 +6,9 @@
 // fail (no free slot, a bucket with no writable volume, a full disk), and
 // runs two maintenance actions: reclaiming deleted files' space (the
 // master's vacuum, every bucket's volumes) and adding a volume to a bucket.
-// Each action is kept (models.StorageAction) with who ran it and how it
-// went.
+// It runs retention cleanups of recordings too, an admin's or the retention
+// policy's each day (retention.go). Each action is kept
+// (models.StorageAction) with who ran it and how it went.
 package storage
 
 import (
@@ -51,12 +52,26 @@ type Config struct {
 	DiskLowPercent   float64
 	ReclaimableRatio float64
 	ReclaimableMin   int64
+
+	// RetentionCheckEvery is how often core looks whether the retention
+	// policy's cleanup is due (10 minutes): a day after the last began
+	// (RetentionEvery), sooner after one that failed, an hour after it ended
+	// (RetentionRetry). CleanupBatch is how many recordings a cleanup takes
+	// at once (50); CleanupTimeout how long one may run (6 hours): what it
+	// did not reach waits for the next.
+	RetentionCheckEvery time.Duration
+	RetentionEvery      time.Duration
+	RetentionRetry      time.Duration
+	CleanupBatch        int
+	CleanupTimeout      time.Duration
 }
 
 // DefaultConfig is Config's defaults, with no master and no buckets.
 func DefaultConfig() Config {
 	return Config{Interval: time.Minute, CallTimeout: 10 * time.Second, ReclaimTimeout: 30 * time.Minute, ReclaimThreshold: 0.1,
-		FewSlots: 3, DiskLowPercent: 10, ReclaimableRatio: 0.3, ReclaimableMin: 64 << 20}
+		FewSlots: 3, DiskLowPercent: 10, ReclaimableRatio: 0.3, ReclaimableMin: 64 << 20,
+		RetentionCheckEvery: 10 * time.Minute, RetentionEvery: 24 * time.Hour, RetentionRetry: time.Hour, CleanupBatch: 50,
+		CleanupTimeout: 6 * time.Hour}
 }
 
 // Errors the actions refuse with.
@@ -66,9 +81,10 @@ var (
 	ErrRunning       = errors.New("it is running already")
 )
 
-// Operations names operations, for the breakdown.
+// Operations names operations, for the breakdown and the cleanups.
 type Operations interface {
 	FindAll(ctx context.Context, search string, offset, limit int64, memberID *uuid.UUID) ([]models.Operation, error)
+	FindByID(ctx context.Context, id uuid.UUID) (models.Operation, error)
 }
 
 // Service serves the store's snapshot, and runs its actions.
@@ -80,6 +96,12 @@ type Service struct {
 	ops     Operations
 	logger  *zap.Logger
 	now     func() time.Time
+
+	// policy and recs are the retention cleanups' (WithRetention): nil,
+	// there are none. poke has the policy looked at now.
+	policy repository.IStorageRetentionRepository
+	recs   Recordings
+	poke   chan struct{}
 
 	// base is the service's context: Stop ends it, and a reclaim running
 	// with it.
@@ -121,7 +143,22 @@ func New(cfg Config, usage repository.IStorageUsageRepository, actions repositor
 	if cfg.ReclaimableMin <= 0 {
 		cfg.ReclaimableMin = def.ReclaimableMin
 	}
-	s := &Service{cfg: cfg, usage: usage, actions: actions, ops: ops, logger: logger, now: time.Now}
+	if cfg.RetentionCheckEvery <= 0 {
+		cfg.RetentionCheckEvery = def.RetentionCheckEvery
+	}
+	if cfg.RetentionEvery <= 0 {
+		cfg.RetentionEvery = def.RetentionEvery
+	}
+	if cfg.RetentionRetry <= 0 {
+		cfg.RetentionRetry = def.RetentionRetry
+	}
+	if cfg.CleanupBatch <= 0 {
+		cfg.CleanupBatch = def.CleanupBatch
+	}
+	if cfg.CleanupTimeout <= 0 {
+		cfg.CleanupTimeout = def.CleanupTimeout
+	}
+	s := &Service{cfg: cfg, usage: usage, actions: actions, ops: ops, logger: logger, now: time.Now, poke: make(chan struct{}, 1)}
 	if master := strings.TrimRight(strings.TrimSpace(cfg.MasterURL), "/"); master != "" {
 		s.sw = &seaweed{master: master, http: &http.Client{}}
 	}
@@ -130,7 +167,7 @@ func New(cfg Config, usage repository.IStorageUsageRepository, actions repositor
 }
 
 // Start fails the actions a core that stopped left running, then reads the
-// store now and every Interval.
+// store now and every Interval, and runs the retention policy when due.
 func (s *Service) Start() {
 	if n, err := s.actions.EndRunning(s.base, "core stopped before it ended", s.now()); err != nil {
 		s.logger.Warn("storage: end the actions left running", zap.Error(err))
@@ -151,9 +188,14 @@ func (s *Service) Start() {
 			}
 		}
 	}()
+	if s.policy != nil && s.recs != nil {
+		s.wg.Add(1)
+		go s.retentionLoop()
+	}
 }
 
-// Stop ends the reads and a reclaim running, and waits for them.
+// Stop ends the reads, and a reclaim or a cleanup running, and waits for
+// them.
 func (s *Service) Stop() {
 	s.cancel()
 	s.wg.Wait()
@@ -228,8 +270,16 @@ func (s *Service) readSeaweed(ctx context.Context) seaweedState {
 
 // names are the operations' names the usage names.
 func (s *Service) names(ctx context.Context, usage []models.StorageUsage) map[uuid.UUID]string {
+	if len(usage) == 0 {
+		return map[uuid.UUID]string{models.PublicOperationID: models.PublicOperationName}
+	}
+	return s.operationNames(ctx)
+}
+
+// operationNames are every operation's names.
+func (s *Service) operationNames(ctx context.Context) map[uuid.UUID]string {
 	names := map[uuid.UUID]string{models.PublicOperationID: models.PublicOperationName}
-	if len(usage) == 0 || s.ops == nil {
+	if s.ops == nil {
 		return names
 	}
 	ops, err := s.ops.FindAll(ctx, "", 0, 100_000, nil)

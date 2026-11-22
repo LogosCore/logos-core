@@ -21,6 +21,7 @@ import {
   downloadable,
   fileSize,
   formatClock,
+  isCleaned,
   isTerminalRecording,
   isVideo,
   openedBy,
@@ -46,7 +47,8 @@ import { FRONT_TERMINAL, type Tone } from "./tunnel-values"
 // live updates). One plays above the list; its file downloads (Guacamole's
 // format, or an asciicast), and a terminal's output as text; an operator
 // deletes one that ended. They stay after the task ends, until the
-// operation is deleted.
+// operation is deleted, or a retention cleanup takes their files (docs:
+// Storage, Retention cleanups): listed still, marked cleaned up.
 
 const API_URL = import.meta.env.VITE_API_URL as string
 
@@ -105,12 +107,14 @@ export function RecordingsView({ task: t, canDelete }: { task: Task; canDelete: 
         {terminal ? (
           <>
             Each terminal session is recorded, here or on the raw port: what the process wrote, what was typed (a password typed at a
-            prompt too), and the terminal&apos;s sizes. They stay until the operation is deleted.
+            prompt too), and the terminal&apos;s sizes. They stay until the operation is deleted, or an admin&apos;s retention cleanup
+            takes those that ended long ago: marking the task important keeps them.
           </>
         ) : (
           <>
             Each {desktopName(front)} desktop opened here is recorded: what it showed, the mouse, and the keys typed in it (none for a
-            view-only one). A client of your own on the port is not. They stay until the operation is deleted.
+            view-only one). A client of your own on the port is not. They stay until the operation is deleted, or an admin&apos;s
+            retention cleanup takes those that ended long ago: marking the task important keeps them.
           </>
         )}
       </p>
@@ -186,7 +190,8 @@ function RecordingRow({
   onDelete: () => void
 }) {
   const state = recordingState(r)
-  const video = videoNote(r)
+  const cleaned = isCleaned(r)
+  const video = cleaned ? null : videoNote(r)
   const terminal = isTerminalRecording(r)
   const who = openedBy(r)
   // A terminal's: its stream, and the raw port's when no one signed in.
@@ -208,7 +213,16 @@ function RecordingRow({
       <span className="text-right text-xs tabular-nums">
         {r.state === RECORDING ? <LiveLength since={r.startedAt} /> : r.state === "FAILED" ? "" : formatClock(r.durationMs)}
       </span>
-      <span className="text-right text-xs tabular-nums" title={isVideo(r) ? `A video now; ${formatBytes(r.size)} as recorded` : undefined}>
+      <span
+        className={cn("text-right text-xs tabular-nums", cleaned && "text-muted-foreground line-through")}
+        title={
+          cleaned
+            ? "What it held: a retention cleanup deleted its files"
+            : isVideo(r)
+              ? `A video now; ${formatBytes(r.size)} as recorded`
+              : undefined
+        }
+      >
         {r.state === "FAILED" ? "" : formatBytes(fileSize(r))}
       </span>
       <span className="flex min-w-0 flex-col">
@@ -233,7 +247,9 @@ function RecordingRow({
               ? `Play recording #${r.number}`
               : r.state === RECORDING
                 ? `It plays once its ${terminal ? "terminal" : "desktop"} closes`
-                : "Nothing to play"
+                : cleaned
+                  ? "A retention cleanup deleted its files: it no longer plays"
+                  : "Nothing to play"
           }
           aria-label={`Play recording #${r.number}`}
           disabled={!playable(r)}

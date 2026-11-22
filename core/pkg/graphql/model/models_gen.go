@@ -1657,6 +1657,7 @@ type Recording struct {
 	VideoError *string `json:"videoError,omitempty"`
 	End        *string `json:"end,omitempty"`
 	Msg        *string `json:"msg,omitempty"`
+	CleanedAt  *string `json:"cleanedAt,omitempty"`
 	Path       string  `json:"path"`
 }
 
@@ -1743,16 +1744,22 @@ type SkillVersion struct {
 }
 
 type StorageAction struct {
-	ID         string       `json:"id"`
-	Action     string       `json:"action"`
-	Bucket     *string      `json:"bucket,omitempty"`
-	Actor      *ModuleActor `json:"actor"`
-	Status     string       `json:"status"`
-	Error      *string      `json:"error,omitempty"`
-	StartedAt  string       `json:"startedAt"`
-	FinishedAt *string      `json:"finishedAt,omitempty"`
-	Freed      int          `json:"freed"`
-	Volumes    int          `json:"volumes"`
+	ID            string       `json:"id"`
+	Action        string       `json:"action"`
+	Bucket        *string      `json:"bucket,omitempty"`
+	Actor         *ModuleActor `json:"actor"`
+	Status        string       `json:"status"`
+	Error         *string      `json:"error,omitempty"`
+	StartedAt     string       `json:"startedAt"`
+	FinishedAt    *string      `json:"finishedAt,omitempty"`
+	Freed         int          `json:"freed"`
+	Volumes       int          `json:"volumes"`
+	OlderThanDays *int         `json:"olderThanDays,omitempty"`
+	Before        *string      `json:"before,omitempty"`
+	OperationID   *string      `json:"operationId,omitempty"`
+	OperationName *string      `json:"operationName,omitempty"`
+	Recordings    int          `json:"recordings"`
+	Bytes         int          `json:"bytes"`
 }
 
 type StorageActionConnection struct {
@@ -1776,6 +1783,32 @@ type StorageBucket struct {
 	DeletedBytes    int      `json:"deletedBytes"`
 	Objects         int      `json:"objects"`
 	ObjectBytes     int      `json:"objectBytes"`
+}
+
+type StorageCleanupOperation struct {
+	OperationID   string  `json:"operationId"`
+	OperationName *string `json:"operationName,omitempty"`
+	Recordings    int     `json:"recordings"`
+	Bytes         int     `json:"bytes"`
+}
+
+type StorageCleanupOperationConnection struct {
+	Edges      []*StorageCleanupOperationEdge `json:"edges"`
+	PageInfo   *pagination.PageInfo           `json:"pageInfo"`
+	TotalCount int                            `json:"totalCount"`
+}
+
+type StorageCleanupOperationEdge struct {
+	Node   *StorageCleanupOperation `json:"node"`
+	Cursor string                   `json:"cursor"`
+}
+
+type StorageCleanupPreview struct {
+	OlderThanDays int                                `json:"olderThanDays"`
+	Before        string                             `json:"before"`
+	Recordings    int                                `json:"recordings"`
+	Bytes         int                                `json:"bytes"`
+	Operations    *StorageCleanupOperationConnection `json:"operations"`
 }
 
 type StorageConsumer struct {
@@ -1807,6 +1840,15 @@ type StorageDisk struct {
 	Free       int     `json:"free"`
 	Volumes    int     `json:"volumes"`
 	MaxVolumes int     `json:"maxVolumes"`
+}
+
+type StorageRetention struct {
+	Enabled       bool           `json:"enabled"`
+	OlderThanDays int            `json:"olderThanDays"`
+	UpdatedAt     *string        `json:"updatedAt,omitempty"`
+	UpdatedBy     *ModuleActor   `json:"updatedBy,omitempty"`
+	LastRun       *StorageAction `json:"lastRun,omitempty"`
+	NextRunAt     *string        `json:"nextRunAt,omitempty"`
 }
 
 type StorageSeaweedFs struct {
