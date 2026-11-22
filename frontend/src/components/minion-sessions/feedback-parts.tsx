@@ -17,19 +17,20 @@ export function FeedbackLevelIcon({ level, className }: { level: FeedbackLevel; 
 }
 
 /**
- * Errors and warnings (unread ones, unless titled otherwise), and a task's
- * information, each with its icon; nothing when there are none.
+ * A session's unread errors, or a task's errors, warnings and information
+ * (titled so), each with its icon; nothing when there are none.
  */
 export function FeedbackCounts({
   errors,
-  warnings,
+  warnings = 0,
   infos = 0,
   className,
   title = `Unread feedback: ${feedbackSummary(errors, warnings, infos)}`,
 }: {
   errors: number
-  warnings: number
-  /** Information: counted on a task, never unread. */
+  /** A task's: warnings are never unread. */
+  warnings?: number
+  /** A task's: information is never unread. */
   infos?: number
   className?: string
   title?: string

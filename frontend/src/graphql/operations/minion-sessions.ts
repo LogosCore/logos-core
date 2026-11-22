@@ -92,7 +92,6 @@ export const MinionSessionFields = graphql(`
     maxTasksPending
     maxTasksNotTaken
     feedbackErrors
-    feedbackWarnings
     feedbackAt
     feedbackReadAt
   }

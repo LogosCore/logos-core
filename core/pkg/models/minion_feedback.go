@@ -31,8 +31,10 @@ type MinionFeedback struct {
 	ReceivedAt time.Time `bson:"received_at" json:"received_at"`
 }
 
-// Feedback levels, as core keeps them (protocol.FeedbackLevelName). Info is
-// counted nowhere as unread: it marks no session and no task.
+// Feedback levels, as core keeps them (protocol.FeedbackLevelName). Only
+// errors are unread (MinionSession.FeedbackErrors); a task counts all three
+// (MinionTask.FeedbackErrors), and a task list marks it by errors and
+// warnings.
 const (
 	FeedbackWarning = "warning"
 	FeedbackError   = "error"

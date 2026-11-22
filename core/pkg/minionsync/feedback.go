@@ -16,11 +16,11 @@ import (
 
 // Feedback (docs: contracts/minion-messages/sessions, Feedback): a minion's
 // warnings, errors and information, kept with its session
-// (models.MinionFeedback), the warnings' and errors' unread counts on the
-// session; information is counted nowhere, but moves the session's
-// FeedbackAt as the others do, so the views read it. Nothing answers it:
-// the message that carried it went, and one sent again adds nothing (one
-// entry per the minion's id).
+// (models.MinionFeedback), its errors counted unread on the session;
+// warnings and information are counted on their task alone, and move the
+// session's FeedbackAt as errors do, so the views read them. Nothing
+// answers it: the message that carried it went, and one sent again adds
+// nothing (one entry per the minion's id).
 
 // WithFeedback keeps minions' feedback; without it a feedback item is
 // taken and dropped.
@@ -91,13 +91,11 @@ func (s *Service) takeFeedback(ctx context.Context, session *models.MinionSessio
 	if errs+warns+infos == 0 {
 		return false, nil
 	}
-	// Information alone: no count moves, FeedbackAt does.
-	if err := s.sessions.AddFeedback(ctx, session.SessionID, errs, warns, now); err != nil {
+	// Warnings and information alone: no count moves, FeedbackAt does.
+	if err := s.sessions.AddFeedback(ctx, session.SessionID, errs, now); err != nil {
 		return false, fmt.Errorf("count feedback: %w", err)
 	}
 	session.FeedbackErrors += errs
-	session.FeedbackWarnings += warns
-	session.FeedbackUnread += errs + warns
 	session.FeedbackAt = &now
 	if err := s.feedback.Trim(ctx, session.SessionID, models.MaxSessionFeedback); err != nil {
 		s.logger.Warn("trim feedback", zap.String("session_id", session.SessionID.String()), zap.Error(err))

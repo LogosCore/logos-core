@@ -868,7 +868,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		out.Conn = &conn
 	}
 	out.MaxTasks, out.MaxTasksSettable = s.MaxTasks, s.MaxTasksSettable
-	out.FeedbackErrors, out.FeedbackWarnings = s.FeedbackErrors, s.FeedbackWarnings
+	out.FeedbackErrors = s.FeedbackErrors
 	out.FeedbackAt, out.FeedbackReadAt = timePtr(s.FeedbackAt), timePtr(s.FeedbackReadAt)
 	out.MaxTasksPending, out.MaxTasksNotTaken = s.MaxTasksDue(), s.MaxTasksNotTaken()
 	out.ConnKind, out.ConnName, out.ConnCount = strPtr(s.ConnKind), strPtr(s.ConnName), s.ConnCount

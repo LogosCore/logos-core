@@ -6,7 +6,6 @@ import {
   PinIcon,
   PlugIcon,
   RefreshCwIcon,
-  TriangleAlertIcon,
   UnplugIcon,
   VenetianMaskIcon,
   type LucideIcon,
@@ -179,14 +178,18 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       return (
         <div className="flex min-w-0 items-baseline gap-1.5" title={`Session ${s.number}, ${s.id}`}>
           <span className="truncate font-mono font-medium">{s.number}</span>
-          {/* The caller's mark, in its color's tone (the row sets it); two
-              icons at most: with errors and warnings both, theirs. */}
-          {(s.mark?.icon || s.mark?.emoji) && !(s.feedbackErrors > 0 && s.feedbackWarnings > 0) && (
-            <span data-mark-icon className={cn("self-center", isMarkColor(s.mark.color) && MARK_TONE_CLASSES)}>
-              <MarkIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} className="block" />
-            </span>
+          {/* One icon after the number: unread errors' while there are
+              some, else the caller's mark, in its color's tone (the row
+              sets it). */}
+          {s.feedbackErrors > 0 ? (
+            <FeedbackFlag s={s} />
+          ) : (
+            (s.mark?.icon || s.mark?.emoji) && (
+              <span data-mark-icon className={cn("self-center", isMarkColor(s.mark.color) && MARK_TONE_CLASSES)}>
+                <MarkIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} className="block" />
+              </span>
+            )
           )}
-          <FeedbackFlag s={s} />
         </div>
       )
     case "addrs":
@@ -303,36 +306,30 @@ function buildTitle(s: MinionSessionFieldsFragment): string {
 }
 
 /**
- * A session's unread feedback beside its number, only when there is some: an
- * error's icon if any is an error, a warning's if any is a warning (how many
- * in their title); each opens the session's Feedback.
+ * A session's unread errors beside its number, only when there are some,
+ * in the place of the caller's mark: an error's icon (how many in its
+ * title), which opens the session's Feedback. Only errors are unread:
+ * warnings and information flag nothing.
  */
 function FeedbackFlag({ s }: { s: MinionSessionFieldsFragment }) {
   const { open } = useRecordModals()
-  if (s.feedbackErrors + s.feedbackWarnings === 0) return null
+  if (s.feedbackErrors === 0) return null
   const id = s.id
-  const summary = feedbackSummary(s.feedbackErrors, s.feedbackWarnings)
-  const levels = [...(s.feedbackErrors > 0 ? (["error"] as const) : []), ...(s.feedbackWarnings > 0 ? (["warning"] as const) : [])]
+  const summary = feedbackSummary(s.feedbackErrors, 0)
   return (
     <span className="inline-flex shrink-0 items-center self-center">
-      {levels.map((level) => {
-        const Icon = level === "error" ? CircleAlertIcon : TriangleAlertIcon
-        return (
-          <button
-            key={level}
-            type="button"
-            className={cn("inline-flex cursor-pointer items-center rounded p-0.5 hover:bg-muted", FEEDBACK_TONE[level])}
-            title={`Unread feedback: ${summary}. Open it`}
-            aria-label={`Unread feedback: ${summary}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              open({ kind: "session", id, tab: "feedback" })
-            }}
-          >
-            <Icon className="size-3.5" aria-hidden />
-          </button>
-        )
-      })}
+      <button
+        type="button"
+        className={cn("inline-flex cursor-pointer items-center rounded p-0.5 hover:bg-muted", FEEDBACK_TONE.error)}
+        title={`Unread feedback: ${summary}. Open it`}
+        aria-label={`Unread feedback: ${summary}`}
+        onClick={(e) => {
+          e.stopPropagation()
+          open({ kind: "session", id, tab: "feedback" })
+        }}
+      >
+        <CircleAlertIcon className="size-3.5" aria-hidden />
+      </button>
     </span>
   )
 }

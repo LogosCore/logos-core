@@ -8,9 +8,9 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/models"
 )
 
-// An entry is unread when it is a warning or an error that came after the
-// session's feedback was last marked read; information never is: it is
-// counted nowhere, so nothing would ever mark it read.
+// An entry is unread when it is an error that came after the session's
+// feedback was last marked read; warnings and information never are: they
+// are counted nowhere, so they would never be marked read.
 func TestFeedbackUnread(t *testing.T) {
 	readAt := time.Date(2026, 11, 22, 10, 0, 0, 0, time.UTC)
 	entry := func(level string, received time.Time) models.MinionFeedback {
@@ -23,7 +23,9 @@ func TestFeedbackUnread(t *testing.T) {
 		readAt   *time.Time
 		want     bool
 	}{
-		{models.FeedbackWarning, after, &readAt, true},
+		{models.FeedbackError, after, &readAt, true},
+		{models.FeedbackWarning, after, &readAt, false},
+		{models.FeedbackWarning, after, nil, false},
 		{models.FeedbackError, before, &readAt, false},
 		{models.FeedbackError, after, nil, true},
 		{models.FeedbackInfo, after, &readAt, false},

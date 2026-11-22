@@ -933,7 +933,6 @@ type MinionSession struct {
 	RunningTasks         int                     `json:"runningTasks"`
 	RunningTunnels       int                     `json:"runningTunnels"`
 	FeedbackErrors       int                     `json:"feedbackErrors"`
-	FeedbackWarnings     int                     `json:"feedbackWarnings"`
 	FeedbackAt           *string                 `json:"feedbackAt,omitempty"`
 	FeedbackReadAt       *string                 `json:"feedbackReadAt,omitempty"`
 	Via                  []*MinionSessionVia     `json:"via"`

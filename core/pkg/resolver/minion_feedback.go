@@ -66,7 +66,7 @@ func (r *minionSessionResolver) MarkMinionFeedbackRead(ctx context.Context, id s
 	if err := r.sessions.MarkFeedbackRead(ctx, s.SessionID, now); err != nil {
 		return nil, err
 	}
-	s.FeedbackErrors, s.FeedbackWarnings, s.FeedbackUnread, s.FeedbackReadAt = 0, 0, 0, &now
+	s.FeedbackErrors, s.FeedbackReadAt = 0, &now
 	r.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(eventbus.MinionSessionEventPayload{
 		SessionID: s.SessionID.String(), OperationID: s.OperationID.String(),
 	}))
@@ -101,11 +101,11 @@ func (r *minionTaskResolver) Feedback(ctx context.Context, t *model.MinionTask) 
 
 // toFeedbackModel is an entry as GraphQL has it: unread when it came after
 // readAt (its session's feedback last marked read).
-// toFeedbackModel is an entry as GraphQL has it: unread when it is a warning
-// or an error that came after the session's feedback was last marked read
-// (information is never unread: it is counted nowhere).
+// toFeedbackModel is an entry as GraphQL has it: unread when it is an error
+// that came after the session's feedback was last marked read (warnings and
+// information are never unread: they are counted nowhere).
 func toFeedbackModel(e models.MinionFeedback, readAt *time.Time) *model.MinionFeedback {
-	unread := e.Level != models.FeedbackInfo && (readAt == nil || e.ReceivedAt.After(*readAt))
+	unread := e.Level == models.FeedbackError && (readAt == nil || e.ReceivedAt.After(*readAt))
 	m := &model.MinionFeedback{ID: e.FeedbackID.String(), Level: e.Level, Msg: e.Msg, Code: strPtr(e.Code), Count: max(e.Count, 1),
 		ReceivedAt: e.ReceivedAt.UTC().Format(time.RFC3339Nano), Unread: unread}
 	if e.Task != nil {

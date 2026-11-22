@@ -121,14 +121,14 @@ type MinionSession struct {
 	// the session with the build's own included; nil until one is set.
 	// MaxTasksSends counts the messages that carried it unanswered: at
 	// MaxTasksTries core stops, the minion not taking it.
-	// FeedbackErrors and FeedbackWarnings count the feedback its minion
-	// sent since an operator last marked it read (FeedbackReadAt), for
-	// everyone of the operation alike; FeedbackUnread is both, what the
-	// Sessions table sorts and filters by; FeedbackAt is when the latest
-	// came (MinionFeedback).
+	// FeedbackErrors counts the errors its minion sent since an operator
+	// last marked them read (FeedbackReadAt), for everyone of the operation
+	// alike: what the Sessions table sorts and filters by. Only errors are
+	// unread: warnings and information are kept and shown, and counted
+	// nowhere (a warning that comes back every few minutes for a problem
+	// no one can fix flagged the session again after every read).
+	// FeedbackAt is when the latest came, of any level (MinionFeedback).
 	FeedbackErrors   int        `bson:"feedback_errors,omitempty" json:"feedback_errors,omitempty"`
-	FeedbackWarnings int        `bson:"feedback_warnings,omitempty" json:"feedback_warnings,omitempty"`
-	FeedbackUnread   int        `bson:"feedback_unread,omitempty" json:"feedback_unread,omitempty"`
 	FeedbackAt       *time.Time `bson:"feedback_at,omitempty" json:"feedback_at,omitempty"`
 	FeedbackReadAt   *time.Time `bson:"feedback_read_at,omitempty" json:"feedback_read_at,omitempty"`
 	MaxTasks         *int       `bson:"max_tasks,omitempty" json:"max_tasks,omitempty"`

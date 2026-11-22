@@ -31,23 +31,23 @@ func (f *fakeFeedback) Add(_ context.Context, e *models.MinionFeedback) (bool, e
 
 func (f *fakeFeedback) Trim(context.Context, uuid.UUID, int) error { f.trimmed++; return nil }
 
-func (f *fakeSessions) AddFeedback(_ context.Context, id uuid.UUID, errs, warns int, at time.Time) error {
+func (f *fakeSessions) AddFeedback(_ context.Context, id uuid.UUID, errs int, at time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			r := &f.rows[i]
-			r.FeedbackErrors, r.FeedbackWarnings, r.FeedbackUnread = r.FeedbackErrors+errs, r.FeedbackWarnings+warns, r.FeedbackUnread+errs+warns
+			r.FeedbackErrors += errs
 			r.FeedbackAt = &at
 		}
 	}
 	return nil
 }
 
-// A minion's feedback is kept with its session and counted unread; the
-// message sent again adds nothing; one that does not read is refused; the
-// task it names is kept, and counted on that task when it is the
-// session's.
+// A minion's feedback is kept with its session, its errors alone counted
+// unread; the message sent again adds nothing; one that does not read is
+// refused; the task it names is kept, and counted on that task when it is
+// the session's.
 func TestFeedback(t *testing.T) {
 	r := newRig(t)
 	feedback := &fakeFeedback{}
@@ -69,8 +69,9 @@ func TestFeedback(t *testing.T) {
 		}
 	}
 	send(warn, fail)
-	if len(feedback.rows) != 2 || row.FeedbackErrors != 1 || row.FeedbackWarnings != 1 || row.FeedbackUnread != 2 || row.FeedbackAt == nil {
-		t.Fatalf("kept %d; session %d errors, %d warnings, %d unread", len(feedback.rows), row.FeedbackErrors, row.FeedbackWarnings, row.FeedbackUnread)
+	// The warning is kept, and not counted: only errors are unread.
+	if len(feedback.rows) != 2 || row.FeedbackErrors != 1 || row.FeedbackAt == nil {
+		t.Fatalf("kept %d; session %d errors", len(feedback.rows), row.FeedbackErrors)
 	}
 	if e := feedback.rows[1]; e.Level != models.FeedbackError || e.Task == nil || *e.Task != task || e.Code != "task_panic" || e.Count != 1 {
 		t.Fatalf("the error: %+v", e)
@@ -84,8 +85,8 @@ func TestFeedback(t *testing.T) {
 	// The same message again (its reply lost): nothing new.
 	id = protocol.NewMessageID()
 	send(warn, fail)
-	if len(feedback.rows) != 2 || row.FeedbackUnread != 2 || tasks.find(task).FeedbackErrors != 1 {
-		t.Fatalf("sent again: %d kept, %d unread, task %d errors", len(feedback.rows), row.FeedbackUnread, tasks.find(task).FeedbackErrors)
+	if len(feedback.rows) != 2 || row.FeedbackErrors != 1 || tasks.find(task).FeedbackErrors != 1 {
+		t.Fatalf("sent again: %d kept, %d errors, task %d errors", len(feedback.rows), row.FeedbackErrors, tasks.find(task).FeedbackErrors)
 	}
 	// About a task not the session's: kept, counted on no task.
 	other := fail
@@ -129,8 +130,8 @@ func TestFeedbackInfo(t *testing.T) {
 	if len(feedback.rows) != 1 || feedback.rows[0].Level != models.FeedbackInfo {
 		t.Fatalf("kept %+v", feedback.rows)
 	}
-	if row.FeedbackErrors != 0 || row.FeedbackWarnings != 0 || row.FeedbackUnread != 0 || row.FeedbackAt == nil {
-		t.Fatalf("session: %d errors, %d warnings, %d unread, at %v", row.FeedbackErrors, row.FeedbackWarnings, row.FeedbackUnread, row.FeedbackAt)
+	if row.FeedbackErrors != 0 || row.FeedbackAt == nil {
+		t.Fatalf("session: %d errors, at %v", row.FeedbackErrors, row.FeedbackAt)
 	}
 	if tt := tasks.find(task); tt.FeedbackInfos != 1 || tt.FeedbackErrors+tt.FeedbackWarnings != 0 {
 		t.Fatalf("the task counts %d infos, %d errors, %d warnings", tt.FeedbackInfos, tt.FeedbackErrors, tt.FeedbackWarnings)

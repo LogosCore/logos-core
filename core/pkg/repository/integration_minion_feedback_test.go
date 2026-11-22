@@ -91,20 +91,21 @@ func TestIntegrationMinionFeedback(t *testing.T) {
 	if err := sessions.Insert(ctx, &models.MinionSession{SessionID: sid, OperationID: op, CreatedAt: t0}); err != nil {
 		t.Fatal(err)
 	}
-	if err := sessions.AddFeedback(ctx, sid, 1, 2, t0); err != nil {
+	if err := sessions.AddFeedback(ctx, sid, 1, t0); err != nil {
 		t.Fatal(err)
 	}
-	if err := sessions.AddFeedback(ctx, sid, 1, 0, t0.Add(time.Minute)); err != nil {
+	// Warnings or information alone: no count, the time moves.
+	if err := sessions.AddFeedback(ctx, sid, 0, t0.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 	s, err := sessions.FindBySessionID(ctx, sid)
-	if err != nil || s.FeedbackErrors != 2 || s.FeedbackWarnings != 2 || s.FeedbackUnread != 4 || !s.FeedbackAt.Equal(t0.Add(time.Minute)) {
+	if err != nil || s.FeedbackErrors != 1 || !s.FeedbackAt.Equal(t0.Add(time.Minute)) {
 		t.Fatalf("counts: %+v %v", s, err)
 	}
 	if err := sessions.MarkFeedbackRead(ctx, sid, t0.Add(2*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	if s, _ = sessions.FindBySessionID(ctx, sid); s.FeedbackUnread != 0 || s.FeedbackErrors != 0 || s.FeedbackReadAt == nil {
+	if s, _ = sessions.FindBySessionID(ctx, sid); s.FeedbackErrors != 0 || s.FeedbackReadAt == nil {
 		t.Fatalf("after read: %+v", s)
 	}
 }

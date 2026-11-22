@@ -193,7 +193,7 @@ function SessionTabLabel({ id }: { id: string }) {
       {/* The console's session through a delegate: the nearest. */}
       {!files && s.via.length > 0 && <span className="shrink-0 text-muted-foreground">{viaShort(s.via)}</span>}
       {(s.mark?.icon || s.mark?.emoji) && <MarkIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} />}
-      {!files && <FeedbackCounts errors={s.feedbackErrors} warnings={s.feedbackWarnings} className="text-xs" />}
+      {!files && <FeedbackCounts errors={s.feedbackErrors} className="text-xs" />}
     </span>
   )
 }

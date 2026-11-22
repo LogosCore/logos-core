@@ -96,10 +96,10 @@ type IMinionSessionRepository interface {
 	BackfillDescriptions(ctx context.Context) (int64, error)
 	// SetPersisted marks a session persisted: a build names it.
 	SetPersisted(ctx context.Context, sessionID uuid.UUID) error
-	// AddFeedback counts feedback its minion sent at at: errors and warnings
-	// unread (models.MinionSession.FeedbackErrors), and when the latest came
-	// (information too, with none of them: it is counted nowhere).
-	AddFeedback(ctx context.Context, sessionID uuid.UUID, errors, warnings int, at time.Time) error
+	// AddFeedback counts feedback its minion sent at at: its errors unread
+	// (models.MinionSession.FeedbackErrors), and when the latest came, of
+	// any level (warnings and information alone: 0 errors, the time moves).
+	AddFeedback(ctx context.Context, sessionID uuid.UUID, errors int, at time.Time) error
 	// MarkFeedbackRead marks the session's feedback read at at, for
 	// everyone: its unread counts go back to 0.
 	MarkFeedbackRead(ctx context.Context, sessionID uuid.UUID, at time.Time) error
@@ -646,16 +646,18 @@ func (r *minionSessionRepository) SetPersisted(ctx context.Context, sessionID uu
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$set": bson.M{"persisted": true}}))
 }
 
-func (r *minionSessionRepository) AddFeedback(ctx context.Context, sessionID uuid.UUID, errors, warnings int, at time.Time) error {
+func (r *minionSessionRepository) AddFeedback(ctx context.Context, sessionID uuid.UUID, errors int, at time.Time) error {
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{
-		"$inc": bson.M{"feedback_errors": errors, "feedback_warnings": warnings, "feedback_unread": errors + warnings},
+		"$inc": bson.M{"feedback_errors": errors},
 		"$max": bson.M{"feedback_at": at},
 	}))
 }
 
 func (r *minionSessionRepository) MarkFeedbackRead(ctx context.Context, sessionID uuid.UUID, at time.Time) error {
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{
-		"$set":   bson.M{"feedback_read_at": at},
+		"$set": bson.M{"feedback_read_at": at},
+		// feedback_warnings and feedback_unread: what sessions counted when
+		// warnings were unread too, gone with the first read.
 		"$unset": bson.M{"feedback_errors": "", "feedback_warnings": "", "feedback_unread": ""},
 	}))
 }

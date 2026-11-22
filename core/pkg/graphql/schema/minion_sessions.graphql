@@ -159,12 +159,11 @@ type MinionSession {
   # those.
   runningTasks: Int!
   runningTunnels: Int!
-  # Its minion's feedback since it was last marked read (for everyone of the
-  # operation): errors and warnings (information is counted nowhere); when
-  # the latest came, information too, and when it was marked read. Entries:
-  # minionFeedback.
+  # Its minion's errors since its feedback was last marked read (for
+  # everyone of the operation): only errors are unread, warnings and
+  # information are counted nowhere; when the latest feedback came, of any
+  # level, and when it was marked read. Entries: minionFeedback.
   feedbackErrors: Int!
-  feedbackWarnings: Int!
   feedbackAt: String
   feedbackReadAt: String
 }
@@ -186,8 +185,8 @@ type MinionFeedback {
   # How many times it happened (the minion folds repeats).
   count: Int!
   receivedAt: String!
-  # A warning or an error that came after the session's feedback was last
-  # marked read; information is never unread.
+  # An error that came after the session's feedback was last marked read;
+  # warnings and information are never unread.
   unread: Boolean!
 }
 
@@ -625,7 +624,7 @@ extend type Mutation {
     @hasPermission(permission: "operation:member")
 
   # Marks the session's feedback read, for everyone in the operation: its
-  # unread counts go back to 0. Needs at least operator; agent API keys are
+  # unread errors go back to 0. Needs at least operator; agent API keys are
   # rejected.
   markMinionFeedbackRead(id: ID!): MinionSession!
     @hasPermission(permission: "operation:member")

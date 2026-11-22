@@ -106,7 +106,7 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
             </TabsTrigger>
             <TabsTrigger value="feedback" className={RECORD_TABS_TRIGGER}>
               Feedback
-              <FeedbackCounts errors={s.feedbackErrors} warnings={s.feedbackWarnings} className="text-xs" />
+              <FeedbackCounts errors={s.feedbackErrors} className="text-xs" />
             </TabsTrigger>
             <TabsTrigger value="identity" className={RECORD_TABS_TRIGGER}>
               Identity

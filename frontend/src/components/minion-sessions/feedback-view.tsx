@@ -14,8 +14,8 @@ import { toggled } from "./feedback-values"
 
 // A session's feedback (its Feedback tab): the warnings, errors and
 // information its minion sent, newest first, paged and searched by core;
-// unread warnings and errors marked until someone marks them read, for
-// everyone in the operation (information is never unread). A long one shows
+// unread errors marked until someone marks them read, for everyone in the
+// operation (warnings and information are never unread). A long one shows
 // its first line until opened.
 
 export function FeedbackView({ s }: { s: MinionSessionFieldsFragment }) {
@@ -26,7 +26,7 @@ export function FeedbackView({ s }: { s: MinionSessionFieldsFragment }) {
   const entries = (q.data?.pages ?? []).flatMap((p) => p.minionFeedback.entries)
   const markRead = useMarkMinionFeedbackRead()
   const access = useCanBuild(s.operationId)
-  const unread = s.feedbackErrors + s.feedbackWarnings
+  const unread = s.feedbackErrors
   const id = s.id
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -49,7 +49,7 @@ export function FeedbackView({ s }: { s: MinionSessionFieldsFragment }) {
           className="relative w-64"
         />
         <span className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
-          {unread > 0 ? <FeedbackCounts errors={s.feedbackErrors} warnings={s.feedbackWarnings} /> : "All read"}
+          {unread > 0 ? <FeedbackCounts errors={s.feedbackErrors} /> : "All read"}
           <Button
             variant="outline"
             size="sm"

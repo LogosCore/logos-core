@@ -893,7 +893,6 @@ type ComplexityRoot struct {
 		FeedbackAt           func(childComplexity int) int
 		FeedbackErrors       func(childComplexity int) int
 		FeedbackReadAt       func(childComplexity int) int
-		FeedbackWarnings     func(childComplexity int) int
 		FolderID             func(childComplexity int) int
 		Host                 func(childComplexity int) int
 		ID                   func(childComplexity int) int
@@ -6270,12 +6269,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.FeedbackReadAt(childComplexity), true
-	case "MinionSession.feedbackWarnings":
-		if e.ComplexityRoot.MinionSession.FeedbackWarnings == nil {
-			break
-		}
-
-		return e.ComplexityRoot.MinionSession.FeedbackWarnings(childComplexity), true
 	case "MinionSession.folderId":
 		if e.ComplexityRoot.MinionSession.FolderID == nil {
 			break
@@ -16302,12 +16295,11 @@ type MinionSession {
   # those.
   runningTasks: Int!
   runningTunnels: Int!
-  # Its minion's feedback since it was last marked read (for everyone of the
-  # operation): errors and warnings (information is counted nowhere); when
-  # the latest came, information too, and when it was marked read. Entries:
-  # minionFeedback.
+  # Its minion's errors since its feedback was last marked read (for
+  # everyone of the operation): only errors are unread, warnings and
+  # information are counted nowhere; when the latest feedback came, of any
+  # level, and when it was marked read. Entries: minionFeedback.
   feedbackErrors: Int!
-  feedbackWarnings: Int!
   feedbackAt: String
   feedbackReadAt: String
 }
@@ -16329,8 +16321,8 @@ type MinionFeedback {
   # How many times it happened (the minion folds repeats).
   count: Int!
   receivedAt: String!
-  # A warning or an error that came after the session's feedback was last
-  # marked read; information is never unread.
+  # An error that came after the session's feedback was last marked read;
+  # warnings and information are never unread.
   unread: Boolean!
 }
 
@@ -16768,7 +16760,7 @@ extend type Mutation {
     @hasPermission(permission: "operation:member")
 
   # Marks the session's feedback read, for everyone in the operation: its
-  # unread counts go back to 0. Needs at least operator; agent API keys are
+  # unread errors go back to 0. Needs at least operator; agent API keys are
   # rejected.
   markMinionFeedbackRead(id: ID!): MinionSession!
     @hasPermission(permission: "operation:member")
@@ -39865,8 +39857,6 @@ func (ec *executionContext) fieldContext_MinionDelegateConnection_session(_ cont
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -44186,35 +44176,6 @@ func (ec *executionContext) fieldContext_MinionSession_feedbackErrors(_ context.
 	return fc, nil
 }
 
-func (ec *executionContext) _MinionSession_feedbackWarnings(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_MinionSession_feedbackWarnings,
-		func(ctx context.Context) (any, error) {
-			return obj.FeedbackWarnings, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_MinionSession_feedbackWarnings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "MinionSession",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _MinionSession_feedbackAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -44731,8 +44692,6 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -45006,8 +44965,6 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -46180,8 +46137,6 @@ func (ec *executionContext) fieldContext_MinionSessionVia_session(_ context.Cont
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -47253,8 +47208,6 @@ func (ec *executionContext) fieldContext_MinionTarget_session(_ context.Context,
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -47441,8 +47394,6 @@ func (ec *executionContext) fieldContext_MinionTarget_delegate(_ context.Context
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -61928,8 +61879,6 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -62176,8 +62125,6 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -62365,8 +62312,6 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -62613,8 +62558,6 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -62802,8 +62745,6 @@ func (ec *executionContext) fieldContext_Mutation_markMinionFeedbackRead(ctx con
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -62991,8 +62932,6 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMaxTasks(ctx c
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -74073,8 +74012,6 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
-			case "feedbackWarnings":
-				return ec.fieldContext_MinionSession_feedbackWarnings(ctx, field)
 			case "feedbackAt":
 				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
 			case "feedbackReadAt":
@@ -101799,11 +101736,6 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "feedbackErrors":
 			out.Values[i] = ec._MinionSession_feedbackErrors(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
-			}
-		case "feedbackWarnings":
-			out.Values[i] = ec._MinionSession_feedbackWarnings(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
