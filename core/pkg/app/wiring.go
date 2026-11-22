@@ -2,10 +2,15 @@ package app
 
 import (
 	"context"
+	"io"
 
+	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/composites"
 	"github.com/logoscore/logos-core/core/pkg/controller"
+	"github.com/logoscore/logos-core/core/pkg/factorycommands"
 	gql "github.com/logoscore/logos-core/core/pkg/graphql"
 	"github.com/logoscore/logos-core/core/pkg/miniontunnels"
+	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/recordings"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/resolver"
@@ -23,24 +28,27 @@ import (
 
 // controllers holds every REST handler the router mounts.
 type controllers struct {
-	auth      controller.IAuthController
-	enroll    controller.IEnrollController
-	status    controller.IStatusController
-	channel   controller.IChannelController
-	link      controller.IChannelLinkController
-	factory   controller.IFactoryLinkController
-	skill     *controller.SkillController
-	build     *controller.BuildController
-	compose   *controller.ComposeController
-	task      *controller.MinionTaskController
-	stream    *controller.MinionStreamController
-	terminal  *controller.MinionTerminalController
-	desktop   *controller.MinionDesktopController
-	recording *controller.RecordingController
-	vpn       *controller.VPNController
-	wiki      *controller.WikiController
-	transfer  *controller.WikiTransferController
-	webhook   *wiki.WebhookHandler
+	auth    controller.IAuthController
+	enroll  controller.IEnrollController
+	status  controller.IStatusController
+	channel controller.IChannelController
+	link    controller.IChannelLinkController
+	factory controller.IFactoryLinkController
+	skill   *controller.SkillController
+	build   *controller.BuildController
+	compose *controller.ComposeController
+	// factoryCommand serves a factory command's call's links but its files
+	// (compose serves those of both kinds of task).
+	factoryCommand *controller.FactoryCommandController
+	task           *controller.MinionTaskController
+	stream         *controller.MinionStreamController
+	terminal       *controller.MinionTerminalController
+	desktop        *controller.MinionDesktopController
+	recording      *controller.RecordingController
+	vpn            *controller.VPNController
+	wiki           *controller.WikiController
+	transfer       *controller.WikiTransferController
+	webhook        *wiki.WebhookHandler
 
 	// oidc is nil when OIDC_ENABLED=false; its routes are then not mounted.
 	oidc controller.IOIDCController
@@ -104,14 +112,15 @@ func (a *App) buildControllers() *controllers {
 			LocalLoginEnabled: a.authCfg.localLoginEnabled,
 			OIDCStatus:        a.oidcStatus,
 		}),
-		channel: controller.NewChannelController(a.moduleGate, a.minionSync, a.logger, a.env.ChannelSyncMaxSize),
-		link:    controller.NewChannelLinkController(a.moduleGate, a.channelModule, a.links),
-		factory: controller.NewFactoryLinkController(a.moduleGate, a.factoryModule, a.factoryLinks),
-		skill:   controller.NewSkillController(a.skillService, a.logger),
-		build:   controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
-		compose: controller.NewComposeController(a.composeTransfers(), a.logger),
-		task:    controller.NewMinionTaskController(a.repos.MinionTask, a.minionFiles, a.repos.Operation, a.logger),
-		stream:  controller.NewMinionStreamController(a.minionStreams, a.repos.Operation, a.logger),
+		channel:        controller.NewChannelController(a.moduleGate, a.minionSync, a.logger, a.env.ChannelSyncMaxSize),
+		link:           controller.NewChannelLinkController(a.moduleGate, a.channelModule, a.links),
+		factory:        controller.NewFactoryLinkController(a.moduleGate, a.factoryModule, a.factoryLinks),
+		skill:          controller.NewSkillController(a.skillService, a.logger),
+		build:          controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
+		compose:        controller.NewComposeController(a.composeTransfers(), a.logger),
+		factoryCommand: controller.NewFactoryCommandController(a.factoryCommandTransfers(), a.logger),
+		task:           controller.NewMinionTaskController(a.repos.MinionTask, a.minionFiles, a.repos.Operation, a.logger),
+		stream:         controller.NewMinionStreamController(a.minionStreams, a.repos.Operation, a.logger),
 		terminal: controller.NewMinionTerminalController(a.minionTunnels, a.repos.MinionTask, a.repos.Operation,
 			gql.WSOriginCheck(a.env.CORSAllowedOrigins), a.logger),
 		desktop: controller.NewMinionDesktopController(a.minionTunnels, a.repos.MinionTask, a.credentialRefs, a.repos.Operation, a.recordings,
@@ -244,9 +253,9 @@ func (a *App) buildResolvers() *resolvers {
 		builds: resolver.NewBuildResolver(a.builds, a.repos.Operation),
 		minionSessions: resolver.WithSessionChannelSchemas(resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences, a.repos.MinionReservation, a.repos.MinionMark, a.repos.Build, a.eventBus,
 			a.repos.MinionTask, a.minionSync, a.repos.MinionFeedback, a.repos.MinionIdentity, a.repos.MinionFolder, a.repos.ModuleRegistry), a.endpoints),
-		minionTasks: resolver.WithTaskChannelSchemas(resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
+		minionTasks: resolver.WithTaskFactoryCommands(resolver.WithTaskChannelSchemas(resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
 			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync, a.minionSync, a.repos.MinionFeedback,
-			a.credentialRefs, a.minionTunnels, a.recordings, a.taskComposites()), a.endpoints),
+			a.credentialRefs, a.minionTunnels, a.recordings, a.taskComposites()), a.endpoints), a.taskFactoryCommands()),
 		minionTargets: resolver.NewMinionTargetResolver(a.minionTargets, a.repos.Build, a.repos.Operation),
 	}
 }
@@ -305,11 +314,93 @@ func (a *App) taskComposites() resolver.TaskComposites {
 	return a.composites
 }
 
-// composeTransfers is the composite tasks' links for their controller: nil
-// when there is none.
-func (a *App) composeTransfers() controller.ComposeTransfers {
-	if a.composites == nil {
+// taskFactoryCommands is what runs factory commands' tasks, for the task
+// resolver: nil when there is none (a test's app).
+func (a *App) taskFactoryCommands() resolver.TaskFactoryCommands {
+	if a.factoryCommands == nil {
 		return nil
 	}
-	return a.composites
+	return a.factoryCommands
+}
+
+// composeTransfers is the task links' service for their controller, a
+// composite task's and a factory command's alike: nil when there is none.
+func (a *App) composeTransfers() controller.ComposeTransfers {
+	if a.composites == nil && a.factoryCommands == nil {
+		return nil
+	}
+	return taskTransfers{composites: a.composites, factory: a.factoryCommands}
+}
+
+// factoryCommandTransfers is the factory commands' links but their files, for
+// their controller: nil when there is none.
+func (a *App) factoryCommandTransfers() controller.FactoryCommandTransfers {
+	if a.factoryCommands == nil {
+		return nil
+	}
+	return a.factoryCommands
+}
+
+// taskTransfers serves the links of composite and factory command tasks
+// alike (/api/factory/tasks/, one key): a task's files go to the service that
+// runs it; data and output are composite tasks' alone.
+type taskTransfers struct {
+	composites *composites.Service
+	factory    *factorycommands.Service
+}
+
+func (t taskTransfers) CheckLink(path, expires, sig string) error {
+	if t.composites != nil {
+		return t.composites.CheckLink(path, expires, sig)
+	}
+	return t.factory.CheckLink(path, expires, sig)
+}
+
+func (t taskTransfers) Data(ctx context.Context, task uuid.UUID) ([]byte, error) {
+	if t.composites == nil {
+		return nil, composites.ErrNotFound
+	}
+	return t.composites.Data(ctx, task)
+}
+
+func (t taskTransfers) Out(ctx context.Context, task uuid.UUID) ([]byte, error) {
+	if t.composites == nil {
+		return nil, composites.ErrNotFound
+	}
+	return t.composites.Out(ctx, task)
+}
+
+func (t taskTransfers) File(ctx context.Context, task, file uuid.UUID) (io.ReadCloser, *models.MinionFile, error) {
+	if ok, err := t.isFactory(ctx, task); err != nil || ok {
+		if err != nil {
+			return nil, nil, err
+		}
+		return t.factory.File(ctx, task, file)
+	}
+	if t.composites == nil {
+		return nil, nil, composites.ErrNotFound
+	}
+	return t.composites.File(ctx, task, file)
+}
+
+func (t taskTransfers) PutFile(ctx context.Context, task uuid.UUID, name string, body io.Reader, size int64) (protocol.BuildFile, error) {
+	if ok, err := t.isFactory(ctx, task); err != nil || ok {
+		if err != nil {
+			return protocol.BuildFile{}, err
+		}
+		return t.factory.PutFile(ctx, task, name, body, size)
+	}
+	if t.composites == nil {
+		return protocol.BuildFile{}, composites.ErrTaskEnded
+	}
+	return t.composites.PutFile(ctx, task, name, body, size)
+}
+
+// isFactory: task is a factory command's, whose links are the factory
+// commands' service's.
+func (t taskTransfers) isFactory(ctx context.Context, task uuid.UUID) (bool, error) {
+	if t.factory == nil {
+		return false, nil
+	}
+	return t.factory.IsFactoryTask(ctx, task)
 }

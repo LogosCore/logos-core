@@ -182,6 +182,7 @@ export type BuildCommand = {
   composite: Scalars['Boolean']['output'];
   default: Scalars['Boolean']['output'];
   description?: Maybe<Scalars['String']['output']>;
+  factory: Scalars['Boolean']['output'];
   id: Scalars['String']['output'];
   kinds: Array<Scalars['String']['output']>;
   label: Scalars['String']['output'];
@@ -296,6 +297,7 @@ export type BuildSchema = {
   crypto?: Maybe<Scalars['String']['output']>;
   errorCodes: Array<BuildErrorCode>;
   errorCodesPerBuild: Scalars['Boolean']['output'];
+  factoryCommands: Array<BuildCommand>;
   failover: Scalars['Boolean']['output'];
   fields: Array<ModuleField>;
   maxTasks: Scalars['Boolean']['output'];
@@ -1413,6 +1415,7 @@ export type MinionTask = {
   doneAt?: Maybe<Scalars['String']['output']>;
   err?: Maybe<Scalars['String']['output']>;
   exit?: Maybe<Scalars['Int']['output']>;
+  factory?: Maybe<MinionTaskFactory>;
   feedback: Array<MinionFeedback>;
   feedbackErrors: Scalars['Int']['output'];
   feedbackInfos: Scalars['Int']['output'];
@@ -1447,6 +1450,16 @@ export type MinionTask = {
   subtaskAs?: Maybe<Scalars['String']['output']>;
   tunnel?: Maybe<MinionTunnel>;
   upload?: Maybe<MinionTaskUpload>;
+};
+
+export type MinionTaskFactory = {
+  acceptedAt?: Maybe<Scalars['String']['output']>;
+  instance?: Maybe<Scalars['String']['output']>;
+  module: Scalars['String']['output'];
+  reportAt?: Maybe<Scalars['String']['output']>;
+  resultAt?: Maybe<Scalars['String']['output']>;
+  waiting?: Maybe<Scalars['String']['output']>;
+  waitingSince?: Maybe<Scalars['String']['output']>;
 };
 
 export type MinionTaskPage = {

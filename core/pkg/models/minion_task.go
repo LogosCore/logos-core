@@ -172,6 +172,49 @@ type MinionTask struct {
 	// ResultOf is the subtask whose result a composite command with no op of
 	// its own took as its own (its data, output and files).
 	ResultOf *uuid.UUID `bson:"result_of,omitempty" json:"result_of,omitempty"`
+
+	// Factory is a factory command's task's (docs: contracts/factory-commands):
+	// its factory runs it, never the minion. Where it stands: waiting for an
+	// instance to take it, or running on one. Nil for any other task.
+	Factory *MinionFactoryRun `bson:"factory,omitempty" json:"factory,omitempty"`
+}
+
+// MinionFactoryRun is where a factory command's task stands (docs:
+// contracts/factory-commands): offered to its factory's instances until one
+// takes it, then running there until its result, a stop, or core gives up on
+// it.
+type MinionFactoryRun struct {
+	// Module is the factory kind that runs it: its session's build's.
+	Module string `bson:"module" json:"module"`
+	// Args are its args as its call carries them: the operator's values over
+	// the command's defaults, as JSON values.
+	Args JSONMap `bson:"args,omitempty" json:"-"`
+	// Files are the task files its args name (file params): linked in its
+	// call, and kept while it runs, as a minion task's upload is.
+	Files []uuid.UUID `bson:"files,omitempty" json:"-"`
+	// Instance is the instance it was offered to, or runs on; "" while it
+	// waits. OfferedAt is when core offered it there; AcceptedAt when the
+	// instance took it (its reply, or a report that came first).
+	Instance   string     `bson:"instance,omitempty" json:"instance,omitempty"`
+	OfferedAt  *time.Time `bson:"offered_at,omitempty" json:"offered_at,omitempty"`
+	AcceptedAt *time.Time `bson:"accepted_at,omitempty" json:"accepted_at,omitempty"`
+	// ReportAt is the latest report of the instance that runs it (its
+	// acceptance, its output): protocol.FactoryCommandNoReport past it fails
+	// the task. Seq is the latest output report's seq core kept.
+	ReportAt *time.Time `bson:"report_at,omitempty" json:"report_at,omitempty"`
+	Seq      int64      `bson:"seq,omitempty" json:"-"`
+	// ResultAt is when its factory's result ended it: a result sent again
+	// is answered as the first was.
+	ResultAt *time.Time `bson:"result_at,omitempty" json:"result_at,omitempty"`
+	// Waiting is why no instance took it at its latest offer, WaitingSince
+	// since when it waits for one, OfferAt when core offers it next: cleared
+	// once one takes it.
+	Waiting      string     `bson:"waiting,omitempty" json:"waiting,omitempty"`
+	WaitingSince *time.Time `bson:"waiting_since,omitempty" json:"waiting_since,omitempty"`
+	OfferAt      *time.Time `bson:"offer_at,omitempty" json:"-"`
+	// LeaseBy is the core process that offers it, until LeaseUntil.
+	LeaseBy    string     `bson:"lease_by,omitempty" json:"-"`
+	LeaseUntil *time.Time `bson:"lease_until,omitempty" json:"-"`
 }
 
 // MinionComposite is where a composite command's task stands (docs:
@@ -428,13 +471,25 @@ const (
 	// QUEUED, then SENT and RUNNING as any task; its done part makes it
 	// COMPOSING again: the task ends at its factory's finish.
 	MinionTaskComposing = "COMPOSING"
+	// MinionTaskFactory is a factory command's task (docs:
+	// contracts/factory-commands) until it ends: its factory runs it, never
+	// the minion, so it takes none of the minion's room and no reply carries
+	// it. It waits for an instance to take it (Factory.Instance empty), then
+	// runs there; it ends DONE, FAILED or CANCELLED as any task.
+	MinionTaskFactory   = "FACTORY"
 	MinionTaskDone      = "DONE"
 	MinionTaskFailed    = "FAILED"
 	MinionTaskCancelled = "CANCELLED"
 )
 
 // MinionTaskOpenStates are the states of a task that has not ended.
-var MinionTaskOpenStates = []string{MinionTaskQueued, MinionTaskSent, MinionTaskRunning, MinionTaskComposing}
+var MinionTaskOpenStates = []string{MinionTaskQueued, MinionTaskSent, MinionTaskRunning, MinionTaskComposing, MinionTaskFactory}
+
+// InFactory reports whether t is a factory command's task that has not
+// ended: waiting for an instance of its factory, or running on one.
+func (t MinionTask) InFactory() bool {
+	return t.Factory != nil && !t.Finished()
+}
 
 // OwnOpOut reports whether t is a composite task whose own op is out (sent,
 // or queued to go): its minion's parts and ends are the own op's.

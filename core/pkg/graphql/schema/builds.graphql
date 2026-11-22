@@ -43,6 +43,10 @@ type BuildSchema {
   # What the minions can do, in the factory's order. A build picks its from
   # its target's.
   commands: [BuildCommand!]!
+  # The factory's own commands (docs: contracts/factory-commands): it runs
+  # them itself, never a minion, and every session of its builds has them.
+  # Each is marked factory; it has no op and no targets.
+  factoryCommands: [BuildCommand!]!
   # The factory's own error codes, in its order: what a minion's exit code
   # means when it stops on an error, for an operator to look up. Empty: it
   # declares none. Core does nothing else with them.
@@ -141,6 +145,9 @@ type BuildCommand {
   # has every command it uses.
   composite: Boolean!
   uses: [String!]!
+  # A factory command (docs: contracts/factory-commands): its factory runs
+  # its task itself, and nothing goes to the minion.
+  factory: Boolean!
 }
 
 # A channel kind a delegate command's minions serve: its connection schema

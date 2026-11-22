@@ -133,6 +133,29 @@ type MinionTask {
   # The subtask whose result a composite command with no op of its own took
   # as its own (its data, output and files); null for any other task.
   resultOf: ID
+  # A factory command's task (docs: contracts/factory-commands): its factory
+  # runs it, never the minion. Its state is FACTORY until it ends. Null for
+  # any other task.
+  factory: MinionTaskFactory
+}
+
+# Where a factory command's task stands (docs: contracts/factory-commands).
+type MinionTaskFactory {
+  # The factory kind that runs it.
+  module: String!
+  # The instance it was offered to, or runs on; null while it waits for one.
+  instance: String
+  # When the instance took it, and its latest report (core ends the task
+  # failed after 10 minutes without one).
+  acceptedAt: String
+  reportAt: String
+  # Why no instance took it at its latest offer, and since when it waits;
+  # null once one took it. Core offers it again every 2 seconds.
+  waiting: String
+  waitingSince: String
+  # When its factory's result ended it; null while it runs, and for one core
+  # ended (a stop, a give-up).
+  resultAt: String
 }
 
 # Where a composite command's task stands (docs: contracts/task-outsourcing).

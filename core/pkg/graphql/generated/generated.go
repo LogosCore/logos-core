@@ -222,6 +222,7 @@ type ComplexityRoot struct {
 		Composite   func(childComplexity int) int
 		Default     func(childComplexity int) int
 		Description func(childComplexity int) int
+		Factory     func(childComplexity int) int
 		ID          func(childComplexity int) int
 		Kinds       func(childComplexity int) int
 		Label       func(childComplexity int) int
@@ -304,6 +305,7 @@ type ComplexityRoot struct {
 		Crypto             func(childComplexity int) int
 		ErrorCodes         func(childComplexity int) int
 		ErrorCodesPerBuild func(childComplexity int) int
+		FactoryCommands    func(childComplexity int) int
 		Failover           func(childComplexity int) int
 		Fields             func(childComplexity int) int
 		MaxTasks           func(childComplexity int) int
@@ -1106,6 +1108,7 @@ type ComplexityRoot struct {
 		DoneAt            func(childComplexity int) int
 		Err               func(childComplexity int) int
 		Exit              func(childComplexity int) int
+		Factory           func(childComplexity int) int
 		Feedback          func(childComplexity int) int
 		FeedbackErrors    func(childComplexity int) int
 		FeedbackInfos     func(childComplexity int) int
@@ -1140,6 +1143,16 @@ type ComplexityRoot struct {
 		SubtaskAs         func(childComplexity int) int
 		Tunnel            func(childComplexity int) int
 		Upload            func(childComplexity int) int
+	}
+
+	MinionTaskFactory struct {
+		AcceptedAt   func(childComplexity int) int
+		Instance     func(childComplexity int) int
+		Module       func(childComplexity int) int
+		ReportAt     func(childComplexity int) int
+		ResultAt     func(childComplexity int) int
+		Waiting      func(childComplexity int) int
+		WaitingSince func(childComplexity int) int
 	}
 
 	MinionTaskPage struct {
@@ -3450,6 +3463,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildCommand.Description(childComplexity), true
+	case "BuildCommand.factory":
+		if e.ComplexityRoot.BuildCommand.Factory == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildCommand.Factory(childComplexity), true
 	case "BuildCommand.id":
 		if e.ComplexityRoot.BuildCommand.ID == nil {
 			break
@@ -3772,6 +3791,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildSchema.ErrorCodesPerBuild(childComplexity), true
+	case "BuildSchema.factoryCommands":
+		if e.ComplexityRoot.BuildSchema.FactoryCommands == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildSchema.FactoryCommands(childComplexity), true
 	case "BuildSchema.failover":
 		if e.ComplexityRoot.BuildSchema.Failover == nil {
 			break
@@ -7224,6 +7249,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.Exit(childComplexity), true
+	case "MinionTask.factory":
+		if e.ComplexityRoot.MinionTask.Factory == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.Factory(childComplexity), true
 	case "MinionTask.feedback":
 		if e.ComplexityRoot.MinionTask.Feedback == nil {
 			break
@@ -7428,6 +7459,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.Upload(childComplexity), true
+
+	case "MinionTaskFactory.acceptedAt":
+		if e.ComplexityRoot.MinionTaskFactory.AcceptedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskFactory.AcceptedAt(childComplexity), true
+	case "MinionTaskFactory.instance":
+		if e.ComplexityRoot.MinionTaskFactory.Instance == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskFactory.Instance(childComplexity), true
+	case "MinionTaskFactory.module":
+		if e.ComplexityRoot.MinionTaskFactory.Module == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskFactory.Module(childComplexity), true
+	case "MinionTaskFactory.reportAt":
+		if e.ComplexityRoot.MinionTaskFactory.ReportAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskFactory.ReportAt(childComplexity), true
+	case "MinionTaskFactory.resultAt":
+		if e.ComplexityRoot.MinionTaskFactory.ResultAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskFactory.ResultAt(childComplexity), true
+	case "MinionTaskFactory.waiting":
+		if e.ComplexityRoot.MinionTaskFactory.Waiting == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskFactory.Waiting(childComplexity), true
+	case "MinionTaskFactory.waitingSince":
+		if e.ComplexityRoot.MinionTaskFactory.WaitingSince == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskFactory.WaitingSince(childComplexity), true
 
 	case "MinionTaskPage.before":
 		if e.ComplexityRoot.MinionTaskPage.Before == nil {
@@ -14126,6 +14200,10 @@ type BuildSchema {
   # What the minions can do, in the factory's order. A build picks its from
   # its target's.
   commands: [BuildCommand!]!
+  # The factory's own commands (docs: contracts/factory-commands): it runs
+  # them itself, never a minion, and every session of its builds has them.
+  # Each is marked factory; it has no op and no targets.
+  factoryCommands: [BuildCommand!]!
   # The factory's own error codes, in its order: what a minion's exit code
   # means when it stops on an error, for an operator to look up. Empty: it
   # declares none. Core does nothing else with them.
@@ -14224,6 +14302,9 @@ type BuildCommand {
   # has every command it uses.
   composite: Boolean!
   uses: [String!]!
+  # A factory command (docs: contracts/factory-commands): its factory runs
+  # its task itself, and nothing goes to the minion.
+  factory: Boolean!
 }
 
 # A channel kind a delegate command's minions serve: its connection schema
@@ -17121,6 +17202,29 @@ type MinionTask {
   # The subtask whose result a composite command with no op of its own took
   # as its own (its data, output and files); null for any other task.
   resultOf: ID
+  # A factory command's task (docs: contracts/factory-commands): its factory
+  # runs it, never the minion. Its state is FACTORY until it ends. Null for
+  # any other task.
+  factory: MinionTaskFactory
+}
+
+# Where a factory command's task stands (docs: contracts/factory-commands).
+type MinionTaskFactory {
+  # The factory kind that runs it.
+  module: String!
+  # The instance it was offered to, or runs on; null while it waits for one.
+  instance: String
+  # When the instance took it, and its latest report (core ends the task
+  # failed after 10 minutes without one).
+  acceptedAt: String
+  reportAt: String
+  # Why no instance took it at its latest offer, and since when it waits;
+  # null once one took it. Core offers it again every 2 seconds.
+  waiting: String
+  waitingSince: String
+  # When its factory's result ended it; null while it runs, and for one core
+  # ended (a stop, a give-up).
+  resultAt: String
 }
 
 # Where a composite command's task stands (docs: contracts/task-outsourcing).
@@ -28265,6 +28369,35 @@ func (ec *executionContext) fieldContext_BuildCommand_uses(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _BuildCommand_factory(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildCommand_factory,
+		func(ctx context.Context) (any, error) {
+			return obj.Factory, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildCommand_factory(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildCommand",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BuildConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.BuildConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29667,6 +29800,71 @@ func (ec *executionContext) fieldContext_BuildSchema_commands(_ context.Context,
 				return ec.fieldContext_BuildCommand_composite(ctx, field)
 			case "uses":
 				return ec.fieldContext_BuildCommand_uses(ctx, field)
+			case "factory":
+				return ec.fieldContext_BuildCommand_factory(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type BuildCommand", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildSchema_factoryCommands(ctx context.Context, field graphql.CollectedField, obj *model.BuildSchema) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildSchema_factoryCommands,
+		func(ctx context.Context) (any, error) {
+			return obj.FactoryCommands, nil
+		},
+		nil,
+		ec.marshalNBuildCommand2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildCommandᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildSchema_factoryCommands(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildSchema",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_BuildCommand_id(ctx, field)
+			case "op":
+				return ec.fieldContext_BuildCommand_op(ctx, field)
+			case "label":
+				return ec.fieldContext_BuildCommand_label(ctx, field)
+			case "description":
+				return ec.fieldContext_BuildCommand_description(ctx, field)
+			case "targets":
+				return ec.fieldContext_BuildCommand_targets(ctx, field)
+			case "default":
+				return ec.fieldContext_BuildCommand_default(ctx, field)
+			case "required":
+				return ec.fieldContext_BuildCommand_required(ctx, field)
+			case "legacy":
+				return ec.fieldContext_BuildCommand_legacy(ctx, field)
+			case "result":
+				return ec.fieldContext_BuildCommand_result(ctx, field)
+			case "action":
+				return ec.fieldContext_BuildCommand_action(ctx, field)
+			case "kinds":
+				return ec.fieldContext_BuildCommand_kinds(ctx, field)
+			case "serves":
+				return ec.fieldContext_BuildCommand_serves(ctx, field)
+			case "params":
+				return ec.fieldContext_BuildCommand_params(ctx, field)
+			case "composite":
+				return ec.fieldContext_BuildCommand_composite(ctx, field)
+			case "uses":
+				return ec.fieldContext_BuildCommand_uses(ctx, field)
+			case "factory":
+				return ec.fieldContext_BuildCommand_factory(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type BuildCommand", field.Name)
 		},
@@ -34263,6 +34461,8 @@ func (ec *executionContext) fieldContext_FactoryKind_schema(_ context.Context, f
 				return ec.fieldContext_BuildSchema_targets(ctx, field)
 			case "commands":
 				return ec.fieldContext_BuildSchema_commands(ctx, field)
+			case "factoryCommands":
+				return ec.fieldContext_BuildSchema_factoryCommands(ctx, field)
 			case "errorCodes":
 				return ec.fieldContext_BuildSchema_errorCodes(ctx, field)
 			case "errorCodesPerBuild":
@@ -49805,6 +50005,51 @@ func (ec *executionContext) fieldContext_MinionTask_resultOf(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_factory(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_factory,
+		func(ctx context.Context) (any, error) {
+			return obj.Factory, nil
+		},
+		nil,
+		ec.marshalOMinionTaskFactory2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTaskFactory,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_factory(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "module":
+				return ec.fieldContext_MinionTaskFactory_module(ctx, field)
+			case "instance":
+				return ec.fieldContext_MinionTaskFactory_instance(ctx, field)
+			case "acceptedAt":
+				return ec.fieldContext_MinionTaskFactory_acceptedAt(ctx, field)
+			case "reportAt":
+				return ec.fieldContext_MinionTaskFactory_reportAt(ctx, field)
+			case "waiting":
+				return ec.fieldContext_MinionTaskFactory_waiting(ctx, field)
+			case "waitingSince":
+				return ec.fieldContext_MinionTaskFactory_waitingSince(ctx, field)
+			case "resultAt":
+				return ec.fieldContext_MinionTaskFactory_resultAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionTaskFactory", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_delegate(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -49845,6 +50090,209 @@ func (ec *executionContext) fieldContext_MinionTask_delegate(_ context.Context, 
 				return ec.fieldContext_MinionDelegate_connections(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionDelegate", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskFactory_module(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskFactory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskFactory_module,
+		func(ctx context.Context) (any, error) {
+			return obj.Module, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskFactory_module(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskFactory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskFactory_instance(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskFactory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskFactory_instance,
+		func(ctx context.Context) (any, error) {
+			return obj.Instance, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskFactory_instance(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskFactory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskFactory_acceptedAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskFactory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskFactory_acceptedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.AcceptedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskFactory_acceptedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskFactory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskFactory_reportAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskFactory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskFactory_reportAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ReportAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskFactory_reportAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskFactory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskFactory_waiting(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskFactory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskFactory_waiting,
+		func(ctx context.Context) (any, error) {
+			return obj.Waiting, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskFactory_waiting(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskFactory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskFactory_waitingSince(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskFactory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskFactory_waitingSince,
+		func(ctx context.Context) (any, error) {
+			return obj.WaitingSince, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskFactory_waitingSince(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskFactory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskFactory_resultAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskFactory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskFactory_resultAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ResultAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskFactory_resultAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskFactory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -49978,6 +50426,8 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
 				return ec.fieldContext_MinionTask_resultOf(ctx, field)
+			case "factory":
+				return ec.fieldContext_MinionTask_factory(ctx, field)
 			case "delegate":
 				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
@@ -53562,6 +54012,8 @@ func (ec *executionContext) fieldContext_Module_build(_ context.Context, field g
 				return ec.fieldContext_BuildSchema_targets(ctx, field)
 			case "commands":
 				return ec.fieldContext_BuildSchema_commands(ctx, field)
+			case "factoryCommands":
+				return ec.fieldContext_BuildSchema_factoryCommands(ctx, field)
 			case "errorCodes":
 				return ec.fieldContext_BuildSchema_errorCodes(ctx, field)
 			case "errorCodesPerBuild":
@@ -63850,6 +64302,8 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
 				return ec.fieldContext_MinionTask_resultOf(ctx, field)
+			case "factory":
+				return ec.fieldContext_MinionTask_factory(ctx, field)
 			case "delegate":
 				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
@@ -64017,6 +64471,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
 				return ec.fieldContext_MinionTask_resultOf(ctx, field)
+			case "factory":
+				return ec.fieldContext_MinionTask_factory(ctx, field)
 			case "delegate":
 				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
@@ -64184,6 +64640,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTaskImportant(ctx con
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
 				return ec.fieldContext_MinionTask_resultOf(ctx, field)
+			case "factory":
+				return ec.fieldContext_MinionTask_factory(ctx, field)
 			case "delegate":
 				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
@@ -64351,6 +64809,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelCap(ctx context
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
 				return ec.fieldContext_MinionTask_resultOf(ctx, field)
+			case "factory":
+				return ec.fieldContext_MinionTask_factory(ctx, field)
 			case "delegate":
 				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
@@ -64518,6 +64978,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelRoutes(ctx cont
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
 				return ec.fieldContext_MinionTask_resultOf(ctx, field)
+			case "factory":
+				return ec.fieldContext_MinionTask_factory(ctx, field)
 			case "delegate":
 				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
@@ -64750,6 +65212,8 @@ func (ec *executionContext) fieldContext_Mutation_disconnectMinionVPNClient(ctx 
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
 				return ec.fieldContext_MinionTask_resultOf(ctx, field)
+			case "factory":
+				return ec.fieldContext_MinionTask_factory(ctx, field)
 			case "delegate":
 				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
@@ -74503,6 +74967,8 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
 				return ec.fieldContext_MinionTask_resultOf(ctx, field)
+			case "factory":
+				return ec.fieldContext_MinionTask_factory(ctx, field)
 			case "delegate":
 				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
@@ -74850,6 +75316,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionCommands(ctx context
 				return ec.fieldContext_BuildCommand_composite(ctx, field)
 			case "uses":
 				return ec.fieldContext_BuildCommand_uses(ctx, field)
+			case "factory":
+				return ec.fieldContext_BuildCommand_factory(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type BuildCommand", field.Name)
 		},
@@ -82210,6 +82678,8 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
 				return ec.fieldContext_MinionTask_resultOf(ctx, field)
+			case "factory":
+				return ec.fieldContext_MinionTask_factory(ctx, field)
 			case "delegate":
 				return ec.fieldContext_MinionTask_delegate(ctx, field)
 			}
@@ -96116,6 +96586,11 @@ func (ec *executionContext) _BuildCommand(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "factory":
+			out.Values[i] = ec._BuildCommand_factory(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -96634,6 +97109,11 @@ func (ec *executionContext) _BuildSchema(ctx context.Context, sel ast.SelectionS
 			}
 		case "commands":
 			out.Values[i] = ec._BuildSchema_commands(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "factoryCommands":
+			out.Values[i] = ec._BuildSchema_factoryCommands(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -103303,6 +103783,8 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			}
 		case "resultOf":
 			out.Values[i] = ec._MinionTask_resultOf(ctx, field, obj)
+		case "factory":
+			out.Values[i] = ec._MinionTask_factory(ctx, field, obj)
 		case "delegate":
 			field := field
 
@@ -103336,6 +103818,57 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionTaskFactoryImplementors = []string{"MinionTaskFactory"}
+
+func (ec *executionContext) _MinionTaskFactory(ctx context.Context, sel ast.SelectionSet, obj *model.MinionTaskFactory) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionTaskFactoryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionTaskFactory")
+		case "module":
+			out.Values[i] = ec._MinionTaskFactory_module(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "instance":
+			out.Values[i] = ec._MinionTaskFactory_instance(ctx, field, obj)
+		case "acceptedAt":
+			out.Values[i] = ec._MinionTaskFactory_acceptedAt(ctx, field, obj)
+		case "reportAt":
+			out.Values[i] = ec._MinionTaskFactory_reportAt(ctx, field, obj)
+		case "waiting":
+			out.Values[i] = ec._MinionTaskFactory_waiting(ctx, field, obj)
+		case "waitingSince":
+			out.Values[i] = ec._MinionTaskFactory_waitingSince(ctx, field, obj)
+		case "resultAt":
+			out.Values[i] = ec._MinionTaskFactory_resultAt(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -120202,6 +120735,13 @@ func (ec *executionContext) marshalOMinionTask2ᚖgithubᚗcomᚋlogoscoreᚋlog
 		return graphql.Null
 	}
 	return ec._MinionTask(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOMinionTaskFactory2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTaskFactory(ctx context.Context, sel ast.SelectionSet, v *model.MinionTaskFactory) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MinionTaskFactory(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOMinionTaskStream2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTaskStream(ctx context.Context, sel ast.SelectionSet, v *model.MinionTaskStream) graphql.Marshaler {

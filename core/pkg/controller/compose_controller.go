@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/composites"
+	"github.com/logoscore/logos-core/core/pkg/factorycommands"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/responses"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -180,21 +181,23 @@ func (cc *ComposeController) task(c *gin.Context, path func(uuid.UUID) string) (
 	return task, true
 }
 
-// transferOK answers a transfer's error: false once it has.
+// transferOK answers a transfer's error, a composite task's or a factory
+// command's (they share the files' links): false once it has.
 func (cc *ComposeController) transferOK(c *gin.Context, task uuid.UUID, err error) bool {
 	var tooLarge *composites.FileTooLargeError
+	var factoryTooLarge *factorycommands.FileTooLargeError
 	switch {
 	case err == nil:
 		return true
-	case errors.Is(err, composites.ErrNotFound):
+	case errors.Is(err, composites.ErrNotFound), errors.Is(err, factorycommands.ErrNotFound):
 		c.JSON(http.StatusNotFound, responses.NewErrorResponse("%s", err.Error()))
-	case errors.Is(err, composites.ErrTaskEnded):
+	case errors.Is(err, composites.ErrTaskEnded), errors.Is(err, factorycommands.ErrTaskEnded):
 		c.JSON(http.StatusConflict, responses.NewErrorResponse("%s", err.Error()))
-	case errors.Is(err, composites.ErrNoFileName):
+	case errors.Is(err, composites.ErrNoFileName), errors.Is(err, factorycommands.ErrNoFileName):
 		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("%s", err.Error()))
-	case errors.Is(err, composites.ErrLengthRequired):
+	case errors.Is(err, composites.ErrLengthRequired), errors.Is(err, factorycommands.ErrLengthRequired):
 		c.JSON(http.StatusLengthRequired, responses.NewErrorResponse("%s", err.Error()))
-	case errors.As(err, &tooLarge):
+	case errors.As(err, &tooLarge), errors.As(err, &factoryTooLarge):
 		c.JSON(http.StatusRequestEntityTooLarge, responses.NewErrorResponse("%s", err.Error()))
 	default:
 		cc.logger.Error("Composite task transfer failed", zap.String("task_id", task.String()), zap.Error(err))

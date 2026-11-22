@@ -193,3 +193,26 @@ func (s *Service) DropTaskFile(ctx context.Context, fileID uuid.UUID) error {
 func (s *Service) TakeFiles(ctx context.Context, from, to uuid.UUID) error {
 	return s.files.AlsoForTask(ctx, from, to)
 }
+
+// ErrNotPutForTask is a file a factory names as a task's own that it did not
+// put for the task (or that is not whole).
+var ErrNotPutForTask = errors.New("not a file the factory put for the task")
+
+// AdoptFactoryFiles makes files a factory command's factory put for task
+// its own (docs: contracts/factory-commands, the result's files): kept as a
+// file its minion sent is, after the task ends. Each must be one put for
+// the task, whole; else none is taken, and the error says which.
+func (s *Service) AdoptFactoryFiles(ctx context.Context, task *models.MinionTask, ids []uuid.UUID) error {
+	for _, id := range ids {
+		f, err := s.files.FindByID(ctx, id)
+		if repository.IsNotFound(err) || (err == nil && (f.Kind != models.MinionFileKindTask || f.ForTask != task.TaskID ||
+			f.State != models.MinionFileComplete)) {
+			return fmt.Errorf("%s: %w", id, ErrNotPutForTask)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	_, err := s.files.AdoptForTask(ctx, ids, task.TaskID, task.SessionID)
+	return err
+}

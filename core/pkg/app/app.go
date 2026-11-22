@@ -22,6 +22,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/environment"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
+	"github.com/logoscore/logos-core/core/pkg/factorycommands"
 	"github.com/logoscore/logos-core/core/pkg/factorylink"
 	"github.com/logoscore/logos-core/core/pkg/filebrowser"
 	"github.com/logoscore/logos-core/core/pkg/lifecycle"
@@ -186,6 +187,9 @@ type App struct {
 	// composites runs composite commands' tasks: their factories' code
 	// decides, over the control plane, what their subtasks are.
 	composites *composites.Service
+	// factoryCommands runs factory commands' tasks: their factories run
+	// them, offered over the control plane, reporting on logos.core.rpc.
+	factoryCommands *factorycommands.Service
 	// links are the channels' control links; minionTargets the targets of
 	// bind minions, which minionSync calls through them. stopTargets stops
 	// the calls' scheduler.
@@ -326,6 +330,15 @@ func NewApp() (*App, error) {
 		repos.ModuleRegistry, repos.ModuleRegistry, repos.User, rpcClient, compositeLinks, minionFiles, bus, l.Named("composites")).
 		WithNudger(minionSync)
 	minionSync.WithComposites(compositeSvc)
+	// Factory commands' tasks (docs: Factory Commands): offered to their
+	// factory's instances over the same RPC client, with the session and its
+	// build; their reports come on logos.core.rpc. Their links share the
+	// composite tasks' key and prefix.
+	factoryCommandSvc := factorycommands.New(factorycommands.Config{MaxFileSize: e.MinionFileMaxSize}, repos.MinionTask,
+		repos.MinionSession, repos.Build, buildSvc, repos.ModuleRegistry, repos.User, credentialRefs, rpcClient, compositeLinks,
+		minionFiles, bus, l.Named("factorycommands"))
+	rpcServer.RegisterHandler(protocol.TypeFactoryCommandOutput, factoryCommandSvc.HandleOutput)
+	rpcServer.RegisterHandler(protocol.TypeFactoryCommandResult, factoryCommandSvc.HandleResult)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildLog, buildSvc.HandleLog)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
@@ -388,6 +401,7 @@ func NewApp() (*App, error) {
 		fileBrowser:     fileBrowser,
 		minionSync:      minionSync,
 		composites:      compositeSvc,
+		factoryCommands: factoryCommandSvc,
 		links:           links,
 		factoryLinks:    factoryLinks,
 		minionTargets:   minionTargets,
@@ -494,6 +508,7 @@ func (a *App) startLifecycle() {
 	a.recordings.Start()
 	a.minionTunnels.Start(context.Background())
 	a.composites.Start()
+	a.factoryCommands.Start()
 	stopTasks, stopDelegates := a.minionSync.WatchTasks(), a.minionSync.WatchDelegates()
 	a.stopTaskWatch = func() { stopTasks(); stopDelegates() }
 	targetsCtx, stopTargets := context.WithCancel(context.Background())
@@ -518,6 +533,9 @@ func (a *App) stopLifecycle() {
 	}
 	if a.composites != nil {
 		a.composites.Stop()
+	}
+	if a.factoryCommands != nil {
+		a.factoryCommands.Stop()
 	}
 	if a.minionFiles != nil {
 		a.minionFiles.Stop()

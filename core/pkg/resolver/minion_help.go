@@ -35,13 +35,15 @@ func helpCommand(commands []protocol.BuildCommand) protocol.BuildCommand {
 }
 
 // helpText is help's answer: the commands with how each is typed, or the
-// one named with its params. commands include help.
-func helpText(commands []protocol.BuildCommand, topic string) string {
+// one named with its params. commands include help; factory are the ids of
+// those that are factory commands (docs: Factory Commands), which their
+// factory runs.
+func helpText(commands []protocol.BuildCommand, topic string, factory ...string) string {
 	var b strings.Builder
 	if topic != "" {
 		for _, c := range commands {
 			if c.ID == topic {
-				writeCommandHelp(&b, c)
+				writeCommandHelp(&b, c, slices.Contains(factory, c.ID))
 				return b.String()
 			}
 		}
@@ -63,6 +65,9 @@ func helpText(commands []protocol.BuildCommand, topic string) string {
 		if c.Legacy {
 			label = strings.TrimSpace(label + " (legacy)")
 		}
+		if slices.Contains(factory, c.ID) {
+			label = strings.TrimSpace(label + " (its factory runs it)")
+		}
 		fmt.Fprintf(&b, "  %-*s  %s\n", width, usages[i], label)
 	}
 	b.WriteString("\n<param> is required, [param] is not, [param=x] defaults to x.\n")
@@ -70,13 +75,16 @@ func helpText(commands []protocol.BuildCommand, topic string) string {
 	return b.String()
 }
 
-func writeCommandHelp(b *strings.Builder, c protocol.BuildCommand) {
+func writeCommandHelp(b *strings.Builder, c protocol.BuildCommand, factory bool) {
 	b.WriteString(commandUsage(c) + "\n")
 	if c.Label != "" {
 		b.WriteString("\n" + c.Label + "\n")
 	}
 	if c.Description != "" {
 		b.WriteString("\n" + c.Description + "\n")
+	}
+	if factory {
+		b.WriteString("\nIts factory runs it, not the minion: it runs whether the minion can be reached or not.\n")
 	}
 	if len(c.Kinds) > 0 {
 		b.WriteString("\nIt works over " + strings.Join(c.Kinds, ", ") + " connections only: a minion on another kind is switched first.\n")

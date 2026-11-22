@@ -1,20 +1,15 @@
 package composites
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/taskdata"
-	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
 )
 
@@ -85,7 +80,7 @@ func (s *Service) finish(ctx context.Context, lk *look) error {
 		}
 		res.Out = out
 		if len(data) > 0 {
-			cbor, err := jsonToCBOR(data)
+			cbor, err := taskdata.FromJSON(data)
 			switch {
 			case err != nil:
 				res.Problem = "data: " + err.Error()
@@ -153,49 +148,4 @@ func (s *Service) takeFile(ctx context.Context, t *models.MinionTask, id string,
 		return b[:max], f.FileID, true, nil
 	}
 	return b, f.FileID, false, nil
-}
-
-// jsonToCBOR is data as JSON (as the web app reads it) back in core's CBOR:
-// {"$bytes": "<base64>"} a byte string, a whole number an integer.
-func jsonToCBOR(raw []byte) ([]byte, error) {
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
-		return nil, err
-	}
-	return protocol.MarshalCBOR(fromJSON(v))
-}
-
-func fromJSON(v any) any {
-	switch v := v.(type) {
-	case map[string]any:
-		if len(v) == 1 {
-			if s, ok := v["$bytes"].(string); ok {
-				if b, err := base64.StdEncoding.DecodeString(s); err == nil {
-					return b
-				}
-			}
-		}
-		out := make(map[string]any, len(v))
-		for k, e := range v {
-			out[k] = fromJSON(e)
-		}
-		return out
-	case []any:
-		out := make([]any, len(v))
-		for i, e := range v {
-			out[i] = fromJSON(e)
-		}
-		return out
-	case json.Number:
-		if n, err := v.Int64(); err == nil {
-			return n
-		}
-		if f, err := v.Float64(); err == nil && !math.IsInf(f, 0) {
-			return f
-		}
-		return v.String()
-	}
-	return v
 }

@@ -189,7 +189,8 @@ type IMinionTaskRepository interface {
 	// chunk: the acks core sends it unasked carry it.
 	UploadCtx(ctx context.Context, taskID uuid.UUID, c []byte) error
 	// UploadFileUse says whether a task file is named by a task that has not
-	// ended (open), and by any task at all (named).
+	// ended (open), and by any task at all (named): as its upload, or as one
+	// a factory command's args name (Factory.Files).
 	UploadFileUse(ctx context.Context, fileID uuid.UUID) (open, named bool, err error)
 	// SetDataProblem records why the task's data does not fit, unless one is
 	// recorded.
@@ -246,6 +247,7 @@ type IMinionTaskRepository interface {
 	UploadDetach(ctx context.Context, taskID uuid.UUID, gen int64, at time.Time) error
 
 	IMinionCompositeRepository
+	IMinionFactoryRepository
 }
 
 type minionTaskRepository struct {
@@ -273,6 +275,11 @@ func NewMinionTaskRepository(db database.Database) IMinionTaskRepository {
 		// composite tasks core looks at next.
 		{Key: []string{"parent_id", "queued_at"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 		{Key: []string{"composite.wake_at"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
+		// The factory commands' tasks whose offer is due, those under way on
+		// an instance, and those that name a task file.
+		{Key: []string{"factory.offer_at"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
+		{Key: []string{"factory.instance"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
+		{Key: []string{"factory.files"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 	})
 	db.EnsureIndexes(context.Background(), minionTaskPartCollection, []opts.IndexModel{
 		{Key: []string{"task_id", "seq"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
@@ -974,11 +981,12 @@ func (r *minionTaskRepository) UploadCtx(ctx context.Context, taskID uuid.UUID, 
 }
 
 func (r *minionTaskRepository) UploadFileUse(ctx context.Context, fileID uuid.UUID) (bool, bool, error) {
-	named, err := r.tasks.Find(ctx, bson.M{"upload.file_id": fileID}).Count()
+	names := bson.A{bson.M{"upload.file_id": fileID}, bson.M{"factory.files": fileID}}
+	named, err := r.tasks.Find(ctx, bson.M{"$or": names}).Count()
 	if err != nil || named == 0 {
 		return false, false, err
 	}
-	open, err := r.tasks.Find(ctx, bson.M{"upload.file_id": fileID, "state": bson.M{"$in": openStatesA()}}).Count()
+	open, err := r.tasks.Find(ctx, bson.M{"$or": names, "state": bson.M{"$in": openStatesA()}}).Count()
 	return open > 0, true, err
 }
 

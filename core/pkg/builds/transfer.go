@@ -49,6 +49,13 @@ func (s *Service) FactoryFile(ctx context.Context, build, file uuid.UUID) (io.Re
 	if err != nil {
 		return nil, nil, err
 	}
+	return s.OpenFile(ctx, b, file)
+}
+
+// OpenFile opens one of b's files, whatever b's state: for a factory
+// command's task about one of its sessions (docs: contracts/factory-commands).
+// ErrTransferNotFound for a file b's values do not name. The caller closes it.
+func (s *Service) OpenFile(ctx context.Context, b *models.Build, file uuid.UUID) (io.ReadCloser, *models.BuildFile, error) {
 	if !slices.Contains(b.FileIDs, file) {
 		return nil, nil, ErrTransferNotFound
 	}

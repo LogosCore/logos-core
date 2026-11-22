@@ -146,6 +146,7 @@ type BuildCommand struct {
 	Params      []*ModuleField `json:"params"`
 	Composite   bool           `json:"composite"`
 	Uses        []string       `json:"uses"`
+	Factory     bool           `json:"factory"`
 }
 
 type BuildConnection struct {
@@ -249,6 +250,7 @@ type BuildSchema struct {
 	Fields             []*ModuleField    `json:"fields"`
 	Targets            []*BuildTarget    `json:"targets"`
 	Commands           []*BuildCommand   `json:"commands"`
+	FactoryCommands    []*BuildCommand   `json:"factoryCommands"`
 	ErrorCodes         []*BuildErrorCode `json:"errorCodes"`
 	ErrorCodesPerBuild bool              `json:"errorCodesPerBuild"`
 	PersistedSessions  bool              `json:"persistedSessions"`
@@ -1161,59 +1163,70 @@ type MinionTargetInput struct {
 }
 
 type MinionTask struct {
-	ID                string            `json:"id"`
-	Feedback          []*MinionFeedback `json:"feedback"`
-	FeedbackErrors    int               `json:"feedbackErrors"`
-	FeedbackWarnings  int               `json:"feedbackWarnings"`
-	FeedbackInfos     int               `json:"feedbackInfos"`
-	Recordings        int               `json:"recordings"`
-	Rev               int               `json:"rev"`
-	SessionID         string            `json:"sessionId"`
-	OperationID       string            `json:"operationId"`
-	Command           string            `json:"command"`
-	Args              any               `json:"args,omitempty"`
-	As                *MinionIdentity   `json:"as,omitempty"`
-	IssuedBy          string            `json:"issuedBy"`
-	IssuedByName      *string           `json:"issuedByName,omitempty"`
-	ImportantAt       *string           `json:"importantAt,omitempty"`
-	ImportantBy       *string           `json:"importantBy,omitempty"`
-	ImportantByName   *string           `json:"importantByName,omitempty"`
-	State             string            `json:"state"`
-	QueuedAt          string            `json:"queuedAt"`
-	SentAt            *string           `json:"sentAt,omitempty"`
-	SendCount         int               `json:"sendCount"`
-	AckedAt           *string           `json:"ackedAt,omitempty"`
-	StartedAt         *string           `json:"startedAt,omitempty"`
-	DoneAt            *string           `json:"doneAt,omitempty"`
-	CancelReason      *string           `json:"cancelReason,omitempty"`
-	CancelRequestedAt *string           `json:"cancelRequestedAt,omitempty"`
-	Ok                *bool             `json:"ok,omitempty"`
-	Exit              *int              `json:"exit,omitempty"`
-	Err               *string           `json:"err,omitempty"`
-	Output            string            `json:"output"`
-	OutputSize        int               `json:"outputSize"`
-	OutputUtf8        bool              `json:"outputUtf8"`
-	OutputTruncated   bool              `json:"outputTruncated"`
-	Parts             int               `json:"parts"`
-	DataParts         int               `json:"dataParts"`
-	Result            *string           `json:"result,omitempty"`
-	Action            *string           `json:"action,omitempty"`
-	Tunnel            *MinionTunnel     `json:"tunnel,omitempty"`
-	Data              any               `json:"data,omitempty"`
-	DataSize          int               `json:"dataSize"`
-	DataTruncated     bool              `json:"dataTruncated"`
-	DataProblem       *string           `json:"dataProblem,omitempty"`
-	MissingParts      int               `json:"missingParts"`
-	File              *MinionFile       `json:"file,omitempty"`
-	Upload            *MinionTaskUpload `json:"upload,omitempty"`
-	Stream            *MinionTaskStream `json:"stream,omitempty"`
-	Document          string            `json:"document"`
-	Composite         *MinionComposite  `json:"composite,omitempty"`
-	ParentID          *string           `json:"parentId,omitempty"`
-	SubtaskAs         *string           `json:"subtaskAs,omitempty"`
-	Cleanup           bool              `json:"cleanup"`
-	ResultOf          *string           `json:"resultOf,omitempty"`
-	Delegate          *MinionDelegate   `json:"delegate,omitempty"`
+	ID                string             `json:"id"`
+	Feedback          []*MinionFeedback  `json:"feedback"`
+	FeedbackErrors    int                `json:"feedbackErrors"`
+	FeedbackWarnings  int                `json:"feedbackWarnings"`
+	FeedbackInfos     int                `json:"feedbackInfos"`
+	Recordings        int                `json:"recordings"`
+	Rev               int                `json:"rev"`
+	SessionID         string             `json:"sessionId"`
+	OperationID       string             `json:"operationId"`
+	Command           string             `json:"command"`
+	Args              any                `json:"args,omitempty"`
+	As                *MinionIdentity    `json:"as,omitempty"`
+	IssuedBy          string             `json:"issuedBy"`
+	IssuedByName      *string            `json:"issuedByName,omitempty"`
+	ImportantAt       *string            `json:"importantAt,omitempty"`
+	ImportantBy       *string            `json:"importantBy,omitempty"`
+	ImportantByName   *string            `json:"importantByName,omitempty"`
+	State             string             `json:"state"`
+	QueuedAt          string             `json:"queuedAt"`
+	SentAt            *string            `json:"sentAt,omitempty"`
+	SendCount         int                `json:"sendCount"`
+	AckedAt           *string            `json:"ackedAt,omitempty"`
+	StartedAt         *string            `json:"startedAt,omitempty"`
+	DoneAt            *string            `json:"doneAt,omitempty"`
+	CancelReason      *string            `json:"cancelReason,omitempty"`
+	CancelRequestedAt *string            `json:"cancelRequestedAt,omitempty"`
+	Ok                *bool              `json:"ok,omitempty"`
+	Exit              *int               `json:"exit,omitempty"`
+	Err               *string            `json:"err,omitempty"`
+	Output            string             `json:"output"`
+	OutputSize        int                `json:"outputSize"`
+	OutputUtf8        bool               `json:"outputUtf8"`
+	OutputTruncated   bool               `json:"outputTruncated"`
+	Parts             int                `json:"parts"`
+	DataParts         int                `json:"dataParts"`
+	Result            *string            `json:"result,omitempty"`
+	Action            *string            `json:"action,omitempty"`
+	Tunnel            *MinionTunnel      `json:"tunnel,omitempty"`
+	Data              any                `json:"data,omitempty"`
+	DataSize          int                `json:"dataSize"`
+	DataTruncated     bool               `json:"dataTruncated"`
+	DataProblem       *string            `json:"dataProblem,omitempty"`
+	MissingParts      int                `json:"missingParts"`
+	File              *MinionFile        `json:"file,omitempty"`
+	Upload            *MinionTaskUpload  `json:"upload,omitempty"`
+	Stream            *MinionTaskStream  `json:"stream,omitempty"`
+	Document          string             `json:"document"`
+	Composite         *MinionComposite   `json:"composite,omitempty"`
+	ParentID          *string            `json:"parentId,omitempty"`
+	SubtaskAs         *string            `json:"subtaskAs,omitempty"`
+	Cleanup           bool               `json:"cleanup"`
+	ResultOf          *string            `json:"resultOf,omitempty"`
+	Factory           *MinionTaskFactory `json:"factory,omitempty"`
+	Delegate          *MinionDelegate    `json:"delegate,omitempty"`
+}
+
+type MinionTaskFactory struct {
+	Module       string  `json:"module"`
+	Instance     *string `json:"instance,omitempty"`
+	AcceptedAt   *string `json:"acceptedAt,omitempty"`
+	ReportAt     *string `json:"reportAt,omitempty"`
+	Waiting      *string `json:"waiting,omitempty"`
+	WaitingSince *string `json:"waitingSince,omitempty"`
+	ResultAt     *string `json:"resultAt,omitempty"`
 }
 
 type MinionTaskPage struct {

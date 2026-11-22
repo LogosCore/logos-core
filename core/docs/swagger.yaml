@@ -724,6 +724,87 @@ paths:
       summary: Factory link (data plane)
       tags:
       - Factories
+  /factory/tasks/{task}/artifact:
+    get:
+      parameters:
+      - description: Task ID
+        in: path
+        name: task
+        required: true
+        type: string
+      - description: The link's expiry, Unix seconds
+        in: query
+        name: expires
+        required: true
+        type: integer
+      - description: The link's signature
+        in: query
+        name: sig
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: not a link of core's, or expired
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "409":
+          description: the task does not run
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: A session's build's artifact, for a factory command's factory
+      tags:
+      - Factories
+  /factory/tasks/{task}/build-files/{file}:
+    get:
+      parameters:
+      - description: Task ID
+        in: path
+        name: task
+        required: true
+        type: string
+      - description: Build file ID
+        in: path
+        name: file
+        required: true
+        type: string
+      - description: The link's expiry, Unix seconds
+        in: query
+        name: expires
+        required: true
+        type: integer
+      - description: The link's signature
+        in: query
+        name: sig
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: not a link of core's, or expired
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "409":
+          description: the task does not run
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: A session's build's file, for a factory command's factory
+      tags:
+      - Factories
   /factory/tasks/{task}/data:
     get:
       parameters:
@@ -1233,6 +1314,22 @@ paths:
       security:
       - BearerAuth: []
       summary: Download a desktop's or a terminal's recording
+      tags:
+      - Minion tasks
+  /recordings/{id}/keys:
+    get:
+      parameters:
+      - description: Recording ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: A desktop recording's keys, once it is a video
       tags:
       - Minion tasks
   /skills:

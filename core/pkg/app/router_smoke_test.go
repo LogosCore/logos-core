@@ -51,6 +51,8 @@ func TestRouteTable(t *testing.T) {
 		"GET /api/channel/link",
 		"GET /api/factory/builds/:build/files/:file",
 		"GET /api/factory/link",
+		"GET /api/factory/tasks/:task/artifact",
+		"GET /api/factory/tasks/:task/build-files/:file",
 		"GET /api/factory/tasks/:task/data",
 		"GET /api/factory/tasks/:task/files/:file",
 		"GET /api/factory/tasks/:task/out",
@@ -202,6 +204,10 @@ func TestRouteAuthTiers(t *testing.T) {
 		"GET /api/factory/tasks/:task/out":         404,
 		"GET /api/factory/tasks/:task/files/:file": 404,
 		"PUT /api/factory/tasks/:task/files":       404,
+		// A factory command's task's, the same (its files' are the ones
+		// above).
+		"GET /api/factory/tasks/:task/artifact":          404,
+		"GET /api/factory/tasks/:task/build-files/:file": 404,
 	}
 
 	r := testRouter(t).NewRouter()

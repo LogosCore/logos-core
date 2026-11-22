@@ -29,6 +29,11 @@ type IMinionFileRepository interface {
 	FindByTask(ctx context.Context, taskID uuid.UUID) (*models.MinionFile, error)
 	// AlsoForTask makes the files task from got to's as well.
 	AlsoForTask(ctx context.Context, from, to uuid.UUID) error
+	// AdoptForTask makes task files put for a task its own, as a file its
+	// minion sent is (docs: contracts/factory-commands, a result's files):
+	// no longer task files, kept as the task's, of its session. It counts
+	// those it changed.
+	AdoptForTask(ctx context.Context, fileIDs []uuid.UUID, task, session uuid.UUID) (int64, error)
 	// Advance takes n bytes from off for a file receiving them, when off is
 	// how far it got: IsNotFound when it is not (a chunk sent again, or one
 	// raced). It returns the file after.
@@ -104,6 +109,23 @@ func (r *minionFileRepository) FindByTask(ctx context.Context, taskID uuid.UUID)
 func (r *minionFileRepository) AlsoForTask(ctx context.Context, from, to uuid.UUID) error {
 	_, err := r.coll.UpdateAll(ctx, bson.M{"task_id": from}, bson.M{"$addToSet": bson.M{"also_tasks": to}})
 	return err
+}
+
+func (r *minionFileRepository) AdoptForTask(ctx context.Context, fileIDs []uuid.UUID, task, session uuid.UUID) (int64, error) {
+	if len(fileIDs) == 0 {
+		return 0, nil
+	}
+	ids := make(bson.A, len(fileIDs))
+	for i, id := range fileIDs {
+		ids[i] = id
+	}
+	res, err := r.coll.UpdateAll(ctx, bson.M{"file_id": bson.M{"$in": ids}, "kind": models.MinionFileKindTask, "for_task": task,
+		"state": models.MinionFileComplete},
+		bson.M{"$set": bson.M{"task_id": task, "session_id": session}, "$unset": bson.M{"kind": "", "for_task": ""}})
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
 }
 
 func (r *minionFileRepository) apply(ctx context.Context, filter, update bson.M) (*models.MinionFile, error) {

@@ -169,6 +169,9 @@ type minionTaskResolver struct {
 	// composites runs composite commands' tasks; nil, a composite command
 	// takes no task.
 	composites TaskComposites
+	// factory runs factory commands' tasks; nil, a session has no factory
+	// commands.
+	factory TaskFactoryCommands
 }
 
 // TaskComposites runs composite commands' tasks (composites.Service): one
@@ -385,6 +388,20 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 			out = append(out, c)
 		}
 	}
+	// The factory's own commands (docs: Factory Commands): every session of
+	// its builds has them, whatever the build has. Core's own are not
+	// shadowed by one, as by a command.
+	if r.factory != nil {
+		listed := make([]string, len(out))
+		for i, c := range out {
+			listed[i] = c.ID
+		}
+		for _, fc := range sc.SessionFactoryCommands(listed) {
+			if !models.IsCoreCommand(fc.ID) {
+				out = append(out, factoryBuildCommand(fc))
+			}
+		}
+	}
 	if r.offersConnect(s) {
 		out = append(out, connectCommands()...)
 	}
@@ -425,6 +442,10 @@ func (r *minionTaskResolver) MinionSessionCommands(ctx context.Context, sessionI
 	}
 	out := make([]*model.BuildCommand, len(commands))
 	for i, c := range commands {
+		if fc, ok := factoryCommandOf(schema, c.ID); ok {
+			out[i] = toFactoryCommandModel(*schema, fc)
+			continue
+		}
 		out[i] = toBuildCommandModel(*schema, c)
 	}
 	return out, nil
@@ -452,7 +473,7 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 		}
 		values = m
 	}
-	_, commands, err := r.commandsOf(ctx, s)
+	schema, commands, err := r.commandsOf(ctx, s)
 	if err != nil {
 		return nil, err
 	}
@@ -460,9 +481,15 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	if i < 0 {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("the session's minion has no %q command", command))
 	}
-	wire, problems := protocol.TaskArgs(commands[i].Params, values)
-	if problems != nil {
-		return nil, moduleGQLError(ctx, errCodeBadUserInput, problemsText(problems))
+	// A factory command's args go to its factory as JSON values, checked
+	// when it is queued (queueFactory); the minion's go in their CBOR forms.
+	fc, isFactory := factoryCommandOf(schema, command)
+	var wire map[string]any
+	if !isFactory {
+		var problems map[string]string
+		if wire, problems = protocol.TaskArgs(commands[i].Params, values); problems != nil {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, problemsText(problems))
+		}
 	}
 	uid, err := callerUserID(ctx)
 	if err != nil {
@@ -470,7 +497,7 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	}
 	if command == protocol.CommandHelp {
 		topic, _ := protocol.ArgString(wire, "command")
-		return r.answerHelp(ctx, s, uid, values, helpText(commands, topic))
+		return r.answerHelp(ctx, s, uid, values, helpText(commands, topic, factoryIDs(schema, commands)...))
 	}
 	if s.Closed(time.Now().UTC()) {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, "the session is closed: its minion takes no tasks")
@@ -483,6 +510,17 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	}
 	if command == models.CommandRehello {
 		return r.runRehello(ctx, s, uid, values)
+	}
+	if isFactory {
+		// Its factory runs it: it waits in core for an instance to take it
+		// (docs: Factory Commands).
+		t, err := r.queueFactory(ctx, s, fc, values, uid)
+		if err != nil {
+			return nil, err
+		}
+		r.factory.Queued(t)
+		r.publish(t)
+		return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
 	}
 	if commands[i].Composite && r.composites == nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("%s is a composite command: core runs none here", command))
@@ -1134,6 +1172,15 @@ func (r *minionTaskResolver) CancelMinionTask(ctx context.Context, id string) (*
 	if models.IsCoreCommand(t.Command) && !t.Finished() {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("core runs %s itself: it ends on its own", t.Command))
 	}
+	if t.InFactory() && r.factory != nil {
+		// It ends cancelled at once; the instance it runs on is told to stop
+		// it (docs: Factory Commands, Stopping).
+		after, err := r.factory.StopTask(ctx, t)
+		if err != nil {
+			return nil, fmt.Errorf("stop the task: %w", err)
+		}
+		return r.toModel(ctx, after, r.names(ctx, []models.MinionTask{*after}))
+	}
 	if t.Composing() && r.composites != nil {
 		// Its factory hears of it, and may clean up (docs: Task
 		// Outsourcing, Stopping); a second stop ends it at once.
@@ -1486,6 +1533,9 @@ func (r *minionTaskResolver) toModel(ctx context.Context, t *models.MinionTask, 
 	}
 	if c := t.Composite; c != nil {
 		m.Composite = r.compositeModel(ctx, t)
+	}
+	if f := t.Factory; f != nil {
+		m.Factory = toFactoryModel(f)
 	}
 	if up := t.Upload; up != nil {
 		m.Upload = &model.MinionTaskUpload{FileID: up.FileID.String(), Name: up.Name, Size: int(up.Size),

@@ -68,6 +68,11 @@ func (a *App) NewRouter() *gin.Engine {
 	factory.GET("/tasks/:task/out", c.compose.Out)
 	factory.GET("/tasks/:task/files/:file", c.compose.File)
 	factory.PUT("/tasks/:task/files", c.compose.PutFile)
+	// A factory command's task's too (the files' links go to the service
+	// that runs the task), and its session's build's artifact and files,
+	// for the factory that runs it (docs: Factory Commands, factory.command).
+	factory.GET("/tasks/:task/artifact", c.factoryCommand.Artifact)
+	factory.GET("/tasks/:task/build-files/:file", c.factoryCommand.BuildFile)
 
 	v1 := r.Group("/api/v1")
 
