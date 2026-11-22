@@ -16,7 +16,7 @@ const STATE: Record<string, { icon: typeof CheckIcon; className: string; spin?: 
   // A composite command's task while its factory's code decides, in core.
   COMPOSING: { icon: WorkflowIcon, className: "text-violet-600 dark:text-violet-400" },
   // A factory command's task, which its factory runs itself, until it ends.
-  FACTORY: { icon: FactoryIcon, className: "text-violet-600 dark:text-violet-400" },
+  FACTORY: { icon: FactoryIcon, className: "text-violet-400 dark:text-violet-300" },
   DONE: { icon: CheckIcon, className: "text-emerald-600 dark:text-emerald-400" },
   FAILED: { icon: XIcon, className: "text-red-600 dark:text-red-400" },
   CANCELLED: { icon: BanIcon, className: "text-muted-foreground" },

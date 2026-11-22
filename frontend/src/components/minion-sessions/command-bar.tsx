@@ -475,7 +475,7 @@ export function CommandBar({
                 </span>
               )}
               {c.factory && (
-                <span className="shrink-0 text-xs text-violet-700 dark:text-violet-400" title="Its factory runs it itself: nothing goes to the minion">
+                <span className="shrink-0 text-xs text-violet-400 dark:text-violet-300" title="Its factory runs it itself: nothing goes to the minion">
                   factory
                 </span>
               )}
