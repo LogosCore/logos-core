@@ -163,6 +163,10 @@ export function BuildCommands({ build }: { build: Build }) {
               {c.kinds.length > 0 && (
                 <div className="text-xs text-muted-foreground">{commandKindsNote(c.kinds)?.text}</div>
               )}
+              {/* A command for some platforms (docs: contracts/minion-build, Commands for some platforms). */}
+              {c.platforms.length > 0 && (
+                <div className="text-xs text-muted-foreground">only for {c.platforms.join(", ")}</div>
+              )}
             </>
           ),
         }))}

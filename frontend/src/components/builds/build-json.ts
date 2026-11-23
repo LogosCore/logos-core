@@ -236,7 +236,7 @@ export function formFromDocument(kind: FactoryKind, channels: ReadonlyMap<string
     target: doc.target,
     platform: doc.platform,
     drafts: draftsFor(targetFields(kind, target), doc.values),
-    commands: pickedCommands(kind, target, doc.commands),
+    commands: pickedCommands(kind, target, doc.commands, doc.platform),
     connections: doc.connections.map((c) =>
       connectionDraft(
         kind,
@@ -308,7 +308,7 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
   const targetId = textOf(root.target, "/target", at)
   const platform = textOf(root.platform, "/platform", at)
   const target = kind.targets.find((t) => t.id === targetId)
-  const commands = readCommands(root.commands, kind, target, at)
+  const commands = readCommands(root.commands, kind, target, platform, at)
   const values = readFieldValues(
     targetFields(kind, target, platform),
     root.values,
@@ -417,22 +417,28 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
 }
 
 /**
- * The commands listed that target has, each a problem where it is not one of
- * them; none listed (no key, null), the target's defaults.
+ * The commands listed that target has on platform, each a problem where it
+ * is not one of them (a command for other platforms says which); none
+ * listed (no key, null), the defaults of the target and platform. A
+ * platform that is not the target's is marked itself: no command is
+ * checked against it.
  */
 function readCommands(
   raw: unknown,
   kind: FactoryKind,
   target: Target | undefined,
+  platform: string,
   at: (path: string, message: string) => void,
 ): string[] {
-  if (raw === undefined || raw === null) return defaultCommands(kind, target)
+  const on = target?.platforms.includes(platform) ? platform : undefined
+  if (raw === undefined || raw === null) return defaultCommands(kind, target, on)
   if (!Array.isArray(raw)) {
     // The one problem there: the form goes on with the defaults.
     at("/commands", "Must be a list of command ids")
-    return defaultCommands(kind, target)
+    return defaultCommands(kind, target, on)
   }
   const own = new Set(targetCommands(kind, target).map((c) => c.id))
+  const onHere = new Set(targetCommands(kind, target, on).map((c) => c.id))
   const out: string[] = []
   raw.forEach((id: unknown, i) => {
     const here = childPointer("/commands", i)
@@ -441,7 +447,10 @@ function readCommands(
     else if (!kind.commands.some((c) => c.id === id)) at(here, `Not a command of ${kind.name}`)
     // Without a target there is nothing to tell; the target is marked.
     else if (target && !own.has(id)) at(here, `Not a command of the ${target.id} target`)
-    else out.push(id)
+    else if (target && !onHere.has(id)) {
+      const c = kind.commands.find((c) => c.id === id)
+      at(here, `Only for ${(c?.platforms ?? []).join(", ")}`)
+    } else out.push(id)
   })
   return out
 }
@@ -497,7 +506,9 @@ export function buildJsonHints(
         info: "What the minion can do, by command id: it has these and no others. The target's required ones stay in; null or none listed: its defaults.",
         items: targetCommands(kind, target).map((c) => ({
           value: c.id,
-          detail: c.required ? `${c.label}, required` : c.label,
+          detail: [c.label, c.required ? "required" : "", c.platforms.length > 0 ? `only for ${c.platforms.join(", ")}` : ""]
+            .filter(Boolean)
+            .join(", "),
           info: c.description ?? undefined,
         })),
       },

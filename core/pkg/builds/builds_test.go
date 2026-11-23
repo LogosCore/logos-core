@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1544,5 +1545,39 @@ func TestBuildPlatformFields(t *testing.T) {
 	var v *ValidationError
 	if !errors.As(err, &v) || v.Problems["values.goarm"] != "only for linux/arm" {
 		t.Fatalf("goarm on linux/amd64: %v %v", err, problemsOf(err))
+	}
+}
+
+// A command for some platforms (protocol.BuildCommand.Platforms) is on
+// builds for those alone: refused on another, and a build that names none
+// gets the defaults and required ones of its platform (docs: Minion Build,
+// Commands for some platforms).
+func TestCreateBuildCommandsForSomePlatforms(t *testing.T) {
+	r := newRig(t)
+	sc := &r.reg.schemas["bob"].BuildSchema
+	sc.Targets[0].Platforms = []string{"linux/amd64", "windows/amd64"}
+	for i := range sc.Commands {
+		switch sc.Commands[i].ID {
+		case "shell":
+			sc.Commands[i].Platforms = []string{"windows/any"}
+		case "ls":
+			sc.Commands[i].Platforms = []string{"linux/any"}
+		}
+	}
+	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) {
+		in.Platform, in.Commands = "linux/amd64", []string{"shell"}
+	}))
+	if p := problemsOf(err); p["commands[0]"] != `"shell" is only for windows/any` {
+		t.Errorf("shell on linux: %v (%v)", p, err)
+	}
+	if b := r.queue(t, func(in *BuildInput) { in.Platform = "windows/amd64" }); !slices.Equal(b.Commands, []string{"sleep", "exit", "hello"}) {
+		t.Errorf("windows' defaults: %v", b.Commands)
+	}
+	if b := r.queue(t, func(in *BuildInput) { in.Platform = "linux/amd64" }); !slices.Equal(b.Commands, []string{"sleep", "exit", "hello", "ls"}) {
+		t.Errorf("linux's defaults: %v", b.Commands)
+	}
+	b := r.queue(t, func(in *BuildInput) { in.Platform, in.Commands = "windows/amd64", []string{"shell"} })
+	if !slices.Equal(b.Commands, []string{"sleep", "exit", "shell"}) {
+		t.Errorf("shell on windows: %v", b.Commands)
 	}
 }

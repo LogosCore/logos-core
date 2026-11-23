@@ -114,10 +114,15 @@ type BuildCommand {
   description: String
   # The targets whose builds can have it.
   targets: [String!]!
+  # The platforms ("os/arch", either half "any") of the builds it is on
+  # (docs: contracts/minion-build, Commands for some platforms): a build for
+  # another has no such command. Empty: every platform of its targets.
+  platforms: [String!]!
   # Picked in a new build until the operator unpicks it, and what a build
-  # that names no commands gets, with the required ones.
+  # that names no commands gets, with the required ones: on its platforms.
   default: Boolean!
-  # In every build of its targets: the minion cannot run without it.
+  # In every build of its targets, on its platforms: the minion cannot run
+  # without it.
   required: Boolean!
   # Kept for the builds that have it (docs: contracts/minion-build, Legacy
   # commands): no new build picks it, and it serves no action, its action

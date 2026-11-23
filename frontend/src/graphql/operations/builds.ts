@@ -44,6 +44,7 @@ export const BuildSchemaFields = graphql(`
       label
       description
       targets
+      platforms
       default
       required
       legacy

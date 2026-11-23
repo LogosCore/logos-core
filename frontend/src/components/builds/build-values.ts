@@ -127,6 +127,12 @@ export interface Command {
   description: string | null
   /** The targets whose builds can have it. */
   targets: string[]
+  /**
+   * The platforms of the builds it is on, "os/arch" with either half "any"
+   * (docs: contracts/minion-build, Commands for some platforms); empty: every
+   * platform of its targets.
+   */
+  platforms: string[]
   /** Picked in a new build until the operator unpicks it. */
   default: boolean
   /** In every build of its targets: it cannot be unpicked. */
@@ -223,6 +229,7 @@ export function factoryKindsByName(
         label: c.label,
         description: c.description ?? null,
         targets: c.targets,
+        platforms: c.platforms,
         default: c.default,
         required: c.required,
         legacy: c.legacy,
@@ -280,32 +287,49 @@ export function offPlatform(kind: FactoryKind, target: Target | undefined, key: 
 // Commands
 // ---------------------------------------------------------------------------
 
-/** The commands a build of target can have, in the factory's order. */
-export function targetCommands(kind: FactoryKind, target: Target | undefined): Command[] {
-  return target ? kind.commands.filter((c) => c.targets.includes(target.id) && !c.legacy) : []
-}
-
-/** What a new build of target starts with, and one naming none gets: its default and required commands, with what they use. */
-export function defaultCommands(kind: FactoryKind, target: Target | undefined): string[] {
-  return pickedCommands(
-    kind,
-    target,
-    targetCommands(kind, target)
-      .filter((c) => c.default || c.required)
-      .map((c) => c.id),
+/**
+ * The commands a build of target can have, in the factory's order; with a
+ * platform, only those on it (onPlatform: a command for some platforms
+ * waits for one of them to be picked).
+ */
+export function targetCommands(kind: FactoryKind, target: Target | undefined, platform?: string): Command[] {
+  if (!target) return []
+  return kind.commands.filter(
+    (c) => c.targets.includes(target.id) && !c.legacy && (platform === undefined || onPlatform(c, platform)),
   )
 }
 
 /**
- * The commands picked, as a build of target has them: the target's among
- * them, with its required ones and what each composite among them uses (and
- * what those use in turn), in the factory's order: core's PickCommands. A
+ * What a new build of target for platform starts with, and one naming none
+ * gets: its default and required commands there, with what they use.
+ */
+export function defaultCommands(kind: FactoryKind, target: Target | undefined, platform?: string): string[] {
+  return pickedCommands(
+    kind,
+    target,
+    targetCommands(kind, target, platform)
+      .filter((c) => c.default || c.required)
+      .map((c) => c.id),
+    platform,
+  )
+}
+
+/**
+ * The commands picked, as a build of target (on platform, when given) has
+ * them: the target's among them, with its required ones and what each
+ * composite among them uses (and what those use in turn), in the factory's
+ * order: core's PickCommands. A
  * composite with no op of its own stays among the picks; core builds what
  * it uses, and its sessions have it. A legacy one picked gives way to the
  * target's commands of its action.
  */
-export function pickedCommands(kind: FactoryKind, target: Target | undefined, picked: Iterable<string>): string[] {
-  const commands = targetCommands(kind, target)
+export function pickedCommands(
+  kind: FactoryKind,
+  target: Target | undefined,
+  picked: Iterable<string>,
+  platform?: string,
+): string[] {
+  const commands = targetCommands(kind, target, platform)
   const byId = new Map(commands.map((c) => [c.id, c]))
   const on = new Set<string>()
   const pick = (id: string) => {
@@ -652,7 +676,7 @@ export function initialForm(
     target: target?.id ?? "",
     platform,
     drafts: draftsFor(targetFields(kind, target), source?.values),
-    commands: source?.commands ? pickedCommands(kind, target, source.commands) : defaultCommands(kind, target),
+    commands: source?.commands ? pickedCommands(kind, target, source.commands, platform) : defaultCommands(kind, target, platform),
     connections: (source?.connections ?? []).map((c) => connectionDraft(kind, channels.get(c.moduleName), c, target)),
     failover: source?.failover ?? { ...DEFAULT_FAILOVER },
     maxTasks: kind.maxTasks ? String(source?.maxTasks ?? DEFAULT_MAX_TASKS) : "",
@@ -880,7 +904,7 @@ export function checkBuild(
 
   // The form cannot leave a required command out; the JSON tab can.
   const listed = new Set(b.commands)
-  const missing = targetCommands(kind, target).filter((c) => c.required && !listed.has(c.id))
+  const missing = targetCommands(kind, target, b.platform).filter((c) => c.required && !listed.has(c.id))
   if (missing.length > 0) {
     errors.commands = `The ${target!.id} target requires ${missing.map((c) => c.id).join(", ")}`
   }
@@ -967,14 +991,28 @@ export function withTarget(kind: FactoryKind, form: BuildForm, targetId: string)
     drafts[f.key] = form.drafts[f.key] ?? initialDraft(f, f.default ?? null, AS_TEXT)
   }
   const before = kind.targets.find((t) => t.id === form.target)
-  const had = new Set(targetCommands(kind, before).map((c) => c.id))
-  const picked = targetCommands(kind, target).filter((c) => (had.has(c.id) ? form.commands.includes(c.id) : c.default))
   const platform = target?.platforms.includes(form.platform)
     ? form.platform
     : target?.platforms.length === 1
       ? target.platforms[0]
       : ""
-  return { ...form, target: targetId, platform, drafts, commands: pickedCommands(kind, target, picked.map((c) => c.id)) }
+  const had = new Set(targetCommands(kind, before, form.platform).map((c) => c.id))
+  const picked = targetCommands(kind, target, platform).filter((c) => (had.has(c.id) ? form.commands.includes(c.id) : c.default))
+  return { ...form, target: targetId, platform, drafts, commands: pickedCommands(kind, target, picked.map((c) => c.id), platform) }
+}
+
+/**
+ * The form on another platform: its commands as a build for it has them (a
+ * command for some platforms: docs, contracts/minion-build, Commands for
+ * some platforms). One both platforms have keeps its pick, one the new
+ * platform adds starts as in a new build (picked when a default), and one
+ * it lacks goes; its required ones come in.
+ */
+export function withPlatform(kind: FactoryKind, form: BuildForm, platform: string): BuildForm {
+  const target = kind.targets.find((t) => t.id === form.target)
+  const had = new Set(targetCommands(kind, target, form.platform).map((c) => c.id))
+  const picked = targetCommands(kind, target, platform).filter((c) => (had.has(c.id) ? form.commands.includes(c.id) : c.default))
+  return { ...form, platform, commands: pickedCommands(kind, target, picked.map((c) => c.id), platform) }
 }
 
 /** Moves item i of a list one place up (-1) or down (+1). */

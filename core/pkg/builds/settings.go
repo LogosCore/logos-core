@@ -138,7 +138,7 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 	for k, reason := range schema.OffPlatformValues(t, st.Platform, st.Values) {
 		out.add("values."+k, "%s", reason)
 	}
-	c.commands = commandsFor(schema, t, st.Commands, out)
+	c.commands = commandsFor(schema, t, st.Platform, st.Commands, out)
 
 	if len(st.Connections) == 0 {
 		out.add("connections", "at least one connection is required")
@@ -213,15 +213,16 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 	return c, out, nil
 }
 
-// commandsFor resolves a build's commands for target t: the ones picked, or
-// the target's defaults when none are named (nil), with its required ones
-// always, and what each composite among them uses, in the schema's order
-// (protocol.BuildSchema.PickCommands). A composite with no op of its own
-// builds nothing: a session of the build has it once it has what it uses.
-// Each one picked must be a command of t, picked once.
-func commandsFor(schema protocol.BuildSchema, t protocol.BuildTarget, picked []string, out problems) []string {
+// commandsFor resolves a build's commands for target t and platform: the
+// ones picked, or the defaults of the target and platform when none are
+// named (nil), with the required ones always, and what each composite among
+// them uses, in the schema's order (protocol.BuildSchema.PickCommands). A
+// composite with no op of its own builds nothing: a session of the build has
+// it once it has what it uses. Each one picked must be a command of t, on
+// the platform (protocol.BuildCommand.Platforms), picked once.
+func commandsFor(schema protocol.BuildSchema, t protocol.BuildTarget, platform string, picked []string, out problems) []string {
 	if picked == nil {
-		return schema.PickCommands(t, schema.DefaultCommands(t))
+		return schema.PickCommands(t, platform, schema.DefaultCommands(t, platform))
 	}
 	seen := make(map[string]bool, len(picked))
 	for i, id := range picked {
@@ -232,12 +233,14 @@ func commandsFor(schema protocol.BuildSchema, t protocol.BuildTarget, picked []s
 			out.add(key, "%q is not a command of this factory", id)
 		case !c.For(t.ID):
 			out.add(key, "%q is not a command of target %q", id, t.ID)
+		case !c.OnPlatform(platform):
+			out.add(key, "%q is only for %s", id, strings.Join(c.Platforms, ", "))
 		case seen[id]:
 			out.add(key, "%q is picked twice", id)
 		}
 		seen[id] = true
 	}
-	return schema.PickCommands(t, picked)
+	return schema.PickCommands(t, platform, picked)
 }
 
 // checkValues checks values against fields: no undeclared keys, every value

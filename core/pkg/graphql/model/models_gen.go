@@ -136,6 +136,7 @@ type BuildCommand struct {
 	Label       string         `json:"label"`
 	Description *string        `json:"description,omitempty"`
 	Targets     []string       `json:"targets"`
+	Platforms   []string       `json:"platforms"`
 	Default     bool           `json:"default"`
 	Required    bool           `json:"required"`
 	Legacy      bool           `json:"legacy"`

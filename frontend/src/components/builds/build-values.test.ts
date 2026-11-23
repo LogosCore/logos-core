@@ -11,6 +11,7 @@ import {
   connectionDraft,
   connectionNames,
   currentStage,
+  defaultCommands,
   draftsFor,
   endpointFromConnection,
   evaluateFields,
@@ -28,6 +29,7 @@ import {
   targetCommands,
   usedBy,
   withKind,
+  withPlatform,
   withTarget,
   type BuildForm,
   type FactoryKind,
@@ -105,6 +107,7 @@ const schema: BuildSchemaFieldsFragment = {
       description: null,
      
       targets: ["dummy", "service"],
+      platforms: [],
       default: false,
       required: true,
       legacy: false,
@@ -114,10 +117,10 @@ const schema: BuildSchemaFieldsFragment = {
       uses: [],
       params: [field({ key: "jitter", type: "int", order: 2 }), field({ key: "interval", type: "duration", order: 1 })],
     },
-    { id: "hello", op: 2, label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
-    { id: "ls", op: 3, label: "List", description: null, targets: ["dummy", "service"], default: false, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
-    { id: "shell", op: 4, label: "Shell", description: null, targets: ["dummy"], default: true, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
-    { id: "stop", op: 5, label: "Stop the service", description: null, targets: ["service"], default: true, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
+    { id: "hello", op: 2, label: "Say hello", description: "Answers.", targets: ["dummy", "service"], platforms: [], default: true, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
+    { id: "ls", op: 3, label: "List", description: null, targets: ["dummy", "service"], platforms: [], default: false, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
+    { id: "shell", op: 4, label: "Shell", description: null, targets: ["dummy"], platforms: [], default: true, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
+    { id: "stop", op: 5, label: "Stop the service", description: null, targets: ["service"], platforms: [], default: true, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
   ],
 }
 
@@ -230,6 +233,7 @@ describe("commands", () => {
       op,
       label: id,
       targets: ["dummy"],
+      platforms: [],
       default: false,
       legacy,
       action,
@@ -266,8 +270,8 @@ describe("commands", () => {
     ...kind,
     commands: [
       ...kind.commands,
-      { id: "archive", op: 40, label: "Archive", description: null, targets: ["dummy"], default: false, required: false, legacy: false, action: null, kinds: [], composite: true, uses: ["ls", "hello"], params: [] },
-      { id: "bundle", op: 0, label: "Bundle", description: null, targets: ["dummy"], default: false, required: false, legacy: false, action: null, kinds: [], composite: true, uses: ["archive"], params: [] },
+      { id: "archive", op: 40, label: "Archive", description: null, targets: ["dummy"], platforms: [], default: false, required: false, legacy: false, action: null, kinds: [], composite: true, uses: ["ls", "hello"], params: [] },
+      { id: "bundle", op: 0, label: "Bundle", description: null, targets: ["dummy"], platforms: [], default: false, required: false, legacy: false, action: null, kinds: [], composite: true, uses: ["archive"], params: [] },
     ],
   }
 
@@ -843,3 +847,47 @@ describe("evaluateFields, a channel's setting by another (when)", () => {
     expect(errors).toEqual({ "connections[0].settings.proxy_url": "Required" })
   })
 })
+
+describe("commands for some platforms", () => {
+  // On the service target (windows/amd64, windows/arm64): stop, a default,
+  // for windows/amd64 alone, and ls for windows/arm64 alone (docs:
+  // contracts/minion-build, Commands for some platforms).
+  const onSome = factoryKindsByName([
+    {
+      moduleName: "bob",
+      instances: 1,
+      schema: {
+        ...schema,
+        commands: schema.commands.map((c) =>
+          c.id === "stop" ? { ...c, platforms: ["windows/amd64"] } : c.id === "ls" ? { ...c, platforms: ["windows/arm64"] } : c,
+        ),
+      },
+    },
+  ]).get("bob")!
+  const service = onSome.targets.find((t) => t.id === "service")!
+  const ids = (cs: readonly { id: string }[]) => cs.map((c) => c.id)
+
+  it("are on builds for those platforms alone", () => {
+    expect(ids(targetCommands(onSome, service))).toEqual(["sleep", "hello", "ls", "stop"])
+    expect(ids(targetCommands(onSome, service, "windows/amd64"))).toEqual(["sleep", "hello", "stop"])
+    expect(ids(targetCommands(onSome, service, "windows/arm64"))).toEqual(["sleep", "hello", "ls"])
+    // No platform picked yet: those for some platforms wait for one.
+    expect(ids(targetCommands(onSome, service, ""))).toEqual(["sleep", "hello"])
+    expect(defaultCommands(onSome, service, "windows/amd64")).toEqual(["sleep", "hello", "stop"])
+    expect(defaultCommands(onSome, service, "windows/arm64")).toEqual(["sleep", "hello"])
+    expect(pickedCommands(onSome, service, ["ls", "stop"], "windows/arm64")).toEqual(["sleep", "ls"])
+  })
+
+  it("follow the platform picked: kept where both have them, the new one's defaults in, the rest out", () => {
+    let form = withTarget(onSome, initialForm(onSome, null, new Map()), "service")
+    expect(form.platform).toBe("")
+    expect(form.commands).toEqual(["sleep", "hello"])
+    form = withPlatform(onSome, form, "windows/amd64")
+    expect(form.commands).toEqual(["sleep", "hello", "stop"])
+    // hello unpicked stays so; stop goes; ls, no default, comes unpicked.
+    form = withPlatform(onSome, { ...form, commands: ["sleep", "stop"] }, "windows/arm64")
+    expect(form.platform).toBe("windows/arm64")
+    expect(form.commands).toEqual(["sleep"])
+  })
+})
+

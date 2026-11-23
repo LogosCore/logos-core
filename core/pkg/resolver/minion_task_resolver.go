@@ -385,7 +385,7 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 	// the factory no longer declares: what the build has.
 	has := b.Commands
 	if t, ok := sc.Target(b.Target); ok {
-		has = sc.SessionCommands(t, b.Commands)
+		has = sc.SessionCommands(t, b.Platform, b.Commands)
 	}
 	var out []protocol.BuildCommand
 	for _, c := range sc.Commands {

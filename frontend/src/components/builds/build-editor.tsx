@@ -66,6 +66,7 @@ import {
   targetCommands,
   targetFields,
   usableKinds,
+  withPlatform,
   withTarget,
   type BuildForm as Form,
   type BuildRecordLike,
@@ -334,7 +335,7 @@ function Editor({
   }
 
   function pickCommands(picked: string[]) {
-    setForm((f) => ({ ...f, commands: pickedCommands(kind, kind.targets.find((t) => t.id === f.target), picked) }))
+    setForm((f) => ({ ...f, commands: pickedCommands(kind, kind.targets.find((t) => t.id === f.target), picked, f.platform) }))
     setServerErrors((prev) => {
       const next = Object.fromEntries(Object.entries(prev).filter(([k]) => !isCommandsKey(k)))
       return Object.keys(next).length === Object.keys(prev).length ? prev : next
@@ -440,8 +441,9 @@ function Editor({
   }
 
   const groups = groupByField(fields, (f) => f)
-  const commands = targetCommands(kind, target)
-  const defaults = defaultCommands(kind, target)
+  // The picked platform's: a command for others shows once one of them is.
+  const commands = targetCommands(kind, target, form.platform)
+  const defaults = defaultCommands(kind, target, form.platform)
   const commandsError = Object.entries(shown).find(([k]) => isCommandsKey(k))?.[1]
   // The channels the target speaks, for a new connection, and their endpoints.
   const speaks = (target?.channels ?? []).map((c) => ({ name: c.moduleName, why: channelUnusable(target, c.moduleName, channels) }))
@@ -583,7 +585,7 @@ function Editor({
             <SettingRow id="build-platform" label="Platform" required help="Where the minion runs." error={shown.platform}>
               <Select
                 value={form.platform === "" ? null : form.platform}
-                onValueChange={(v) => setForm((f) => ({ ...f, platform: typeof v === "string" ? v : "" }))}
+                onValueChange={(v) => setForm((f) => withPlatform(kind, f, typeof v === "string" ? v : ""))}
                 disabled={disabled || !target}
               >
                 <SelectTrigger id="build-platform" className="w-full max-w-80">

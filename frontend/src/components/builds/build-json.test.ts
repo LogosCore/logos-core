@@ -66,9 +66,9 @@ const schema: BuildSchemaFieldsFragment = {
     },
   ],
   commands: [
-    { id: "sleep", op: 1, label: "Sleep", description: null, targets: ["dummy", "service"], default: false, required: true, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
-    { id: "hello", op: 2, label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
-    { id: "shell", op: 3, label: "Shell", description: null, targets: ["dummy"], default: false, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
+    { id: "sleep", op: 1, label: "Sleep", description: null, targets: ["dummy", "service"], platforms: [], default: false, required: true, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
+    { id: "hello", op: 2, label: "Say hello", description: "Answers.", targets: ["dummy", "service"], platforms: [], default: true, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
+    { id: "shell", op: 3, label: "Shell", description: null, targets: ["dummy"], platforms: [], default: false, required: false, legacy: false, action: null, kinds: [], composite: false, uses: [], params: [] },
   ],
 }
 const kind = factoryKindsByName([{ moduleName: "bob", instances: 1, schema }]).get("bob")!
@@ -519,3 +519,26 @@ describe("buildJsonHints", () => {
     expect(hints["/connections/0/values"].map((h) => h.key)).toEqual(["method"])
   })
 })
+
+describe("a command for some platforms", () => {
+  // hello on windows/amd64 alone (docs: contracts/minion-build, Commands
+  // for some platforms).
+  const onSome = factoryKindsByName([
+    { moduleName: "bob", instances: 1, schema: { ...schema, commands: schema.commands.map((c) => (c.id === "hello" ? { ...c, platforms: ["windows/amd64"] } : c)) } },
+  ]).get("bob")!
+  const service = { ...json(), target: "service", values: { service_name: "svc" }, commands: ["sleep", "hello"] }
+  const commandProblems = (doc: unknown) => {
+    const r = readBuildJson(JSON.stringify(doc), onSome, channels)
+    return r.ok ? Object.fromEntries(r.problems.filter((p) => p.path.startsWith("/commands")).map((p) => [p.path, p.message])) : null
+  }
+
+  it("is a problem on another platform, and listed with its platforms", () => {
+    expect(commandProblems({ ...service, platform: "windows/arm64" })).toEqual({ "/commands/1": "Only for windows/amd64" })
+    expect(commandProblems({ ...service, platform: "windows/amd64" })).toEqual({})
+    const hello = buildJsonHints(onSome, channels, "service", [])[""]
+      ?.find((h) => h.key === "commands")
+      ?.items?.find((i) => i.value === "hello")
+    expect(hello?.detail).toBe("Say hello, only for windows/amd64")
+  })
+})
+

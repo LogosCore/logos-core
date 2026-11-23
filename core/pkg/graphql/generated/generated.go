@@ -229,6 +229,7 @@ type ComplexityRoot struct {
 		Legacy      func(childComplexity int) int
 		Op          func(childComplexity int) int
 		Params      func(childComplexity int) int
+		Platforms   func(childComplexity int) int
 		Required    func(childComplexity int) int
 		Result      func(childComplexity int) int
 		Serves      func(childComplexity int) int
@@ -3740,6 +3741,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildCommand.Params(childComplexity), true
+	case "BuildCommand.platforms":
+		if e.ComplexityRoot.BuildCommand.Platforms == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildCommand.Platforms(childComplexity), true
 	case "BuildCommand.required":
 		if e.ComplexityRoot.BuildCommand.Required == nil {
 			break
@@ -15524,10 +15531,15 @@ type BuildCommand {
   description: String
   # The targets whose builds can have it.
   targets: [String!]!
+  # The platforms ("os/arch", either half "any") of the builds it is on
+  # (docs: contracts/minion-build, Commands for some platforms): a build for
+  # another has no such command. Empty: every platform of its targets.
+  platforms: [String!]!
   # Picked in a new build until the operator unpicks it, and what a build
-  # that names no commands gets, with the required ones.
+  # that names no commands gets, with the required ones: on its platforms.
   default: Boolean!
-  # In every build of its targets: the minion cannot run without it.
+  # In every build of its targets, on its platforms: the minion cannot run
+  # without it.
   required: Boolean!
   # Kept for the builds that have it (docs: contracts/minion-build, Legacy
   # commands): no new build picks it, and it serves no action, its action
@@ -29939,6 +29951,35 @@ func (ec *executionContext) fieldContext_BuildCommand_targets(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _BuildCommand_platforms(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildCommand_platforms,
+		func(ctx context.Context) (any, error) {
+			return obj.Platforms, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildCommand_platforms(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildCommand",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BuildCommand_default(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31698,6 +31739,8 @@ func (ec *executionContext) fieldContext_BuildSchema_commands(_ context.Context,
 				return ec.fieldContext_BuildCommand_description(ctx, field)
 			case "targets":
 				return ec.fieldContext_BuildCommand_targets(ctx, field)
+			case "platforms":
+				return ec.fieldContext_BuildCommand_platforms(ctx, field)
 			case "default":
 				return ec.fieldContext_BuildCommand_default(ctx, field)
 			case "required":
@@ -31761,6 +31804,8 @@ func (ec *executionContext) fieldContext_BuildSchema_factoryCommands(_ context.C
 				return ec.fieldContext_BuildCommand_description(ctx, field)
 			case "targets":
 				return ec.fieldContext_BuildCommand_targets(ctx, field)
+			case "platforms":
+				return ec.fieldContext_BuildCommand_platforms(ctx, field)
 			case "default":
 				return ec.fieldContext_BuildCommand_default(ctx, field)
 			case "required":
@@ -79081,6 +79126,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionCommands(ctx context
 				return ec.fieldContext_BuildCommand_description(ctx, field)
 			case "targets":
 				return ec.fieldContext_BuildCommand_targets(ctx, field)
+			case "platforms":
+				return ec.fieldContext_BuildCommand_platforms(ctx, field)
 			case "default":
 				return ec.fieldContext_BuildCommand_default(ctx, field)
 			case "required":
@@ -104172,6 +104219,11 @@ func (ec *executionContext) _BuildCommand(ctx context.Context, sel ast.Selection
 			out.Values[i] = ec._BuildCommand_description(ctx, field, obj)
 		case "targets":
 			out.Values[i] = ec._BuildCommand_targets(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "platforms":
+			out.Values[i] = ec._BuildCommand_platforms(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
