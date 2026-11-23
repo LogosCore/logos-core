@@ -11,7 +11,9 @@ import {
   connectionDraft,
   connectionNames,
   currentStage,
+  draftsFor,
   endpointFromConnection,
+  evaluateFields,
   evaluateForm,
   factoryKindsByName,
   fileFits,
@@ -812,5 +814,32 @@ describe("a connection param as a connection form", () => {
     expect(readConnectionJSON("")).toBeNull()
     expect(readConnectionJSON("[1]")).toBeNull()
     expect(readConnectionJSON('{"kind":"reverse-call"}')).toBeNull()
+  })
+})
+
+describe("evaluateFields, a channel's setting by another (when)", () => {
+  // A proxy's address, only with route proxy: a build's connection, and a
+  // session's connection form (connectionOfDraft), as an endpoint's.
+  const settings: FieldDef[] = [
+    field({ key: "base_url", type: "url", required: true }),
+    field({ key: "route", type: "enum", default: "direct", options: [{ value: "direct" }, { value: "proxy" }] }),
+    field({ key: "proxy_url", type: "url", required: true, when: { key: "route", values: ["proxy"] } }),
+  ]
+
+  it("leaves it out, and unchecked, while it does not apply", () => {
+    const errors: Record<string, string> = {}
+    const drafts = draftsFor(settings, { base_url: "https://edge.example.com", proxy_url: "http://10.0.0.2:3128" })
+    expect(evaluateFields("connections[0].settings.", settings, drafts, errors)).toEqual({ base_url: "https://edge.example.com" })
+    expect(errors).toEqual({})
+  })
+
+  it("takes it, and requires it, while it does", () => {
+    const errors: Record<string, string> = {}
+    const drafts = draftsFor(settings, { base_url: "https://edge.example.com", route: "proxy" })
+    expect(evaluateFields("connections[0].settings.", settings, drafts, errors)).toEqual({
+      base_url: "https://edge.example.com",
+      route: "proxy",
+    })
+    expect(errors).toEqual({ "connections[0].settings.proxy_url": "Required" })
   })
 })

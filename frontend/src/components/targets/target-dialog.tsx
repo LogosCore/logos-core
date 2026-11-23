@@ -9,6 +9,7 @@ import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
 import { FieldControl } from "@/components/modules/management/field-control"
 import {
   evaluateParams,
+  fieldApplies,
   groupByField,
   initialDraft,
   type Draft,
@@ -222,7 +223,11 @@ function TargetForm({
           <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">{conn.problem}</div>
         )}
 
-        {groupByField(fields, (f) => f).map((g) => (
+        {/* A target field by another (its when) shows only while it applies; evaluateParams sends it only then. */}
+        {groupByField(
+          fields.filter((f) => fieldApplies(f, fields, drafts)),
+          (f) => f,
+        ).map((g) => (
           <SettingsSection key={g.group} title={g.group}>
             {g.items.map((f) => {
               const id = `target-${f.key}`

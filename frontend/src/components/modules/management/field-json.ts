@@ -1,5 +1,5 @@
 import { childPointer, isRecord, sameJSON, type JsonKeyHint, type JsonProblem } from "@/lib/json-edit"
-import { parseDraft, validateValue, type Draft, type FieldDef } from "./field-values"
+import { conditionText, fieldAppliesTo, parseDraft, validateValue, type Draft, type FieldDef } from "./field-values"
 
 // How a record's field values (an endpoint's settings, a build's values)
 // show in its JSON tab and read back from it. Every field is listed with the
@@ -8,7 +8,9 @@ import { parseDraft, validateValue, type Draft, type FieldDef } from "./field-va
 // URLs, secrets, durations, date-times, options), [] for a list, {} for a
 // map; null for a number, a switch or a file, where 0 and false are values.
 // Reading back, empty text and null mean not set, and so does a value at its
-// default, so the field keeps following the default.
+// default, so the field keeps following the default. A field whose condition
+// (when: a connection's setting by another) does not hold is not listed, as
+// the form does not show it, and a value given for it is a problem.
 
 const TEXTS = new Set(["string", "url", "secret", "duration", "datetime", "enum"])
 const LISTS = new Set(["string_list", "enum_list"])
@@ -27,10 +29,10 @@ export function shownWhenUnset(f: FieldDef): unknown {
   return null
 }
 
-/** Every field, with the value the JSON shows for it. */
+/** Every field that applies by values, with the value the JSON shows for it. */
 export function jsonFieldValues(fields: readonly FieldDef[], values: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
-  for (const f of fields) out[f.key] = values[f.key] ?? shownWhenUnset(f)
+  for (const f of fields) if (fieldAppliesTo(f, fields, values)) out[f.key] = values[f.key] ?? shownWhenUnset(f)
   return out
 }
 
@@ -74,15 +76,26 @@ export function readFieldValues(
     return values
   }
   const byKey = new Map(fields.map((f) => [f.key, f]))
+  // What a condition (when) is read by: the values as written, else defaults.
+  const written: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(object)) {
+    const f = byKey.get(key)
+    if (f && !leavesUnset(f, value, opts)) written[key] = value
+  }
   for (const [key, value] of Object.entries(object)) {
     const f = byKey.get(key)
     if (!f) {
       const message = typeof messages.unknown === "string" ? messages.unknown : messages.unknown(key)
       problems.push({ path: childPointer(pointer, key), message })
     }
-    else if (!leavesUnset(f, value, opts) && !sameJSON(value, f.default)) values[key] = value
+    else if (leavesUnset(f, value, opts)) continue
+    else if (!fieldAppliesTo(f, fields, written)) {
+      problems.push({ path: childPointer(pointer, key), message: `Only when ${conditionText(f.when!)}` })
+    }
+    else if (!sameJSON(value, f.default)) values[key] = value
   }
   for (const f of fields) {
+    if (!fieldAppliesTo(f, fields, written)) continue
     const v = object[f.key]
     const error = validateValue(f, v === undefined || leavesUnset(f, v, opts) ? null : v, { fallback: f.default })
     if (error) problems.push({ path: childPointer(pointer, f.key), message: error })
@@ -100,6 +113,7 @@ export function fieldHints(fields: readonly FieldDef[]): JsonKeyHint[] {
       f.description,
       hasDefault(f) ? `Default: ${JSON.stringify(f.default)}` : "No default",
       f.platforms?.length ? `Only for ${f.platforms.join(", ")}` : "",
+      f.when ? `Only when ${conditionText(f.when)}` : "",
     ]
       .filter(Boolean)
       .join("\n"),

@@ -1,9 +1,10 @@
 import { acceptText } from "@/components/builds/build-values"
-import { formatValue, type FieldDef } from "./field-values"
+import { conditionText, formatValue, type FieldDef } from "./field-values"
 
 /**
  * What a schema field's row says after its key and type: its default, the
- * options it takes, or the files it accepts.
+ * options it takes, or the files it accepts; and when it applies, for a
+ * field by another (a connection's setting, a param).
  */
 export function fieldNotes(f: FieldDef): string[] {
   const notes: string[] = []
@@ -17,6 +18,7 @@ export function fieldNotes(f: FieldDef): string[] {
   if (f.type === "file") notes.push(acceptText(f))
   // A build field for some platforms alone.
   if (f.platforms && f.platforms.length > 0) notes.push(`only for ${f.platforms.join(", ")}`)
+  if (f.when) notes.push(`only when ${conditionText(f.when)}`)
   return notes
 }
 

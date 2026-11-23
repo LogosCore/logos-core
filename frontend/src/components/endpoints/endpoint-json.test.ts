@@ -214,3 +214,46 @@ describe("connection kinds", () => {
     expect(out.params).toEqual({ base_url: "", backoff: "1m" })
   })
 })
+
+describe("a setting by another (when)", () => {
+  const routed: Kind = {
+    name: "http",
+    icon: { icon: "", iconLight: "" },
+    version: 2,
+    kinds: [
+      {
+        kind: RC,
+        fields: [
+          { key: "base_url", type: "url", label: "Base URL", order: 1, required: true, advanced: false, platforms: [] },
+          {
+            key: "route", type: "enum", label: "Route", order: 2, required: false, default: "direct", advanced: false, platforms: [],
+            options: [{ value: "direct" }, { value: "proxy" }],
+          },
+          {
+            key: "proxy_url", type: "url", label: "Proxy URL", order: 3, required: true, advanced: false, platforms: [],
+            when: { key: "route", values: ["proxy"] },
+          },
+        ],
+      },
+    ],
+  }
+  const doc = (values: Record<string, unknown>) => ({ name: "Edge", description: "", kind: RC, values })
+
+  it("lists it only while it applies", () => {
+    expect(Object.keys(JSON.parse(endpointJson(routed, doc({}))).params)).toEqual(["base_url", "route"])
+    expect(Object.keys(JSON.parse(endpointJson(routed, doc({ route: "proxy" }))).params)).toEqual(["base_url", "route", "proxy_url"])
+    expect(endpointJsonHints(routed, RC)["/params"].find((h) => h.key === "proxy_url")?.info).toContain("Only when route is proxy")
+  })
+
+  it("reads a value for it as a problem where it does not apply, and requires it only where it does", () => {
+    const text = (params: Record<string, unknown>) => JSON.stringify({ name: "Edge", kind: RC, params })
+    const off = readEndpointJson(text({ base_url: "https://a.example.com", proxy_url: "http://p:3128" }), routed, RC)
+    expect(off.ok && off.problems).toEqual([{ path: "/params/proxy_url", message: "Only when route is proxy" }])
+    expect(off.ok && off.doc.values).toEqual({ base_url: "https://a.example.com" })
+    const on = readEndpointJson(text({ base_url: "https://a.example.com", route: "proxy" }), routed, RC)
+    expect(on.ok && on.problems.map((p) => p.path)).toEqual(["/params/proxy_url"])
+    const set = readEndpointJson(text({ base_url: "https://a.example.com", route: "proxy", proxy_url: "http://p:3128" }), routed, RC)
+    expect(set.ok && set.problems).toEqual([])
+    expect(set.ok && set.doc.values).toEqual({ base_url: "https://a.example.com", route: "proxy", proxy_url: "http://p:3128" })
+  })
+})

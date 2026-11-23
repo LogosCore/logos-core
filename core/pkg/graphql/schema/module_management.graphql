@@ -97,9 +97,10 @@ type ModuleField {
   accept: [String!]
   # file: the largest file in bytes; null when there is no limit.
   maxSize: JSON
-  # An action's or a command's param: when it applies (the form shows it,
-  # and takes it) — while the param key of the same form, an enum, holds
-  # one of values. Null: always.
+  # An action's or a command's param, or a connection schema's field: when
+  # it applies (the form shows it, and takes it) — while the field key of
+  # the same form (a connection kind's fields, or its target's), an enum,
+  # holds one of values, set or by its default. Null: always.
   when: ModuleFieldCondition
   # An action's or a command's param seldom changed: the form shows it
   # under More options, folded.

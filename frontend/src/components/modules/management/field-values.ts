@@ -808,6 +808,29 @@ export function fieldApplies(field: FieldDef, params: readonly FieldDef[], draft
 }
 
 /**
+ * fieldApplies over values by key rather than a form's drafts (a JSON tab's,
+ * an export's, a stored endpoint's): the enum the condition names holds one
+ * of its values, set or else by its default. A connection schema's fields
+ * take conditions as params do (docs: Minion Connection Schema, Fields that
+ * depend on another).
+ */
+export function fieldAppliesTo(field: FieldDef, fields: readonly FieldDef[], values: Record<string, unknown>): boolean {
+  const when = field.when
+  if (!when) return true
+  const on = fields.find((f) => f.key === when.key)
+  if (!on) return false
+  const set = values[when.key]
+  const value = set !== null && set !== undefined ? set : on.default
+  return typeof value === "string" && when.values.includes(value)
+}
+
+/** A condition as core says it: "front is forward", "front is socks, http or forward". */
+export function conditionText(when: { key: string; values: readonly string[] }): string {
+  const v = when.values
+  return `${when.key} is ${v.length < 2 ? v.join("") : `${v.slice(0, -1).join(", ")} or ${v[v.length - 1]}`}`
+}
+
+/**
  * Params object for invokeModuleAction (unset params omitted) plus per-key
  * errors; a param that does not apply (fieldApplies) is neither.
  */

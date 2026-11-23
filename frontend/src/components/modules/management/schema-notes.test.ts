@@ -21,6 +21,13 @@ describe("fieldNotes", () => {
     ).toEqual(["default 7", "7, 6", "only for linux/arm"])
   })
 
+  it("says when a field by another applies", () => {
+    const proxy = field({ key: "proxy_url", type: "url", when: { key: "route", values: ["proxy"] } })
+    expect(fieldNotes(proxy)).toEqual(["only when route is proxy"])
+    const host = field({ key: "host", type: "string", when: { key: "front", values: ["socks", "forward"] } })
+    expect(fieldNotes(host)).toEqual(["only when front is socks or forward"])
+  })
+
   it("shows a secret's declared default, not a mask", () => {
     expect(fieldNotes(field({ key: "token", type: "secret", default: "changeme" }))).toEqual(["default changeme"])
   })

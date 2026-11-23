@@ -312,6 +312,45 @@ func TestCreateBuildConnectionNames(t *testing.T) {
 	}
 }
 
+// A channel's setting that applies only by another (When: a proxy's address,
+// only with route proxy) is checked as an endpoint's: refused, or required,
+// by the route it goes with; left out of the request where it does not
+// apply (docs: Minion Connection Schema, Fields that depend on another).
+func TestCreateBuildConnectionConditions(t *testing.T) {
+	r := newRig(t)
+	k := r.chs.schemas["http"].Kinds[protocol.KindReverseCall]
+	k.Fields = append(k.Fields,
+		protocol.FieldSpec{Key: "route", Type: protocol.FieldEnum, Default: "direct",
+			Options: []protocol.EnumOption{{Value: "direct"}, {Value: "proxy"}}},
+		protocol.FieldSpec{Key: "proxy_url", Type: protocol.FieldURL, Required: true,
+			When: &protocol.FieldCondition{Key: "route", Values: []string{"proxy"}}})
+	r.chs.schemas["http"].Kinds[protocol.KindReverseCall] = k
+	settings := func(s map[string]any) func(in *BuildInput) {
+		return func(in *BuildInput) { in.Connections[0].Settings = s }
+	}
+	const edge, proxy = "https://edge.example.com", "http://10.0.0.2:3128"
+	for name, c := range map[string]struct {
+		settings map[string]any
+		want     string
+	}{
+		"an address without the proxy":  {map[string]any{"base_url": edge, "proxy_url": proxy}, "only when route is proxy"},
+		"the proxy without its address": {map[string]any{"base_url": edge, "route": "proxy"}, "value is required"},
+	} {
+		_, err := r.svc.CreateBuild(context.Background(), opID, r.input(settings(c.settings)))
+		if p := problemsOf(err); p["connections[0].settings.proxy_url"] != c.want {
+			t.Errorf("%s: %v (%v)", name, p, err)
+		}
+	}
+	direct := r.queue(t, settings(map[string]any{"base_url": edge}))
+	if p := direct.Connections.Items[0].Endpoint.Params; p["route"] != "direct" || p["proxy_url"] != nil {
+		t.Errorf("direct: %v", p)
+	}
+	through := r.queue(t, settings(map[string]any{"base_url": edge, "route": "proxy", "proxy_url": proxy}))
+	if p := through.Connections.Items[0].Endpoint.Params; p["proxy_url"] != proxy {
+		t.Errorf("through the proxy: %v", p)
+	}
+}
+
 func TestCreateBuildProblems(t *testing.T) {
 	r := newRig(t)
 	text := r.upload(t, "notes.txt", "text/plain", "hi")

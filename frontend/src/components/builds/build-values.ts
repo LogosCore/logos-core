@@ -8,6 +8,7 @@
 import {
   compareFields,
   emptyDraft,
+  fieldApplies,
   humanizeBytes,
   initialDraft,
   parseDraft,
@@ -816,6 +817,12 @@ export interface FormInput {
   uniqueErrorCodes: boolean | null
 }
 
+/**
+ * The values fields' drafts hold, adding their errors under prefix: those at
+ * their default left to the server's. A field that does not apply (its
+ * when: a channel's setting by another) is neither sent nor checked, as the
+ * form does not show it.
+ */
 export function evaluateFields(
   prefix: string,
   fields: readonly FieldDef[],
@@ -824,6 +831,7 @@ export function evaluateFields(
 ): Record<string, unknown> {
   const values: Record<string, unknown> = {}
   for (const f of fields) {
+    if (!fieldApplies(f, fields, drafts)) continue
     const parsed = parseDraft(f, drafts[f.key] ?? emptyDraft(f, AS_TEXT))
     if (!parsed.ok) {
       errors[prefix + f.key] = parsed.error

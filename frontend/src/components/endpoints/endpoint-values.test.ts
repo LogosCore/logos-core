@@ -259,3 +259,45 @@ describe("endpointImportFrom", () => {
     expect(endpointImportFrom({ other: 1 })).toBeNull()
   })
 })
+
+describe("a setting by another (when)", () => {
+  // A proxy's address, only with route proxy (docs: Minion Connection
+  // Schema, Fields that depend on another).
+  const routed: FieldDef[] = [
+    field({ key: "base_url", type: "url", required: true }),
+    field({ key: "route", type: "enum", default: "direct", options: [{ value: "direct" }, { value: "proxy" }] }),
+    field({ key: "proxy_url", type: "url", required: true, when: { key: "route", values: ["proxy"] } }),
+  ]
+
+  it("is neither sent nor required while it does not apply", () => {
+    const drafts = endpointDrafts(routed, { base_url: "https://edge.example.com" })
+    expect(evaluateEndpoint(routed, drafts)).toEqual({ values: { base_url: "https://edge.example.com" }, errors: {} })
+    // Typed in, then the route turned back to direct: not sent.
+    drafts.proxy_url = { kind: "text", text: "http://10.0.0.2:3128" }
+    expect(evaluateEndpoint(routed, drafts).values).toEqual({ base_url: "https://edge.example.com" })
+  })
+
+  it("is sent, and required, while it does", () => {
+    const drafts = endpointDrafts(routed, { base_url: "https://edge.example.com", route: "proxy" })
+    expect(evaluateEndpoint(routed, drafts).errors).toEqual({ proxy_url: "Required" })
+    drafts.proxy_url = { kind: "text", text: "http://10.0.0.2:3128" }
+    expect(evaluateEndpoint(routed, drafts)).toEqual({
+      values: { base_url: "https://edge.example.com", route: "proxy", proxy_url: "http://10.0.0.2:3128" },
+      errors: {},
+    })
+  })
+
+  it("is left out of an import where it does not apply, and named", () => {
+    const http: Kind = { name: "http", icon: { icon: "", iconLight: "" }, version: 2, kinds: [{ kind: "reverse-call", fields: routed }] }
+    const text = JSON.stringify({
+      format: ENDPOINT_EXPORT_FORMAT,
+      name: "edge",
+      channel: { module_name: "http", schema_version: 2 },
+      kind: "reverse-call",
+      params: { base_url: "https://edge.example.com", route: "direct", proxy_url: "http://10.0.0.2:3128" },
+    })
+    const r = parseEndpointImport(text, new Map([["http", http]]))
+    expect(r.ok && r.value.values).toEqual({ base_url: "https://edge.example.com" })
+    expect(r.ok && r.value.notes).toEqual(["Left out, settings that do not apply: proxy_url (only when route is proxy)."])
+  })
+})

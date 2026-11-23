@@ -19,7 +19,7 @@
 // param of the connection format takes a session's connection by name or
 // place (connection-choices.ts).
 
-import { parseGoDuration } from "@/components/modules/management/field-values"
+import { conditionText, parseGoDuration } from "@/components/modules/management/field-values"
 import {
   isConnectionPlace,
   connectionFromText,
@@ -57,11 +57,8 @@ export function paramApplies(param: CommandParam, params: readonly CommandParam[
   return typeof value === "string" && when.values.includes(value)
 }
 
-/** A condition as core says it: "front is forward", "front is socks, http or forward". */
-export function conditionText(when: { key: string; values: readonly string[] }): string {
-  const v = when.values
-  return `${when.key} is ${v.length < 2 ? v.join("") : `${v.slice(0, -1).join(", ")} or ${v[v.length - 1]}`}`
-}
+// A condition as core says it ("front is forward"), shared with the forms.
+export { conditionText }
 
 export interface CommandDef {
   id: string

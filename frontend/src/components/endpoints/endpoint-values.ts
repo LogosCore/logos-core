@@ -7,7 +7,10 @@
 import { GraphQLRequestError } from "@/lib/graphql-client"
 import {
   compareFields,
+  conditionText,
   emptyDraft,
+  fieldApplies,
+  fieldAppliesTo,
   formatValue,
   initialDraft,
   parseDraft,
@@ -221,6 +224,12 @@ export function parseEndpointImport(
   if (unknown.length > 0) {
     notes.push(`Left out, not ${connKind} settings of ${moduleName} v${kind.version}: ${unknown.sort().join(", ")}.`)
   }
+  // A setting by another (when) that does not apply as the export stands.
+  const off = conn.fields.filter((f) => f.key in values && !fieldAppliesTo(f, conn.fields, values))
+  for (const f of off) delete values[f.key]
+  if (off.length > 0) {
+    notes.push(`Left out, settings that do not apply: ${off.map((f) => `${f.key} (only when ${conditionText(f.when!)})`).join(", ")}.`)
+  }
   // An export names the endpoint by its slug: the name to start from.
   const name = typeof doc.name === "string" ? doc.name.trim().slice(0, MAX_ENDPOINT_NAME_LENGTH) : ""
   return { ok: true, value: { kind, connectionKind: connKind, name: name || "imported", values, notes } }
@@ -271,7 +280,8 @@ export function endpointDrafts(
  * The values object to submit (it replaces the stored one), plus per-key
  * errors. Unset fields are left out, and so are fields at their default
  * (the form starts with the defaults filled in): the default applies, and
- * keeps applying should the channel change it.
+ * keeps applying should the channel change it. A field that does not apply
+ * (its when) is neither sent nor checked, as the form does not show it.
  */
 export function evaluateEndpoint(
   fields: readonly FieldDef[],
@@ -280,6 +290,7 @@ export function evaluateEndpoint(
   const values: Record<string, unknown> = {}
   const errors: Record<string, string> = {}
   for (const f of fields) {
+    if (!fieldApplies(f, fields, drafts)) continue
     const parsed = parseDraft(f, drafts[f.key] ?? emptyDraft(f, AS_TEXT))
     if (!parsed.ok) {
       errors[f.key] = parsed.error

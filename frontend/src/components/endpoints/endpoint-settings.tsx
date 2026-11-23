@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
 import { FieldControl } from "@/components/modules/management/field-control"
-import { groupByField, initialDraft, type Draft } from "@/components/modules/management/field-values"
+import { fieldApplies, groupByField, initialDraft, type Draft } from "@/components/modules/management/field-values"
 import { ConnectionKindPicker } from "./connection-kind-picker"
 import { connectionKind, type Kind } from "./endpoint-values"
 
@@ -14,7 +14,9 @@ const GENERAL_SECTION = "General"
 // what follows; then the channel's settings for that kind, a section per
 // group. Values live with the caller, by field key. Inside a build's
 // connection (sub) the sections are a level down, General untitled: the
-// connection's header says what they belong to.
+// connection's header says what they belong to. A setting that applies only
+// by another (its when: a proxy's address, only with route proxy) shows only
+// while it does.
 
 export function EndpointSettings({
   channel,
@@ -55,7 +57,8 @@ export function EndpointSettings({
   /** Sections a level down, inside a group of their own (a build's connection). */
   sub?: boolean
 }) {
-  const fields = connectionKind(channel, kind)?.fields ?? []
+  const all = connectionKind(channel, kind)?.fields ?? []
+  const fields = all.filter((f) => fieldApplies(f, all, drafts))
   return (
     <>
       <SettingsSection id={sectionIdOf?.(GENERAL_SECTION)} title={sub ? undefined : GENERAL_SECTION} sub={sub}>

@@ -242,7 +242,9 @@ func commandsFor(schema protocol.BuildSchema, t protocol.BuildTarget, picked []s
 
 // checkValues checks values against fields: no undeclared keys, every value
 // valid, required ones set, and file values naming a fitting build file of
-// op, whose ids go into files.
+// op, whose ids go into files. A field whose condition (When: a channel's
+// connection field) does not hold takes no value and is not required, as
+// protocol.ValidateFieldValues has it.
 func (s *Service) checkValues(ctx context.Context, op uuid.UUID, prefix string, fields []protocol.FieldSpec, values map[string]any, out problems,
 	files, creds map[uuid.UUID]bool) error {
 	declared := make(map[string]protocol.FieldSpec, len(fields))
@@ -256,6 +258,12 @@ func (s *Service) checkValues(ctx context.Context, op uuid.UUID, prefix string, 
 	}
 	for _, f := range fields {
 		v, ok := values[f.Key]
+		if !protocol.FieldApplies(f, fields, values) {
+			if ok && v != nil {
+				out.add(prefix+f.Key, "only when %s", f.When.String())
+			}
+			continue
+		}
 		if !ok || v == nil {
 			if f.Required && f.Default == nil {
 				out.add(prefix+f.Key, "value is required")
