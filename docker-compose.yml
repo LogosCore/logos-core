@@ -32,6 +32,9 @@ services:
       # slots and buckets, and their maintenance. Set it empty in .env and
       # the page shows what core's records say alone.
       SEAWEEDFS_MASTER_URL: ${SEAWEEDFS_MASTER_URL-http://seaweedfs-master:9333}
+      # Its gRPC address, a reclaim's; empty: the master URL's host on its
+      # port plus 10000 (seaweedfs-master:19333).
+      SEAWEEDFS_MASTER_GRPC: ${SEAWEEDFS_MASTER_GRPC:-}
       # Community skill bundles. A distinct bucket means a distinct
       # SeaweedFS collection, and a collection's first write is when its
       # volume is allocated — point this at an existing bucket if the
