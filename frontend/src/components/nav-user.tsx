@@ -25,7 +25,19 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { BotIcon, ChevronsUpDownIcon, KeyIcon, LogOutIcon, MonitorIcon, MonitorSmartphoneIcon, MoonIcon, SunIcon, UserIcon } from "lucide-react"
+import {
+  BookTextIcon,
+  BotIcon,
+  ChevronsUpDownIcon,
+  ExternalLinkIcon,
+  KeyIcon,
+  LogOutIcon,
+  MonitorIcon,
+  MonitorSmartphoneIcon,
+  MoonIcon,
+  SunIcon,
+  UserIcon,
+} from "lucide-react"
 import { useAuthStore } from "@/stores/auth"
 import { useSessionStore } from "@/stores/sessions"
 import { useAPIKeyStore } from "@/stores/api-keys"
@@ -42,6 +54,10 @@ const warmDialogs = () => {
   void mySessionsDialogCode.load().catch(() => undefined)
   void myAPIKeyDialogCode.load().catch(() => undefined)
 }
+
+// The Logos docs site: logos-docs, deployed to GitHub Pages. The menu's Docs
+// opens it in a new tab.
+const DOCS_URL = "https://logoscore.github.io/logos-docs/"
 
 export function NavUser({
   user,
@@ -155,6 +171,11 @@ export function NavUser({
             <DropdownMenuItem render={<Link to="/agents" />}>
               <BotIcon className="size-4" />
               Agents
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<a href={DOCS_URL} target="_blank" rel="noopener noreferrer" />}>
+              <BookTextIcon className="size-4" />
+              Docs
+              <ExternalLinkIcon className="ml-auto size-3.5 text-muted-foreground" />
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
