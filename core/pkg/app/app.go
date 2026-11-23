@@ -40,6 +40,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/modulemgmt"
 	"github.com/logoscore/logos-core/core/pkg/recordings"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/logoscore/logos-core/core/pkg/scheduledtasks"
 	"github.com/logoscore/logos-core/core/pkg/skills"
 	"github.com/logoscore/logos-core/core/pkg/storage"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
@@ -202,6 +203,9 @@ type App struct {
 	// factoryCommands runs factory commands' tasks: their factories run
 	// them, offered over the control plane, reporting on logos.core.rpc.
 	factoryCommands *factorycommands.Service
+	// scheduledTasks takes on the tasks queued with a time once it comes
+	// (docs: Tasks and Results, Scheduled tasks).
+	scheduledTasks *scheduledtasks.Service
 	// links are the channels' control links; minionTargets the targets of
 	// bind minions, which minionSync calls through them. stopTargets stops
 	// the calls' scheduler.
@@ -352,6 +356,9 @@ func NewApp() (*App, error) {
 	factoryCommandSvc := factorycommands.New(factorycommands.Config{MaxFileSize: e.MinionFileMaxSize}, repos.MinionTask,
 		repos.MinionSession, repos.Build, buildSvc, repos.ModuleRegistry, repos.User, credentialRefs, rpcClient, compositeLinks,
 		minionFiles, bus, l.Named("factorycommands"))
+	// Tasks queued with a time, taken on once it comes by the task resolver
+	// (WithStarter, in buildRouter).
+	scheduledTaskSvc := scheduledtasks.New(repos.MinionTask, l.Named("scheduledtasks"))
 	rpcServer.RegisterHandler(protocol.TypeFactoryCommandOutput, factoryCommandSvc.HandleOutput)
 	rpcServer.RegisterHandler(protocol.TypeFactoryCommandResult, factoryCommandSvc.HandleResult)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
@@ -435,6 +442,7 @@ func NewApp() (*App, error) {
 		minionSync:      minionSync,
 		composites:      compositeSvc,
 		factoryCommands: factoryCommandSvc,
+		scheduledTasks:  scheduledTaskSvc,
 		links:           links,
 		factoryLinks:    factoryLinks,
 		minionTargets:   minionTargets,
@@ -545,6 +553,7 @@ func (a *App) startLifecycle() {
 	a.minionTunnels.Start(context.Background())
 	a.composites.Start()
 	a.factoryCommands.Start()
+	a.scheduledTasks.Start()
 	a.storage.Start()
 	stopTasks, stopDelegates := a.minionSync.WatchTasks(), a.minionSync.WatchDelegates()
 	a.stopTaskWatch = func() { stopTasks(); stopDelegates() }
@@ -562,6 +571,11 @@ func (a *App) stopLifecycle() {
 	}
 	if a.rpcServer != nil {
 		a.rpcServer.Stop()
+	}
+	// A scheduled task taken on calls its factory's code or offers it, as a
+	// composite or a factory command: stopped before them.
+	if a.scheduledTasks != nil {
+		a.scheduledTasks.Stop()
 	}
 	// Build offers and cancels use the RPC client too, and composite
 	// tasks' calls.

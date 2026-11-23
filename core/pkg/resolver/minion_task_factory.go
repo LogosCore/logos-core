@@ -76,10 +76,11 @@ func toFactoryCommandModel(sc protocol.BuildSchema, fc protocol.FactoryCommand) 
 
 // queueFactory checks a factory command's task as an operator's (its args,
 // the task files and credentials they name) and keeps it: it waits in core
-// (FACTORY) for an instance of its factory to take it. A check that fails is
-// a GraphQL error with the reason; the task is not published.
+// (FACTORY) for an instance of its factory to take it, or with at, SCHEDULED
+// until then, offered to none. A check that fails is a GraphQL error with
+// the reason; the task is not published.
 func (r *minionTaskResolver) queueFactory(ctx context.Context, s *models.MinionSession, fc protocol.FactoryCommand, values map[string]any,
-	uid uuid.UUID) (*models.MinionTask, error) {
+	uid uuid.UUID, at *time.Time) (*models.MinionTask, error) {
 	b, err := r.builds.FindByBuildID(ctx, s.BuildID)
 	if err != nil {
 		if repository.IsNotFound(err) {
@@ -103,6 +104,10 @@ func (r *minionTaskResolver) queueFactory(ctx context.Context, s *models.MinionS
 	t := &models.MinionTask{TaskID: uuid.New(), OperationID: s.OperationID, SessionID: s.SessionID, Command: fc.ID, Args: values,
 		CredentialIDs: credentialIDs, Result: fc.Result, IssuedBy: uid, State: models.MinionTaskFactory, QueuedAt: now,
 		LineRest: lineRest(fc.Params), Factory: &models.MinionFactoryRun{Module: b.ModuleName, Args: args, Files: files, OfferAt: &now}}
+	if at != nil {
+		// Offered once its time comes (its offer due then: StartState).
+		t.State, t.ScheduledAt = models.MinionTaskScheduled, at
+	}
 	t.LineNames = r.lineNames(ctx, s, fc.Params, t.Args)
 	t.LineJSON = lineJSON(fc.Params, t.Args)
 	if err := r.tasks.Insert(ctx, t); err != nil {

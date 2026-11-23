@@ -468,6 +468,7 @@ func toBuildCommandModel(s protocol.BuildSchema, c protocol.BuildCommand) *model
 		Params: toBuildFieldModels(c.Params),
 		Result: strPtr(c.Result), Action: strPtr(c.Action), Kinds: append([]string{}, c.Kinds...),
 		Serves: []*model.BuildServe{}, Composite: c.Composite, Uses: append([]string{}, c.Uses...),
+		Schedulable: schedulable(c),
 	}
 	for _, sv := range c.Serves {
 		mc.Serves = append(mc.Serves, &model.BuildServe{ModuleName: sv.ModuleName, Versions: append([]int{}, sv.Versions...),
@@ -586,4 +587,11 @@ func timePtr(t *time.Time) *string {
 	}
 	s := t.Format(time.RFC3339)
 	return &s
+}
+
+// schedulable reports whether a task of c can be queued with a time (docs:
+// Tasks and Results, Scheduled tasks): not one of core's own commands,
+// which run at once, nor a tunnel, whose port opens as it is queued.
+func schedulable(c protocol.BuildCommand) bool {
+	return !models.IsCoreCommand(c.ID) && !protocol.IsTunnelAction(c.Action)
 }

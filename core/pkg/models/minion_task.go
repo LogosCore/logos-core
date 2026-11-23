@@ -77,10 +77,14 @@ type MinionTask struct {
 	// task list search reads (MinionTaskSearchText).
 	SearchText string `bson:"search_text,omitempty" json:"-"`
 
-	State     string     `bson:"state" json:"state"`
-	QueuedAt  time.Time  `bson:"queued_at" json:"queued_at"`
-	SentAt    *time.Time `bson:"sent_at,omitempty" json:"sent_at,omitempty"`
-	SendCount int        `bson:"send_count,omitempty" json:"send_count,omitempty"`
+	State    string    `bson:"state" json:"state"`
+	QueuedAt time.Time `bson:"queued_at" json:"queued_at"`
+	// ScheduledAt is when a task queued with a time goes on (docs:
+	// contracts/minion-messages/tasks-and-results, Scheduled tasks): it
+	// waits SCHEDULED until then. Kept once it went on; Run now drops it.
+	ScheduledAt *time.Time `bson:"scheduled_at,omitempty" json:"scheduled_at,omitempty"`
+	SentAt      *time.Time `bson:"sent_at,omitempty" json:"sent_at,omitempty"`
+	SendCount   int        `bson:"send_count,omitempty" json:"send_count,omitempty"`
 	// AckedAt: the minion acked it, or a result for it came.
 	AckedAt   *time.Time `bson:"acked_at,omitempty" json:"acked_at,omitempty"`
 	StartedAt *time.Time `bson:"started_at,omitempty" json:"started_at,omitempty"`
@@ -462,9 +466,14 @@ func (t MinionTask) MissingParts() int {
 
 // Minion task states.
 const (
-	MinionTaskQueued  = "QUEUED"
-	MinionTaskSent    = "SENT"
-	MinionTaskRunning = "RUNNING"
+	// MinionTaskScheduled is a task queued with a time (ScheduledAt) that
+	// has not come: it waits in core, nothing of it gone anywhere (its
+	// minion, its factory's code, its factory), and goes on at its time in
+	// the state it would have been queued in (StartState).
+	MinionTaskScheduled = "SCHEDULED"
+	MinionTaskQueued    = "QUEUED"
+	MinionTaskSent      = "SENT"
+	MinionTaskRunning   = "RUNNING"
 	// MinionTaskComposing is a composite command's task while it waits in
 	// core for its factory's code: it never goes to the minion, and takes
 	// none of its room. Its own op, when a decision sends it, makes it
@@ -483,7 +492,22 @@ const (
 )
 
 // MinionTaskOpenStates are the states of a task that has not ended.
-var MinionTaskOpenStates = []string{MinionTaskQueued, MinionTaskSent, MinionTaskRunning, MinionTaskComposing, MinionTaskFactory}
+var MinionTaskOpenStates = []string{MinionTaskScheduled, MinionTaskQueued, MinionTaskSent, MinionTaskRunning, MinionTaskComposing,
+	MinionTaskFactory}
+
+// StartState is the state a SCHEDULED task goes on in at its time, the one
+// it would have been queued in: COMPOSING for a composite command's (its
+// factory's code then called), FACTORY for a factory command's (then
+// offered to its factory), else QUEUED (for its minion).
+func (t MinionTask) StartState() string {
+	switch {
+	case t.Composite != nil:
+		return MinionTaskComposing
+	case t.Factory != nil:
+		return MinionTaskFactory
+	}
+	return MinionTaskQueued
+}
 
 // InFactory reports whether t is a factory command's task that has not
 // ended: waiting for an instance of its factory, or running on one.

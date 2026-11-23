@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { DateTimePicker } from "@/components/ui/date-picker"
 import { Textarea } from "@/components/ui/textarea"
 import {
   DocumentIconPicker,
@@ -124,6 +125,9 @@ function CustomEventForm({ operationId, timezone, event, onSaved }: FormProps) {
   const initialDescription = event
     ? parseCustomEventDescription(event.metadata)
     : ""
+  // The date and time as typed or picked, 24 hours (DateTimePicker): its hidden input
+  // carries it in the form's data, as occurredAt.
+  const [occurred, setOccurred] = useState(() => formatForLocalInput(initialOccurred))
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -232,11 +236,11 @@ function CustomEventForm({ operationId, timezone, event, onSaved }: FormProps) {
           <FieldLabel htmlFor="custom-event-occurred">
             Date &amp; time
           </FieldLabel>
-          <Input
+          <DateTimePicker
             id="custom-event-occurred"
             name="occurredAt"
-            type="datetime-local"
-            defaultValue={formatForLocalInput(initialOccurred)}
+            value={occurred}
+            onChange={setOccurred}
             required
           />
         </Field>

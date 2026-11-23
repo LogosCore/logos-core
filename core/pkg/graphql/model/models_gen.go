@@ -137,6 +137,7 @@ type BuildCommand struct {
 	Description *string        `json:"description,omitempty"`
 	Targets     []string       `json:"targets"`
 	Platforms   []string       `json:"platforms"`
+	Schedulable bool           `json:"schedulable"`
 	Default     bool           `json:"default"`
 	Required    bool           `json:"required"`
 	Legacy      bool           `json:"legacy"`
@@ -1232,6 +1233,7 @@ type MinionTask struct {
 	ImportantByName   *string            `json:"importantByName,omitempty"`
 	State             string             `json:"state"`
 	QueuedAt          string             `json:"queuedAt"`
+	ScheduledAt       *string            `json:"scheduledAt,omitempty"`
 	SentAt            *string            `json:"sentAt,omitempty"`
 	SendCount         int                `json:"sendCount"`
 	AckedAt           *string            `json:"ackedAt,omitempty"`

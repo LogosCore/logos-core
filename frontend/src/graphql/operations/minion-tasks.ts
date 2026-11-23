@@ -40,6 +40,7 @@ export const MinionTaskFields = graphql(`
     importantByName
     state
     queuedAt
+    scheduledAt
     sentAt
     sendCount
     ackedAt
@@ -384,6 +385,7 @@ export const MinionSessionCommandsQuery = graphql(`
       composite
       uses
       factory
+      schedulable
       params {
         ...ModuleFieldDefFields
       }
@@ -401,8 +403,17 @@ export const MinionDesktopSettingsQuery = graphql(`
 `)
 
 export const QueueMinionTaskMutation = graphql(`
-  mutation QueueMinionTask($sessionId: ID!, $command: String!, $args: JSON) {
-    queueMinionTask(sessionId: $sessionId, command: $command, args: $args) {
+  mutation QueueMinionTask($sessionId: ID!, $command: String!, $args: JSON, $at: String) {
+    queueMinionTask(sessionId: $sessionId, command: $command, args: $args, at: $at) {
+      ...MinionTaskFields
+    }
+  }
+`)
+
+// Takes a scheduled task on at once, its time dropped.
+export const RunMinionTaskNowMutation = graphql(`
+  mutation RunMinionTaskNow($id: ID!) {
+    runMinionTaskNow(id: $id) {
       ...MinionTaskFields
     }
   }

@@ -77,8 +77,13 @@ func (r *minionTaskResolver) Document(ctx context.Context, obj *model.MinionTask
 }
 
 // QueueMinionTask is the resolver for the queueMinionTask field.
-func (r *mutationResolver) QueueMinionTask(ctx context.Context, sessionID string, command string, args any) (*model.MinionTask, error) {
-	return r.MinionTaskResolver.QueueMinionTask(ctx, sessionID, command, args)
+func (r *mutationResolver) QueueMinionTask(ctx context.Context, sessionID string, command string, args any, at *string) (*model.MinionTask, error) {
+	return r.MinionTaskResolver.QueueMinionTask(ctx, sessionID, command, args, at)
+}
+
+// RunMinionTaskNow is the resolver for the runMinionTaskNow field.
+func (r *mutationResolver) RunMinionTaskNow(ctx context.Context, id string) (*model.MinionTask, error) {
+	return r.MinionTaskResolver.RunMinionTaskNow(ctx, id)
 }
 
 // CancelMinionTask is the resolver for the cancelMinionTask field.

@@ -3,7 +3,7 @@ import { ChevronRightIcon, PlayIcon, SlidersHorizontalIcon, FolderTreeIcon } fro
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { errorMessage } from "@/components/modules/management/api-errors"
-import type { Draft, FieldDef } from "@/components/modules/management/field-values"
+import { rfc3339ToLocalInput, type Draft, type FieldDef } from "@/components/modules/management/field-values"
 import { SessionCommandDialog } from "./session-command-dialog"
 import { draftsFromTexts } from "@/components/command-form/command-drafts"
 import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
@@ -13,6 +13,7 @@ import { useWorkspaceActions } from "./workspace-tabs"
 import { actionCommands } from "./action-commands"
 import { TaskFilesProvider } from "./task-files"
 import { commandOf, lineTexts, paramApplies, parseCommandLine, usage, valueCompletion, words, type CommandDef } from "./command-line"
+import { SCHEDULE_KEY, takeSchedule } from "./task-schedule"
 import { choiceDetail, connectionText, isConnectionPlace, withConnection, type ConnectionChoice } from "./connection-choices"
 import { ConnectionChoicesProvider } from "./session-connection-choices"
 import { useSessionConnectionChoices } from "./use-connection-choices"
@@ -66,6 +67,8 @@ export interface ConsoleCommand extends CommandDef {
   required?: boolean
   /** Kept for the builds that have it: it serves no action (docs: contracts/minion-build, Legacy commands). */
   legacy?: boolean
+  /** Its task can be queued with a time (--at=, the form's Schedule): not core's own, nor a tunnel. */
+  schedulable?: boolean
 }
 
 export function CommandBar({
@@ -182,7 +185,8 @@ export function CommandBar({
     [back, typingCommand, builtinLine, line, commands, connections],
   )
   const command = builtinLine ? undefined : commandOf(line, commands)
-  const parsed = line.trim() === "" || builtinLine ? null : parseCommandLine(line, commands, connections)
+  // A time (--at=) is the task's, not a param's: the line is read without it.
+  const parsed = line.trim() === "" || builtinLine ? null : parseCommandLine(takeSchedule(line, commands).line, commands, connections)
 
   const runBuiltin = (text: string) => {
     const el = input.current
@@ -211,6 +215,15 @@ export function CommandBar({
       runBuiltin(text)
       return
     }
+    // Its time (--at=), taken off the line: the task waits SCHEDULED until
+    // then; one that is none is refused.
+    const schedule = takeSchedule(text, commands)
+    if (schedule.error) {
+      setError(schedule.error)
+      if (input.current) fx?.refused(input.current)
+      return
+    }
+    text = schedule.line
     // A file is picked in the form: a line for a command that sends one,
     // without it, opens there.
     const lt = lineTexts(text, commands, connections)
@@ -237,19 +250,19 @@ export function CommandBar({
           if (input.current) fx?.refused(input.current)
           return
         }
-        queueParsed(p.command.id, r.args)
+        queueParsed(p.command.id, r.args, schedule.at)
       }, (err: unknown) => setError(errorMessage(err, "Could not look the credential up")))
       return
     }
-    queueParsed(p.command.id, p.args)
+    queueParsed(p.command.id, p.args, schedule.at)
   }
 
-  const queueParsed = (command: string, args: Record<string, unknown>) => {
+  const queueParsed = (command: string, args: Record<string, unknown>, at: string | null) => {
     const el = input.current
     setError(null)
     if (el) fx?.ran(el)
     queue.mutate(
-      { sessionId, command, args: Object.keys(args).length > 0 ? args : null },
+      { sessionId, command, args: Object.keys(args).length > 0 ? args : null, at },
       {
         onSuccess: (data) => {
           onQueued?.(data.queueMinionTask)
@@ -302,7 +315,9 @@ export function CommandBar({
       setFormOpen(true)
       return
     }
-    const lt = lineTexts(line, commands, connections)
+    // Its time (--at=) fills the form's Schedule, as typed when it is none.
+    const schedule = takeSchedule(line, commands)
+    const lt = lineTexts(schedule.line, commands, connections)
     const c = lt.command ? commands.find((x) => x.id === lt.command!.id) : undefined
     if (!c) {
       setError(`No command "${words(line)[0].text}": ${commands.map((x) => x.id).join(", ") || "none"}`)
@@ -310,6 +325,9 @@ export function CommandBar({
     }
     setError(null)
     let drafts = draftsFromTexts(c.fields, lt.texts)
+    if (schedule.text !== null) {
+      drafts = { ...drafts, [SCHEDULE_KEY]: { kind: "text", text: schedule.at ? rfc3339ToLocalInput(schedule.at) : schedule.text } }
+    }
     // A connection named (edit_connection's conn): the params that take it
     // whole start as it, to edit, unless typed.
     const place = c.fields.filter(isConnectionPlace).map((f) => Number(lt.texts.get(f.key)))[0]

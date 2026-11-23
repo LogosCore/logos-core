@@ -6,6 +6,7 @@ import {
   CopyIcon,
   CornerLeftUpIcon,
   DownloadIcon,
+  PlayIcon,
   RotateCcwIcon,
   SearchIcon,
   SquareIcon,
@@ -434,6 +435,12 @@ export function TaskDetail({
               </span>
             )
           )}
+          {actions.canRunNow && (
+            <Button variant="ghost" size="icon-xs" title="Run it now: its time dropped, it goes on at once" aria-label="Run the task now"
+              disabled={actions.runningNow} onClick={actions.runNow}>
+              <PlayIcon />
+            </Button>
+          )}
           {actions.canRunAgain && (
             <Button variant="ghost" size="icon-xs" title="Run it again" aria-label="Run the task again" disabled={actions.runningAgain} onClick={actions.runAgain}>
               <RotateCcwIcon />
@@ -471,7 +478,9 @@ export function TaskDetail({
           loading={outputQ.isLoading}
           running={!FINISHED.has(t.state)}
           empty={
-            t.state === "QUEUED" || t.state === "SENT"
+            t.state === "SCHEDULED"
+              ? "No output yet: it is scheduled, and goes on at its time."
+              : t.state === "QUEUED" || t.state === "SENT"
               ? "No output yet."
               : FINISHED.has(t.state)
                 ? "No output."

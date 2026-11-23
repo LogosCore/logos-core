@@ -10,6 +10,7 @@ import { commandKindsNote } from "./command-kinds"
 import { lineOf, usage } from "./command-line"
 import { isConnectionPlace, withConnection, type ConnectionChoice } from "./connection-choices"
 import { SessionFormContext } from "./session-form-context"
+import { atOption, SCHEDULE_FIELD, splitSchedule } from "./task-schedule"
 
 // A session's command as a form, wherever it opens: the console's
 // Shift+Enter and form button, and the views that run one of the session's
@@ -53,6 +54,20 @@ export function SessionCommandDialog({
   onQueued,
 }: SessionCommandDialogProps) {
   const queue = useQueueMinionTask()
+  // A command whose task takes a time has Schedule under More options: its
+  // task waits SCHEDULED until then (task-schedule.ts).
+  // Its bound is now: a time past is dimmed in the calendar, and the form
+  // says so before core does.
+  const fields = command
+    ? command.schedulable
+      ? [...command.fields, { ...SCHEDULE_FIELD, min: new Date().toISOString() }]
+      : command.fields
+    : []
+  // The params' values as a line, the time as its option.
+  const sameAs = (values: Record<string, unknown>) => {
+    const { args, at } = splitSchedule(values)
+    return command ? `${lineOf(command.id, args, command, connections)}${at ? ` ${atOption(at)}` : ""}` : ""
+  }
   return (
     // Its fields read the session by it (a connection param: connection-field.tsx).
     <SessionFormContext.Provider value={sessionId}>
@@ -75,22 +90,20 @@ export function SessionCommandDialog({
         )
       }
       before={before}
-      fields={command?.fields ?? []}
+      fields={fields}
       initialDrafts={initialDrafts}
       showErrorsFor={showErrorsFor}
       after={(values) =>
         command && (
-          <p
-            className="truncate font-mono text-xs text-muted-foreground"
-            title={values ? lineOf(command.id, values, command, connections) : undefined}
-          >
-            Same as: {values ? lineOf(command.id, values, command, connections) : "…"}
+          <p className="truncate font-mono text-xs text-muted-foreground" title={values ? sameAs(values) : undefined}>
+            Same as: {values ? sameAs(values) : "…"}
           </p>
         )
       }
       onSubmit={async (values, drafts) => {
         if (!command) throw new Error("Pick a command first.")
-        const data = await queue.mutateAsync({ sessionId, command: command.id, args: Object.keys(values).length > 0 ? values : null })
+        const { args, at } = splitSchedule(values)
+        const data = await queue.mutateAsync({ sessionId, command: command.id, args: Object.keys(args).length > 0 ? args : null, at })
         // A stream picked here goes now, as the task waits for it.
         for (const d of Object.values(drafts)) {
           if (d.kind === "stream" && d.file) startStreamUpload(data.queueMinionTask.id, d.file)
@@ -102,7 +115,7 @@ export function SessionCommandDialog({
       followDrafts={(key, drafts) => {
         // A connection picked (edit_connection's conn): the params that
         // take one whole start over as it.
-        const f = command?.fields.find((x) => x.key === key)
+        const f = fields.find((x) => x.key === key)
         const d = drafts[key]
         if (!command || !f || !isConnectionPlace(f) || d?.kind !== "text") return drafts
         const picked = connections.find((c) => String(c.place) === d.text.trim())

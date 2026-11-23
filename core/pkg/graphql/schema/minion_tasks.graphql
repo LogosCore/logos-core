@@ -41,11 +41,15 @@ type MinionTask {
   importantBy: ID
   # Their username; null when the user is gone.
   importantByName: String
-  # QUEUED (waiting for the minion to ask), SENT (not acked yet), RUNNING
-  # (the minion has it: acked, or its output coming),
+  # SCHEDULED (queued with a time that has not come: nothing of it went
+  # anywhere), QUEUED (waiting for the minion to ask), SENT (not acked
+  # yet), RUNNING (the minion has it: acked, or its output coming),
   # DONE (the minion did it), FAILED or CANCELLED.
   state: String!
   queuedAt: String!
+  # When a task queued with a time goes on (queueMinionTask's at): SCHEDULED
+  # until then. Kept once it went on; Run now drops it.
+  scheduledAt: String
   # When it first went out, and how many times it did.
   sentAt: String
   sendCount: Int!
@@ -711,8 +715,16 @@ extend type Query {
 extend type Mutation {
   # Gives a session's minion a command: args are checked against the
   # command's params and the task waits for the minion's next check-in.
-  # Needs operator; agent API keys are rejected.
-  queueMinionTask(sessionId: ID!, command: String!, args: JSON): MinionTask!
+  # With at (RFC 3339, after now) it waits SCHEDULED until then, nothing of
+  # it gone anywhere (docs: Tasks and Results, Scheduled tasks); core's own
+  # commands and tunnels take none. Needs operator; agent API keys are
+  # rejected.
+  queueMinionTask(sessionId: ID!, command: String!, args: JSON, at: String): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # Takes a SCHEDULED task on at once, its time dropped: it goes on as one
+  # queued now. Needs operator.
+  runMinionTaskNow(id: ID!): MinionTask!
     @hasPermission(permission: "operation:member")
 
   # Stops a task: one not sent yet is cancelled at once, one sent is asked

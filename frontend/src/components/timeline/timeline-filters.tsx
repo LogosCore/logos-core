@@ -3,7 +3,7 @@ import { CalendarIcon, FilterIcon, UsersIcon, XIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import {
   Popover,
   PopoverContent,
@@ -14,6 +14,7 @@ import {
   type SuggestionOption,
 } from "@/components/ui/suggestion-input"
 import { useUserSuggestions } from "@/graphql/hooks/operations"
+import { dateValue } from "@/lib/date-time-text"
 import { cn } from "@/lib/utils"
 import { dayjs } from "./dayjs-setup"
 import { SUBJECT_KIND_OPTIONS } from "./timeline-filter-options"
@@ -245,22 +246,25 @@ export function DateRangeFilter({ from, to, onChange }: DateRangeFilterProps) {
         <div className="grid gap-2">
           <label className="grid gap-1 text-xs">
             <span className="text-muted-foreground">From</span>
-            <Input
-              type="date"
+            <DatePicker
               value={from ?? ""}
-              onChange={(e) =>
-                onChange({ from: e.target.value || null, to })
-              }
+              max={to}
+              aria-label="From"
+              onChange={(v) => {
+                // Text that is no date yet leaves the range as it is.
+                if (v === "" || dateValue(v) === v) onChange({ from: v || null, to })
+              }}
             />
           </label>
           <label className="grid gap-1 text-xs">
             <span className="text-muted-foreground">To</span>
-            <Input
-              type="date"
+            <DatePicker
               value={to ?? ""}
-              onChange={(e) =>
-                onChange({ from, to: e.target.value || null })
-              }
+              min={from}
+              aria-label="To"
+              onChange={(v) => {
+                if (v === "" || dateValue(v) === v) onChange({ from, to: v || null })
+              }}
             />
           </label>
           {hasRange && (

@@ -232,6 +232,7 @@ type ComplexityRoot struct {
 		Platforms   func(childComplexity int) int
 		Required    func(childComplexity int) int
 		Result      func(childComplexity int) int
+		Schedulable func(childComplexity int) int
 		Serves      func(childComplexity int) int
 		Targets     func(childComplexity int) int
 		Uses        func(childComplexity int) int
@@ -1185,6 +1186,7 @@ type ComplexityRoot struct {
 		Result            func(childComplexity int) int
 		ResultOf          func(childComplexity int) int
 		Rev               func(childComplexity int) int
+		ScheduledAt       func(childComplexity int) int
 		SendCount         func(childComplexity int) int
 		SentAt            func(childComplexity int) int
 		SessionID         func(childComplexity int) int
@@ -1586,7 +1588,7 @@ type ComplexityRoot struct {
 		PermanentlyDeleteWikiDocument func(childComplexity int, id string) int
 		PublishOperatorFocus          func(childComplexity int, input model.OperatorFocusInput) int
 		PurgeTask                     func(childComplexity int, id string) int
-		QueueMinionTask               func(childComplexity int, sessionID string, command string, args any) int
+		QueueMinionTask               func(childComplexity int, sessionID string, command string, args any, at *string) int
 		ReclaimStorage                func(childComplexity int) int
 		RecordIconUse                 func(childComplexity int, name string) int
 		RegenerateAgentKey            func(childComplexity int, id string) int
@@ -1601,6 +1603,7 @@ type ComplexityRoot struct {
 		RestoreWikiDocumentBackup     func(childComplexity int, documentID string, backupID string) int
 		RevokeAllMySessions           func(childComplexity int) int
 		RevokeSession                 func(childComplexity int, id string) int
+		RunMinionTaskNow              func(childComplexity int, id string) int
 		SetAgentKeyEnabled            func(childComplexity int, id string, enabled bool) int
 		SetHiddenIdentities           func(childComplexity int, names []string) int
 		SetMinionProcessMark          func(childComplexity int, name string, mark *model.MinionSessionMarkInput) int
@@ -2683,7 +2686,8 @@ type MutationResolver interface {
 	ConnectMinionTarget(ctx context.Context, id string) (*model.MinionTarget, error)
 	DisconnectMinionTarget(ctx context.Context, id string) (*model.MinionTarget, error)
 	RemoveMinionTarget(ctx context.Context, id string) (bool, error)
-	QueueMinionTask(ctx context.Context, sessionID string, command string, args any) (*model.MinionTask, error)
+	QueueMinionTask(ctx context.Context, sessionID string, command string, args any, at *string) (*model.MinionTask, error)
+	RunMinionTaskNow(ctx context.Context, id string) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
 	SetMinionTaskImportant(ctx context.Context, id string, important bool) (*model.MinionTask, error)
 	SetMinionProcessMark(ctx context.Context, name string, mark *model.MinionSessionMarkInput) (*model.MinionProcessMark, error)
@@ -3759,6 +3763,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildCommand.Result(childComplexity), true
+	case "BuildCommand.schedulable":
+		if e.ComplexityRoot.BuildCommand.Schedulable == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildCommand.Schedulable(childComplexity), true
 	case "BuildCommand.serves":
 		if e.ComplexityRoot.BuildCommand.Serves == nil {
 			break
@@ -7879,6 +7889,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.Rev(childComplexity), true
+	case "MinionTask.scheduledAt":
+		if e.ComplexityRoot.MinionTask.ScheduledAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.ScheduledAt(childComplexity), true
 	case "MinionTask.sendCount":
 		if e.ComplexityRoot.MinionTask.SendCount == nil {
 			break
@@ -10122,7 +10138,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.QueueMinionTask(childComplexity, args["sessionId"].(string), args["command"].(string), args["args"].(any)), true
+		return e.ComplexityRoot.Mutation.QueueMinionTask(childComplexity, args["sessionId"].(string), args["command"].(string), args["args"].(any), args["at"].(*string)), true
 	case "Mutation.reclaimStorage":
 		if e.ComplexityRoot.Mutation.ReclaimStorage == nil {
 			break
@@ -10262,6 +10278,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RevokeSession(childComplexity, args["id"].(string)), true
+	case "Mutation.runMinionTaskNow":
+		if e.ComplexityRoot.Mutation.RunMinionTaskNow == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_runMinionTaskNow_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RunMinionTaskNow(childComplexity, args["id"].(string)), true
 	case "Mutation.setAgentKeyEnabled":
 		if e.ComplexityRoot.Mutation.SetAgentKeyEnabled == nil {
 			break
@@ -15535,6 +15562,10 @@ type BuildCommand {
   # (docs: contracts/minion-build, Commands for some platforms): a build for
   # another has no such command. Empty: every platform of its targets.
   platforms: [String!]!
+  # Its task can be queued with a time (queueMinionTask's at): every
+  # command's but core's own, which run at once, and a tunnel's, whose port
+  # opens as it is queued (docs: Tasks and Results, Scheduled tasks).
+  schedulable: Boolean!
   # Picked in a new build until the operator unpicks it, and what a build
   # that names no commands gets, with the required ones: on its platforms.
   default: Boolean!
@@ -18375,11 +18406,15 @@ type MinionTask {
   importantBy: ID
   # Their username; null when the user is gone.
   importantByName: String
-  # QUEUED (waiting for the minion to ask), SENT (not acked yet), RUNNING
-  # (the minion has it: acked, or its output coming),
+  # SCHEDULED (queued with a time that has not come: nothing of it went
+  # anywhere), QUEUED (waiting for the minion to ask), SENT (not acked
+  # yet), RUNNING (the minion has it: acked, or its output coming),
   # DONE (the minion did it), FAILED or CANCELLED.
   state: String!
   queuedAt: String!
+  # When a task queued with a time goes on (queueMinionTask's at): SCHEDULED
+  # until then. Kept once it went on; Run now drops it.
+  scheduledAt: String
   # When it first went out, and how many times it did.
   sentAt: String
   sendCount: Int!
@@ -19045,8 +19080,16 @@ extend type Query {
 extend type Mutation {
   # Gives a session's minion a command: args are checked against the
   # command's params and the task waits for the minion's next check-in.
-  # Needs operator; agent API keys are rejected.
-  queueMinionTask(sessionId: ID!, command: String!, args: JSON): MinionTask!
+  # With at (RFC 3339, after now) it waits SCHEDULED until then, nothing of
+  # it gone anywhere (docs: Tasks and Results, Scheduled tasks); core's own
+  # commands and tunnels take none. Needs operator; agent API keys are
+  # rejected.
+  queueMinionTask(sessionId: ID!, command: String!, args: JSON, at: String): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # Takes a SCHEDULED task on at once, its time dropped: it goes on as one
+  # queued now. Needs operator.
+  runMinionTaskNow(id: ID!): MinionTask!
     @hasPermission(permission: "operation:member")
 
   # Stops a task: one not sent yet is cancelled at once, one sent is asked
@@ -22924,6 +22967,11 @@ func (ec *executionContext) field_Mutation_queueMinionTask_args(ctx context.Cont
 		return nil, err
 	}
 	args["args"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "at", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["at"] = arg3
 	return args, nil
 }
 
@@ -23053,6 +23101,17 @@ func (ec *executionContext) field_Mutation_restoreWikiDocument_args(ctx context.
 }
 
 func (ec *executionContext) field_Mutation_revokeSession_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_runMinionTaskNow_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
@@ -29980,6 +30039,35 @@ func (ec *executionContext) fieldContext_BuildCommand_platforms(_ context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _BuildCommand_schedulable(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildCommand_schedulable,
+		func(ctx context.Context) (any, error) {
+			return obj.Schedulable, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildCommand_schedulable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildCommand",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BuildCommand_default(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31741,6 +31829,8 @@ func (ec *executionContext) fieldContext_BuildSchema_commands(_ context.Context,
 				return ec.fieldContext_BuildCommand_targets(ctx, field)
 			case "platforms":
 				return ec.fieldContext_BuildCommand_platforms(ctx, field)
+			case "schedulable":
+				return ec.fieldContext_BuildCommand_schedulable(ctx, field)
 			case "default":
 				return ec.fieldContext_BuildCommand_default(ctx, field)
 			case "required":
@@ -31806,6 +31896,8 @@ func (ec *executionContext) fieldContext_BuildSchema_factoryCommands(_ context.C
 				return ec.fieldContext_BuildCommand_targets(ctx, field)
 			case "platforms":
 				return ec.fieldContext_BuildCommand_platforms(ctx, field)
+			case "schedulable":
+				return ec.fieldContext_BuildCommand_schedulable(ctx, field)
 			case "default":
 				return ec.fieldContext_BuildCommand_default(ctx, field)
 			case "required":
@@ -51978,6 +52070,35 @@ func (ec *executionContext) fieldContext_MinionTask_queuedAt(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_scheduledAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_scheduledAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ScheduledAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_scheduledAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_sentAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -53539,6 +53660,8 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
 				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "scheduledAt":
+				return ec.fieldContext_MinionTask_scheduledAt(ctx, field)
 			case "sentAt":
 				return ec.fieldContext_MinionTask_sentAt(ctx, field)
 			case "sendCount":
@@ -67344,7 +67467,7 @@ func (ec *executionContext) _Mutation_queueMinionTask(ctx context.Context, field
 						return nil
 					}
 					return fc.Args["args"].(any)
-				}())
+				}(), fc.Args["at"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -67417,6 +67540,8 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
 				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "scheduledAt":
+				return ec.fieldContext_MinionTask_scheduledAt(ctx, field)
 			case "sentAt":
 				return ec.fieldContext_MinionTask_sentAt(ctx, field)
 			case "sendCount":
@@ -67507,6 +67632,179 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_runMinionTaskNow(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_runMinionTaskNow,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RunMinionTaskNow(ctx, fc.Args["id"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionTask
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionTask
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionTask2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTask,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_runMinionTaskNow(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionTask_id(ctx, field)
+			case "feedback":
+				return ec.fieldContext_MinionTask_feedback(ctx, field)
+			case "feedbackErrors":
+				return ec.fieldContext_MinionTask_feedbackErrors(ctx, field)
+			case "feedbackWarnings":
+				return ec.fieldContext_MinionTask_feedbackWarnings(ctx, field)
+			case "feedbackInfos":
+				return ec.fieldContext_MinionTask_feedbackInfos(ctx, field)
+			case "recordings":
+				return ec.fieldContext_MinionTask_recordings(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionTask_rev(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_MinionTask_sessionId(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionTask_operationId(ctx, field)
+			case "command":
+				return ec.fieldContext_MinionTask_command(ctx, field)
+			case "args":
+				return ec.fieldContext_MinionTask_args(ctx, field)
+			case "as":
+				return ec.fieldContext_MinionTask_as(ctx, field)
+			case "issuedBy":
+				return ec.fieldContext_MinionTask_issuedBy(ctx, field)
+			case "issuedByName":
+				return ec.fieldContext_MinionTask_issuedByName(ctx, field)
+			case "importantAt":
+				return ec.fieldContext_MinionTask_importantAt(ctx, field)
+			case "importantBy":
+				return ec.fieldContext_MinionTask_importantBy(ctx, field)
+			case "importantByName":
+				return ec.fieldContext_MinionTask_importantByName(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionTask_state(ctx, field)
+			case "queuedAt":
+				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "scheduledAt":
+				return ec.fieldContext_MinionTask_scheduledAt(ctx, field)
+			case "sentAt":
+				return ec.fieldContext_MinionTask_sentAt(ctx, field)
+			case "sendCount":
+				return ec.fieldContext_MinionTask_sendCount(ctx, field)
+			case "ackedAt":
+				return ec.fieldContext_MinionTask_ackedAt(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_MinionTask_startedAt(ctx, field)
+			case "doneAt":
+				return ec.fieldContext_MinionTask_doneAt(ctx, field)
+			case "cancelReason":
+				return ec.fieldContext_MinionTask_cancelReason(ctx, field)
+			case "cancelRequestedAt":
+				return ec.fieldContext_MinionTask_cancelRequestedAt(ctx, field)
+			case "ok":
+				return ec.fieldContext_MinionTask_ok(ctx, field)
+			case "exit":
+				return ec.fieldContext_MinionTask_exit(ctx, field)
+			case "err":
+				return ec.fieldContext_MinionTask_err(ctx, field)
+			case "output":
+				return ec.fieldContext_MinionTask_output(ctx, field)
+			case "outputSize":
+				return ec.fieldContext_MinionTask_outputSize(ctx, field)
+			case "outputUtf8":
+				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputTruncated":
+				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
+			case "parts":
+				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "dataParts":
+				return ec.fieldContext_MinionTask_dataParts(ctx, field)
+			case "result":
+				return ec.fieldContext_MinionTask_result(ctx, field)
+			case "action":
+				return ec.fieldContext_MinionTask_action(ctx, field)
+			case "tunnel":
+				return ec.fieldContext_MinionTask_tunnel(ctx, field)
+			case "data":
+				return ec.fieldContext_MinionTask_data(ctx, field)
+			case "dataSize":
+				return ec.fieldContext_MinionTask_dataSize(ctx, field)
+			case "dataTruncated":
+				return ec.fieldContext_MinionTask_dataTruncated(ctx, field)
+			case "dataProblem":
+				return ec.fieldContext_MinionTask_dataProblem(ctx, field)
+			case "missingParts":
+				return ec.fieldContext_MinionTask_missingParts(ctx, field)
+			case "file":
+				return ec.fieldContext_MinionTask_file(ctx, field)
+			case "files":
+				return ec.fieldContext_MinionTask_files(ctx, field)
+			case "upload":
+				return ec.fieldContext_MinionTask_upload(ctx, field)
+			case "stream":
+				return ec.fieldContext_MinionTask_stream(ctx, field)
+			case "document":
+				return ec.fieldContext_MinionTask_document(ctx, field)
+			case "composite":
+				return ec.fieldContext_MinionTask_composite(ctx, field)
+			case "parentId":
+				return ec.fieldContext_MinionTask_parentId(ctx, field)
+			case "subtaskAs":
+				return ec.fieldContext_MinionTask_subtaskAs(ctx, field)
+			case "cleanup":
+				return ec.fieldContext_MinionTask_cleanup(ctx, field)
+			case "resultOf":
+				return ec.fieldContext_MinionTask_resultOf(ctx, field)
+			case "factory":
+				return ec.fieldContext_MinionTask_factory(ctx, field)
+			case "delegate":
+				return ec.fieldContext_MinionTask_delegate(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionTask", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_runMinionTaskNow_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_cancelMinionTask(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -67588,6 +67886,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
 				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "scheduledAt":
+				return ec.fieldContext_MinionTask_scheduledAt(ctx, field)
 			case "sentAt":
 				return ec.fieldContext_MinionTask_sentAt(ctx, field)
 			case "sendCount":
@@ -67759,6 +68059,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTaskImportant(ctx con
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
 				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "scheduledAt":
+				return ec.fieldContext_MinionTask_scheduledAt(ctx, field)
 			case "sentAt":
 				return ec.fieldContext_MinionTask_sentAt(ctx, field)
 			case "sendCount":
@@ -68068,6 +68370,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelCap(ctx context
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
 				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "scheduledAt":
+				return ec.fieldContext_MinionTask_scheduledAt(ctx, field)
 			case "sentAt":
 				return ec.fieldContext_MinionTask_sentAt(ctx, field)
 			case "sendCount":
@@ -68239,6 +68543,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelRoutes(ctx cont
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
 				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "scheduledAt":
+				return ec.fieldContext_MinionTask_scheduledAt(ctx, field)
 			case "sentAt":
 				return ec.fieldContext_MinionTask_sentAt(ctx, field)
 			case "sendCount":
@@ -68475,6 +68781,8 @@ func (ec *executionContext) fieldContext_Mutation_disconnectMinionVPNClient(ctx 
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
 				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "scheduledAt":
+				return ec.fieldContext_MinionTask_scheduledAt(ctx, field)
 			case "sentAt":
 				return ec.fieldContext_MinionTask_sentAt(ctx, field)
 			case "sendCount":
@@ -78729,6 +79037,8 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
 				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "scheduledAt":
+				return ec.fieldContext_MinionTask_scheduledAt(ctx, field)
 			case "sentAt":
 				return ec.fieldContext_MinionTask_sentAt(ctx, field)
 			case "sendCount":
@@ -79128,6 +79438,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionCommands(ctx context
 				return ec.fieldContext_BuildCommand_targets(ctx, field)
 			case "platforms":
 				return ec.fieldContext_BuildCommand_platforms(ctx, field)
+			case "schedulable":
+				return ec.fieldContext_BuildCommand_schedulable(ctx, field)
 			case "default":
 				return ec.fieldContext_BuildCommand_default(ctx, field)
 			case "required":
@@ -90290,6 +90602,8 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_state(ctx, field)
 			case "queuedAt":
 				return ec.fieldContext_MinionTask_queuedAt(ctx, field)
+			case "scheduledAt":
+				return ec.fieldContext_MinionTask_scheduledAt(ctx, field)
 			case "sentAt":
 				return ec.fieldContext_MinionTask_sentAt(ctx, field)
 			case "sendCount":
@@ -104227,6 +104541,11 @@ func (ec *executionContext) _BuildCommand(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "schedulable":
+			out.Values[i] = ec._BuildCommand_schedulable(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "default":
 			out.Values[i] = ec._BuildCommand_default(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -111450,6 +111769,8 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "scheduledAt":
+			out.Values[i] = ec._MinionTask_scheduledAt(ctx, field, obj)
 		case "sentAt":
 			out.Values[i] = ec._MinionTask_sentAt(ctx, field, obj)
 		case "sendCount":
@@ -114478,6 +114799,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "queueMinionTask":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_queueMinionTask(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "runMinionTaskNow":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_runMinionTaskNow(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

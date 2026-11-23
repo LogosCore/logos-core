@@ -1,7 +1,13 @@
 import { toast } from "sonner"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
-import { fetchMinionTaskOutput, useCancelMinionTask, useQueueMinionTask, useSetMinionTaskImportant } from "@/graphql/hooks/minion-tasks"
+import {
+  fetchMinionTaskOutput,
+  useCancelMinionTask,
+  useQueueMinionTask,
+  useRunMinionTaskNow,
+  useSetMinionTaskImportant,
+} from "@/graphql/hooks/minion-tasks"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { formatInterval } from "./sessions-layout"
 import { formatTime } from "@/lib/date-format"
@@ -47,10 +53,10 @@ export function useToggleImportant() {
 }
 
 /**
- * What can be done with a task: stop it, run it again (onQueued gets the new
- * one), copy its command line or output, mark it important (canMark: an
- * operator's, a closed session's tasks too) or no longer. Each says false
- * when it does not apply.
+ * What can be done with a task: stop it, run a scheduled one now (its time
+ * dropped), run it again (onQueued gets the new one), copy its command line
+ * or output, mark it important (canMark: an operator's, a closed session's
+ * tasks too) or no longer. Each says false when it does not apply.
  */
 export function useTaskActions(
   t: Task,
@@ -59,6 +65,7 @@ export function useTaskActions(
 ) {
   const cancel = useCancelMinionTask()
   const queue = useQueueMinionTask()
+  const runNow = useRunMinionTaskNow()
   const important = useToggleImportant()
   const finished = FINISHED.has(t.state)
   // A composite command's task stops again once stopped: the second stop
@@ -81,6 +88,10 @@ export function useTaskActions(
     // mutateAsync, not mutate's callbacks: a menu that ran it closes, and
     // callbacks do not run once the caller is gone.
     stop: () => void cancel.mutateAsync(t.id).catch((err: unknown) => toast.error(errorMessage(err, "Could not stop the task"))),
+    // A scheduled task's time dropped: it goes on at once.
+    canRunNow: canWrite && t.state === "SCHEDULED",
+    runningNow: runNow.isPending,
+    runNow: () => void runNow.mutateAsync(t.id).catch((err: unknown) => toast.error(errorMessage(err, "Could not run the task now"))),
     canRunAgain: canWrite,
     runningAgain: queue.isPending,
     runAgain: () =>

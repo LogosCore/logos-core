@@ -1,6 +1,7 @@
 import { TriangleAlertIcon } from "lucide-react"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { DateTimePicker } from "@/components/ui/date-picker"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
@@ -226,17 +227,21 @@ function LineField({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{spec.label}</FieldLabel>
-      <Input
-        id={id}
-        type={spec.kind === "DATETIME" ? "datetime-local" : "text"}
-        required={spec.required}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={spec.hint || undefined}
-        autoComplete="off"
-        spellCheck={false}
-        className={spec.kind === "SECRET" ? "font-mono" : undefined}
-      />
+      {spec.kind === "DATETIME" ? (
+        <DateTimePicker id={id} required={spec.required} value={value} onChange={onChange} />
+      ) : (
+        <Input
+          id={id}
+          type="text"
+          required={spec.required}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={spec.hint || undefined}
+          autoComplete="off"
+          spellCheck={false}
+          className={spec.kind === "SECRET" ? "font-mono" : undefined}
+        />
+      )}
     </Field>
   )
 }

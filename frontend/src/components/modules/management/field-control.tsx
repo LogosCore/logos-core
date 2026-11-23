@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { DateTimePicker } from "@/components/ui/date-picker"
 import {
   Select,
   SelectContent,
@@ -306,13 +307,15 @@ export function FieldControl({
       const utc = text.trim() === "" ? null : localInputToRFC3339(text.trim())
       return (
         <div className="flex flex-col gap-1">
-          <Input
+          <DateTimePicker
             id={id}
-            type="datetime-local"
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={setText}
+            // The field's own bounds (RFC 3339): past them, dimmed in the calendar.
+            min={typeof field.min === "string" ? field.min : null}
+            max={typeof field.max === "string" ? field.max : null}
             disabled={disabled}
-            aria-invalid={invalid || undefined}
+            invalid={invalid}
             className="w-full max-w-72"
           />
           <span className="text-xs text-muted-foreground">

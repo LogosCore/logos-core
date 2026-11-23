@@ -1,5 +1,6 @@
-import { BanIcon, CheckIcon, CircleDashedIcon, FactoryIcon, LoaderIcon, SendIcon, StarIcon, WorkflowIcon, XIcon } from "lucide-react"
+import { BanIcon, CheckIcon, CircleDashedIcon, ClockIcon, FactoryIcon, LoaderIcon, SendIcon, StarIcon, WorkflowIcon, XIcon } from "lucide-react"
 import { useSteadyTitle } from "@/hooks/use-steady-title"
+import { formatDateTime } from "@/lib/date-format"
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { clock, FINISHED, took, type Task } from "./task-actions"
@@ -10,6 +11,8 @@ import { factoryHeld, factoryStands, ranOn } from "./factory-values"
 // draw it.
 
 const STATE: Record<string, { icon: typeof CheckIcon; className: string; spin?: boolean }> = {
+  // Queued with a time that has not come: nothing of it went anywhere.
+  SCHEDULED: { icon: ClockIcon, className: "text-muted-foreground" },
   QUEUED: { icon: CircleDashedIcon, className: "text-muted-foreground" },
   SENT: { icon: SendIcon, className: "text-muted-foreground" },
   RUNNING: { icon: LoaderIcon, className: "text-sky-600 dark:text-sky-400", spin: true },
@@ -119,6 +122,13 @@ export function StateLabel({ t, held }: { t: Task; held?: string | null }) {
   const muted = "text-muted-foreground"
   let text: React.ReactNode
   switch (t.state) {
+    case "SCHEDULED":
+      text = (
+        <span title="Core keeps it until then; then it goes on as one queued at that time (Run now: at once)">
+          scheduled for {t.scheduledAt ? formatDateTime(t.scheduledAt) : "later"}
+        </span>
+      )
+      break
     case "QUEUED":
       text = held ? (
         <span className={HELD}>waits: {held}</span>
@@ -212,6 +222,8 @@ function FactoryStandText({ t }: { t: Task }) {
 export function TaskTimes({ t }: { t: Task }) {
   const times = [
     ["queued", t.queuedAt],
+    // The time it was queued with, kept once it went on.
+    [t.state === "SCHEDULED" ? "scheduled for" : "scheduled", t.scheduledAt],
     ["sent", t.sentAt],
     ["started", t.startedAt],
     ["ended", t.doneAt],

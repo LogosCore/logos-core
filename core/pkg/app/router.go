@@ -8,6 +8,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/controller"
 	"github.com/logoscore/logos-core/core/pkg/middleware"
 	"github.com/logoscore/logos-core/core/pkg/responses"
+	"github.com/logoscore/logos-core/core/pkg/scheduledtasks"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -36,6 +37,10 @@ func (a *App) NewRouter() *gin.Engine {
 	// ops, with an operator's checks.
 	if q, ok := res.minionTasks.(composites.Queuer); ok && a.composites != nil {
 		a.composites.WithQueuer(q)
+	}
+	// It takes on the tasks queued with a time, once it comes.
+	if st, ok := res.minionTasks.(scheduledtasks.Starter); ok && a.scheduledTasks != nil {
+		a.scheduledTasks.WithStarter(st)
 	}
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

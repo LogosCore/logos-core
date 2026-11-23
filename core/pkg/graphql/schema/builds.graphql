@@ -118,6 +118,10 @@ type BuildCommand {
   # (docs: contracts/minion-build, Commands for some platforms): a build for
   # another has no such command. Empty: every platform of its targets.
   platforms: [String!]!
+  # Its task can be queued with a time (queueMinionTask's at): every
+  # command's but core's own, which run at once, and a tunnel's, whose port
+  # opens as it is queued (docs: Tasks and Results, Scheduled tasks).
+  schedulable: Boolean!
   # Picked in a new build until the operator unpicks it, and what a build
   # that names no commands gets, with the required ones: on its platforms.
   default: Boolean!

@@ -4,6 +4,7 @@ import {
   CopyIcon,
   CornerLeftUpIcon,
   ListTreeIcon,
+  PlayIcon,
   RotateCcwIcon,
   SearchIcon,
   SquareIcon,
@@ -395,7 +396,7 @@ function TaskRow({
   const status = t.composite?.status
   // The status changes as the factory's code goes: held while hovered (useSteadyTitle).
   const hover = useSteadyTitle(
-    `${line}${t.parentId ? `\nA subtask of a composite task${sub ? `: ${sub}` : ""}` : ""}${status ? `\n${status}` : ""}\n${t.issuedBy === "00000000-0000-0000-0000-000000000000" ? "core" : (t.issuedByName ?? "someone gone")} · queued ${formatAbsolute(t.queuedAt)}${t.importantAt ? `\nMarked important by ${markedBy(t)}` : ""}`,
+    `${line}${t.parentId ? `\nA subtask of a composite task${sub ? `: ${sub}` : ""}` : ""}${status ? `\n${status}` : ""}\n${t.issuedBy === "00000000-0000-0000-0000-000000000000" ? "core" : (t.issuedByName ?? "someone gone")} · queued ${formatAbsolute(t.queuedAt)}${t.state === "SCHEDULED" && t.scheduledAt ? `\nScheduled for ${formatAbsolute(t.scheduledAt)}` : ""}${t.importantAt ? `\nMarked important by ${markedBy(t)}` : ""}`,
   )
   return (
     <ContextMenu>
@@ -487,6 +488,12 @@ function TaskMenu({
         <SquareIcon />
         {actions.stopLabel}
       </ContextMenuItem>
+      {actions.canRunNow && (
+        <ContextMenuItem disabled={actions.runningNow} onClick={actions.runNow}>
+          <PlayIcon />
+          Run now
+        </ContextMenuItem>
+      )}
       <ContextMenuItem disabled={!actions.canRunAgain || actions.runningAgain} onClick={actions.runAgain}>
         <RotateCcwIcon />
         Run again

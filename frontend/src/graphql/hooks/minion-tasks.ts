@@ -13,6 +13,7 @@ import { isOlder } from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
 import {
   CancelMinionTaskDocument,
+  RunMinionTaskNowDocument,
   CreateMinionVpnKeyDocument,
   DeleteRecordingDocument,
   RecordingsDocument,
@@ -432,9 +433,19 @@ export function upsertMinionTask(queryClient: QueryClient, task: MinionTaskField
 export function useQueueMinionTask() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (vars: { sessionId: string; command: string; args: Record<string, unknown> | null }) =>
+    // at: a time for it (RFC 3339): it waits SCHEDULED until then.
+    mutationFn: (vars: { sessionId: string; command: string; args: Record<string, unknown> | null; at?: string | null }) =>
       graphqlClient(QueueMinionTaskDocument, vars),
     onSuccess: (data) => upsertMinionTask(queryClient, data.queueMinionTask),
+  })
+}
+
+/** Takes a scheduled task on at once: it goes on as queued now. */
+export function useRunMinionTaskNow() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => graphqlClient(RunMinionTaskNowDocument, { id }),
+    onSuccess: (data) => upsertMinionTask(queryClient, data.runMinionTaskNow),
   })
 }
 

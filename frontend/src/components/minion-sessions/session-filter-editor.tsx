@@ -2,9 +2,11 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { DateTimePicker } from "@/components/ui/date-picker"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { MinionSessionFilterOp } from "@/graphql/gql/graphql"
 import { useMinionSessionValues } from "@/graphql/hooks/minion-sessions"
+import { dateTimeValue } from "@/lib/date-time-text"
 import { cn } from "@/lib/utils"
 import {
   FILTER_OPS,
@@ -213,10 +215,15 @@ function DateTimeInput({
   return (
     <label className="flex items-center gap-2 text-xs text-muted-foreground">
       <span className="w-8">{label}</span>
-      <Input
-        type="datetime-local"
+      <DateTimePicker
+        aria-label={label}
         value={local}
-        onChange={(e) => onChange(e.target.value ? new Date(e.target.value).toISOString().replace(/\.\d{3}Z$/, "Z") : undefined)}
+        onChange={(v) => {
+          // Text that is no date and time yet leaves the filter as it was.
+          const typed = dateTimeValue(v)
+          if (typed === "") onChange(undefined)
+          else if (typed) onChange(new Date(typed).toISOString().replace(/\.\d{3}Z$/, "Z"))
+        }}
       />
     </label>
   )

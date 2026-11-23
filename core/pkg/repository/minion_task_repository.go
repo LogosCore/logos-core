@@ -92,6 +92,13 @@ type IMinionTaskRepository interface {
 	// tasks sent before and not yet acked first, then queued ones, oldest
 	// first; none an operator asked to cancel.
 	ForDelivery(ctx context.Context, sessionID uuid.UUID, limit int) ([]models.MinionTask, error)
+	// ScheduledDue returns the SCHEDULED tasks whose time came by now, the
+	// earliest first, at most limit.
+	ScheduledDue(ctx context.Context, now time.Time, limit int) ([]models.MinionTask, error)
+	// StartScheduled takes a SCHEDULED task on in state (its StartState),
+	// its time dropped when drop (Run now). IsNotFound when it is not
+	// SCHEDULED any more: stopped, or gone on already.
+	StartScheduled(ctx context.Context, taskID uuid.UUID, state string, drop bool) (*models.MinionTask, error)
 	// OpenWithAction returns the session's tasks of an action (a command's
 	// action when queued) that have not ended.
 	OpenWithAction(ctx context.Context, sessionID uuid.UUID, action string) ([]models.MinionTask, error)
@@ -280,6 +287,10 @@ func NewMinionTaskRepository(db database.Database) IMinionTaskRepository {
 		{Key: []string{"factory.offer_at"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 		{Key: []string{"factory.instance"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 		{Key: []string{"factory.files"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
+		// The scheduled tasks whose time came (ScheduledDue): the tasks ever
+		// queued with a time alone.
+		{Key: []string{"state", "scheduled_at"}, IndexOptions: new(options.IndexOptions).
+			SetPartialFilterExpression(bson.M{"scheduled_at": bson.M{"$exists": true}})},
 	})
 	db.EnsureIndexes(context.Background(), minionTaskPartCollection, []opts.IndexModel{
 		{Key: []string{"task_id", "seq"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
@@ -379,6 +390,27 @@ func (r *minionTaskRepository) ForDelivery(ctx context.Context, sessionID uuid.U
 		}
 	}
 	return append(resend, queued...), nil
+}
+
+func (r *minionTaskRepository) ScheduledDue(ctx context.Context, now time.Time, limit int) ([]models.MinionTask, error) {
+	var out []models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"state": models.MinionTaskScheduled, "scheduled_at": bson.M{"$lte": now}}).
+		Sort("scheduled_at").Limit(int64(limit)).All(&out)
+	return out, err
+}
+
+func (r *minionTaskRepository) StartScheduled(ctx context.Context, taskID uuid.UUID, state string, drop bool) (*models.MinionTask, error) {
+	update := bson.M{"$set": bson.M{"state": state}, "$inc": bumpRev}
+	if drop {
+		update["$unset"] = bson.M{"scheduled_at": ""}
+	}
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "state": models.MinionTaskScheduled}).
+		Apply(qmgo.Change{Update: update, ReturnNew: true}, &after)
+	if err != nil {
+		return nil, err
+	}
+	return &after, nil
 }
 
 func uuidsIn(ids []uuid.UUID) bson.A {
@@ -655,7 +687,13 @@ func (r *minionTaskRepository) RequestCancelWhy(ctx context.Context, taskID uuid
 	for k, v := range asked {
 		cancelled[k] = v
 	}
-	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "state": models.MinionTaskQueued, "composite": bson.M{"$exists": false}}).Apply(qmgo.Change{
+	// Scheduled, or queued for the minion (a composite task's own op aside),
+	// nothing of it gone out: cancelled now, whatever its command.
+	notOut := bson.M{"task_id": taskID, "$or": bson.A{
+		bson.M{"state": models.MinionTaskScheduled},
+		bson.M{"state": models.MinionTaskQueued, "composite": bson.M{"$exists": false}},
+	}}
+	err := r.tasks.Find(ctx, notOut).Apply(qmgo.Change{
 		Update:    bson.M{"$set": cancelled, "$inc": bumpRev},
 		ReturnNew: true,
 	}, &after)

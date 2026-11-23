@@ -44,7 +44,11 @@ type IMinionTaskResolver interface {
 	// DelegateServes are what a delegate task's command serves, as its
 	// factory's latest schema says.
 	DelegateServes(ctx context.Context, t *model.MinionTask) ([]protocol.ChannelVersions, error)
-	QueueMinionTask(ctx context.Context, sessionID, command string, args any) (*model.MinionTask, error)
+	// QueueMinionTask queues a command's task; with at (RFC 3339), one that
+	// waits SCHEDULED until then.
+	QueueMinionTask(ctx context.Context, sessionID, command string, args any, at *string) (*model.MinionTask, error)
+	// RunMinionTaskNow takes a SCHEDULED task on at once, its time dropped.
+	RunMinionTaskNow(ctx context.Context, id string) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
 	SetMinionTaskImportant(ctx context.Context, id string, important bool) (*model.MinionTask, error)
 	SetMinionTunnelCap(ctx context.Context, taskID string, limit int) (*model.MinionTask, error)
@@ -475,8 +479,12 @@ func (r *minionTaskResolver) MinionDesktopSettings(_ context.Context, front stri
 	return out, nil
 }
 
-func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, command string, args any) (*model.MinionTask, error) {
+func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, command string, args any, at *string) (*model.MinionTask, error) {
 	s, err := r.session(ctx, sessionID, models.OperationRoleOperator)
+	if err != nil {
+		return nil, err
+	}
+	schedule, err := scheduleOf(ctx, at, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
@@ -495,6 +503,17 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	i := slices.IndexFunc(commands, func(c protocol.BuildCommand) bool { return c.ID == command })
 	if i < 0 {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("the session's minion has no %q command", command))
+	}
+	// Core runs its own commands at once; a tunnel's port opens as it is
+	// queued, so neither waits for a time (docs: Scheduled tasks).
+	if schedule != nil {
+		switch {
+		case models.IsCoreCommand(command):
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("core runs %s itself, at once: it takes no time", command))
+		case protocol.IsTunnelAction(commands[i].Action):
+			return nil, moduleGQLError(ctx, errCodeBadUserInput,
+				fmt.Sprintf("%s opens its port as it is queued: it takes no time", command))
+		}
 	}
 	// A factory command's args go to its factory as JSON values, checked
 	// when it is queued (queueFactory); the minion's go in their CBOR forms.
@@ -529,22 +548,24 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	if isFactory {
 		// Its factory runs it: it waits in core for an instance to take it
 		// (docs: Factory Commands).
-		t, err := r.queueFactory(ctx, s, fc, values, uid)
+		t, err := r.queueFactory(ctx, s, fc, values, uid, schedule)
 		if err != nil {
 			return nil, err
 		}
-		r.factory.Queued(t)
+		if t.State != models.MinionTaskScheduled {
+			r.factory.Queued(t)
+		}
 		r.publish(t)
 		return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
 	}
 	if commands[i].Composite && r.composites == nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("%s is a composite command: core runs none here", command))
 	}
-	t, err := r.queue(ctx, s, commands[i], values, wire, queueing{by: uid, files: r.taskFile})
+	t, err := r.queue(ctx, s, commands[i], values, wire, queueing{by: uid, files: r.taskFile, at: schedule})
 	if err != nil {
 		return nil, err
 	}
-	if t.Composite != nil {
+	if t.Composite != nil && t.State != models.MinionTaskScheduled {
 		r.composites.Started(t)
 	}
 	r.publish(t)
@@ -561,6 +582,8 @@ type queueing struct {
 	// composite one's too), and takes no stream.
 	parent *models.MinionTask
 	sub    *models.MinionSubtask
+	// at is an operator's time for it: it waits SCHEDULED until then.
+	at *time.Time
 }
 
 // fileLookup finds the file a file param's value names, in an operation.
@@ -678,6 +701,11 @@ func (r *minionTaskResolver) queue(ctx context.Context, s *models.MinionSession,
 		if cmd.HasOp() {
 			t.Composite.OwnOp = string(protocol.OwnOpNotRun)
 		}
+	}
+	if q.at != nil {
+		// It waits in core until its time, then goes on as queued then
+		// (StartState: COMPOSING for a composite's, else QUEUED).
+		t.State, t.ScheduledAt = models.MinionTaskScheduled, q.at
 	}
 	t.LineNames = r.lineNames(ctx, s, cmd.Params, t.Args)
 	t.LineJSON = lineJSON(cmd.Params, t.Args)
@@ -1187,6 +1215,15 @@ func (r *minionTaskResolver) CancelMinionTask(ctx context.Context, id string) (*
 	if models.IsCoreCommand(t.Command) && !t.Finished() {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("core runs %s itself: it ends on its own", t.Command))
 	}
+	if t.State == models.MinionTaskScheduled {
+		// Nothing of it went anywhere: cancelled at once, whatever its
+		// command (docs: Scheduled tasks).
+		if t, err = r.tasks.RequestCancel(ctx, tid, time.Now().UTC()); err != nil {
+			return nil, fmt.Errorf("cancel the task: %w", err)
+		}
+		r.publish(t)
+		return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+	}
 	if t.InFactory() && r.factory != nil {
 		// It ends cancelled at once; the instance it runs on is told to stop
 		// it (docs: Factory Commands, Stopping).
@@ -1502,7 +1539,7 @@ func (r *minionTaskResolver) toModel(ctx context.Context, t *models.MinionTask, 
 	m := &model.MinionTask{
 		ID: t.TaskID.String(), Rev: int(t.Rev), SessionID: t.SessionID.String(), OperationID: t.OperationID.String(), Command: t.Command,
 		IssuedBy: t.IssuedBy.String(), State: t.State, QueuedAt: t.QueuedAt.UTC().Format(time.RFC3339Nano),
-		SentAt: taskTime(t.SentAt), SendCount: t.SendCount, AckedAt: taskTime(t.AckedAt), StartedAt: taskTime(t.StartedAt),
+		ScheduledAt: taskTime(t.ScheduledAt), SentAt: taskTime(t.SentAt), SendCount: t.SendCount, AckedAt: taskTime(t.AckedAt), StartedAt: taskTime(t.StartedAt),
 		DoneAt: taskTime(t.DoneAt), CancelRequestedAt: taskTime(t.CancelRequestedAt), CancelReason: strPtr(t.CancelReason), Ok: t.OK, Err: strPtr(t.Err),
 		OutputSize: int(t.OutSize), OutputTruncated: t.OutTruncated, Parts: t.Parts, DataParts: t.DataParts,
 		Result: strPtr(t.Result), Action: strPtr(t.Action), DataSize: int(t.DataSize), DataTruncated: t.DataTruncated,

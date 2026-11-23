@@ -20,6 +20,7 @@ export function useConsoleCommands(sessionId: string) {
         composite: c.composite,
         uses: c.uses,
         factory: c.factory,
+        schedulable: c.schedulable,
         fields: c.params,
         // In the form's order: the order words fill them in.
         params: [...c.params].sort(compareFormOrder).map((p) => ({

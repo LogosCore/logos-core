@@ -102,7 +102,7 @@ func TestQueueFactoryCommand(t *testing.T) {
 		Name: "edge.pcap", Total: 10}
 	g.r.creds = fakeTaskCreds{rows: map[string]protocol.Credential{credID: {ID: credID, Type: protocol.CredentialTypePlaintext}}}
 	m, err := g.r.QueueMinionTask(factoryAdminCtx(), g.session.SessionID.String(), "whois",
-		map[string]any{"address": "203.0.113.7", "capture": fileID.String(), "login": credID})
+		map[string]any{"address": "203.0.113.7", "capture": fileID.String(), "login": credID}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,13 +131,13 @@ func TestQueueFactoryCommand(t *testing.T) {
 		{map[string]any{"address": "x", "capture": uuid.NewString()}, "capture: no such task file"},
 		{map[string]any{"address": "x", "login": uuid.NewString()}, "is gone"},
 	} {
-		if _, err := g.r.QueueMinionTask(factoryAdminCtx(), g.session.SessionID.String(), "whois", c.args); err == nil || !strings.Contains(err.Error(), c.want) {
+		if _, err := g.r.QueueMinionTask(factoryAdminCtx(), g.session.SessionID.String(), "whois", c.args, nil); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Fatalf("%v: err %v, want %q", c.args, err, c.want)
 		}
 	}
 	g.files.byID[fileID].Name = "edge.txt"
 	if _, err := g.r.QueueMinionTask(factoryAdminCtx(), g.session.SessionID.String(), "whois",
-		map[string]any{"address": "x", "capture": fileID.String()}); err == nil || !strings.Contains(err.Error(), "capture: edge.txt") {
+		map[string]any{"address": "x", "capture": fileID.String()}, nil); err == nil || !strings.Contains(err.Error(), "capture: edge.txt") {
 		t.Fatalf("a file the param does not take: %v", err)
 	}
 }
@@ -145,7 +145,7 @@ func TestQueueFactoryCommand(t *testing.T) {
 // An operator's stop of a factory command's task goes to what runs it.
 func TestCancelFactoryCommand(t *testing.T) {
 	g, runner := newFactoryRig(t)
-	m, err := g.r.QueueMinionTask(factoryAdminCtx(), g.session.SessionID.String(), "whois", map[string]any{"address": "x"})
+	m, err := g.r.QueueMinionTask(factoryAdminCtx(), g.session.SessionID.String(), "whois", map[string]any{"address": "x"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
