@@ -351,9 +351,23 @@ export function pickedCommands(
 }
 
 /**
+ * The picks after a change of them (next, a move in the picker): a command
+ * taken out of before takes out every composite among before that uses it,
+ * in turn too (a composite using that composite), as a composite cannot run
+ * without what it uses. Taking a composite out leaves what it uses picked.
+ */
+export function withoutUsersOf(commands: readonly Command[], before: readonly string[], next: readonly string[]): string[] {
+  const removed = before.filter((id) => !next.includes(id))
+  if (removed.length === 0) return [...next]
+  const users = usedBy(commands, before)
+  const out = new Set(removed.flatMap((id) => users.get(id) ?? []))
+  return next.filter((id) => !out.has(id))
+}
+
+/**
  * The commands picked composites use, each with the composites among picked
- * that use it (in turn too), in their order: what stays picked while they
- * are.
+ * that use it (in turn too), in their order: those taking it out takes out
+ * with it (withoutUsersOf).
  */
 export function usedBy(commands: readonly Command[], picked: readonly string[]): Map<string, string[]> {
   const byId = new Map(commands.map((c) => [c.id, c]))
@@ -757,7 +771,9 @@ export function buildConnectionRows(
  * filled in: values equal to today's defaults are left out, so they read as
  * defaults; so are connection names the server gave, and settings the channel
  * no longer declares, with a note. Its commands are picked again, those the
- * target no longer has aside.
+ * target no longer has aside, and each composite with no op of its own whose
+ * commands the build all has: it builds nothing, so it is in no build's
+ * commands, but the build's sessions have it (composedOf).
  */
 export function sourceFromBuild(
   kind: FactoryKind,
@@ -792,13 +808,25 @@ export function sourceFromBuild(
     target: build.target,
     platform: build.platform,
     values: withoutDefaults(targetFields(kind, target, build.platform), isRecord(build.values) ? build.values : {}),
-    commands: build.commands ?? null,
+    commands: build.commands ? [...build.commands, ...composedOf(kind, target, build.platform, build.commands)] : null,
     connections,
     failover: recordFailover(build.failover),
     maxTasks: build.maxTasks ?? null,
     compression: build.compression != null,
     uniqueErrorCodes: build.uniqueErrorCodes ?? null,
   }
+}
+
+/**
+ * The composites with no op of their own that a build of target for
+ * platform has every command of (they use): none is among a build's
+ * commands, as it builds nothing, but its sessions have it (the protocol's
+ * SessionCommands), and so does the form made again from it.
+ */
+function composedOf(kind: FactoryKind, target: Target | undefined, platform: string, commands: readonly string[]): string[] {
+  return targetCommands(kind, target, platform)
+    .filter((c) => c.composite && c.op === 0 && c.uses.length > 0 && c.uses.every((u) => commands.includes(u)))
+    .map((c) => c.id)
 }
 
 /** values of fields, but those equal to their field's default. */

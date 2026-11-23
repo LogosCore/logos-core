@@ -31,6 +31,7 @@ import {
   withKind,
   withPlatform,
   withTarget,
+  withoutUsersOf,
   type BuildForm,
   type FactoryKind,
   onPlatform,
@@ -288,6 +289,35 @@ describe("commands", () => {
     expect(used.get("hello")).toEqual(["bundle", "archive"])
     expect(used.has("shell")).toBe(false)
     expect(usedBy(targetCommands(composites, dummy), ["shell", "ls"]).size).toBe(0)
+  })
+
+  it("taken out take out the composites picked that use them, in turn too; a composite taken out leaves what it uses", () => {
+    const commands = targetCommands(composites, dummy)
+    const before = pickedCommands(composites, dummy, ["bundle", "shell"])
+    expect(before).toEqual(["sleep", "hello", "ls", "shell", "archive", "bundle"])
+    const without = (...ids: string[]) => before.filter((id) => !ids.includes(id))
+    // ls out: archive uses it, and bundle uses archive.
+    expect(withoutUsersOf(commands, before, without("ls"))).toEqual(without("ls", "archive", "bundle"))
+    // archive out: bundle goes; ls and hello stay.
+    expect(withoutUsersOf(commands, before, without("archive"))).toEqual(without("archive", "bundle"))
+    // bundle out: what it uses stays.
+    expect(withoutUsersOf(commands, before, without("bundle"))).toEqual(without("bundle"))
+    // shell out, used by none: alone.
+    expect(withoutUsersOf(commands, before, without("shell"))).toEqual(without("shell"))
+    // Something added: nothing taken out.
+    expect(withoutUsersOf(commands, ["sleep"], ["sleep", "ls"])).toEqual(["sleep", "ls"])
+  })
+
+  it("picked again in a build made again: a composite with no op is in no build's commands, but its sessions have it", () => {
+    // The form sends bundle among the picks; core keeps what it uses, as
+    // bundle builds nothing (the protocol's PickCommands).
+    const picked = pickedCommands(composites, dummy, ["bundle"])
+    const built = picked.filter((id) => id !== "bundle")
+    const again = (commands: string[]) =>
+      initialForm(composites, sourceFromBuild(composites, { target: "dummy", platform: "any/any", commands }, channels), channels).commands
+    expect(again(built)).toEqual(picked)
+    // A build without all that bundle uses has no bundle: its sessions have none.
+    expect(again(["sleep", "hello", "ls"])).toEqual(["sleep", "hello", "ls"])
   })
 })
 

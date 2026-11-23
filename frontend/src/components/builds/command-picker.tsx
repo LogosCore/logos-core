@@ -1,16 +1,18 @@
 import type { ReactNode } from "react"
 import { SettingsSection } from "@/components/ui/settings-rows"
 import { TransferList, type TransferItem } from "@/components/ui/transfer-list"
-import { usedBy, type Command } from "@/components/builds/build-values"
+import { usedBy, withoutUsersOf, type Command } from "@/components/builds/build-values"
 import { commandKindsNote } from "@/components/minion-sessions/command-kinds"
 
 /**
  * The build form's commands: what the minion will be able to do, and nothing
  * else. The target's commands to pick from, and the ones picked, in two lists
  * in the factory's order. A new build starts with the target's default and
- * required ones picked; the required ones cannot be taken out, nor the ones
- * a composite command picked uses (picking it picks them). onChange gets the
- * picks as they are: the form keeps them to the target's.
+ * required ones picked; the required ones cannot be taken out. Picking a
+ * composite command picks what it uses (the form's pickedCommands), and
+ * taking one of those out takes out the composites picked that use it
+ * (withoutUsersOf). onChange gets the picks as they are then: the form keeps
+ * them to the target's.
  */
 export function CommandPicker({
   id,
@@ -51,11 +53,11 @@ export function CommandPicker({
         // Where it works, when not over every kind: a minion on another is
         // switched first.
         commandKindsNote(c.kinds)?.text.concat(".") ?? "",
+        by ? `Used by ${by.join(", ")}: taking it out takes ${by.length === 1 ? "it" : "them"} out too.` : "",
       ]
         .filter(Boolean)
         .join("\n"),
-      locked: c.required || by !== undefined,
-      lockedNote: c.required || !by ? undefined : `Used by ${by.join(", ")}: selected while ${by.length === 1 ? "it is" : "they are"}`,
+      locked: c.required,
     }
   })
   return (
@@ -64,13 +66,13 @@ export function CommandPicker({
         <p className="text-sm text-muted-foreground">
           {commands.length === 0
             ? "This target has no commands."
-            : "The minion can do the selected commands and nothing else. The locked ones are built into every minion of the target, or used by a composite command selected."}
+            : "The minion can do the selected commands and nothing else. The locked ones are built into every minion of the target. Selecting a composite command selects what it uses; taking one of those out takes the composite out too."}
         </p>
         {commands.length > 0 && (
           <TransferList
             items={items}
             selected={picked}
-            onChange={onChange}
+            onChange={(next) => onChange(withoutUsersOf(commands, picked, next))}
             defaults={defaults}
             titles={{ available: "Available", selected: "Selected" }}
             lockedNote="Built into every minion of the target"
