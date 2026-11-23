@@ -44,10 +44,19 @@ export function carriedSelection(tasks: readonly ConsoleTask[], sel: ConsoleSele
   return selectTask(tasks, sel.pinned)
 }
 
-/** Picks the task before or after the one shown (↑, ↓). */
-export function stepTask(tasks: readonly ConsoleTask[], sel: ConsoleSelection, by: -1 | 1): ConsoleSelection {
-  const at = tasks.findIndex((t) => t.id === selectedTask(tasks, sel)?.id)
-  const next = tasks[Math.min(tasks.length - 1, Math.max(0, at + by))]
+/**
+ * Picks the task before or after the one shown (↑, ↓), in the order the
+ * list shows them (shown: the tree's, each composite task's subtasks under
+ * it; task-tree.ts). The newest stays tasks' last.
+ */
+export function stepTask(
+  tasks: readonly ConsoleTask[],
+  sel: ConsoleSelection,
+  by: -1 | 1,
+  shown: readonly ConsoleTask[] = tasks,
+): ConsoleSelection {
+  const at = shown.findIndex((t) => t.id === selectedTask(tasks, sel)?.id)
+  const next = shown[Math.min(shown.length - 1, Math.max(0, at + by))]
   return next ? selectTask(tasks, next.id) : sel
 }
 

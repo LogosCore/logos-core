@@ -27,6 +27,15 @@ describe("which task the console shows", () => {
     expect(stepTask(tasks, selectTask(tasks, "b"), 1)).toEqual(FOLLOWING)
   })
 
+  test("↑ and ↓ go in the order the list shows, the newest still the latest queued", () => {
+    // c, a subtask of a, shown under it, above b.
+    const shown = [task("a"), task("c", 1, "RUNNING"), task("b")]
+    expect(selectedTask(tasks, stepTask(tasks, FOLLOWING, 1, shown))?.id).toBe("b")
+    expect(selectedTask(tasks, stepTask(tasks, FOLLOWING, -1, shown))?.id).toBe("a")
+    // Back down to c, the newest: following it again.
+    expect(stepTask(tasks, selectTask(tasks, "a"), 1, shown)).toEqual(FOLLOWING)
+  })
+
   test("while another is picked, the newest moving on is told: more of it, or a new one", () => {
     const sel = selectTask(tasks, "a")
     expect(newestMoved(tasks, sel)).toBeNull()

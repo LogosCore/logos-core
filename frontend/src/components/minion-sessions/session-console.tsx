@@ -22,6 +22,7 @@ import { carriedSelection, FOLLOWING, newestMoved, selectTask, selectedTask, ste
 import { DEFAULT_CONSOLE_SPLIT, MAX_SPLIT, MIN_SPLIT } from "./sessions-layout"
 import { TaskDetail } from "./task-detail"
 import { TaskList } from "./task-list"
+import { taskTree } from "./task-tree"
 import { emptyListText } from "./task-filter"
 import { UploadDialog } from "./upload-dialog"
 import { DeleteDialog, type DeleteTarget } from "./delete-dialog"
@@ -75,6 +76,8 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const byId = useMemo(() => new Map(commands.map((c) => [c.id, c])), [commands])
   // Oldest first: the newest at the bottom, by the command line.
   const tasks = useMemo(() => (tasksQ.data?.pages ?? []).flatMap((p) => p.minionTasks.tasks).toReversed(), [tasksQ.data])
+  // As the list shows them: each composite task's subtasks under it.
+  const rows = useMemo(() => taskTree(tasks), [tasks])
 
   // What ↑ and ↓ go through on the command line: every task as typed,
   // whatever the list is narrowed to.
@@ -210,12 +213,12 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
           className="border-t"
           first={
             <TaskList
-              tasks={tasks}
+              rows={rows}
               loading={tasksQ.isLoading}
               selectedId={selected?.id ?? null}
               following={selection.pinned === null}
               onSelect={(id) => setSelection(selectTask(tasks, id))}
-              onStep={(by) => setSelection(stepTask(tasks, selection, by))}
+              onStep={(by) => setSelection(stepTask(tasks, selection, by, rows.map((r) => r.task)))}
               onQueued={ran}
               commands={byId}
               canWrite={writable}

@@ -172,7 +172,6 @@ export function ProcessListView({
   // The host's widths (its users' are longer on Windows), the same for every row.
   const cols = colsFor(sep)
   const total = first?.totalCount ?? 0
-  const hidden = first?.hidden ?? 0
   const searching = search.trim() !== ""
   const tree = sort.field === "TREE"
   const sorted = SORTS.find((s) => s.field === sort.field)
@@ -196,7 +195,6 @@ export function ProcessListView({
       <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1 text-xs">
         <span className="text-muted-foreground tabular-nums">
           {first ? `${total.toLocaleString("en-US")} ${searching ? (total === 1 ? "match" : "matches") : total === 1 ? "process" : "processes"}` : ""}
-          {hidden > 0 && ` · ${hidden.toLocaleString("en-US")} folded`}
         </span>
         <SearchInput
           value={search}

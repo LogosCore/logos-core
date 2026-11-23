@@ -5688,7 +5688,7 @@ export type MinionTaskProcessesQueryVariables = Exact<{
 }>;
 
 
-export type MinionTaskProcessesQuery = { minionTaskProcesses: { totalCount: number, sep: string, hidden: number, systemTrees: number, edges: Array<{ cursor: string, node: { pid: number, ppid?: number | null, name: string, path?: string | null, cmdline?: string | null, user?: string | null, started?: string | null, session?: number | null, integrity?: string | null, arch?: string | null, threads?: number | null, memory?: number | null, cpuTime?: number | null, state?: string | null, depth: number, children: number, minion: boolean, context: boolean, last: boolean, guides: Array<boolean>, hidden: number, stem: boolean, builtinMark: boolean, mark?: { color?: string | null, icon?: string | null, emoji?: string | null, builtin: boolean } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MinionTaskProcessesQuery = { minionTaskProcesses: { totalCount: number, sep: string, systemTrees: number, edges: Array<{ cursor: string, node: { pid: number, ppid?: number | null, name: string, path?: string | null, cmdline?: string | null, user?: string | null, started?: string | null, session?: number | null, integrity?: string | null, arch?: string | null, threads?: number | null, memory?: number | null, cpuTime?: number | null, state?: string | null, depth: number, children: number, minion: boolean, context: boolean, last: boolean, guides: Array<boolean>, hidden: number, stem: boolean, builtinMark: boolean, mark?: { color?: string | null, icon?: string | null, emoji?: string | null, builtin: boolean } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type SetMinionProcessMarkMutationVariables = Exact<{
   name: Scalars['String']['input'];
@@ -14250,7 +14250,6 @@ export const MinionTaskProcessesDocument = new TypedDocumentString(`
     }
     totalCount
     sep
-    hidden
     systemTrees
   }
 }

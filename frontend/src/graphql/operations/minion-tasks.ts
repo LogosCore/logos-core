@@ -536,7 +536,6 @@ export const MinionTaskProcessesQuery = graphql(`
       }
       totalCount
       sep
-      hidden
       systemTrees
     }
   }

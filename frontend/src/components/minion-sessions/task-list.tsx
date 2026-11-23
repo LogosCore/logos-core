@@ -2,7 +2,6 @@ import { Fragment, useEffect, useLayoutEffect, useRef, type KeyboardEvent, type 
 import {
   ArrowDownIcon,
   CopyIcon,
-  CornerDownRightIcon,
   CornerLeftUpIcon,
   ListTreeIcon,
   RotateCcwIcon,
@@ -33,10 +32,12 @@ import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { useSessionConnectionChoices } from "./use-connection-choices"
 import { TaskAs } from "./task-as"
 import { subtaskText } from "./composite-values"
+import { dayHeadings, type TaskTreePlace, type TaskTreeRow } from "./task-tree"
 
 // The left of a session's console: its tasks, a row each, oldest at the
 // top and the newest at the bottom by the command line, under a heading
-// for each day. A click or ↑ and ↓
+// for each day; a composite task's subtasks right under it, a tree's lines
+// joining them as a process list's (task-tree.ts). A click or ↑ and ↓
 // pick the one shown beside it; a row's context menu stops it, runs it
 // again, copies its command or output, or marks it important (S does too):
 // a star then stands for its state: yellow when it went well, else in its
@@ -48,7 +49,7 @@ import { subtaskText } from "./composite-values"
 // its composite's factory named it.
 
 export function TaskList({
-  tasks,
+  rows,
   loading,
   selectedId,
   following,
@@ -74,8 +75,8 @@ export function TaskList({
   stale,
   canMark,
 }: {
-  /** Oldest first. */
-  tasks: readonly Task[]
+  /** Oldest first, each composite task's subtasks under it (taskTree). */
+  rows: readonly TaskTreeRow<Task>[]
   /** The first page is still coming. */
   loading: boolean
   selectedId: string | null
@@ -120,24 +121,22 @@ export function TaskList({
   // Today and Yesterday move on at midnight.
   const now = new Date(useNow(60_000))
 
-  // Following, the list stays at the bottom as tasks come; otherwise the
-  // picked one is kept in view.
+  // Following, the list stays at the bottom as tasks come, the newest in
+  // view (a subtask, under its composite task, may be above later ones);
+  // otherwise the picked one is kept in view.
   useLayoutEffect(() => {
     const el = list.current
-    if (el && following) el.scrollTop = el.scrollHeight
-  }, [following, tasks.length])
+    if (!el || !following) return
+    el.scrollTop = el.scrollHeight
+    keepInView(el, selectedId)
+  }, [following, rows.length, selectedId])
   useEffect(() => {
     const el = list.current
-    const row = selectedId ? el?.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(selectedId)}"]`) : null
-    if (!el || !row || following) return
-    // The list alone scrolls: scrollIntoView would move the page too.
-    const top = row.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop
-    const heading = 24 // the sticky day heading over the list's top
-    if (top - heading < el.scrollTop) el.scrollTop = top - heading
-    else if (top + row.offsetHeight > el.scrollTop + el.clientHeight) el.scrollTop = top + row.offsetHeight - el.clientHeight
+    if (el && !following) keepInView(el, selectedId)
   }, [following, selectedId])
 
-  const selected = selectedId ? tasks.find((t) => t.id === selectedId) : undefined
+  const selected = selectedId ? rows.find((r) => r.task.id === selectedId)?.task : undefined
+  const headings = dayHeadings(rows, (t) => dayGroup(t.queuedAt, now))
   // The list's keys: not those of a row's menu, a popup opened from it
   // (its arrows move in the menu, S is no star there).
   const onKeyDown = (e: KeyboardEvent) => {
@@ -257,15 +256,15 @@ export function TaskList({
             </InView>
           </div>
         )}
-        {tasks.length === 0 && !loading && <p className="sticky left-0 px-3 py-2 text-sm text-muted-foreground">{emptyListText(filter)}</p>}
-        {tasks.map((t, i) => {
-          const day = dayGroup(t.queuedAt, now)
-          const newDay = i === 0 || dayGroup(tasks[i - 1].queuedAt, now).key !== day.key
+        {rows.length === 0 && !loading && <p className="sticky left-0 px-3 py-2 text-sm text-muted-foreground">{emptyListText(filter)}</p>}
+        {rows.map((r, i) => {
+          const t = r.task
           return (
             <Fragment key={t.id}>
-              {newDay && <DaySeparator label={day.label} />}
+              {headings[i] && <DaySeparator label={headings[i]} />}
               <TaskRow
                 task={t}
+                place={r}
                 command={commands.get(t.command)}
                 selected={t.id === selectedId}
                 onSelect={() => onSelect(t.id)}
@@ -312,8 +311,60 @@ function InView({ children }: { children: ReactNode }) {
   return <span className="sticky left-1/2 inline-block -translate-x-1/2">{children}</span>
 }
 
+/**
+ * Scrolls list el as little as it takes to show the row of task id, below
+ * the sticky day heading over its top. The list alone scrolls:
+ * scrollIntoView would move the page too.
+ */
+function keepInView(el: HTMLElement, id: string | null) {
+  const row = id ? el.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`) : null
+  if (!row) return
+  const top = row.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop
+  const heading = 24 // the sticky day heading over the list's top
+  if (top - heading < el.scrollTop) el.scrollTop = top - heading
+  else if (top + row.offsetHeight > el.scrollTop + el.clientHeight) el.scrollTop = top + row.offsetHeight - el.clientHeight
+}
+
+/** How far a subtask's line is in from its composite task's. */
+const INDENT = 16
+
+/** The tree's upright: under the first character of its composite task's line. */
+const LINE_X = 3
+
+/** A row's padding above and below (py-1): the lines cross it to join the next row's. */
+const ROW_PAD = 4
+
+/** A line of the rows' text (text-xs): the stem starts under it, a corner turns at its middle. */
+const LINE_H = 16
+
+/**
+ * A task's lines in the tree (its place, task-tree.ts), drawn as a process
+ * list's are: a composite task's stem from under its line down to its
+ * subtasks; a subtask's corner, its upright going on down to the next one
+ * (├), or ending at it, the last (└), its arm stopping short of the line.
+ */
+function TaskTreeLines({ place }: { place: TaskTreePlace }) {
+  const line = "pointer-events-none absolute bg-muted-foreground/40"
+  if (place.stem) return <span aria-hidden className={cn(line, "w-px")} style={{ left: LINE_X, top: LINE_H, bottom: -ROW_PAD }} />
+  if (!place.sub) return null
+  // A hook's upright starts at its own line, with nothing above to join.
+  const top = place.hook ? 0 : -ROW_PAD
+  const corner = LINE_H / 2
+  return (
+    <>
+      <span
+        aria-hidden
+        className={cn(line, "w-px")}
+        style={place.last ? { left: LINE_X, top, height: corner - top } : { left: LINE_X, top, bottom: -ROW_PAD }}
+      />
+      <span aria-hidden className={cn(line, "h-px")} style={{ left: LINE_X, top: corner, width: INDENT - 3 - LINE_X }} />
+    </>
+  )
+}
+
 function TaskRow({
   task: t,
+  place,
   command,
   selected,
   onSelect,
@@ -324,6 +375,8 @@ function TaskRow({
   onShowComposite,
 }: {
   task: Task
+  /** Its place in the tree: its lines, a subtask's indent. */
+  place: TaskTreePlace
   command?: CommandDef
   selected: boolean
   onSelect: () => void
@@ -383,10 +436,11 @@ function TaskRow({
           <StateIcon t={t} held={held} className="self-center" />
         )}
         <span className="shrink-0 font-mono text-muted-foreground tabular-nums">{clock(t.queuedAt)}</span>
-        {t.parentId && (
-          <CornerDownRightIcon className="size-3 shrink-0 self-center text-violet-600 dark:text-violet-400" aria-label="a subtask" />
-        )}
-        <code className="flex-1 font-mono whitespace-nowrap">{line}</code>
+        <span className="relative flex-1" style={place.sub ? { paddingLeft: INDENT } : undefined}>
+          <TaskTreeLines place={place} />
+          {t.parentId && <span className="sr-only">A subtask: </span>}
+          <code className="font-mono whitespace-nowrap">{line}</code>
+        </span>
         {sub && <span className="shrink-0 whitespace-nowrap text-muted-foreground">{sub}</span>}
         <TaskAs as={t.as} />
         {t.feedbackErrors + t.feedbackWarnings > 0 && (
