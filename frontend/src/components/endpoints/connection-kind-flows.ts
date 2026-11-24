@@ -35,9 +35,6 @@ export interface FlowEvent {
 }
 
 export interface KindFlow {
-  /** What the kind is, for people, in two parts: "Calls in", "a request each exchange". */
-  label: string
-  sub: string
   /** One sentence on what the kind does, under the kind picker. */
   summary: string
   period: number
@@ -79,8 +76,6 @@ export function stepAt(flow: KindFlow, t: number): number {
 
 export const KIND_FLOWS: Record<string, KindFlow> = {
   "reverse-call": {
-    label: "Calls in",
-    sub: "a request each exchange",
     summary: "The minion checks in on its schedule; a task waits for its next check-in.",
     period: 9,
     links: (t, ev) => ({ mc: crossing(ev, t, "mc") ? "flash" : "none", ck: crossing(ev, t, "ck") ? "flash" : "none" }),
@@ -101,8 +96,6 @@ export const KIND_FLOWS: Record<string, KindFlow> = {
     ],
   },
   "reverse-persistent": {
-    label: "Stays connected",
-    sub: "core sends at once",
     summary: "The minion keeps a connection open, so core sends it a task at once.",
     period: 9,
     links: (t) => ({ mc: t > 0.3 && t < 8.6 ? "open" : "none", ck: t > 0.8 && t < 8.6 ? "open" : "none" }),
@@ -125,8 +118,6 @@ export const KIND_FLOWS: Record<string, KindFlow> = {
     ],
   },
   "bind-call": {
-    label: "Called",
-    sub: "core calls the minion",
     summary: "Core calls the minion when it has a task; the minion never dials out.",
     period: 9,
     links: (t, ev) => ({ mc: crossing(ev, t, "mc") ? "flash" : "none", ck: "open" }),
@@ -147,8 +138,6 @@ export const KIND_FLOWS: Record<string, KindFlow> = {
     ],
   },
   "bind-persistent": {
-    label: "Reached",
-    sub: "core opens the connection",
     summary: "Core opens a connection to the minion and sends tasks over it while it is open.",
     period: 9,
     links: (t) => ({ mc: t > 1.6 && t < 8.2 ? "open" : "none", ck: "open" }),

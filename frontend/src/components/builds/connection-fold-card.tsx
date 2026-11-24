@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { ChevronRightIcon } from "lucide-react"
 import { TableBody } from "@/components/ui/table"
-import { KIND_FLOWS } from "@/components/endpoints/connection-kind-flows"
+import { kindNotes } from "@/components/endpoints/endpoint-values"
 import { ModuleIcon } from "@/components/modules/module-icon"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { cn } from "@/lib/utils"
@@ -58,8 +58,8 @@ export function ConnectionFoldCard({
             <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{place}.</span>
             <ModuleIcon type="channel" icon={icon} className="size-4 shrink-0 self-center" />
             <span className="truncate font-mono text-sm font-semibold">{name ?? moduleName}</span>
-            <span className="shrink-0 text-xs text-muted-foreground" title={`${moduleName} · ${kind}`}>
-              {KIND_FLOWS[kind]?.label ?? kind}
+            <span className="shrink-0 font-mono text-xs text-muted-foreground" title={kindNotes[kind]}>
+              {kind}
             </span>
             {badge}
           </button>

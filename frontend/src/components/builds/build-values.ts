@@ -1128,4 +1128,4 @@ export function usableKinds(target: Target | undefined, ch: ChannelKind | undefi
   return own.filter((k) => carried.includes(k))
 }
 
-export { kindLabels } from "@/components/endpoints/endpoint-values"
+export { kindNotes } from "@/components/endpoints/endpoint-values"

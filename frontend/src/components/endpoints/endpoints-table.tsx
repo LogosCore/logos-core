@@ -11,7 +11,7 @@ import { fetchChannelEndpointExport } from "@/graphql/hooks/channel-endpoints"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { ModuleIconCell } from "@/components/modules/module-icon"
-import { connectionKind, exportFileName, kindLabels, settingRows, type Kind } from "./endpoint-values"
+import { connectionKind, exportFileName, kindNotes, settingRows, type Kind } from "./endpoint-values"
 
 type Endpoint = ChannelEndpointFieldsFragment
 
@@ -92,7 +92,7 @@ export function EndpointsTable({
               />
               <div className="flex min-w-0 items-baseline gap-1.5">
                 <span className="truncate font-mono">{ep.moduleName}</span>
-                <span className="truncate font-mono text-xs text-muted-foreground" title={kindLabels[ep.kind]}>
+                <span className="truncate font-mono text-xs text-muted-foreground" title={kindNotes[ep.kind]}>
                   {ep.kind}
                 </span>
                 <span className="text-xs text-muted-foreground">v{ep.schemaVersion}</span>

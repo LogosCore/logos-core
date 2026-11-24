@@ -10,7 +10,7 @@ import {
   VenetianMaskIcon,
   type LucideIcon,
 } from "lucide-react"
-import { kindLabels } from "@/components/endpoints/endpoint-values"
+import { kindNotes } from "@/components/endpoints/endpoint-values"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { KindName } from "@/components/modules/module-icon"
@@ -101,7 +101,7 @@ function connKindKey(s: MinionSessionFieldsFragment): string {
 /** The connection a session uses, for Last seen's hover: "Connection 2 of 2 · reverse-persistent (…)". */
 function connNote(s: MinionSessionFieldsFragment, now: number): string[] {
   if (!s.conn) return []
-  const kind = s.connKind ? ` · ${s.connKind}${kindLabels[s.connKind] ? ` (${kindLabels[s.connKind]})` : ""}` : ""
+  const kind = s.connKind ? ` · ${s.connKind}${kindNotes[s.connKind] ? ` (${kindNotes[s.connKind]})` : ""}` : ""
   const lines = [`Connection ${s.conn} of ${s.connCount}${kind}`]
   const last = s.connChanges[0]
   if (last) {

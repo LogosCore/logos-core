@@ -4,7 +4,7 @@ import { SettingRow } from "@/components/ui/settings-rows"
 import { cn } from "@/lib/utils"
 import { ConnectionKindDiagram } from "./connection-kind-diagram"
 import { KIND_FLOWS } from "./connection-kind-flows"
-import { kindLabels, kindNames, type Kind } from "./endpoint-values"
+import { kindNames, kindNotes, type Kind } from "./endpoint-values"
 
 // A connection's kind, as a settings row (the rest of its settings follow
 // from it): a segmented switch of the kinds the channel carries, those that
@@ -124,7 +124,7 @@ export function ConnectionKindPicker({
               aria-checked={on}
               tabIndex={on ? 0 : -1}
               disabled={disabled || off}
-              title={reason(k) ?? `${kindLabels[k] ?? k} (${k})`}
+              title={reason(k) ?? kindNotes[k] ?? k}
               onClick={() => !on && onChange(k)}
               className={cn(
                 "h-6.5 rounded-md px-3 text-sm transition-colors disabled:cursor-not-allowed",
@@ -132,7 +132,7 @@ export function ConnectionKindPicker({
                 off && "opacity-40",
               )}
             >
-              {KIND_FLOWS[k]?.label ?? k}
+              {k}
             </button>
           )
         })}

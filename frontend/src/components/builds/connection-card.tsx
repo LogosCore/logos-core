@@ -13,7 +13,7 @@ import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
 import { KindName } from "@/components/modules/module-icon"
 import type { Draft } from "@/components/modules/management/field-values"
 import { EndpointSettings } from "@/components/endpoints/endpoint-settings"
-import { KIND_FLOWS } from "@/components/endpoints/connection-kind-flows"
+import { kindNotes } from "@/components/endpoints/endpoint-values"
 import { useChannelEndpointCount } from "@/graphql/hooks/channel-endpoints"
 import { cn } from "@/lib/utils"
 import { FieldRow } from "./build-field-row"
@@ -189,8 +189,8 @@ export function ConnectionCard({
             {c.name.trim() || defaultName}
           </span>
           {askKind && effectiveKind && (
-            <span className="shrink-0 rounded border px-1.5 text-xs text-muted-foreground" title={effectiveKind}>
-              {KIND_FLOWS[effectiveKind]?.label ?? effectiveKind}
+            <span className="shrink-0 rounded border px-1.5 font-mono text-xs text-muted-foreground" title={kindNotes[effectiveKind]}>
+              {effectiveKind}
             </span>
           )}
           {expanded && c.filledFrom && (

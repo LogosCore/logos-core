@@ -7,7 +7,7 @@ import { ModuleStatusIndicator } from "@/components/modules/module-status-indica
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { cn } from "@/lib/utils"
 import { platformLabel } from "@/components/builds/build-values"
-import { kindLabels } from "@/components/endpoints/endpoint-values"
+import { kindNotes } from "@/components/endpoints/endpoint-values"
 import { compareFields, formatValue, type FieldDef } from "./field-values"
 import { channelsText, fieldNotes, paramsNote, versionsText } from "./schema-notes"
 import { commandKindsNote } from "@/components/minion-sessions/command-kinds"
@@ -34,10 +34,11 @@ export function ConnectionSchema({ connection }: { connection: Connection }) {
   return (
     <InfoCard title="Minion connection settings" note={`schema v${connection.version}`} labelWidth={KEYS}>
       {connection.kinds.map((k) => {
-        const label = kindLabels[k.kind] ?? k.kind
+        const label = k.kind
+        const note = [kindNotes[k.kind], k.agentless && "acts as the minion"].filter(Boolean).join(" · ")
         return (
           <Fragment key={k.kind}>
-            <SectionRow title={label} note={k.agentless ? `${k.kind} · acts as the minion` : k.kind} />
+            <SectionRow title={label} note={note || undefined} />
             {k.fields.length > 0 ? <IdRows rows={fieldRows(k.fields)} /> : <NoteRow>None.</NoteRow>}
             {k.target.length > 0 && (
               <>

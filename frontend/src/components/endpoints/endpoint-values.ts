@@ -42,12 +42,16 @@ export interface Kind {
   kinds: ConnectionKindDef[]
 }
 
-/** What a connection kind is, for people. */
-export const kindLabels: Record<string, string> = {
-  "reverse-call": "Calls in: a request each exchange",
-  "reverse-persistent": "Stays connected: core sends at once",
-  "bind-call": "Called: core calls the minion",
-  "bind-persistent": "Reached: core opens the connection",
+/**
+ * What a connection kind does, in a few words, beside its name. A kind is
+ * always called by its name (reverse-call, …): the app has no other names
+ * for them.
+ */
+export const kindNotes: Record<string, string> = {
+  "reverse-call": "a request each exchange",
+  "reverse-persistent": "core sends at once",
+  "bind-call": "core calls the minion",
+  "bind-persistent": "core opens the connection",
 }
 
 /** The connection kind of channel ch called kind; undefined when ch does not carry it. */

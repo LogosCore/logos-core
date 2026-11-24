@@ -11,7 +11,7 @@ import { MAX_ENDPOINT_NAME_LENGTH, endpointNameError, problemsFromError } from "
 import { useCreateChannelEndpoint } from "@/graphql/hooks/channel-endpoints"
 import {
   endpointFromConnection,
-  kindLabels,
+  kindNotes,
   settingFields,
   type ChannelKind,
   type ConnectionDraft,
@@ -126,7 +126,7 @@ function SaveBody({ operationId, factory, channel, channelIcon, connection, conn
       </DialogHeader>
       <div className="flex items-baseline gap-2">
         <KindName type="channel" name={channel.name} icon={channelIcon} className="text-sm" />
-        <span className="font-mono text-xs text-muted-foreground" title={kindLabels[draft.kind]}>
+        <span className="font-mono text-xs text-muted-foreground" title={kindNotes[draft.kind]}>
           {draft.kind}
         </span>
       </div>
