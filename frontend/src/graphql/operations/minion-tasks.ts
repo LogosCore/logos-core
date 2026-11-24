@@ -313,6 +313,22 @@ export const MinionTaskOutputQuery = graphql(`
   }
 `)
 
+// A piece of a task's output read in every encoding core knows: the
+// table an operator picks the session's encoding from.
+export const MinionTaskOutputDecodingsQuery = graphql(`
+  query MinionTaskOutputDecodings($id: ID!) {
+    minionTask(id: $id) {
+      id
+      outputDecodings {
+        encoding
+        name
+        text
+        unreadable
+      }
+    }
+  }
+`)
+
 // What its minion said of a task as feedback (the latest 20), read apart
 // from its output: it comes with the session's feedback, not its parts.
 export const MinionTaskFeedbackQuery = graphql(`

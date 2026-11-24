@@ -687,6 +687,45 @@ func TestIntegrationMinionSessionDescription(t *testing.T) {
 	}
 }
 
+// A session's output encoding: set, read alone, kept by a claim, and gone
+// again (UTF-8) when cleared.
+func TestIntegrationMinionSessionOutputEncoding(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	id := uuid.New()
+	if err := repo.Insert(ctx, &models.MinionSession{SessionID: id, OperationID: uuid.New(), Number: 1, CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	if enc, err := repo.OutputEncoding(ctx, id); err != nil || enc != "" {
+		t.Fatalf("new session: %q, %v", enc, err)
+	}
+	if err := repo.SetOutputEncoding(ctx, id, "ibm866"); err != nil {
+		t.Fatal(err)
+	}
+	if enc, err := repo.OutputEncoding(ctx, id); err != nil || enc != "ibm866" {
+		t.Fatalf("set: %q, %v", enc, err)
+	}
+	if err := repo.Claim(ctx, id, MinionSessionClaim{At: time.Now().UTC(), BuildID: uuid.New()}); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := repo.FindBySessionID(ctx, id); s.OutputEncoding != "ibm866" || s.Rev < 2 {
+		t.Fatalf("claimed: %q, rev %d", s.OutputEncoding, s.Rev)
+	}
+	if err := repo.SetOutputEncoding(ctx, id, ""); err != nil {
+		t.Fatal(err)
+	}
+	if enc, err := repo.OutputEncoding(ctx, id); err != nil || enc != "" {
+		t.Fatalf("cleared: %q, %v", enc, err)
+	}
+	if _, err := repo.OutputEncoding(ctx, uuid.New()); !IsNotFound(err) {
+		t.Fatalf("no such session: %v", err)
+	}
+	if err := repo.SetOutputEncoding(ctx, uuid.New(), "ibm866"); !IsNotFound(err) {
+		t.Fatalf("set on no such session: %v", err)
+	}
+}
+
 // Marks are each operator's own; marking again replaces the fields, an
 // empty mark removes it, and a bulk mark marks many alike.
 func TestIntegrationMinionSessionMarks(t *testing.T) {

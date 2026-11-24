@@ -91,6 +91,12 @@ type IMinionSessionRepository interface {
 	// SetDescription replaces a session's description; IsNotFound when
 	// there is none.
 	SetDescription(ctx context.Context, sessionID uuid.UUID, description string) error
+	// SetOutputEncoding sets what the session's tasks' output is read as,
+	// "" for UTF-8; IsNotFound when there is no such session.
+	SetOutputEncoding(ctx context.Context, sessionID uuid.UUID, encoding string) error
+	// OutputEncoding is what the session's tasks' output is read as, ""
+	// for UTF-8; IsNotFound when there is no such session.
+	OutputEncoding(ctx context.Context, sessionID uuid.UUID) (string, error)
 	// BackfillDescriptions gives sessions from before they had a
 	// description their build's.
 	BackfillDescriptions(ctx context.Context) (int64, error)
@@ -557,6 +563,24 @@ func (r *minionSessionRepository) SetDescription(ctx context.Context, sessionID 
 		update = bson.M{"$set": bson.M{"description_set": true}, "$unset": bson.M{"description": ""}}
 	}
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(update))
+}
+
+func (r *minionSessionRepository) SetOutputEncoding(ctx context.Context, sessionID uuid.UUID, encoding string) error {
+	update := bson.M{"$set": bson.M{"output_encoding": encoding}}
+	if encoding == "" {
+		update = bson.M{"$unset": bson.M{"output_encoding": ""}}
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(update))
+}
+
+func (r *minionSessionRepository) OutputEncoding(ctx context.Context, sessionID uuid.UUID) (string, error) {
+	var s struct {
+		OutputEncoding string `bson:"output_encoding"`
+	}
+	if err := r.coll.Find(ctx, bson.M{"session_id": sessionID}).Select(bson.M{"output_encoding": 1}).One(&s); err != nil {
+		return "", err
+	}
+	return s.OutputEncoding, nil
 }
 
 // BackfillDescriptions is one update inside Mongo: description from

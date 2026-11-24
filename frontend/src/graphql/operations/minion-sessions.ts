@@ -44,6 +44,7 @@ export const MinionSessionFields = graphql(`
     addrs
     address
     addressPicked
+    outputEncoding
     sleepInterval
     sleepJitter
     lateAt
@@ -258,6 +259,14 @@ export const SetMinionSessionsLayoutMutation = graphql(`
 export const SetMinionSessionAddressMutation = graphql(`
   mutation SetMinionSessionAddress($id: ID!, $address: String) {
     setMinionSessionAddress(id: $id, address: $address) {
+      ...MinionSessionFields
+    }
+  }
+`)
+
+export const SetMinionSessionOutputEncodingMutation = graphql(`
+  mutation SetMinionSessionOutputEncoding($id: ID!, $encoding: String) {
+    setMinionSessionOutputEncoding(id: $id, encoding: $encoding) {
       ...MinionSessionFields
     }
   }

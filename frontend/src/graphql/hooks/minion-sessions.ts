@@ -30,6 +30,7 @@ import {
   MinionSessionsLayoutDocument,
   SetMinionSessionsLayoutDocument,
   SetMinionSessionAddressDocument,
+  SetMinionSessionOutputEncodingDocument,
   SetMinionSessionMaxTasksDocument,
   MinionFeedbackDocument,
   MinionIdentitiesDocument,
@@ -287,6 +288,15 @@ export function useMinionSessionChangedSubscription(operationId: string) {
       enabled: operationId !== "",
     },
   )
+}
+
+/** Sets what a session's tasks' output is read as, for the whole operation; null goes back to UTF-8. */
+export function useSetMinionSessionOutputEncoding() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string; encoding: string | null }) => graphqlClient(SetMinionSessionOutputEncodingDocument, vars),
+    onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionOutputEncoding),
+  })
 }
 
 /** Picks the address a session shows, for the whole operation; null goes back to core's guess. */

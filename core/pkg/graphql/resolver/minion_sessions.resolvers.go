@@ -92,6 +92,11 @@ func (r *mutationResolver) SetMinionSessionAddress(ctx context.Context, id strin
 	return r.MinionSessionResolver.SetMinionSessionAddress(ctx, id, address)
 }
 
+// SetMinionSessionOutputEncoding is the resolver for the setMinionSessionOutputEncoding field.
+func (r *mutationResolver) SetMinionSessionOutputEncoding(ctx context.Context, id string, encoding *string) (*model.MinionSession, error) {
+	return r.MinionSessionResolver.SetMinionSessionOutputEncoding(ctx, id, encoding)
+}
+
 // MarkMinionFeedbackRead is the resolver for the markMinionFeedbackRead field.
 func (r *mutationResolver) MarkMinionFeedbackRead(ctx context.Context, id string) (*model.MinionSession, error) {
 	return r.MinionSessionResolver.MarkMinionFeedbackRead(ctx, id)

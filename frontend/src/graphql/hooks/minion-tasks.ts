@@ -28,6 +28,7 @@ import {
   MinionTaskFeedbackDocument,
   MinionTaskImportantCountDocument,
   MinionTaskOutputDocument,
+  MinionTaskOutputDecodingsDocument,
   MinionTaskProcessesDocument,
   SetMinionProcessMarkDocument,
   ResetMinionProcessMarkDocument,
@@ -78,6 +79,7 @@ export const minionTaskKeys = {
   commands: (sessionId: string) => [...minionTaskKeys.all, "commands", sessionId] as const,
   desktopSettings: (front: string) => [...minionTaskKeys.all, "desktopSettings", front] as const,
   output: (id: string) => [...minionTaskKeys.all, "output", id] as const,
+  outputDecodings: (id: string) => [...minionTaskKeys.all, "outputDecodings", id] as const,
   document: (id: string) => [...minionTaskKeys.all, "document", id] as const,
   feedback: (id: string) => [...minionTaskKeys.all, "feedback", id] as const,
   fileStrings: (fileId: string, filter: MinionFileStringsFilter) =>
@@ -198,6 +200,20 @@ export function useMinionTaskOutput(id: string | null, version: string, finished
     // Up to 4 MiB each: the reads of a growing output go soon, its last one
     // (the task ended) stays as long as any other query.
     gcTime: finished ? 5 * 60_000 : 10_000,
+  })
+}
+
+/**
+ * A piece of a task's output read in every encoding core knows, while
+ * enabled (the Encodings table is open), again when version changes (more
+ * output came).
+ */
+export function useMinionTaskOutputDecodings(id: string, version: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...minionTaskKeys.outputDecodings(id), version],
+    queryFn: () => graphqlClient(MinionTaskOutputDecodingsDocument, { id }),
+    enabled,
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === id ? prev : undefined),
   })
 }
 

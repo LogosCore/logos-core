@@ -69,13 +69,22 @@ type MinionTask {
   ok: Boolean
   exit: Int
   err: String
-  # The output: the parts joined in order, read as UTF-8 (bytes that are not
-  # stand as U+FFFD; outputUtf8 says whether all were). At most 4 MiB is
-  # kept (outputTruncated). Read only when asked for: a list asks for the
-  # rest. The bytes as they came: GET /api/v1/minion-tasks/{id}/output.
+  # The output: the parts joined in order, read as the session's
+  # outputEncoding, UTF-8 when it has none (what cannot be read stands as
+  # U+FFFD). At most 4 MiB is kept (outputTruncated). Read only when asked
+  # for: a list asks for the rest. The bytes as they came:
+  # GET /api/v1/minion-tasks/{id}/output.
   output: String!
   outputSize: Int!
+  # Whether the output's bytes are all UTF-8, whatever the session reads
+  # them as.
   outputUtf8: Boolean!
+  # A piece of the output read in every encoding core knows, for an operator
+  # to pick the session's (setMinionSessionOutputEncoding): from the start of
+  # the line with its first byte that is not ASCII, 2 KiB at most. In core's
+  # order (Unicode, OEM code pages, Windows', ISO 8859, others, CJK, EBCDIC).
+  # Read only when asked for.
+  outputDecodings: [MinionOutputDecoding!]!
   outputTruncated: Boolean!
   # How many result parts came: it grows with each, output, data or
   # listings alone (a walk sends thousands).
@@ -151,6 +160,20 @@ type MinionTask {
   # runs it, never the minion. Its state is FACTORY until it ends. Null for
   # any other task.
   factory: MinionTaskFactory
+}
+
+# A piece of a task's output read in one encoding (MinionTask.outputDecodings).
+type MinionOutputDecoding {
+  # What a session keeps (setMinionSessionOutputEncoding): "ibm866".
+  encoding: String!
+  # What an operator sees: "OEM Russian (866)".
+  name: String!
+  # The piece, read in it.
+  text: String!
+  # Signs it is not the output's encoding: its characters that could not be
+  # read (U+FFFD) or are control characters but a tab, a line end or a form
+  # feed, and the line breaks it lost (ASCII read as UTF-16 has none left).
+  unreadable: Int!
 }
 
 # Where a factory command's task stands (docs: contracts/factory-commands).

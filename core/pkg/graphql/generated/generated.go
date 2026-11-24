@@ -873,6 +873,13 @@ type ComplexityRoot struct {
 		OperationID func(childComplexity int) int
 	}
 
+	MinionOutputDecoding struct {
+		Encoding   func(childComplexity int) int
+		Name       func(childComplexity int) int
+		Text       func(childComplexity int) int
+		Unreadable func(childComplexity int) int
+	}
+
 	MinionProcess struct {
 		Arch        func(childComplexity int) int
 		BuiltinMark func(childComplexity int) int
@@ -963,6 +970,7 @@ type ComplexityRoot struct {
 		Number               func(childComplexity int) int
 		OperationID          func(childComplexity int) int
 		Os                   func(childComplexity int) int
+		OutputEncoding       func(childComplexity int) int
 		PeerAddress          func(childComplexity int) int
 		Peers                func(childComplexity int) int
 		Persisted            func(childComplexity int) int
@@ -1177,6 +1185,7 @@ type ComplexityRoot struct {
 		Ok                func(childComplexity int) int
 		OperationID       func(childComplexity int) int
 		Output            func(childComplexity int) int
+		OutputDecodings   func(childComplexity int) int
 		OutputSize        func(childComplexity int) int
 		OutputTruncated   func(childComplexity int) int
 		OutputUtf8        func(childComplexity int) int
@@ -1524,132 +1533,133 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		AddCredentialComment          func(childComplexity int, credentialID string, text string) int
-		AddMinionTarget               func(childComplexity int, buildID string, conn int, input model.MinionTargetInput, sessionID *string) int
-		AddOperationMember            func(childComplexity int, operationID string, userID string, role models.OperationRole) int
-		AddTaskWikiReference          func(childComplexity int, taskID string, wikiID string) int
-		AdminRevokeAllUserSessions    func(childComplexity int, userID string) int
-		AdminRevokeSession            func(childComplexity int, id string) int
-		BlockModule                   func(childComplexity int, instance string, reason *string) int
-		BulkImportHashes              func(childComplexity int, operationID string, input model.BulkImportHashesInput) int
-		CancelBuild                   func(childComplexity int, id string) int
-		CancelMinionTask              func(childComplexity int, id string) int
-		CancelStorageAction           func(childComplexity int, id string) int
-		ChangeTaskStage               func(childComplexity int, input model.ChangeTaskStageInput) int
-		CheckMinionTarget             func(childComplexity int, id string) int
-		CleanUpStorage                func(childComplexity int, olderThanDays int, operationID *string) int
-		CompleteGuide                 func(childComplexity int, guide string) int
-		ConnectMinionTarget           func(childComplexity int, id string) int
-		CreateAgentKey                func(childComplexity int, input model.CreateAgentKeyInput) int
-		CreateBuild                   func(childComplexity int, operationID string, input model.BuildInput) int
-		CreateChannelEndpoint         func(childComplexity int, operationID string, moduleName string, input model.ChannelEndpointInput) int
-		CreateCredential              func(childComplexity int, operationID string, input model.CreateCredentialInput) int
-		CreateCustomTimelineEvent     func(childComplexity int, operationID string, input model.CreateCustomTimelineEventInput) int
-		CreateHash                    func(childComplexity int, operationID string, input model.CreateHashInput) int
-		CreateHost                    func(childComplexity int, operationID string, input model.CreateHostInput) int
-		CreateMinionSessionFolder     func(childComplexity int, operationID string, input model.MinionSessionFolderInput) int
-		CreateMinionVPNKey            func(childComplexity int, taskID string) int
-		CreateMyAPIKey                func(childComplexity int) int
-		CreateOperation               func(childComplexity int, input model.CreateOperationInput) int
-		CreateTask                    func(childComplexity int, input model.CreateTaskInput) int
-		CreateUser                    func(childComplexity int, input model.CreateUserInput) int
-		CreateWikiDocument            func(childComplexity int, operationID string, input model.CreateWikiDocumentInput) int
-		CreateWikiDocumentBackup      func(childComplexity int, documentID string, description *string) int
-		DeleteAgentKey                func(childComplexity int, id string) int
-		DeleteBuild                   func(childComplexity int, id string) int
-		DeleteBuildArtifact           func(childComplexity int, id string) int
-		DeleteBuildFile               func(childComplexity int, id string) int
-		DeleteBuilds                  func(childComplexity int, operationID string, ids []string, matching *model.BuildMatchInput) int
-		DeleteChannelEndpoint         func(childComplexity int, id string) int
-		DeleteCredential              func(childComplexity int, id string) int
-		DeleteCredentialComment       func(childComplexity int, credentialID string, commentID string) int
-		DeleteCustomTimelineEvent     func(childComplexity int, id string) int
-		DeleteHash                    func(childComplexity int, id string) int
-		DeleteHost                    func(childComplexity int, id string) int
-		DeleteMinionSessionFolder     func(childComplexity int, id string) int
-		DeleteModule                  func(childComplexity int, instance string) int
-		DeleteMyAPIKey                func(childComplexity int) int
-		DeleteOperation               func(childComplexity int, id string) int
-		DeleteRecording               func(childComplexity int, id string) int
-		DeleteTask                    func(childComplexity int, id string) int
-		DeleteUser                    func(childComplexity int, id string) int
-		DeleteWikiDocument            func(childComplexity int, id string) int
-		DeleteWikiDocumentBackup      func(childComplexity int, id string) int
-		DisconnectMinionTarget        func(childComplexity int, id string) int
-		DisconnectMinionVPNClient     func(childComplexity int, taskID string, client string) int
-		DuplicateWikiDocument         func(childComplexity int, id string, withChildren *bool) int
-		EmptyWikiDocumentTrash        func(childComplexity int, operationID string) int
-		GrowStorageBucket             func(childComplexity int, bucket string) int
-		ImportLocalPreferences        func(childComplexity int, input model.ImportLocalPreferencesInput) int
-		InstantiateTemplate           func(childComplexity int, templateID string, targetOperationID string, parentDocumentID *string, title *string, emoji *string, icon *string, color *string) int
-		InvokeModuleAction            func(childComplexity int, instance string, action string, params any) int
-		MarkHashCracked               func(childComplexity int, id string, input model.MarkHashCrackedInput) int
-		MarkMinionFeedbackRead        func(childComplexity int, id string) int
-		MinionStreamLink              func(childComplexity int, taskID string) int
-		MoveMinionSessionFolder       func(childComplexity int, id string, before *string) int
-		PermanentlyDeleteWikiDocument func(childComplexity int, id string) int
-		PublishOperatorFocus          func(childComplexity int, input model.OperatorFocusInput) int
-		PurgeTask                     func(childComplexity int, id string) int
-		QueueMinionTask               func(childComplexity int, sessionID string, command string, args any, at *string) int
-		ReclaimStorage                func(childComplexity int) int
-		RecordIconUse                 func(childComplexity int, name string) int
-		RegenerateAgentKey            func(childComplexity int, id string) int
-		RegenerateMyAPIKey            func(childComplexity int) int
-		RemoveMinionTarget            func(childComplexity int, id string) int
-		RemoveOperationMember         func(childComplexity int, operationID string, userID string) int
-		RemoveSkill                   func(childComplexity int, name string) int
-		ReorderWikiDocumentSiblings   func(childComplexity int, input model.ReorderWikiDocumentSiblingsInput) int
-		ResetMinionProcessMark        func(childComplexity int, name string) int
-		RestoreTask                   func(childComplexity int, id string) int
-		RestoreWikiDocument           func(childComplexity int, id string, cascade *bool) int
-		RestoreWikiDocumentBackup     func(childComplexity int, documentID string, backupID string) int
-		RevokeAllMySessions           func(childComplexity int) int
-		RevokeSession                 func(childComplexity int, id string) int
-		RunMinionTaskNow              func(childComplexity int, id string) int
-		SetAgentKeyEnabled            func(childComplexity int, id string, enabled bool) int
-		SetHiddenIdentities           func(childComplexity int, names []string) int
-		SetMinionProcessMark          func(childComplexity int, name string, mark *model.MinionSessionMarkInput) int
-		SetMinionSessionAddress       func(childComplexity int, id string, address *string) int
-		SetMinionSessionArchived      func(childComplexity int, id string, archived bool) int
-		SetMinionSessionDescription   func(childComplexity int, id string, description string) int
-		SetMinionSessionMark          func(childComplexity int, id string, mark *model.MinionSessionMarkInput) int
-		SetMinionSessionMaxTasks      func(childComplexity int, id string, max int) int
-		SetMinionSessionsArchived     func(childComplexity int, operationID string, ids []string, matching *model.MinionSessionMatchInput, archived bool) int
-		SetMinionSessionsFolder       func(childComplexity int, operationID string, ids []string, matching *model.MinionSessionMatchInput, folderID *string) int
-		SetMinionSessionsLayout       func(childComplexity int, layout *model.MinionSessionsLayoutInput) int
-		SetMinionSessionsMark         func(childComplexity int, operationID string, ids []string, matching *model.MinionSessionMatchInput, mark *model.MinionSessionMarkInput) int
-		SetMinionTaskImportant        func(childComplexity int, id string, important bool) int
-		SetMinionTunnelCap            func(childComplexity int, taskID string, cap int) int
-		SetMinionTunnelRoutes         func(childComplexity int, taskID string, routes []string) int
-		SetMyAPIKeyEnabled            func(childComplexity int, enabled bool) int
-		SetStorageRetention           func(childComplexity int, enabled bool, olderThanDays int) int
-		SetTaskAssignees              func(childComplexity int, taskID string, assigneeIds []string) int
-		SetTaskCredentialReferences   func(childComplexity int, taskID string, credentialIds []string) int
-		SetTaskWikiReferences         func(childComplexity int, taskID string, wikiIds []string) int
-		SetWikiDocumentTemplate       func(childComplexity int, id string, isTemplate bool) int
-		SnoozeSkill                   func(childComplexity int, name string, version int) int
-		SnoozeSkillUpdate             func(childComplexity int, version int) int
-		TouchRecentOperation          func(childComplexity int, operationID string) int
-		TrackWikiDocumentVisit        func(childComplexity int, documentID string) int
-		TransferSkill                 func(childComplexity int, name string, userID string) int
-		UnblockModule                 func(childComplexity int, instance string) int
-		UpdateAgentKey                func(childComplexity int, id string, input model.UpdateAgentKeyInput) int
-		UpdateBuildDescription        func(childComplexity int, id string, description string) int
-		UpdateChannelEndpoint         func(childComplexity int, id string, input model.ChannelEndpointInput, expectedRevision int) int
-		UpdateCredential              func(childComplexity int, id string, input model.UpdateCredentialInput) int
-		UpdateCredentialComment       func(childComplexity int, credentialID string, commentID string, text string) int
-		UpdateCustomTimelineEvent     func(childComplexity int, id string, input model.UpdateCustomTimelineEventInput) int
-		UpdateHash                    func(childComplexity int, id string, input model.UpdateHashInput) int
-		UpdateHost                    func(childComplexity int, id string, input model.UpdateHostInput) int
-		UpdateMinionSessionFolder     func(childComplexity int, id string, input model.MinionSessionFolderInput) int
-		UpdateMinionTarget            func(childComplexity int, id string, input model.MinionTargetInput) int
-		UpdateModuleConfig            func(childComplexity int, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) int
-		UpdateOperation               func(childComplexity int, id string, input model.UpdateOperationInput) int
-		UpdateOperationMemberRole     func(childComplexity int, operationID string, userID string, role models.OperationRole) int
-		UpdateOwnProfile              func(childComplexity int, input model.UpdateUserInput) int
-		UpdateTask                    func(childComplexity int, id string, input model.UpdateTaskInput) int
-		UpdateUser                    func(childComplexity int, id string, input model.UpdateUserInput) int
-		UpdateWikiDocument            func(childComplexity int, id string, input model.UpdateWikiDocumentInput) int
+		AddCredentialComment           func(childComplexity int, credentialID string, text string) int
+		AddMinionTarget                func(childComplexity int, buildID string, conn int, input model.MinionTargetInput, sessionID *string) int
+		AddOperationMember             func(childComplexity int, operationID string, userID string, role models.OperationRole) int
+		AddTaskWikiReference           func(childComplexity int, taskID string, wikiID string) int
+		AdminRevokeAllUserSessions     func(childComplexity int, userID string) int
+		AdminRevokeSession             func(childComplexity int, id string) int
+		BlockModule                    func(childComplexity int, instance string, reason *string) int
+		BulkImportHashes               func(childComplexity int, operationID string, input model.BulkImportHashesInput) int
+		CancelBuild                    func(childComplexity int, id string) int
+		CancelMinionTask               func(childComplexity int, id string) int
+		CancelStorageAction            func(childComplexity int, id string) int
+		ChangeTaskStage                func(childComplexity int, input model.ChangeTaskStageInput) int
+		CheckMinionTarget              func(childComplexity int, id string) int
+		CleanUpStorage                 func(childComplexity int, olderThanDays int, operationID *string) int
+		CompleteGuide                  func(childComplexity int, guide string) int
+		ConnectMinionTarget            func(childComplexity int, id string) int
+		CreateAgentKey                 func(childComplexity int, input model.CreateAgentKeyInput) int
+		CreateBuild                    func(childComplexity int, operationID string, input model.BuildInput) int
+		CreateChannelEndpoint          func(childComplexity int, operationID string, moduleName string, input model.ChannelEndpointInput) int
+		CreateCredential               func(childComplexity int, operationID string, input model.CreateCredentialInput) int
+		CreateCustomTimelineEvent      func(childComplexity int, operationID string, input model.CreateCustomTimelineEventInput) int
+		CreateHash                     func(childComplexity int, operationID string, input model.CreateHashInput) int
+		CreateHost                     func(childComplexity int, operationID string, input model.CreateHostInput) int
+		CreateMinionSessionFolder      func(childComplexity int, operationID string, input model.MinionSessionFolderInput) int
+		CreateMinionVPNKey             func(childComplexity int, taskID string) int
+		CreateMyAPIKey                 func(childComplexity int) int
+		CreateOperation                func(childComplexity int, input model.CreateOperationInput) int
+		CreateTask                     func(childComplexity int, input model.CreateTaskInput) int
+		CreateUser                     func(childComplexity int, input model.CreateUserInput) int
+		CreateWikiDocument             func(childComplexity int, operationID string, input model.CreateWikiDocumentInput) int
+		CreateWikiDocumentBackup       func(childComplexity int, documentID string, description *string) int
+		DeleteAgentKey                 func(childComplexity int, id string) int
+		DeleteBuild                    func(childComplexity int, id string) int
+		DeleteBuildArtifact            func(childComplexity int, id string) int
+		DeleteBuildFile                func(childComplexity int, id string) int
+		DeleteBuilds                   func(childComplexity int, operationID string, ids []string, matching *model.BuildMatchInput) int
+		DeleteChannelEndpoint          func(childComplexity int, id string) int
+		DeleteCredential               func(childComplexity int, id string) int
+		DeleteCredentialComment        func(childComplexity int, credentialID string, commentID string) int
+		DeleteCustomTimelineEvent      func(childComplexity int, id string) int
+		DeleteHash                     func(childComplexity int, id string) int
+		DeleteHost                     func(childComplexity int, id string) int
+		DeleteMinionSessionFolder      func(childComplexity int, id string) int
+		DeleteModule                   func(childComplexity int, instance string) int
+		DeleteMyAPIKey                 func(childComplexity int) int
+		DeleteOperation                func(childComplexity int, id string) int
+		DeleteRecording                func(childComplexity int, id string) int
+		DeleteTask                     func(childComplexity int, id string) int
+		DeleteUser                     func(childComplexity int, id string) int
+		DeleteWikiDocument             func(childComplexity int, id string) int
+		DeleteWikiDocumentBackup       func(childComplexity int, id string) int
+		DisconnectMinionTarget         func(childComplexity int, id string) int
+		DisconnectMinionVPNClient      func(childComplexity int, taskID string, client string) int
+		DuplicateWikiDocument          func(childComplexity int, id string, withChildren *bool) int
+		EmptyWikiDocumentTrash         func(childComplexity int, operationID string) int
+		GrowStorageBucket              func(childComplexity int, bucket string) int
+		ImportLocalPreferences         func(childComplexity int, input model.ImportLocalPreferencesInput) int
+		InstantiateTemplate            func(childComplexity int, templateID string, targetOperationID string, parentDocumentID *string, title *string, emoji *string, icon *string, color *string) int
+		InvokeModuleAction             func(childComplexity int, instance string, action string, params any) int
+		MarkHashCracked                func(childComplexity int, id string, input model.MarkHashCrackedInput) int
+		MarkMinionFeedbackRead         func(childComplexity int, id string) int
+		MinionStreamLink               func(childComplexity int, taskID string) int
+		MoveMinionSessionFolder        func(childComplexity int, id string, before *string) int
+		PermanentlyDeleteWikiDocument  func(childComplexity int, id string) int
+		PublishOperatorFocus           func(childComplexity int, input model.OperatorFocusInput) int
+		PurgeTask                      func(childComplexity int, id string) int
+		QueueMinionTask                func(childComplexity int, sessionID string, command string, args any, at *string) int
+		ReclaimStorage                 func(childComplexity int) int
+		RecordIconUse                  func(childComplexity int, name string) int
+		RegenerateAgentKey             func(childComplexity int, id string) int
+		RegenerateMyAPIKey             func(childComplexity int) int
+		RemoveMinionTarget             func(childComplexity int, id string) int
+		RemoveOperationMember          func(childComplexity int, operationID string, userID string) int
+		RemoveSkill                    func(childComplexity int, name string) int
+		ReorderWikiDocumentSiblings    func(childComplexity int, input model.ReorderWikiDocumentSiblingsInput) int
+		ResetMinionProcessMark         func(childComplexity int, name string) int
+		RestoreTask                    func(childComplexity int, id string) int
+		RestoreWikiDocument            func(childComplexity int, id string, cascade *bool) int
+		RestoreWikiDocumentBackup      func(childComplexity int, documentID string, backupID string) int
+		RevokeAllMySessions            func(childComplexity int) int
+		RevokeSession                  func(childComplexity int, id string) int
+		RunMinionTaskNow               func(childComplexity int, id string) int
+		SetAgentKeyEnabled             func(childComplexity int, id string, enabled bool) int
+		SetHiddenIdentities            func(childComplexity int, names []string) int
+		SetMinionProcessMark           func(childComplexity int, name string, mark *model.MinionSessionMarkInput) int
+		SetMinionSessionAddress        func(childComplexity int, id string, address *string) int
+		SetMinionSessionArchived       func(childComplexity int, id string, archived bool) int
+		SetMinionSessionDescription    func(childComplexity int, id string, description string) int
+		SetMinionSessionMark           func(childComplexity int, id string, mark *model.MinionSessionMarkInput) int
+		SetMinionSessionMaxTasks       func(childComplexity int, id string, max int) int
+		SetMinionSessionOutputEncoding func(childComplexity int, id string, encoding *string) int
+		SetMinionSessionsArchived      func(childComplexity int, operationID string, ids []string, matching *model.MinionSessionMatchInput, archived bool) int
+		SetMinionSessionsFolder        func(childComplexity int, operationID string, ids []string, matching *model.MinionSessionMatchInput, folderID *string) int
+		SetMinionSessionsLayout        func(childComplexity int, layout *model.MinionSessionsLayoutInput) int
+		SetMinionSessionsMark          func(childComplexity int, operationID string, ids []string, matching *model.MinionSessionMatchInput, mark *model.MinionSessionMarkInput) int
+		SetMinionTaskImportant         func(childComplexity int, id string, important bool) int
+		SetMinionTunnelCap             func(childComplexity int, taskID string, cap int) int
+		SetMinionTunnelRoutes          func(childComplexity int, taskID string, routes []string) int
+		SetMyAPIKeyEnabled             func(childComplexity int, enabled bool) int
+		SetStorageRetention            func(childComplexity int, enabled bool, olderThanDays int) int
+		SetTaskAssignees               func(childComplexity int, taskID string, assigneeIds []string) int
+		SetTaskCredentialReferences    func(childComplexity int, taskID string, credentialIds []string) int
+		SetTaskWikiReferences          func(childComplexity int, taskID string, wikiIds []string) int
+		SetWikiDocumentTemplate        func(childComplexity int, id string, isTemplate bool) int
+		SnoozeSkill                    func(childComplexity int, name string, version int) int
+		SnoozeSkillUpdate              func(childComplexity int, version int) int
+		TouchRecentOperation           func(childComplexity int, operationID string) int
+		TrackWikiDocumentVisit         func(childComplexity int, documentID string) int
+		TransferSkill                  func(childComplexity int, name string, userID string) int
+		UnblockModule                  func(childComplexity int, instance string) int
+		UpdateAgentKey                 func(childComplexity int, id string, input model.UpdateAgentKeyInput) int
+		UpdateBuildDescription         func(childComplexity int, id string, description string) int
+		UpdateChannelEndpoint          func(childComplexity int, id string, input model.ChannelEndpointInput, expectedRevision int) int
+		UpdateCredential               func(childComplexity int, id string, input model.UpdateCredentialInput) int
+		UpdateCredentialComment        func(childComplexity int, credentialID string, commentID string, text string) int
+		UpdateCustomTimelineEvent      func(childComplexity int, id string, input model.UpdateCustomTimelineEventInput) int
+		UpdateHash                     func(childComplexity int, id string, input model.UpdateHashInput) int
+		UpdateHost                     func(childComplexity int, id string, input model.UpdateHostInput) int
+		UpdateMinionSessionFolder      func(childComplexity int, id string, input model.MinionSessionFolderInput) int
+		UpdateMinionTarget             func(childComplexity int, id string, input model.MinionTargetInput) int
+		UpdateModuleConfig             func(childComplexity int, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) int
+		UpdateOperation                func(childComplexity int, id string, input model.UpdateOperationInput) int
+		UpdateOperationMemberRole      func(childComplexity int, operationID string, userID string, role models.OperationRole) int
+		UpdateOwnProfile               func(childComplexity int, input model.UpdateUserInput) int
+		UpdateTask                     func(childComplexity int, id string, input model.UpdateTaskInput) int
+		UpdateUser                     func(childComplexity int, id string, input model.UpdateUserInput) int
+		UpdateWikiDocument             func(childComplexity int, id string, input model.UpdateWikiDocumentInput) int
 	}
 
 	NetworkInterface struct {
@@ -2598,6 +2608,7 @@ type MinionTaskResolver interface {
 	Output(ctx context.Context, obj *model.MinionTask) (string, error)
 
 	OutputUtf8(ctx context.Context, obj *model.MinionTask) (bool, error)
+	OutputDecodings(ctx context.Context, obj *model.MinionTask) ([]*model.MinionOutputDecoding, error)
 
 	Tunnel(ctx context.Context, obj *model.MinionTask) (*model.MinionTunnel, error)
 	Data(ctx context.Context, obj *model.MinionTask) (any, error)
@@ -2683,6 +2694,7 @@ type MutationResolver interface {
 	SetMinionSessionMark(ctx context.Context, id string, mark *model.MinionSessionMarkInput) (*model.MinionSession, error)
 	SetMinionSessionsMark(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, mark *model.MinionSessionMarkInput) (int, error)
 	SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error)
+	SetMinionSessionOutputEncoding(ctx context.Context, id string, encoding *string) (*model.MinionSession, error)
 	MarkMinionFeedbackRead(ctx context.Context, id string) (*model.MinionSession, error)
 	SetMinionSessionMaxTasks(ctx context.Context, id string, max int) (*model.MinionSession, error)
 	SetMinionSessionsLayout(ctx context.Context, layout *model.MinionSessionsLayoutInput) (*model.MinionSessionsLayout, error)
@@ -6414,6 +6426,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MinionListenerEvent.OperationID(childComplexity), true
 
+	case "MinionOutputDecoding.encoding":
+		if e.ComplexityRoot.MinionOutputDecoding.Encoding == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionOutputDecoding.Encoding(childComplexity), true
+	case "MinionOutputDecoding.name":
+		if e.ComplexityRoot.MinionOutputDecoding.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionOutputDecoding.Name(childComplexity), true
+	case "MinionOutputDecoding.text":
+		if e.ComplexityRoot.MinionOutputDecoding.Text == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionOutputDecoding.Text(childComplexity), true
+	case "MinionOutputDecoding.unreadable":
+		if e.ComplexityRoot.MinionOutputDecoding.Unreadable == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionOutputDecoding.Unreadable(childComplexity), true
+
 	case "MinionProcess.arch":
 		if e.ComplexityRoot.MinionProcess.Arch == nil {
 			break
@@ -6880,6 +6917,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.Os(childComplexity), true
+	case "MinionSession.outputEncoding":
+		if e.ComplexityRoot.MinionSession.OutputEncoding == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.OutputEncoding(childComplexity), true
 	case "MinionSession.peerAddress":
 		if e.ComplexityRoot.MinionSession.PeerAddress == nil {
 			break
@@ -7841,6 +7884,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.Output(childComplexity), true
+	case "MinionTask.outputDecodings":
+		if e.ComplexityRoot.MinionTask.OutputDecodings == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.OutputDecodings(childComplexity), true
 	case "MinionTask.outputSize":
 		if e.ComplexityRoot.MinionTask.OutputSize == nil {
 			break
@@ -10395,6 +10444,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetMinionSessionMaxTasks(childComplexity, args["id"].(string), args["max"].(int)), true
+	case "Mutation.setMinionSessionOutputEncoding":
+		if e.ComplexityRoot.Mutation.SetMinionSessionOutputEncoding == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setMinionSessionOutputEncoding_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetMinionSessionOutputEncoding(childComplexity, args["id"].(string), args["encoding"].(*string)), true
 	case "Mutation.setMinionSessionsArchived":
 		if e.ComplexityRoot.Mutation.SetMinionSessionsArchived == nil {
 			break
@@ -17632,6 +17692,10 @@ type MinionSession {
   # the hello sent none.
   address: String
   addressPicked: Boolean!
+  # What its tasks' output is read as (MinionTask.output): one of
+  # MinionTask.outputDecodings' encodings, an operator's pick for everyone in
+  # the operation (setMinionSessionOutputEncoding). null: UTF-8.
+  outputEncoding: String
   # The IP address the latest message came from, as its channel saw it (the
   # host's NAT's outside address, or the client a trusted proxy forwarded
   # for): the session's current external address. null where the channels
@@ -18186,6 +18250,13 @@ extend type Mutation {
   setMinionSessionAddress(id: ID!, address: String): MinionSession!
     @hasPermission(permission: "operation:member")
 
+  # Sets what the session's tasks' output is read as, for everyone in the
+  # operation: one of MinionTask.outputDecodings' encodings; null (or
+  # "utf-8") goes back to UTF-8. Needs at least operator; agent API keys are
+  # rejected.
+  setMinionSessionOutputEncoding(id: ID!, encoding: String): MinionSession!
+    @hasPermission(permission: "operation:member")
+
   # Marks the session's feedback read, for everyone in the operation: its
   # unread errors go back to 0. Needs at least operator; agent API keys are
   # rejected.
@@ -18484,13 +18555,22 @@ type MinionTask {
   ok: Boolean
   exit: Int
   err: String
-  # The output: the parts joined in order, read as UTF-8 (bytes that are not
-  # stand as U+FFFD; outputUtf8 says whether all were). At most 4 MiB is
-  # kept (outputTruncated). Read only when asked for: a list asks for the
-  # rest. The bytes as they came: GET /api/v1/minion-tasks/{id}/output.
+  # The output: the parts joined in order, read as the session's
+  # outputEncoding, UTF-8 when it has none (what cannot be read stands as
+  # U+FFFD). At most 4 MiB is kept (outputTruncated). Read only when asked
+  # for: a list asks for the rest. The bytes as they came:
+  # GET /api/v1/minion-tasks/{id}/output.
   output: String!
   outputSize: Int!
+  # Whether the output's bytes are all UTF-8, whatever the session reads
+  # them as.
   outputUtf8: Boolean!
+  # A piece of the output read in every encoding core knows, for an operator
+  # to pick the session's (setMinionSessionOutputEncoding): from the start of
+  # the line with its first byte that is not ASCII, 2 KiB at most. In core's
+  # order (Unicode, OEM code pages, Windows', ISO 8859, others, CJK, EBCDIC).
+  # Read only when asked for.
+  outputDecodings: [MinionOutputDecoding!]!
   outputTruncated: Boolean!
   # How many result parts came: it grows with each, output, data or
   # listings alone (a walk sends thousands).
@@ -18566,6 +18646,20 @@ type MinionTask {
   # runs it, never the minion. Its state is FACTORY until it ends. Null for
   # any other task.
   factory: MinionTaskFactory
+}
+
+# A piece of a task's output read in one encoding (MinionTask.outputDecodings).
+type MinionOutputDecoding {
+  # What a session keeps (setMinionSessionOutputEncoding): "ibm866".
+  encoding: String!
+  # What an operator sees: "OEM Russian (866)".
+  name: String!
+  # The piece, read in it.
+  text: String!
+  # Signs it is not the output's encoding: its characters that could not be
+  # read (U+FFFD) or are control characters but a tab, a line end or a form
+  # feed, and the line breaks it lost (ASCII read as UTF-16 has none left).
+  unreadable: Int!
 }
 
 # Where a factory command's task stands (docs: contracts/factory-commands).
@@ -23312,6 +23406,22 @@ func (ec *executionContext) field_Mutation_setMinionSessionMaxTasks_args(ctx con
 		return nil, err
 	}
 	args["max"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setMinionSessionOutputEncoding_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "encoding", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["encoding"] = arg1
 	return args, nil
 }
 
@@ -42087,6 +42197,8 @@ func (ec *executionContext) fieldContext_MinionDelegateConnection_session(_ cont
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -44786,6 +44898,122 @@ func (ec *executionContext) fieldContext_MinionListenerEvent_listener(_ context.
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionOutputDecoding_encoding(ctx context.Context, field graphql.CollectedField, obj *model.MinionOutputDecoding) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionOutputDecoding_encoding,
+		func(ctx context.Context) (any, error) {
+			return obj.Encoding, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionOutputDecoding_encoding(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionOutputDecoding",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionOutputDecoding_name(ctx context.Context, field graphql.CollectedField, obj *model.MinionOutputDecoding) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionOutputDecoding_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionOutputDecoding_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionOutputDecoding",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionOutputDecoding_text(ctx context.Context, field graphql.CollectedField, obj *model.MinionOutputDecoding) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionOutputDecoding_text,
+		func(ctx context.Context) (any, error) {
+			return obj.Text, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionOutputDecoding_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionOutputDecoding",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionOutputDecoding_unreadable(ctx context.Context, field graphql.CollectedField, obj *model.MinionOutputDecoding) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionOutputDecoding_unreadable,
+		func(ctx context.Context) (any, error) {
+			return obj.Unreadable, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionOutputDecoding_unreadable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionOutputDecoding",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionProcess_pid(ctx context.Context, field graphql.CollectedField, obj *model.MinionProcess) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -46678,6 +46906,35 @@ func (ec *executionContext) fieldContext_MinionSession_addressPicked(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_outputEncoding(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_outputEncoding,
+		func(ctx context.Context) (any, error) {
+			return obj.OutputEncoding, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_outputEncoding(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_peerAddress(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -48106,6 +48363,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -48377,6 +48636,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -49547,6 +49808,8 @@ func (ec *executionContext) fieldContext_MinionSessionVia_session(_ context.Cont
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -50616,6 +50879,8 @@ func (ec *executionContext) fieldContext_MinionTarget_session(_ context.Context,
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -50800,6 +51065,8 @@ func (ec *executionContext) fieldContext_MinionTarget_delegate(_ context.Context
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -52540,6 +52807,45 @@ func (ec *executionContext) fieldContext_MinionTask_outputUtf8(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_outputDecodings(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_outputDecodings,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.MinionTask().OutputDecodings(ctx, obj)
+		},
+		nil,
+		ec.marshalNMinionOutputDecoding2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionOutputDecodingᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_outputDecodings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "encoding":
+				return ec.fieldContext_MinionOutputDecoding_encoding(ctx, field)
+			case "name":
+				return ec.fieldContext_MinionOutputDecoding_name(ctx, field)
+			case "text":
+				return ec.fieldContext_MinionOutputDecoding_text(ctx, field)
+			case "unreadable":
+				return ec.fieldContext_MinionOutputDecoding_unreadable(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionOutputDecoding", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_outputTruncated(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -53781,6 +54087,8 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_outputSize(ctx, field)
 			case "outputUtf8":
 				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputDecodings":
+				return ec.fieldContext_MinionTask_outputDecodings(ctx, field)
 			case "outputTruncated":
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
@@ -65695,6 +66003,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -65939,6 +66249,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -66124,6 +66436,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -66368,6 +66682,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -66454,6 +66770,193 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_setMinionSessionAddress_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setMinionSessionOutputEncoding(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_setMinionSessionOutputEncoding,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetMinionSessionOutputEncoding(ctx, fc.Args["id"].(string), fc.Args["encoding"].(*string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionSession
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionSession
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_setMinionSessionOutputEncoding(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionSession_rev(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionSession_state(ctx, field)
+			case "number":
+				return ec.fieldContext_MinionSession_number(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionSession_operationId(ctx, field)
+			case "buildId":
+				return ec.fieldContext_MinionSession_buildId(ctx, field)
+			case "buildDescription":
+				return ec.fieldContext_MinionSession_buildDescription(ctx, field)
+			case "description":
+				return ec.fieldContext_MinionSession_description(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_MinionSession_moduleName(ctx, field)
+			case "target":
+				return ec.fieldContext_MinionSession_target(ctx, field)
+			case "platform":
+				return ec.fieldContext_MinionSession_platform(ctx, field)
+			case "staged":
+				return ec.fieldContext_MinionSession_staged(ctx, field)
+			case "pid":
+				return ec.fieldContext_MinionSession_pid(ctx, field)
+			case "os":
+				return ec.fieldContext_MinionSession_os(ctx, field)
+			case "arch":
+				return ec.fieldContext_MinionSession_arch(ctx, field)
+			case "host":
+				return ec.fieldContext_MinionSession_host(ctx, field)
+			case "user":
+				return ec.fieldContext_MinionSession_user(ctx, field)
+			case "domain":
+				return ec.fieldContext_MinionSession_domain(ctx, field)
+			case "proc":
+				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "machineId":
+				return ec.fieldContext_MinionSession_machineId(ctx, field)
+			case "integrity":
+				return ec.fieldContext_MinionSession_integrity(ctx, field)
+			case "acting":
+				return ec.fieldContext_MinionSession_acting(ctx, field)
+			case "addrs":
+				return ec.fieldContext_MinionSession_addrs(ctx, field)
+			case "address":
+				return ec.fieldContext_MinionSession_address(ctx, field)
+			case "addressPicked":
+				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
+			case "peerAddress":
+				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
+			case "peers":
+				return ec.fieldContext_MinionSession_peers(ctx, field)
+			case "version":
+				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "roundtripTime":
+				return ec.fieldContext_MinionSession_roundtripTime(ctx, field)
+			case "x":
+				return ec.fieldContext_MinionSession_x(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_MinionSession_createdAt(ctx, field)
+			case "archived":
+				return ec.fieldContext_MinionSession_archived(ctx, field)
+			case "folderId":
+				return ec.fieldContext_MinionSession_folderId(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionSession_mark(ctx, field)
+			case "persisted":
+				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "restarts":
+				return ec.fieldContext_MinionSession_restarts(ctx, field)
+			case "restartCount":
+				return ec.fieldContext_MinionSession_restartCount(ctx, field)
+			case "sleepInterval":
+				return ec.fieldContext_MinionSession_sleepInterval(ctx, field)
+			case "sleepJitter":
+				return ec.fieldContext_MinionSession_sleepJitter(ctx, field)
+			case "lateAt":
+				return ec.fieldContext_MinionSession_lateAt(ctx, field)
+			case "lostAt":
+				return ec.fieldContext_MinionSession_lostAt(ctx, field)
+			case "lastSeenAt":
+				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "codecDownSince":
+				return ec.fieldContext_MinionSession_codecDownSince(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionSession_conn(ctx, field)
+			case "connKind":
+				return ec.fieldContext_MinionSession_connKind(ctx, field)
+			case "connCount":
+				return ec.fieldContext_MinionSession_connCount(ctx, field)
+			case "connectionsChangedAt":
+				return ec.fieldContext_MinionSession_connectionsChangedAt(ctx, field)
+			case "connChanges":
+				return ec.fieldContext_MinionSession_connChanges(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionSession_connections(ctx, field)
+			case "maxTasks":
+				return ec.fieldContext_MinionSession_maxTasks(ctx, field)
+			case "maxTasksSettable":
+				return ec.fieldContext_MinionSession_maxTasksSettable(ctx, field)
+			case "maxTasksPending":
+				return ec.fieldContext_MinionSession_maxTasksPending(ctx, field)
+			case "maxTasksNotTaken":
+				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
+			case "runningTasks":
+				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
+			case "feedbackErrors":
+				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
+			case "feedbackAt":
+				return ec.fieldContext_MinionSession_feedbackAt(ctx, field)
+			case "feedbackReadAt":
+				return ec.fieldContext_MinionSession_feedbackReadAt(ctx, field)
+			case "via":
+				return ec.fieldContext_MinionSession_via(ctx, field)
+			case "viaSince":
+				return ec.fieldContext_MinionSession_viaSince(ctx, field)
+			case "bindTarget":
+				return ec.fieldContext_MinionSession_bindTarget(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setMinionSessionOutputEncoding_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -66553,6 +67056,8 @@ func (ec *executionContext) fieldContext_Mutation_markMinionFeedbackRead(ctx con
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -66738,6 +67243,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMaxTasks(ctx c
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -67682,6 +68189,8 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_outputSize(ctx, field)
 			case "outputUtf8":
 				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputDecodings":
+				return ec.fieldContext_MinionTask_outputDecodings(ctx, field)
 			case "outputTruncated":
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
@@ -67857,6 +68366,8 @@ func (ec *executionContext) fieldContext_Mutation_runMinionTaskNow(ctx context.C
 				return ec.fieldContext_MinionTask_outputSize(ctx, field)
 			case "outputUtf8":
 				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputDecodings":
+				return ec.fieldContext_MinionTask_outputDecodings(ctx, field)
 			case "outputTruncated":
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
@@ -68032,6 +68543,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_outputSize(ctx, field)
 			case "outputUtf8":
 				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputDecodings":
+				return ec.fieldContext_MinionTask_outputDecodings(ctx, field)
 			case "outputTruncated":
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
@@ -68207,6 +68720,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTaskImportant(ctx con
 				return ec.fieldContext_MinionTask_outputSize(ctx, field)
 			case "outputUtf8":
 				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputDecodings":
+				return ec.fieldContext_MinionTask_outputDecodings(ctx, field)
 			case "outputTruncated":
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
@@ -68520,6 +69035,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelCap(ctx context
 				return ec.fieldContext_MinionTask_outputSize(ctx, field)
 			case "outputUtf8":
 				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputDecodings":
+				return ec.fieldContext_MinionTask_outputDecodings(ctx, field)
 			case "outputTruncated":
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
@@ -68695,6 +69212,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelRoutes(ctx cont
 				return ec.fieldContext_MinionTask_outputSize(ctx, field)
 			case "outputUtf8":
 				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputDecodings":
+				return ec.fieldContext_MinionTask_outputDecodings(ctx, field)
 			case "outputTruncated":
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
@@ -68935,6 +69454,8 @@ func (ec *executionContext) fieldContext_Mutation_disconnectMinionVPNClient(ctx 
 				return ec.fieldContext_MinionTask_outputSize(ctx, field)
 			case "outputUtf8":
 				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputDecodings":
+				return ec.fieldContext_MinionTask_outputDecodings(ctx, field)
 			case "outputTruncated":
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
@@ -78740,6 +79261,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "outputEncoding":
+				return ec.fieldContext_MinionSession_outputEncoding(ctx, field)
 			case "peerAddress":
 				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
 			case "peers":
@@ -79257,6 +79780,8 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_outputSize(ctx, field)
 			case "outputUtf8":
 				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputDecodings":
+				return ec.fieldContext_MinionTask_outputDecodings(ctx, field)
 			case "outputTruncated":
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
@@ -90824,6 +91349,8 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_outputSize(ctx, field)
 			case "outputUtf8":
 				return ec.fieldContext_MinionTask_outputUtf8(ctx, field)
+			case "outputDecodings":
+				return ec.fieldContext_MinionTask_outputDecodings(ctx, field)
 			case "outputTruncated":
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
@@ -110146,6 +110673,60 @@ func (ec *executionContext) _MinionListenerEvent(ctx context.Context, sel ast.Se
 	return out
 }
 
+var minionOutputDecodingImplementors = []string{"MinionOutputDecoding"}
+
+func (ec *executionContext) _MinionOutputDecoding(ctx context.Context, sel ast.SelectionSet, obj *model.MinionOutputDecoding) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionOutputDecodingImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionOutputDecoding")
+		case "encoding":
+			out.Values[i] = ec._MinionOutputDecoding_encoding(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._MinionOutputDecoding_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "text":
+			out.Values[i] = ec._MinionOutputDecoding_text(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unreadable":
+			out.Values[i] = ec._MinionOutputDecoding_unreadable(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var minionProcessImplementors = []string{"MinionProcess"}
 
 func (ec *executionContext) _MinionProcess(ctx context.Context, sel ast.SelectionSet, obj *model.MinionProcess) graphql.Marshaler {
@@ -110528,6 +111109,8 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "outputEncoding":
+			out.Values[i] = ec._MinionSession_outputEncoding(ctx, field, obj)
 		case "peerAddress":
 			out.Values[i] = ec._MinionSession_peerAddress(ctx, field, obj)
 		case "peers":
@@ -112110,6 +112693,42 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 					}
 				}()
 				res = ec._MinionTask_outputUtf8(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "outputDecodings":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._MinionTask_outputDecodings(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -115004,6 +115623,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "setMinionSessionAddress":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setMinionSessionAddress(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setMinionSessionOutputEncoding":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setMinionSessionOutputEncoding(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -127313,6 +127939,32 @@ func (ec *executionContext) marshalNMinionListenerEvent2ᚖgithubᚗcomᚋlogosc
 		return graphql.Null
 	}
 	return ec._MinionListenerEvent(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionOutputDecoding2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionOutputDecodingᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionOutputDecoding) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionOutputDecoding2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionOutputDecoding(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionOutputDecoding2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionOutputDecoding(ctx context.Context, sel ast.SelectionSet, v *model.MinionOutputDecoding) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionOutputDecoding(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNMinionProcess2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionProcess(ctx context.Context, sel ast.SelectionSet, v *model.MinionProcess) graphql.Marshaler {

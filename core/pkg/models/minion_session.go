@@ -69,6 +69,11 @@ type MinionSession struct {
 	// the host's real one (DefaultAddress). Empty when the hello sent none.
 	Address       string `bson:"address,omitempty" json:"address,omitempty"`
 	AddressPicked bool   `bson:"address_picked,omitempty" json:"address_picked,omitempty"`
+	// OutputEncoding is what its tasks' output is read as (textenc's id,
+	// an operator's pick for the whole team): the bytes the minion sent,
+	// as its host wrote them (cmd.exe's OEM code page). Empty: UTF-8. A
+	// claim keeps it.
+	OutputEncoding string `bson:"output_encoding,omitempty" json:"output_encoding,omitempty"`
 
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 	// PeerAddress is the IP address the latest message came from, as its

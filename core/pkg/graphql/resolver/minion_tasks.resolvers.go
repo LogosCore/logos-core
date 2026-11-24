@@ -7,12 +7,12 @@ package resolver
 
 import (
 	"context"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
+	"github.com/logoscore/logos-core/core/pkg/textenc"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
@@ -27,7 +27,12 @@ func (r *minionTaskResolver) Output(ctx context.Context, obj *model.MinionTask) 
 	if err != nil {
 		return "", err
 	}
-	return strings.ToValidUTF8(string(out), "\uFFFD"), nil
+	// Read as its session's encoding, an operator's pick; UTF-8 without.
+	enc, err := r.MinionTaskResolver.OutputEncoding(ctx, obj.SessionID)
+	if err != nil {
+		return "", err
+	}
+	return textenc.Decode(enc, out), nil
 }
 
 // OutputUtf8 is the resolver for the outputUtf8 field.
@@ -37,6 +42,20 @@ func (r *minionTaskResolver) OutputUtf8(ctx context.Context, obj *model.MinionTa
 		return false, err
 	}
 	return utf8.Valid(out), nil
+}
+
+// OutputDecodings is the resolver for the outputDecodings field.
+func (r *minionTaskResolver) OutputDecodings(ctx context.Context, obj *model.MinionTask) ([]*model.MinionOutputDecoding, error) {
+	out, err := r.MinionTaskResolver.Output(ctx, obj.ID)
+	if err != nil {
+		return nil, err
+	}
+	ds := textenc.Decodings(out)
+	res := make([]*model.MinionOutputDecoding, len(ds))
+	for i, d := range ds {
+		res[i] = &model.MinionOutputDecoding{Encoding: d.ID, Name: d.Name, Text: d.Text, Unreadable: d.Unreadable}
+	}
+	return res, nil
 }
 
 // Tunnel is the resolver for the tunnel field.

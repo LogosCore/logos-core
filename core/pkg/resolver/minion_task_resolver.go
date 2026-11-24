@@ -60,6 +60,9 @@ type IMinionTaskResolver interface {
 	// Data their data merged: read only when a query asks (the selected
 	// task's), the parent query having checked the caller.
 	Output(ctx context.Context, taskID string) ([]byte, error)
+	// OutputEncoding is what the session's tasks' output is read as
+	// (textenc's id), "" for UTF-8.
+	OutputEncoding(ctx context.Context, sessionID string) (string, error)
 	Data(ctx context.Context, taskID string) (any, error)
 	// Document is the task's stored document as JSON, for debugging
 	// (minion_task_document.go).
@@ -1337,6 +1340,19 @@ func (r *minionTaskResolver) Output(ctx context.Context, taskID string) ([]byte,
 		out = append(out, p.Out...)
 	}
 	return out, nil
+}
+
+func (r *minionTaskResolver) OutputEncoding(ctx context.Context, sessionID string) (string, error) {
+	sid, err := uuid.Parse(sessionID)
+	if err != nil {
+		return "", fmt.Errorf("invalid session ID")
+	}
+	enc, err := r.sessions.OutputEncoding(ctx, sid)
+	if repository.IsNotFound(err) {
+		// The session was deleted under its task: as UTF-8.
+		return "", nil
+	}
+	return enc, err
 }
 
 func (r *minionTaskResolver) Data(ctx context.Context, taskID string) (any, error) {

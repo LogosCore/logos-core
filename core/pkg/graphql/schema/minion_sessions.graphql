@@ -66,6 +66,10 @@ type MinionSession {
   # the hello sent none.
   address: String
   addressPicked: Boolean!
+  # What its tasks' output is read as (MinionTask.output): one of
+  # MinionTask.outputDecodings' encodings, an operator's pick for everyone in
+  # the operation (setMinionSessionOutputEncoding). null: UTF-8.
+  outputEncoding: String
   # The IP address the latest message came from, as its channel saw it (the
   # host's NAT's outside address, or the client a trusted proxy forwarded
   # for): the session's current external address. null where the channels
@@ -618,6 +622,13 @@ extend type Mutation {
   # operation; null goes back to core's guess. Needs at least operator; agent
   # API keys are rejected.
   setMinionSessionAddress(id: ID!, address: String): MinionSession!
+    @hasPermission(permission: "operation:member")
+
+  # Sets what the session's tasks' output is read as, for everyone in the
+  # operation: one of MinionTask.outputDecodings' encodings; null (or
+  # "utf-8") goes back to UTF-8. Needs at least operator; agent API keys are
+  # rejected.
+  setMinionSessionOutputEncoding(id: ID!, encoding: String): MinionSession!
     @hasPermission(permission: "operation:member")
 
   # Marks the session's feedback read, for everyone in the operation: its

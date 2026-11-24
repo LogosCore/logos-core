@@ -573,6 +573,8 @@ models:
         resolver: true
       outputUtf8:
         resolver: true
+      outputDecodings:
+        resolver: true
       data:
         resolver: true
       # The stored document, read only when the console's JSON tab asks.

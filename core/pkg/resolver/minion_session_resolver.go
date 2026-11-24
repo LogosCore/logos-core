@@ -18,6 +18,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/logoscore/logos-core/core/pkg/textenc"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
@@ -39,6 +40,7 @@ type IMinionSessionResolver interface {
 	// SetMinionSessionAddress picks the address a session shows; nil goes
 	// back to core's guess.
 	SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error)
+	SetMinionSessionOutputEncoding(ctx context.Context, id string, encoding *string) (*model.MinionSession, error)
 	// SetMinionSessionMaxTasks sets the operator's limit of tasks at once,
 	// which core sends the minion (the outbox) until it says it has it.
 	SetMinionSessionMaxTasks(ctx context.Context, id string, max int) (*model.MinionSession, error)
@@ -585,6 +587,31 @@ func (r *minionSessionResolver) SetMinionSessionAddress(ctx context.Context, id 
 	return r.withMark(ctx, s), nil
 }
 
+func (r *minionSessionResolver) SetMinionSessionOutputEncoding(ctx context.Context, id string, encoding *string) (*model.MinionSession, error) {
+	s, err := r.operatorSession(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	enc := ""
+	if encoding != nil && *encoding != textenc.UTF8 {
+		if _, ok := textenc.Lookup(*encoding); !ok {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("%q is not an encoding core reads", *encoding))
+		}
+		enc = *encoding
+	}
+	if err := r.sessions.SetOutputEncoding(ctx, s.SessionID, enc); err != nil {
+		if repository.IsNotFound(err) {
+			return nil, moduleGQLError(ctx, errCodeNotFound, "session not found")
+		}
+		return nil, fmt.Errorf("set the output encoding: %w", err)
+	}
+	s.OutputEncoding = enc
+	r.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(eventbus.MinionSessionEventPayload{
+		SessionID: s.SessionID.String(), OperationID: s.OperationID.String(),
+	}))
+	return r.withMark(ctx, s), nil
+}
+
 func (r *minionSessionResolver) SetMinionSessionMaxTasks(ctx context.Context, id string, max int) (*model.MinionSession, error) {
 	s, err := r.operatorSession(ctx, id)
 	if err != nil {
@@ -849,7 +876,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		BuildDescription: s.BuildDescription, Description: s.Description, ModuleName: s.ModuleName, Target: s.Target, Platform: s.Platform,
 		Staged: s.Staged, Pid: int(h.PID), Os: h.OS, Arch: h.Arch, Host: strPtr(h.Host), User: strPtr(h.User),
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), MachineID: strPtr(h.MachineID), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),
-		Version: strPtr(h.Version), RoundtripTime: h.RoundtripTime, Address: strPtr(s.Address), AddressPicked: s.AddressPicked,
+		Version: strPtr(h.Version), RoundtripTime: h.RoundtripTime, Address: strPtr(s.Address), AddressPicked: s.AddressPicked, OutputEncoding: strPtr(s.OutputEncoding),
 		PeerAddress: strPtr(s.PeerAddress), Peers: toSessionPeerModels(s.Peers),
 		Persisted: s.Persisted, RestartCount: int(s.RestartCount), Restarts: toSessionRestartModels(s.Restarts),
 		LateAt: timePtr(s.LateAt), LostAt: timePtr(s.LostAt), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),

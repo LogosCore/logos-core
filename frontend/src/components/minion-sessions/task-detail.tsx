@@ -6,6 +6,7 @@ import {
   CopyIcon,
   CornerLeftUpIcon,
   DownloadIcon,
+  LanguagesIcon,
   PlayIcon,
   RotateCcwIcon,
   SearchIcon,
@@ -56,6 +57,8 @@ import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { TaskAs } from "./task-as"
 import { CompositeView } from "./composite-view"
 import { subtaskText } from "./composite-values"
+import { OutputEncodingDialog } from "./output-encoding-dialog"
+import { encodingName } from "./output-encoding-values"
 import { FACTORY } from "./factory-values"
 import { ResultFilesView } from "./result-files-view"
 
@@ -192,7 +195,10 @@ export function TaskDetail({
   // Read again when they change: more output, a part with data, its end.
   // Not on every part: a walk sends parts with listings alone, many a
   // second, and its progress (its data) every 2 seconds.
-  const outputQ = useMinionTaskOutput(t.id, `${t.outputSize}:${t.dataParts}:${t.state}`, FINISHED.has(t.state))
+  // And again when the session's encoding, what core reads it as, changes.
+  const session = useMinionSession(t.sessionId).data?.minionSession
+  const outputEncoding = session?.outputEncoding ?? null
+  const outputQ = useMinionTaskOutput(t.id, `${t.outputSize}:${t.dataParts}:${t.state}:${outputEncoding ?? ""}`, FINISHED.has(t.state))
   const detail = outputQ.data?.minionTask
   const output = detail?.output ?? ""
   const data = (detail?.data as Record<string, unknown> | null | undefined) ?? null
@@ -203,7 +209,6 @@ export function TaskDetail({
   // Information too, which marks the task in no list.
   const counts = { errors: t.feedbackErrors, warnings: t.feedbackWarnings, infos: t.feedbackInfos }
   const hasFeedback = counts.errors + counts.warnings + counts.infos > 0
-  const session = useMinionSession(t.sessionId).data?.minionSession
   const feedbackQ = useMinionTaskFeedback(t.id, `${counts.errors}:${counts.warnings}:${counts.infos}:${session?.feedbackReadAt ?? ""}`, hasFeedback)
   const feedback = feedbackQ.data?.minionTask?.feedback ?? []
   const feedbackTitle = `What the minion said of it: ${feedbackSummary(counts.errors, counts.warnings, counts.infos)}`
@@ -287,6 +292,7 @@ export function TaskDetail({
           ? "output"
           : "data"
   const [wrap, setWrap] = useState(() => readFlag(WRAP_KEY, true))
+  const [encodingsOpen, setEncodingsOpen] = useState(false)
   const [rawData, setRawData] = useState(() => readFlag(RAW_DATA_KEY, false))
   // The stored task, read while its tab is open, again as it changes.
   const documentQ = useMinionTaskDocument(
@@ -413,6 +419,15 @@ export function TaskDetail({
             </>
           ) : shown === "feedback" ? null : (
             <>
+              {/* On every output: valid UTF-8 can still be another encoding's
+                  bytes (short CP866 text often is). */}
+              {actions.hasOutput && (
+                <Button variant={outputEncoding ? "secondary" : "ghost"} size="icon-xs"
+                  title={`Read as ${outputEncoding ? encodingName([], outputEncoding) : "UTF-8"}: the output in every encoding, to pick the session's`}
+                  aria-label="Pick the output's encoding" onClick={() => setEncodingsOpen(true)}>
+                  <LanguagesIcon />
+                </Button>
+              )}
               <Button variant="ghost" size="icon-xs" title="Copy the output" aria-label="Copy the output" disabled={!actions.hasOutput}
                 onClick={() => void actions.copyOutput(detail ? output : undefined)}>
                 <CopyIcon />
@@ -457,6 +472,14 @@ export function TaskDetail({
           )}
         </div>
       </div>
+      <OutputEncodingDialog
+        open={encodingsOpen}
+        onClose={() => setEncodingsOpen(false)}
+        taskId={t.id}
+        version={String(t.outputSize)}
+        session={session}
+        canPick={canMark}
+      />
       {t.err && <div className="border-b px-3 py-1 font-mono text-xs whitespace-pre-wrap text-red-600 dark:text-red-400">{t.err}</div>}
       {t.cancelReason && <div className="border-b px-3 py-1 text-xs text-muted-foreground">{t.cancelReason}</div>}
 
@@ -496,7 +519,11 @@ export function TaskDetail({
           wrap={wrap}
           findSignal={findSignal}
           notes={[
-            detail && !detail.outputUtf8 ? "Not all of it is UTF-8: bytes that are not show as �; the download has them." : null,
+            outputEncoding
+              ? `Read as ${encodingName([], outputEncoding)}, the session's encoding (the encodings button above picks another); the download has the bytes as they came.`
+              : detail && !detail.outputUtf8
+                ? "Not all of it is UTF-8: bytes that are not show as �. The encodings button above reads it in others, to pick the session's; the download has the bytes."
+                : null,
             t.outputTruncated ? "Cut at 4 MiB: the rest was dropped." : null,
           ]}
         />
