@@ -55,16 +55,32 @@ describe("randomIndex", () => {
 })
 
 describe("generate", () => {
-  it("makes a path of three words by default: segments between dividers, one before and after", () => {
-    expect(generate(path, words, sequence(0, 1, 2))).toBe("/river/stone/cloud/")
+  it("makes a path of 2 to 5 words by default: how many drawn first, then segments between dividers, one before and after", () => {
+    expect(path.segments).toEqual([2, 5])
+    // 1 of 0-3 is 3 words.
+    expect(generate(path, words, sequence(1, 0, 1, 2))).toBe("/river/stone/cloud/")
+  })
+
+  it("draws how many words from the range's fewest to its most", () => {
+    expect(generate(path, words, sequence(0))).toBe("/river/river/")
+    expect(generate(path, words, sequence(3))).toBe("/river/river/river/river/river/")
+    expect(generate(set({ segments: [5, 8] }), words, sequence(3))).toBe(`/${Array(8).fill("river").join("/")}/`)
+  })
+
+  it("gives every count of the range, and none outside it", () => {
+    const counts = new Set<number>()
+    const s = set({ divider: "-", leading: false, trailing: false })
+    for (let i = 0; i < 400; i++) counts.add((generate(s, ["a"]) ?? "").split("-").length)
+    expect([...counts].sort()).toEqual([2, 3, 4, 5])
   })
 
   it("divides a word a segment as asked, and cases the words", () => {
-    const s = set({ segments: 3, divider: "-", leading: false, trailing: false })
-    expect(generate(s, words, sequence(1, 0, 2))).toBe("stone-river-cloud")
-    expect(generate({ ...s, divider: "." }, words, sequence(1, 0, 2))).toBe("stone.river.cloud")
-    expect(generate({ ...s, case: "title" }, words, sequence(1, 0, 2))).toBe("Stone-River-Cloud")
-    expect(generate({ ...s, divider: "_", leading: true }, words, sequence(1, 0, 2))).toBe("_stone_river_cloud")
+    // A range of one count still draws it: the first number.
+    const s = set({ segments: [3, 3], divider: "-", leading: false, trailing: false })
+    expect(generate(s, words, sequence(0, 1, 0, 2))).toBe("stone-river-cloud")
+    expect(generate({ ...s, divider: "." }, words, sequence(0, 1, 0, 2))).toBe("stone.river.cloud")
+    expect(generate({ ...s, case: "title" }, words, sequence(0, 1, 0, 2))).toBe("Stone-River-Cloud")
+    expect(generate({ ...s, divider: "_", leading: true }, words, sequence(0, 1, 0, 2))).toBe("_stone_river_cloud")
   })
 
   it("makes nothing without words", () => {
@@ -74,7 +90,8 @@ describe("generate", () => {
 
 describe("candidates", () => {
   it("are different values that fit the field", () => {
-    const got = candidates(set({ segments: 1 }), words, 5, (v) => v !== "/stone/", sequence(0, 1, 2, 0, 1, 2))
+    // A word each: how many (0, one count to draw from), then which.
+    const got = candidates(set({ segments: [1, 1] }), words, 5, (v) => v !== "/stone/", sequence(0, 1, 0, 0, 0, 2))
     expect(got).toEqual(["/river/", "/cloud/"])
   })
 
@@ -100,9 +117,15 @@ describe("drawsFrom", () => {
 })
 
 describe("combinations", () => {
-  it("count a choice of word for every segment", () => {
+  it("count a choice of word for every segment, for every count of the range", () => {
     // 3 words in 4 segments: 3^4 = 81.
-    expect(10 ** log10Combinations(set({ segments: 4 }), 3)).toBeCloseTo(81)
+    expect(10 ** log10Combinations(set({ segments: [4, 4] }), 3)).toBeCloseTo(81)
+    // In 2 or 3: 3^2 + 3^3 = 36.
+    expect(10 ** log10Combinations(set({ segments: [2, 3] }), 3)).toBeCloseTo(36)
+    // One word makes a value of each count: 2 to 5 is 4.
+    expect(10 ** log10Combinations(path, 1)).toBeCloseTo(4)
+    // Past any number's range, still counted.
+    expect(log10Combinations(set({ segments: [5, 8] }), 180_000)).toBeCloseTo(8 * Math.log10(180_000), 4)
     expect(log10Combinations(path, 0)).toBe(-Infinity)
   })
 
@@ -116,12 +139,16 @@ describe("combinations", () => {
 
 describe("settingsOf", () => {
   it("keeps what was saved, and takes the preset's for anything missing or out of range", () => {
-    expect(settingsOf({ segments: 4, divider: ".", case: "UPPER", lists: [] }, path)).toEqual({
+    expect(settingsOf({ segments: [4, 7], divider: ".", case: "UPPER", lists: [] }, path)).toEqual({
       ...path,
-      segments: 4,
+      segments: [4, 7],
       divider: ".",
     })
     expect(settingsOf(null, path)).toEqual(path)
+    // Segments are one of the slider's ranges: not a count, as they were, nor any other range.
+    expect(settingsOf({ segments: 3 }, path)).toEqual(path)
+    expect(settingsOf({ segments: [2, 9] }, path)).toEqual(path)
+    expect(settingsOf({ segments: [3, 6, 9] }, path)).toEqual(path)
     // Settings it no longer has are dropped.
     expect(settingsOf({ pattern: "adjective-noun", words: 3, joiner: "_", digits: 3, lists: ["long"] }, path)).toEqual({
       ...path,

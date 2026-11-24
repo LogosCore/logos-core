@@ -12,9 +12,9 @@ import {
   formatCombinations,
   fromDrawn,
   log10Combinations,
-  MAX_SEGMENTS,
   pool,
   PRESETS,
+  SEGMENT_RANGES,
   settingsOf,
   type Divider,
   type GeneratorSettings,
@@ -139,7 +139,15 @@ function Panel({
     <div className="flex flex-col">
       <div className="grid gap-4 p-3 sm:grid-cols-2">
         <div className="flex flex-col gap-3">
-          <SliderRow label="Segments" value={s.segments} min={1} max={MAX_SEGMENTS} onChange={(segments) => set({ segments })} />
+          {/* A range a stop: each value has one of its counts. */}
+          <SliderRow
+            label="Segments"
+            value={Math.max(0, SEGMENT_RANGES.indexOf(s.segments))}
+            max={SEGMENT_RANGES.length - 1}
+            text={`${s.segments[0]}–${s.segments[1]}`}
+            valueText={(i) => `${SEGMENT_RANGES[i][0]} to ${SEGMENT_RANGES[i][1]} segments`}
+            onChange={(i) => set({ segments: SEGMENT_RANGES[i] })}
+          />
           <Choices label="Divider">
             {DIVIDERS.map((d) => (
               <Chip key={d} active={s.divider === d} onClick={() => set({ divider: d })}>
@@ -249,26 +257,29 @@ function Panel({
   )
 }
 
+/** A slider over stops 0 to max, the one it is at shown as text, and said as valueText says. */
 function SliderRow({
   label,
   value,
-  min,
   max,
+  text,
+  valueText,
   onChange,
 }: {
   label: string
   value: number
-  min: number
   max: number
+  text: string
+  valueText: (value: number) => string
   onChange: (value: number) => void
 }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="font-medium text-muted-foreground">{label}</span>
-        <span className="tabular-nums">{value}</span>
+        <span className="tabular-nums">{text}</span>
       </div>
-      <Slider value={value} min={min} max={max} step={1} onValueChange={onChange} aria-label={label} />
+      <Slider value={value} min={0} max={max} step={1} onValueChange={onChange} aria-label={label} valueText={valueText} />
     </div>
   )
 }

@@ -7,9 +7,23 @@
 export type Divider = "/" | "-" | "." | "_"
 export type LetterCase = "lower" | "title"
 
+/** The fewest and the most segments a value can have, both counted. */
+export type SegmentRange = readonly [fewest: number, most: number]
+
+/**
+ * The ranges of segments the slider steps through: a value has one of a
+ * range's counts, each as likely, so the values made are not all as long.
+ */
+export const SEGMENT_RANGES: readonly SegmentRange[] = [
+  [2, 5],
+  [3, 6],
+  [4, 7],
+  [5, 8],
+]
+
 export interface GeneratorSettings {
-  /** Words, one a segment: 1 to MAX_SEGMENTS. */
-  segments: number
+  /** How many words, one a segment: one of SEGMENT_RANGES. */
+  segments: SegmentRange
   divider: Divider
   /** A divider before the first segment ("/quiet"), and after the last ("river/"). */
   leading: boolean
@@ -18,8 +32,6 @@ export interface GeneratorSettings {
   /** The word lists picked, by id: every word comes from them all. None: every list the catalog has. */
   lists: string[]
 }
-
-export const MAX_SEGMENTS = 6
 
 /** What a word list is, as public/wordlists/index.json lists it. */
 export interface WordlistInfo {
@@ -44,7 +56,7 @@ export interface WordlistCatalog {
 /** How a field of each format starts, before the operator changes anything. */
 export const PRESETS: Record<string, GeneratorSettings> = {
   path: {
-    segments: 3,
+    segments: SEGMENT_RANGES[0],
     divider: "/",
     leading: true,
     trailing: true,
@@ -63,11 +75,13 @@ export const FORMATS = Object.keys(PRESETS)
  */
 export function settingsOf(saved: unknown, preset: GeneratorSettings): GeneratorSettings {
   const s = typeof saved === "object" && saved !== null ? (saved as Partial<Record<keyof GeneratorSettings, unknown>>) : {}
-  const int = (v: unknown, min: number, max: number, fallback: number) =>
-    typeof v === "number" && Number.isInteger(v) && v >= min && v <= max ? v : fallback
   const oneOf = <T>(v: unknown, options: readonly T[], fallback: T): T => (options.includes(v as T) ? (v as T) : fallback)
+  const range = s.segments
   return {
-    segments: int(s.segments, 1, MAX_SEGMENTS, preset.segments),
+    // One of the slider's ranges, as SEGMENT_RANGES has it.
+    segments:
+      SEGMENT_RANGES.find((r) => Array.isArray(range) && range.length === 2 && r[0] === range[0] && r[1] === range[1]) ??
+      preset.segments,
     divider: oneOf<Divider>(s.divider, ["/", "-", ".", "_"], preset.divider),
     leading: typeof s.leading === "boolean" ? s.leading : preset.leading,
     trailing: typeof s.trailing === "boolean" ? s.trailing : preset.trailing,
@@ -130,13 +144,16 @@ export function randomIndex(n: number, random: Random = cryptoRandom): number {
 const title = (w: string) => (w === "" ? w : w[0].toUpperCase() + w.slice(1))
 
 /**
- * One value in the shape s sets, a word a segment, drawn from words
- * (drawsFrom's lists, merged by pool). Null when there are none.
+ * One value in the shape s sets, drawn from words (drawsFrom's lists, merged
+ * by pool): first how many segments, each count of the range as likely, then
+ * a word a segment. Null when there are none.
  */
 export function generate(s: GeneratorSettings, words: readonly string[], random: Random = cryptoRandom): string | null {
   if (words.length === 0) return null
+  const [fewest, most] = s.segments
+  const count = fewest + randomIndex(most - fewest + 1, random)
   const segments: string[] = []
-  for (let i = 0; i < s.segments; i++) {
+  for (let i = 0; i < count; i++) {
     const w = words[randomIndex(words.length, random)]
     segments.push(s.case === "title" ? title(w) : w)
   }
@@ -165,11 +182,16 @@ export function candidates(
 
 /**
  * How many different values the settings can make from size words, as its
- * base-10 logarithm: a big list's count passes any number's range long
- * before the slider ends. -Infinity without words.
+ * base-10 logarithm: size^fewest + … + size^most, which for a big list
+ * passes any number's range. -Infinity without words.
  */
 export function log10Combinations(s: GeneratorSettings, size: number): number {
-  return size === 0 ? -Infinity : s.segments * Math.log10(size)
+  if (size === 0) return -Infinity
+  const [fewest, most] = s.segments
+  // size^most × (1 + 1/size + … + 1/size^(most - fewest)): the sum's small part summed.
+  let rest = 0
+  for (let k = 0; k <= most - fewest; k++) rest += size ** -k
+  return most * Math.log10(size) + Math.log10(rest)
 }
 
 const SUPERSCRIPT = "⁰¹²³⁴⁵⁶⁷⁸⁹"
