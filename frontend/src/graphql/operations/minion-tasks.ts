@@ -182,6 +182,7 @@ export const MinionTaskFields = graphql(`
     }
     parentId
     subtaskAs
+    connectionText
     cleanup
     resultOf
     composite {

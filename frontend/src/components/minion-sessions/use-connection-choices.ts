@@ -26,7 +26,7 @@ export function useSessionConnectionChoices(sessionId: string): ConnectionChoice
       place: c.place,
       channel: c.moduleName,
       kind: c.kind,
-      address: settingsSummary(channels.get(c.moduleName), c.kind, c.params, 1) || undefined,
+      address: settingsSummary(channels.get(c.moduleName), c.kind, c.params) || undefined,
       inUse: c.place === conn,
       value: {
         channel: c.moduleName,

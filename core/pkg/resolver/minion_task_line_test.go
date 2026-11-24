@@ -1,9 +1,12 @@
 package resolver
 
 import (
+	"context"
 	"testing"
 
 	"github.com/logoscore/logos-golang-protocol/protocol"
+
+	"github.com/logoscore/logos-core/core/pkg/models"
 )
 
 // The cases of the console's restParam and lineOf (command-line.ts).
@@ -45,5 +48,41 @@ func TestLineRest(t *testing.T) {
 		if got := lineRest(c.params); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+// A task's connection param is said by the connection it names when it is
+// queued: its place, channel and kind, then the channel's summary fields
+// set, in its order, or without one the first two set by order.
+func TestConnectionText(t *testing.T) {
+	fields := []protocol.FieldSpec{
+		{Key: "base_url", Num: 1, Type: protocol.FieldURL, Label: "Base URL", Order: 1},
+		{Key: "host_header", Num: 3, Type: protocol.FieldString, Label: "Host header", Order: 3},
+		{Key: "mode", Num: 14, Type: protocol.FieldEnum, Label: "Mode", Order: 0},
+	}
+	r := &minionTaskResolver{channels: fakeChannelSchemas{"http": {Version: 4, Kinds: map[string]protocol.ConnectionKind{
+		protocol.KindReverseCall:       {Fields: fields},
+		protocol.KindReversePersistent: {Fields: fields, Summary: []string{"base_url", "mode"}},
+	}}}}
+	s := &models.MinionSession{ModuleName: "bob", Connections: []models.MinionSessionConnSpec{
+		{Channel: "http", Kind: protocol.KindReverseCall, Params: map[string]any{"host_header": "cdn", "base_url": "https://a.example", "mode": "url-based"}},
+		{Channel: "http", Kind: protocol.KindReversePersistent, Params: map[string]any{"host_header": "cdn", "mode": "factory-based"}},
+	}}
+	params := []protocol.FieldSpec{{Key: "conn", Num: 1, Type: protocol.FieldInt, Format: protocol.FormatConnection}}
+	for place, want := range map[int]string{
+		1: "1 · http · reverse-call · url-based · https://a.example", // the first two set, by order
+		2: "2 · http · reverse-persistent · factory-based",           // the summary's, base_url not set
+		3: "",                                                        // no connection there
+	} {
+		if got := r.connectionText(context.Background(), s, params, models.JSONMap{"conn": int64(place)}); got != want {
+			t.Errorf("connection %d: %q, want %q", place, got, want)
+		}
+	}
+	if got := r.connectionText(context.Background(), s, []protocol.FieldSpec{{Key: "for", Type: protocol.FieldDuration}},
+		models.JSONMap{"for": "1h"}); got != "" {
+		t.Errorf("no connection param: %q", got)
+	}
+	if got := summaryValue([]any{"a", int64(2)}); got != "a, 2" {
+		t.Errorf("a list: %q", got)
 	}
 }

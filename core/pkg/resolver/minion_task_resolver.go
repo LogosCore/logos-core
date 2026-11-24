@@ -708,6 +708,7 @@ func (r *minionTaskResolver) queue(ctx context.Context, s *models.MinionSession,
 		t.State, t.ScheduledAt = models.MinionTaskScheduled, q.at
 	}
 	t.LineJSON = lineJSON(cmd.Params, t.Args)
+	t.ConnectionText = r.connectionText(ctx, s, cmd.Params, t.Args)
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		if tunnel {
 			r.tunnels.Close(ctx, taskID)
@@ -1578,6 +1579,7 @@ func (r *minionTaskResolver) toModel(ctx context.Context, t *models.MinionTask, 
 		parent := t.ParentID.String()
 		m.ParentID, m.SubtaskAs, m.Cleanup = &parent, strPtr(t.SubtaskAs), t.Cleanup
 	}
+	m.ConnectionText = strPtr(t.ConnectionText)
 	if t.ResultOf != nil {
 		of := t.ResultOf.String()
 		m.ResultOf = &of

@@ -367,6 +367,11 @@ export function TaskDetail({
               <span className="truncate">subtask{subtaskText(t) ? `: ${subtaskText(t)}` : ""}</span>
             </button>
           )}
+          {t.connectionText && (
+            <span className="text-xs text-muted-foreground" title="The connection it named, as the session had it when the task was queued">
+              connection {t.connectionText}
+            </span>
+          )}
           <span className="text-xs text-muted-foreground" title={`Queued ${formatAbsolute(t.queuedAt)}`}>
             by {t.issuedBy === NO_ISSUER ? "core" : (t.issuedByName ?? "someone gone")}
           </span>

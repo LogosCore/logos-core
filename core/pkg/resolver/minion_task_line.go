@@ -2,7 +2,11 @@ package resolver
 
 import (
 	"cmp"
+	"context"
+	"encoding/json"
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -60,4 +64,85 @@ func advancedRank(p protocol.FieldSpec) int {
 		return 1
 	}
 	return 0
+}
+
+// connectionText says the connection a task's connection param names, as
+// the session has it now (models.MinionTask.ConnectionText): its place,
+// channel and kind, then what tells it from others (connectionSummary).
+// Empty without such a param, or for a place the session has no connection
+// at.
+func (r *minionTaskResolver) connectionText(ctx context.Context, s *models.MinionSession, params []protocol.FieldSpec,
+	args models.JSONMap) string {
+	place := connPlaceArg(params, args)
+	if place < 1 {
+		return ""
+	}
+	cur, ok := r.currentConnection(ctx, s, place)
+	if !ok {
+		return ""
+	}
+	channel, _ := cur["channel"].(string)
+	kind, _ := cur["kind"].(string)
+	parts := []string{strconv.Itoa(place), channel, kind}
+	if r.channels != nil {
+		if schema, err := r.channels.Schema(ctx, channel); err == nil && schema != nil {
+			values, _ := cur["params"].(map[string]any)
+			parts = append(parts, connectionSummary(schema.Kinds[kind], values)...)
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
+// connectionSummary is what tells a connection of kind k from others, as
+// the web app shows it (settingsSummary in frontend builds/build-values.ts:
+// change them together): the values of the fields its Summary names, in
+// its order, those set; without one, the first two set, the fields by order
+// and then label.
+func connectionSummary(k protocol.ConnectionKind, values map[string]any) []string {
+	set := func(f protocol.FieldSpec) bool { v, ok := values[f.Key]; return ok && v != nil }
+	var shown []protocol.FieldSpec
+	if len(k.Summary) > 0 {
+		for _, key := range k.Summary {
+			if i := slices.IndexFunc(k.Fields, func(f protocol.FieldSpec) bool { return f.Key == key }); i >= 0 && set(k.Fields[i]) {
+				shown = append(shown, k.Fields[i])
+			}
+		}
+	} else {
+		fields := slices.Clone(k.Fields)
+		slices.SortStableFunc(fields, func(a, b protocol.FieldSpec) int {
+			return cmp.Or(cmp.Compare(a.Order, b.Order), strings.Compare(orKey(a.Label, a.Key), orKey(b.Label, b.Key)))
+		})
+		for _, f := range fields {
+			if set(f) && len(shown) < 2 {
+				shown = append(shown, f)
+			}
+		}
+	}
+	out := make([]string, len(shown))
+	for i, f := range shown {
+		out[i] = summaryValue(values[f.Key])
+	}
+	return out
+}
+
+// summaryValue is a setting's value in a summary: text as it is, a list's
+// items joined, anything else as JSON.
+func summaryValue(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case bool, int, int64, float64, uint64:
+		return fmt.Sprint(x)
+	case []any:
+		items := make([]string, len(x))
+		for i, it := range x {
+			items[i] = summaryValue(it)
+		}
+		return strings.Join(items, ", ")
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprint(v)
+	}
+	return string(b)
 }

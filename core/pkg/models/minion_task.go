@@ -69,6 +69,13 @@ type MinionTask struct {
 	// shows their values as JSON, which their stored args cannot tell from a
 	// string_map's or a list's. Set when it is queued.
 	LineJSON []string `bson:"line_json,omitempty" json:"-"`
+	// ConnectionText says the connection its connection param names (an
+	// int of protocol.FormatConnection: switch_connection's conn) as it was
+	// when it was queued, for people: "2 · http · reverse-persistent ·
+	// url-based · wss://edge.example.com". Its line says only the place,
+	// which the session's connections may give another later. Empty without
+	// such a param, or when the connection was not known.
+	ConnectionText string `bson:"connection_text,omitempty" json:"connection_text,omitempty"`
 	// SearchText is its line as the console shows it: what the session's
 	// task list search reads (MinionTaskSearchText).
 	SearchText string `bson:"search_text,omitempty" json:"-"`

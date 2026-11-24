@@ -109,6 +109,7 @@ func (r *minionTaskResolver) queueFactory(ctx context.Context, s *models.MinionS
 		t.State, t.ScheduledAt = models.MinionTaskScheduled, at
 	}
 	t.LineJSON = lineJSON(fc.Params, t.Args)
+	t.ConnectionText = r.connectionText(ctx, s, fc.Params, t.Args)
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("queue the task: %w", err)
 	}

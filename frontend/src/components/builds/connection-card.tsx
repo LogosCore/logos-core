@@ -126,10 +126,7 @@ export function ConnectionCard({
   const expanded = open || hasError
   const defaultName = defaultConnectionName(c.moduleName, index)
   const idPrefix = `connection-${c.key}`
-  // The header names the kind when there is a choice, or when the one
-  // it has is no longer usable (another target, a channel that dropped it).
-  const kindOptions = effectiveKind && !kinds.includes(effectiveKind) ? [effectiveKind, ...kinds] : kinds
-  const askKind = kindOptions.length > 1
+  // The header names the kind, always.
 
   // The connection's own rows in General: what the minion calls it, the team's note.
   const general = (
@@ -188,7 +185,7 @@ export function ConnectionCard({
           <span className={cn("truncate font-mono text-sm font-medium", !c.name.trim() && "text-muted-foreground")}>
             {c.name.trim() || defaultName}
           </span>
-          {askKind && effectiveKind && (
+          {effectiveKind && (
             <span className="shrink-0 rounded border px-1.5 font-mono text-xs text-muted-foreground" title={kindNotes[effectiveKind]}>
               {effectiveKind}
             </span>

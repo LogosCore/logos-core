@@ -388,13 +388,15 @@ function TaskRow({
 }) {
   const held = useTaskWaiting(t.sessionId)
   const line = lineOf(t.command, t.args as Record<string, unknown> | null, command)
-  // A subtask's line as its composite's factory named it; a composite
-  // task's status line, on hover.
+  // A subtask's line as its composite's factory named it, and the
+  // connection a connection param named when the task was queued (its line
+  // says only the place); a composite task's status line, on hover.
   const sub = subtaskText(t)
+  const note = [sub, t.connectionText].filter(Boolean).join(" · ")
   const status = t.composite?.status
   // The status changes as the factory's code goes: held while hovered (useSteadyTitle).
   const hover = useSteadyTitle(
-    `${line}${t.parentId ? `\nA subtask of a composite task${sub ? `: ${sub}` : ""}` : ""}${status ? `\n${status}` : ""}\n${t.issuedBy === "00000000-0000-0000-0000-000000000000" ? "core" : (t.issuedByName ?? "someone gone")} · queued ${formatAbsolute(t.queuedAt)}${t.state === "SCHEDULED" && t.scheduledAt ? `\nScheduled for ${formatAbsolute(t.scheduledAt)}` : ""}${t.importantAt ? `\nMarked important by ${markedBy(t)}` : ""}`,
+    `${line}${t.connectionText ? `\nConnection ${t.connectionText}` : ""}${t.parentId ? `\nA subtask of a composite task${sub ? `: ${sub}` : ""}` : ""}${status ? `\n${status}` : ""}\n${t.issuedBy === "00000000-0000-0000-0000-000000000000" ? "core" : (t.issuedByName ?? "someone gone")} · queued ${formatAbsolute(t.queuedAt)}${t.state === "SCHEDULED" && t.scheduledAt ? `\nScheduled for ${formatAbsolute(t.scheduledAt)}` : ""}${t.importantAt ? `\nMarked important by ${markedBy(t)}` : ""}`,
   )
   return (
     <ContextMenu>
@@ -440,7 +442,7 @@ function TaskRow({
           {t.parentId && <span className="sr-only">A subtask: </span>}
           <code className="font-mono whitespace-nowrap">{line}</code>
         </span>
-        {sub && <span className="shrink-0 whitespace-nowrap text-muted-foreground">{sub}</span>}
+        {note && <span className="shrink-0 whitespace-nowrap text-muted-foreground">{note}</span>}
         <TaskAs as={t.as} />
         {t.feedbackErrors + t.feedbackWarnings > 0 && (
           <span className="self-center" title={`What the minion said of it: ${feedbackSummary(t.feedbackErrors, t.feedbackWarnings)}`}>

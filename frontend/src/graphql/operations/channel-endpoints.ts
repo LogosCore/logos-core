@@ -40,6 +40,7 @@ export const ChannelKindsQuery = graphql(`
           fields {
             ...ModuleFieldDefFields
           }
+          summary
         }
       }
     }

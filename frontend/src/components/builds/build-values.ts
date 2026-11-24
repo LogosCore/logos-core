@@ -659,12 +659,21 @@ export function connectionNames(connections: readonly Pick<ConnectionDraft, "mod
   return connections.map((c, i) => c.name.trim() || defaultConnectionName(c.moduleName, i))
 }
 
-/** The first count settings of connection kind connKind with a value, for one line: "https://edge.example.com · 10s". */
-export function settingsSummary(channel: ChannelKind | undefined, connKind: string, values: unknown, count = 2): string {
-  return settingRows(connectionKind(channel, connKind)?.fields, isRecord(values) ? values : {})
-    .slice(0, count)
-    .map((r) => r.text)
-    .join(" · ")
+/**
+ * A connection's settings for one line, what tells it from others: the ones
+ * the channel's summary names for connection kind connKind, in its order,
+ * those set ("url-based · https://edge.example.com"); without a summary,
+ * the first two settings set. The same everywhere a connection is listed.
+ */
+export function settingsSummary(channel: ChannelKind | undefined, connKind: string, values: unknown): string {
+  const kind = connectionKind(channel, connKind)
+  const rows = settingRows(kind?.fields, isRecord(values) ? values : {})
+  const summary = kind?.summary ?? []
+  const shown =
+    summary.length > 0
+      ? summary.flatMap((key) => rows.filter((r) => r.key === key))
+      : rows.slice(0, 2)
+  return shown.map((r) => r.text).join(" · ")
 }
 
 /** The name the server gives connection i when it has none. */
@@ -760,7 +769,7 @@ export function buildConnectionRows(
       kind: c.kind,
       name: c.name,
       // The channel's first setting, usually where the minion connects.
-      address: settingsSummary(channels.get(c.moduleName), c.kind, c.params, 1),
+      address: settingsSummary(channels.get(c.moduleName), c.kind, c.params),
       description: build.connectionDescriptions?.[i] ?? "",
     }
   })

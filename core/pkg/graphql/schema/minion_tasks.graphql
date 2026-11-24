@@ -137,6 +137,12 @@ type MinionTask {
   # factory named it; cleanup: one a stopped composite task runs to clean up.
   parentId: ID
   subtaskAs: String
+  # The connection its connection param named (switch_connection's conn),
+  # as the session had it when the task was queued: "2 · http ·
+  # reverse-persistent · url-based · wss://edge.example.com". Its line says
+  # only the place, which may name another connection later. Null without
+  # such a param, or when the connection was not known.
+  connectionText: String
   cleanup: Boolean!
   # The subtask whose result a composite command with no op of its own took
   # as its own (its data, output and files); null for any other task.

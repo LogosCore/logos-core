@@ -1147,6 +1147,7 @@ type ComplexityRoot struct {
 		Cleanup           func(childComplexity int) int
 		Command           func(childComplexity int) int
 		Composite         func(childComplexity int) int
+		ConnectionText    func(childComplexity int) int
 		Data              func(childComplexity int) int
 		DataParts         func(childComplexity int) int
 		DataProblem       func(childComplexity int) int
@@ -1412,6 +1413,7 @@ type ComplexityRoot struct {
 		Agentless func(childComplexity int) int
 		Fields    func(childComplexity int) int
 		Kind      func(childComplexity int) int
+		Summary   func(childComplexity int) int
 		Target    func(childComplexity int) int
 	}
 
@@ -7653,6 +7655,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.Composite(childComplexity), true
+	case "MinionTask.connectionText":
+		if e.ComplexityRoot.MinionTask.ConnectionText == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.ConnectionText(childComplexity), true
 	case "MinionTask.data":
 		if e.ComplexityRoot.MinionTask.Data == nil {
 			break
@@ -8954,6 +8962,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleConnectionKind.Kind(childComplexity), true
+	case "ModuleConnectionKind.summary":
+		if e.ComplexityRoot.ModuleConnectionKind.Summary == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConnectionKind.Summary(childComplexity), true
 	case "ModuleConnectionKind.target":
 		if e.ComplexityRoot.ModuleConnectionKind.Target == nil {
 			break
@@ -16065,6 +16079,10 @@ type ModuleConnectionKind {
   # runs on the target, and core gives the channel the keys of each call's
   # and open's id.
   agentless: Boolean!
+  # The keys of the fields that tell its connections apart, for people (an
+  # address, a mode), in the order shown: the channel's summary. Empty when
+  # it names none: the first fields set say it then.
+  summary: [String!]!
 }
 
 # A channel kind minions can be given endpoints for.
@@ -18485,6 +18503,12 @@ type MinionTask {
   # factory named it; cleanup: one a stopped composite task runs to clean up.
   parentId: ID
   subtaskAs: String
+  # The connection its connection param named (switch_connection's conn),
+  # as the session had it when the task was queued: "2 · http ·
+  # reverse-persistent · url-based · wss://edge.example.com". Its line says
+  # only the place, which may name another connection later. Null without
+  # such a param, or when the connection was not known.
+  connectionText: String
   cleanup: Boolean!
   # The subtask whose result a composite command with no op of its own took
   # as its own (its data, output and files); null for any other task.
@@ -53158,6 +53182,35 @@ func (ec *executionContext) fieldContext_MinionTask_subtaskAs(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_connectionText(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_connectionText,
+		func(ctx context.Context) (any, error) {
+			return obj.ConnectionText, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_connectionText(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_cleanup(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -53637,6 +53690,8 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_parentId(ctx, field)
 			case "subtaskAs":
 				return ec.fieldContext_MinionTask_subtaskAs(ctx, field)
+			case "connectionText":
+				return ec.fieldContext_MinionTask_connectionText(ctx, field)
 			case "cleanup":
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
@@ -58624,6 +58679,35 @@ func (ec *executionContext) fieldContext_ModuleConnectionKind_agentless(_ contex
 	return fc, nil
 }
 
+func (ec *executionContext) _ModuleConnectionKind_summary(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConnectionKind_summary,
+		func(ctx context.Context) (any, error) {
+			return obj.Summary, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConnectionKind_summary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConnectionKind",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleConnectionSchema_version(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionSchema) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -58685,6 +58769,8 @@ func (ec *executionContext) fieldContext_ModuleConnectionSchema_kinds(_ context.
 				return ec.fieldContext_ModuleConnectionKind_target(ctx, field)
 			case "agentless":
 				return ec.fieldContext_ModuleConnectionKind_agentless(ctx, field)
+			case "summary":
+				return ec.fieldContext_ModuleConnectionKind_summary(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleConnectionKind", field.Name)
 		},
@@ -67505,6 +67591,8 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_parentId(ctx, field)
 			case "subtaskAs":
 				return ec.fieldContext_MinionTask_subtaskAs(ctx, field)
+			case "connectionText":
+				return ec.fieldContext_MinionTask_connectionText(ctx, field)
 			case "cleanup":
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
@@ -67678,6 +67766,8 @@ func (ec *executionContext) fieldContext_Mutation_runMinionTaskNow(ctx context.C
 				return ec.fieldContext_MinionTask_parentId(ctx, field)
 			case "subtaskAs":
 				return ec.fieldContext_MinionTask_subtaskAs(ctx, field)
+			case "connectionText":
+				return ec.fieldContext_MinionTask_connectionText(ctx, field)
 			case "cleanup":
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
@@ -67851,6 +67941,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_parentId(ctx, field)
 			case "subtaskAs":
 				return ec.fieldContext_MinionTask_subtaskAs(ctx, field)
+			case "connectionText":
+				return ec.fieldContext_MinionTask_connectionText(ctx, field)
 			case "cleanup":
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
@@ -68024,6 +68116,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTaskImportant(ctx con
 				return ec.fieldContext_MinionTask_parentId(ctx, field)
 			case "subtaskAs":
 				return ec.fieldContext_MinionTask_subtaskAs(ctx, field)
+			case "connectionText":
+				return ec.fieldContext_MinionTask_connectionText(ctx, field)
 			case "cleanup":
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
@@ -68335,6 +68429,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelCap(ctx context
 				return ec.fieldContext_MinionTask_parentId(ctx, field)
 			case "subtaskAs":
 				return ec.fieldContext_MinionTask_subtaskAs(ctx, field)
+			case "connectionText":
+				return ec.fieldContext_MinionTask_connectionText(ctx, field)
 			case "cleanup":
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
@@ -68508,6 +68604,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionTunnelRoutes(ctx cont
 				return ec.fieldContext_MinionTask_parentId(ctx, field)
 			case "subtaskAs":
 				return ec.fieldContext_MinionTask_subtaskAs(ctx, field)
+			case "connectionText":
+				return ec.fieldContext_MinionTask_connectionText(ctx, field)
 			case "cleanup":
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
@@ -68746,6 +68844,8 @@ func (ec *executionContext) fieldContext_Mutation_disconnectMinionVPNClient(ctx 
 				return ec.fieldContext_MinionTask_parentId(ctx, field)
 			case "subtaskAs":
 				return ec.fieldContext_MinionTask_subtaskAs(ctx, field)
+			case "connectionText":
+				return ec.fieldContext_MinionTask_connectionText(ctx, field)
 			case "cleanup":
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
@@ -79000,6 +79100,8 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_parentId(ctx, field)
 			case "subtaskAs":
 				return ec.fieldContext_MinionTask_subtaskAs(ctx, field)
+			case "connectionText":
+				return ec.fieldContext_MinionTask_connectionText(ctx, field)
 			case "cleanup":
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
@@ -90565,6 +90667,8 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_parentId(ctx, field)
 			case "subtaskAs":
 				return ec.fieldContext_MinionTask_subtaskAs(ctx, field)
+			case "connectionText":
+				return ec.fieldContext_MinionTask_connectionText(ctx, field)
 			case "cleanup":
 				return ec.fieldContext_MinionTask_cleanup(ctx, field)
 			case "resultOf":
@@ -111978,6 +112082,8 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			out.Values[i] = ec._MinionTask_parentId(ctx, field, obj)
 		case "subtaskAs":
 			out.Values[i] = ec._MinionTask_subtaskAs(ctx, field, obj)
+		case "connectionText":
+			out.Values[i] = ec._MinionTask_connectionText(ctx, field, obj)
 		case "cleanup":
 			out.Values[i] = ec._MinionTask_cleanup(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -113525,6 +113631,11 @@ func (ec *executionContext) _ModuleConnectionKind(ctx context.Context, sel ast.S
 			}
 		case "agentless":
 			out.Values[i] = ec._ModuleConnectionKind_agentless(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "summary":
+			out.Values[i] = ec._ModuleConnectionKind_summary(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

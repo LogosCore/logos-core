@@ -1264,6 +1264,7 @@ type MinionTask struct {
 	Composite         *MinionComposite   `json:"composite,omitempty"`
 	ParentID          *string            `json:"parentId,omitempty"`
 	SubtaskAs         *string            `json:"subtaskAs,omitempty"`
+	ConnectionText    *string            `json:"connectionText,omitempty"`
 	Cleanup           bool               `json:"cleanup"`
 	ResultOf          *string            `json:"resultOf,omitempty"`
 	Factory           *MinionTaskFactory `json:"factory,omitempty"`
@@ -1469,6 +1470,7 @@ type ModuleConnectionKind struct {
 	Fields    []*ModuleField `json:"fields"`
 	Target    []*ModuleField `json:"target"`
 	Agentless bool           `json:"agentless"`
+	Summary   []string       `json:"summary"`
 }
 
 type ModuleConnectionSchema struct {

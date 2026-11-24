@@ -27,6 +27,8 @@ export interface ConnectionKindDef {
   /** "reverse-call", "reverse-persistent", ... */
   kind: string
   fields: FieldDef[]
+  /** The keys of the fields that tell its connections apart, for people, in order (the channel's summary); empty: none named. */
+  summary?: readonly string[]
 }
 
 /**
@@ -73,7 +75,7 @@ export function kindsByName(
     moduleName: string
     icon?: string
     iconLight?: string
-    schema: { version: number; kinds: readonly { kind: string; fields: readonly FieldDef[] }[] }
+    schema: { version: number; kinds: readonly { kind: string; fields: readonly FieldDef[]; summary?: readonly string[] }[] }
   }[],
 ): Map<string, Kind> {
   const out = new Map<string, Kind>()
@@ -85,6 +87,7 @@ export function kindsByName(
       kinds: k.schema.kinds.map((c) => ({
         kind: c.kind,
         fields: c.fields.map((f) => (f.type === "secret" ? { ...f, type: "string" } : f)).sort(compareFields),
+        summary: c.summary ?? [],
       })),
     })
   }

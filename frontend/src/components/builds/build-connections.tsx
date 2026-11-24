@@ -53,7 +53,7 @@ export function BuildConnections({ build: b }: { build: BuildRecord }) {
             const own = valueRows(kind ? paramFields(kind, c.moduleName, c.kind) : [], c.values).filter(isSet)
             // Headed only when the factory has values for the channel too.
             const parts = own.length > 0
-            const address = settingsSummary(channels.get(c.moduleName), c.kind, c.params, 1)
+            const address = settingsSummary(channels.get(c.moduleName), c.kind, c.params)
             const ownFailover =
               connections.length > 1 && (!failoverAuto(c.kind, c.failover) || c.failover?.fail_after !== undefined)
                 ? [

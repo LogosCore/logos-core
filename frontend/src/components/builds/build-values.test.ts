@@ -634,6 +634,16 @@ describe("endpoint summaries", () => {
     // Another kind's fields: only base_url is one of reverse-persistent's.
     expect(settingsSummary(http, "reverse-persistent", eu.values)).toBe("https://cdn.eu.example.com")
   })
+
+  it("sums up the settings the channel's summary names, in its order, those set", () => {
+    const withSummary = {
+      ...http,
+      kinds: http.kinds.map((k) => (k.kind === "reverse-call" ? { ...k, summary: ["request_timeout", "base_url"] } : k)),
+    }
+    // Its settings in the summary's order; one not set left out.
+    expect(settingsSummary(withSummary, "reverse-call", eu.values)).toBe("10s · https://cdn.eu.example.com")
+    expect(settingsSummary(withSummary, "reverse-call", { base_url: "https://a.example" })).toBe("https://a.example")
+  })
 })
 
 describe("max tasks", () => {
@@ -740,7 +750,7 @@ describe("sourceFromBuild", () => {
       connectionDescriptions: ["EU front"],
     }
     expect(buildConnectionRows(build, channels)).toEqual([
-      { moduleName: "http", kind: "reverse-call", name: "http-1", address: "https://a.example.com", description: "EU front" },
+      { moduleName: "http", kind: "reverse-call", name: "http-1", address: "https://a.example.com · 40s", description: "EU front" },
       { moduleName: "http", kind: "reverse-persistent", name: "edge", address: "https://b.example.com", description: "" },
     ])
     expect(buildConnectionRows({ connections: null }, channels)).toEqual([])

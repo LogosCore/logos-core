@@ -281,7 +281,8 @@ func toConnectionModel(s *protocol.ConnectionSchema) *model.ModuleConnectionSche
 				fields[i].Default = f.Default
 			}
 		}
-		out.Kinds = append(out.Kinds, &model.ModuleConnectionKind{Kind: kind, Fields: fields, Target: fieldModels(k.Target), Agentless: k.Agentless})
+		out.Kinds = append(out.Kinds, &model.ModuleConnectionKind{Kind: kind, Fields: fields, Target: fieldModels(k.Target), Agentless: k.Agentless,
+			Summary: append([]string{}, k.Summary...)})
 	}
 	return out
 }

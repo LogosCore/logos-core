@@ -111,7 +111,7 @@ export function ConnectionCards({ s }: { s: Session }) {
       {connections.map((c) => {
         const inUse = c.place === s.conn
         const expanded = unfolded.has(c.place)
-        const address = settingsSummary(channels.get(c.moduleName), c.kind, c.params, 1)
+        const address = settingsSummary(channels.get(c.moduleName), c.kind, c.params)
         const settings = valueRows(settingFields(channels.get(c.moduleName), c.kind), c.params).filter(isSet)
         const own = valueRows(factory ? paramFields(factory, c.moduleName, c.kind) : [], c.values).filter(isSet)
         return (
