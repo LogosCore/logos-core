@@ -4,11 +4,14 @@ import type { MinionListenerFieldsFragment } from "@/graphql/gql/graphql"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { formatDateTime } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
+import { OperationCell } from "./operation-cell"
 import { hostPort } from "@/components/minion-sessions/tunnel-values"
 
 export type MinionListener = MinionListenerFieldsFragment
 
 const GRID_COLS = "grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]"
+// With the Operation column, when the page lists every operation the user is in.
+const GRID_COLS_ALL = "grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]"
 
 /**
  * The operation's reverse port forwards, the latest opened first: the port
@@ -23,6 +26,7 @@ export function ListenersTable({
   hasNextPage,
   fetchNextPage,
   emptyState,
+  showOperation = false,
 }: {
   listeners: MinionListener[]
   isLoading: boolean
@@ -30,7 +34,10 @@ export function ListenersTable({
   hasNextPage: boolean
   fetchNextPage: () => void
   emptyState: ReactNode
+  /** An Operation column: the page lists every operation the user is a member of. */
+  showOperation?: boolean
 }) {
+  const cols = showOperation ? GRID_COLS_ALL : GRID_COLS
   const modals = useRecordModals()
   return (
     <VirtualizedDataTable
@@ -39,12 +46,13 @@ export function ListenersTable({
       isFetchingNextPage={isFetchingNextPage}
       hasNextPage={hasNextPage}
       fetchNextPage={fetchNextPage}
-      gridCols={GRID_COLS}
+      gridCols={cols}
       entityNoun="ports"
       header={
         <>
           <div>Minion&apos;s port</div>
           <div>Forwards to</div>
+          {showOperation && <div>Operation</div>}
           <div>Session</div>
           <div>Opened by</div>
           <div>Since</div>
@@ -56,7 +64,7 @@ export function ListenersTable({
         const asked = hostPort(l.bind, l.listen)
         const port = l.bound ? l.bound.slice(l.bound.lastIndexOf(":") + 1) : String(l.listen || "any")
         return (
-          <button type="button" className={dataTableRowClass(GRID_COLS, "cursor-pointer")} onClick={() => modals.open({ kind: "session", id: l.sessionId })}
+          <button type="button" className={dataTableRowClass(cols, "cursor-pointer")} onClick={() => modals.open({ kind: "session", id: l.sessionId })}
             title={`Open session #${l.sessionNumber}`}>
             <span className="flex min-w-0 flex-col">
               <span className="font-mono text-sm tabular-nums">
@@ -75,6 +83,7 @@ export function ListenersTable({
                 {l.listening ? "listening" : "the minion listens once it has the task"}
               </span>
             </span>
+            {showOperation && <OperationCell name={l.operationName} />}
             <span className="font-mono text-sm">#{l.sessionNumber}</span>
             <span className="truncate">{l.openedByName ?? <span className="text-muted-foreground">someone gone</span>}</span>
             <span className="truncate text-sm tabular-nums">{formatDateTime(l.openedAt)}</span>

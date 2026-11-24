@@ -4,6 +4,9 @@
 type VPNTunnel {
   # The task's id: a VPN tunnel serves one task.
   id: ID!
+  # The operation it is in: a list across operations has each row say it.
+  operationId: ID!
+  operationName: String!
   # Its networks, CIDRs.
   routes: [String!]!
   sessionId: ID!
@@ -49,7 +52,9 @@ type VPNTunnelEvent {
 
 extend type Subscription {
   # An operation's VPN tunnels as they change. Needs at least viewer.
-  vpnTunnelChanged(operationId: ID!): VPNTunnelEvent!
+  # Without operationId: every operation the caller is a member of, as at
+  # subscribe time.
+  vpnTunnelChanged(operationId: ID): VPNTunnelEvent!
     @hasPermission(permission: "operation:member")
 }
 
@@ -57,6 +62,8 @@ extend type Query {
   # An operation's VPN tunnels, the latest opened first, a page at a time;
   # search matches the session's number, who opened it and the routes.
   # Needs at least viewer.
-  vpnTunnels(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): VPNTunnelConnection!
+  # Without operationId: every operation the caller is a member of (the
+  # Ports page with no operation), each row saying its own.
+  vpnTunnels(operationId: ID, search: String, first: Int = 50, after: String, last: Int, before: String): VPNTunnelConnection!
     @hasPermission(permission: "operation:member")
 }

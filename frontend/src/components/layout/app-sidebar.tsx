@@ -63,6 +63,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {/* Global items (Findings) stay visible whether or not an operation
           is scoped; Findings switches to its cross-operation mode in that
           case so users can search across the operations they belong to.
+          Ports does too (unscoped), keeping its place when one is.
           Render scoped + global items inside a single NavMain (and thus a
           single SidebarGroup) so the spacing between them matches the
           gap between scoped items — otherwise stacked p-2 padding from two
@@ -75,7 +76,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             items={
               scopedOperation
                 ? [...navigationOperationTopItems, ...navigationGlobalItems, ...navigationOperationItems]
-                : navigationGlobalItems
+                : [...navigationGlobalItems, ...navigationOperationItems.filter((item) => item.unscoped)]
             }
           />
         </div>

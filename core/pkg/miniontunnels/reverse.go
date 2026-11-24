@@ -486,18 +486,18 @@ func (s *Service) Listener(ctx context.Context, task uuid.UUID) (*models.MinionL
 	return s.listeners.FindByTaskID(ctx, task)
 }
 
-// Listeners is a page of the operation's reverse port forwards' listeners,
+// Listeners is a page of the operations' reverse port forwards' listeners,
 // the latest opened first; CountListeners counts them.
-func (s *Service) Listeners(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionListener, error) {
+func (s *Service) Listeners(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionListener, error) {
 	if s.listeners == nil {
 		return []models.MinionListener{}, nil
 	}
-	return s.listeners.FindByOperationIDWithCursor(ctx, operationID, search, cursor, limit, forward)
+	return s.listeners.FindByOperationIDsWithCursor(ctx, operationIDs, search, cursor, limit, forward)
 }
 
-func (s *Service) CountListeners(ctx context.Context, operationID uuid.UUID, search string) (int64, error) {
+func (s *Service) CountListeners(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error) {
 	if s.listeners == nil {
 		return 0, nil
 	}
-	return s.listeners.CountByOperationID(ctx, operationID, search)
+	return s.listeners.CountByOperationIDs(ctx, operationIDs, search)
 }

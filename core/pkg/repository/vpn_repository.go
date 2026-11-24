@@ -27,10 +27,10 @@ type IVPNTunnelRepository interface {
 	Insert(ctx context.Context, v *models.VPNTunnel) error
 	// All is every VPN tunnel kept, to take up again after a restart.
 	All(ctx context.Context) ([]models.VPNTunnel, error)
-	// FindByOperationIDWithCursor is a page of the operation's VPN tunnels,
+	// FindByOperationIDsWithCursor is a page of the operations' VPN tunnels,
 	// the latest opened first; search matches SearchText.
-	FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.VPNTunnel, error)
-	CountByOperationID(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
+	FindByOperationIDsWithCursor(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.VPNTunnel, error)
+	CountByOperationIDs(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error)
 	// FindByTaskID is the task's VPN tunnel; IsNotFound for none.
 	FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.VPNTunnel, error)
 	// ReserveStreams takes n more stream numbers for the task: the last
@@ -73,20 +73,20 @@ func VPNTunnelCursor(v *models.VPNTunnel) string {
 	return pagination.EncodeCursor(v.CreateAt, v.Id)
 }
 
-func vpnTunnelFilter(operationID uuid.UUID, search string) bson.M {
-	q := bson.M{"operation_id": operationID}
+func vpnTunnelFilter(operationIDs []uuid.UUID, search string) bson.M {
+	q := bson.M{"operation_id": bson.M{"$in": operationIDs}}
 	if search = strings.TrimSpace(search); search != "" {
 		q["search_text"] = bson.M{"$regex": searchPattern(search), "$options": "i"}
 	}
 	return q
 }
 
-func (r *vpnTunnelRepository) FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.VPNTunnel, error) {
+func (r *vpnTunnelRepository) FindByOperationIDsWithCursor(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.VPNTunnel, error) {
 	if err := vpnTunnelListSort.ValidateCursor(cursor); err != nil {
 		return nil, err
 	}
 	out := []models.VPNTunnel{}
-	err := r.coll.Find(ctx, pagination.ApplyCursorFilterKey(vpnTunnelFilter(operationID, search), cursor, forward, vpnTunnelListSort)).
+	err := r.coll.Find(ctx, pagination.ApplyCursorFilterKey(vpnTunnelFilter(operationIDs, search), cursor, forward, vpnTunnelListSort)).
 		Sort(pagination.SortFieldsKey(forward, vpnTunnelListSort)...).Limit(limit).All(&out)
 	if err != nil {
 		return nil, err
@@ -97,8 +97,8 @@ func (r *vpnTunnelRepository) FindByOperationIDWithCursor(ctx context.Context, o
 	return out, nil
 }
 
-func (r *vpnTunnelRepository) CountByOperationID(ctx context.Context, operationID uuid.UUID, search string) (int64, error) {
-	return r.coll.Find(ctx, vpnTunnelFilter(operationID, search)).Count()
+func (r *vpnTunnelRepository) CountByOperationIDs(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error) {
+	return r.coll.Find(ctx, vpnTunnelFilter(operationIDs, search)).Count()
 }
 
 func (r *vpnTunnelRepository) FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.VPNTunnel, error) {

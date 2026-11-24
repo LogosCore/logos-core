@@ -14,7 +14,8 @@ import {
 // the operation's VPN events (lib/live-lists).
 
 export interface VPNTunnelListParams {
-  operationId: string
+  /** null: every operation the caller is a member of. */
+  operationId: string | null
   search: string
 }
 
@@ -49,7 +50,7 @@ export function useVPNTunnels(params: VPNTunnelListParams) {
  * in where it belongs (a refresh), one whose machines or streams changed is
  * patched in place, one closed goes.
  */
-export function useVPNTunnelsSubscription(operationId: string) {
+export function useVPNTunnelsSubscription(operationId: string | null) {
   const queryClient = useQueryClient()
   useSubscription(
     VpnTunnelChangedDocument,

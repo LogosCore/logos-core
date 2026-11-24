@@ -5,6 +5,8 @@ import { applyPortEvent, operationalPortKeys, type PortPages } from "./operation
 
 const port = (id: string, p: Partial<OperationalPortFieldsFragment> = {}): OperationalPortFieldsFragment => ({
   id,
+  operationId: "op1",
+  operationName: "Operation 1",
   port: 41000,
   front: "socks",
   address: null,

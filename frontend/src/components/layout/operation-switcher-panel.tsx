@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConnectionNodes } from "@/hooks/use-connection-nodes";
 import { useRecentOperations } from "@/hooks/use-picker-history";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { CheckIcon, SwordsIcon, LoaderIcon, SearchIcon } from "lucide-react";
+import { CheckIcon, SwordsIcon, LoaderIcon, SearchIcon, XIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Tooltip,
@@ -31,6 +31,7 @@ export default function OperationSwitcherPanel({
   const scopedOperation = useScopedOperationStore((s) => s.scopedOperation);
   const recentOperations = useRecentOperations();
   const scopeOperation = useScopedOperationStore((s) => s.scopeOperation);
+  const unscopeOperation = useScopedOperationStore((s) => s.unscopeOperation);
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -138,6 +139,24 @@ export default function OperationSwitcherPanel({
           className="h-7 pl-7 text-xs"
         />
       </div>
+
+      {/* Leaving the operation: the pages that can then show every
+          operation's (Findings, Ports) do, the others ask for one. */}
+      {scopedOperation && (
+        <button
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            unscopeOperation();
+            onClose();
+          }}
+          className="mt-1 flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+        >
+          <XIcon className="size-3.5 shrink-0" />
+          <span className="truncate">No operation</span>
+          <span className="ml-auto truncate text-xs">leave {scopedOperation.name}</span>
+        </button>
+      )}
 
       {/* Operations list */}
       {isLoading && (

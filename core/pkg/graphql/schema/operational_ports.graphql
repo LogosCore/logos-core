@@ -4,6 +4,9 @@
 type OperationalPort {
   # The task's id: a port serves one task.
   id: ID!
+  # The operation it is in: a list across operations has each row say it.
+  operationId: ID!
+  operationName: String!
   port: Int!
   # What core puts in front of it, its task's front: socks (a SOCKS
   # proxy), http (an HTTP proxy), forward (a port forward to to,
@@ -59,7 +62,9 @@ type OperationalPortEvent {
 
 extend type Subscription {
   # An operation's operational ports as they change. Needs at least viewer.
-  operationalPortChanged(operationId: ID!): OperationalPortEvent!
+  # Without operationId: every operation the caller is a member of, as at
+  # subscribe time.
+  operationalPortChanged(operationId: ID): OperationalPortEvent!
     @hasPermission(permission: "operation:member")
 }
 
@@ -67,6 +72,8 @@ extend type Query {
   # An operation's operational ports in use, the latest opened first, a
   # page at a time; search matches the port, the session's number and who
   # opened it. Needs at least viewer.
-  operationalPorts(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): OperationalPortConnection!
+  # Without operationId: every operation the caller is a member of (the
+  # Ports page with no operation), each row saying its own.
+  operationalPorts(operationId: ID, search: String, first: Int = 50, after: String, last: Int, before: String): OperationalPortConnection!
     @hasPermission(permission: "operation:member")
 }

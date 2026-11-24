@@ -4,10 +4,13 @@ import type { VpnTunnelFieldsFragment } from "@/graphql/gql/graphql"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { formatDateTime } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
+import { OperationCell } from "./operation-cell"
 
 export type VPNTunnel = VpnTunnelFieldsFragment
 
 const GRID_COLS = "grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]"
+// With the Operation column, when the page lists every operation the user is in.
+const GRID_COLS_ALL = "grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,0.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]"
 
 /**
  * The operation's VPN tunnels (docs: contracts/vpn-front), the latest
@@ -22,6 +25,7 @@ export function VPNTunnelsTable({
   hasNextPage,
   fetchNextPage,
   emptyState,
+  showOperation = false,
 }: {
   tunnels: VPNTunnel[]
   isLoading: boolean
@@ -29,7 +33,10 @@ export function VPNTunnelsTable({
   hasNextPage: boolean
   fetchNextPage: () => void
   emptyState: ReactNode
+  /** An Operation column: the page lists every operation the user is a member of. */
+  showOperation?: boolean
 }) {
+  const cols = showOperation ? GRID_COLS_ALL : GRID_COLS
   const modals = useRecordModals()
   return (
     <VirtualizedDataTable
@@ -38,12 +45,13 @@ export function VPNTunnelsTable({
       isFetchingNextPage={isFetchingNextPage}
       hasNextPage={hasNextPage}
       fetchNextPage={fetchNextPage}
-      gridCols={GRID_COLS}
+      gridCols={cols}
       entityNoun="VPNs"
       header={
         <>
           <div>Routes</div>
           <div>Machines</div>
+          {showOperation && <div>Operation</div>}
           <div>Session</div>
           <div>Opened by</div>
           <div>Since</div>
@@ -54,7 +62,7 @@ export function VPNTunnelsTable({
       renderRow={(v) => (
         <button
           type="button"
-          className={dataTableRowClass(GRID_COLS, "cursor-pointer")}
+          className={dataTableRowClass(cols, "cursor-pointer")}
           onClick={() => modals.open({ kind: "session", id: v.sessionId })}
           title={`Open session #${v.sessionNumber}`}
         >
@@ -64,6 +72,7 @@ export function VPNTunnelsTable({
           <span className={cn("text-sm tabular-nums", v.clients > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
             {v.listening ? `${v.clients} connected` : "closed"}
           </span>
+          {showOperation && <OperationCell name={v.operationName} />}
           <span className="font-mono text-sm">#{v.sessionNumber}</span>
           <span className="truncate">{v.openedByName ?? <span className="text-muted-foreground">someone gone</span>}</span>
           <span className="truncate text-sm tabular-nums">{formatDateTime(v.openedAt)}</span>

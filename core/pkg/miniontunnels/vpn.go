@@ -120,7 +120,7 @@ func (s *Service) vpnChanged(task, operation uuid.UUID, opened, closed bool) {
 }
 
 // VPNTunnel is the task's VPN tunnel as kept; IsNotFound for none.
-// VPNTunnels and CountVPNTunnels are a page of the operation's, the
+// VPNTunnels and CountVPNTunnels are a page of the operations', the
 // latest opened first, and how many.
 func (s *Service) VPNTunnel(ctx context.Context, task uuid.UUID) (*models.VPNTunnel, error) {
 	if s.vpnTunnels == nil {
@@ -129,18 +129,18 @@ func (s *Service) VPNTunnel(ctx context.Context, task uuid.UUID) (*models.VPNTun
 	return s.vpnTunnels.FindByTaskID(ctx, task)
 }
 
-func (s *Service) VPNTunnels(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.VPNTunnel, error) {
+func (s *Service) VPNTunnels(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.VPNTunnel, error) {
 	if s.vpnTunnels == nil {
 		return nil, nil
 	}
-	return s.vpnTunnels.FindByOperationIDWithCursor(ctx, operationID, search, cursor, limit, forward)
+	return s.vpnTunnels.FindByOperationIDsWithCursor(ctx, operationIDs, search, cursor, limit, forward)
 }
 
-func (s *Service) CountVPNTunnels(ctx context.Context, operationID uuid.UUID, search string) (int64, error) {
+func (s *Service) CountVPNTunnels(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error) {
 	if s.vpnTunnels == nil {
 		return 0, nil
 	}
-	return s.vpnTunnels.CountByOperationID(ctx, operationID, search)
+	return s.vpnTunnels.CountByOperationIDs(ctx, operationIDs, search)
 }
 
 // VPNConnected is how many clients of the task's VPN tunnel are connected.

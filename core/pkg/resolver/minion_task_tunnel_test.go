@@ -59,11 +59,11 @@ func (f *fakeTaskTunnels) VPNTunnel(context.Context, uuid.UUID) (*models.VPNTunn
 	return nil, repository.ErrNotFound
 }
 
-func (f *fakeTaskTunnels) VPNTunnels(context.Context, uuid.UUID, string, *pagination.Cursor, int64, bool) ([]models.VPNTunnel, error) {
+func (f *fakeTaskTunnels) VPNTunnels(context.Context, []uuid.UUID, string, *pagination.Cursor, int64, bool) ([]models.VPNTunnel, error) {
 	return nil, nil
 }
 
-func (f *fakeTaskTunnels) CountVPNTunnels(context.Context, uuid.UUID, string) (int64, error) {
+func (f *fakeTaskTunnels) CountVPNTunnels(context.Context, []uuid.UUID, string) (int64, error) {
 	return 0, nil
 }
 
@@ -106,11 +106,11 @@ func (f *fakeTaskTunnels) Port(context.Context, uuid.UUID) (*models.OperationalP
 	return nil, repository.ErrNotFound
 }
 
-func (f *fakeTaskTunnels) Ports(context.Context, uuid.UUID, string, *pagination.Cursor, int64, bool) ([]models.OperationalPort, error) {
+func (f *fakeTaskTunnels) Ports(context.Context, []uuid.UUID, string, *pagination.Cursor, int64, bool) ([]models.OperationalPort, error) {
 	return nil, nil
 }
 
-func (f *fakeTaskTunnels) CountPorts(context.Context, uuid.UUID, string) (int64, error) {
+func (f *fakeTaskTunnels) CountPorts(context.Context, []uuid.UUID, string) (int64, error) {
 	return 0, nil
 }
 
@@ -126,7 +126,7 @@ func (f *fakeTaskTunnels) Listener(context.Context, uuid.UUID) (*models.MinionLi
 	return nil, repository.ErrNotFound
 }
 
-func (f *fakeTaskTunnels) Listeners(context.Context, uuid.UUID, string, *pagination.Cursor, int64, bool) ([]models.MinionListener, error) {
+func (f *fakeTaskTunnels) Listeners(context.Context, []uuid.UUID, string, *pagination.Cursor, int64, bool) ([]models.MinionListener, error) {
 	return nil, nil
 }
 
@@ -135,7 +135,7 @@ func (f *fakeTaskTunnels) SetCap(_ context.Context, _ uuid.UUID, limit int64) er
 	return f.err
 }
 
-func (f *fakeTaskTunnels) CountListeners(context.Context, uuid.UUID, string) (int64, error) {
+func (f *fakeTaskTunnels) CountListeners(context.Context, []uuid.UUID, string) (int64, error) {
 	return 0, nil
 }
 
@@ -744,5 +744,34 @@ func TestDesktopFronts(t *testing.T) {
 	}
 	if fields, err := r.MinionDesktopSettings(ctx, "forward"); err != nil || len(fields) != 0 {
 		t.Errorf("a forward's settings: %v %v", fields, err)
+	}
+}
+
+// The Ports lists cover the operation named, for a viewer of it, or with
+// none named every operation the caller is a member of.
+func TestPortOperations(t *testing.T) {
+	caller, op1, op2, other := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	ops := map[uuid.UUID]models.Operation{
+		op1:   memberOp(op1, caller, models.OperationRoleViewer),
+		op2:   memberOp(op2, caller, models.OperationRoleOperator),
+		other: strangerOp(other),
+	}
+	r := &minionTaskResolver{operationRepo: &mockOpRepo{
+		findByMemberIDFn: func(context.Context, uuid.UUID) ([]models.Operation, error) {
+			return []models.Operation{ops[op1], ops[op2]}, nil
+		},
+		findByIDFn: func(_ context.Context, id uuid.UUID) (models.Operation, error) { return ops[id], nil },
+	}}
+	ctx := newCallerCtx(caller)
+	if got, err := r.portOperations(ctx, nil); err != nil || len(got) != 2 || got[0] != op1 || got[1] != op2 {
+		t.Fatalf("none named: %v %v", got, err)
+	}
+	named := op2.String()
+	if got, err := r.portOperations(ctx, &named); err != nil || len(got) != 1 || got[0] != op2 {
+		t.Fatalf("one named: %v %v", got, err)
+	}
+	stranger := other.String()
+	if _, err := r.portOperations(ctx, &stranger); err == nil {
+		t.Fatal("an operation the caller is not in: listed")
 	}
 }

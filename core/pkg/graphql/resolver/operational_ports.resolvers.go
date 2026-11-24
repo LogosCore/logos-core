@@ -13,17 +13,17 @@ import (
 )
 
 // OperationalPorts is the resolver for the operationalPorts field.
-func (r *queryResolver) OperationalPorts(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error) {
+func (r *queryResolver) OperationalPorts(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error) {
 	return r.MinionTaskResolver.OperationalPorts(ctx, operationID, search, first, after, last, before)
 }
 
 // OperationalPortChanged is the resolver for the operationalPortChanged field.
-func (r *subscriptionResolver) OperationalPortChanged(ctx context.Context, operationID string) (<-chan *model.OperationalPortEvent, error) {
+func (r *subscriptionResolver) OperationalPortChanged(ctx context.Context, operationID *string) (<-chan *model.OperationalPortEvent, error) {
 	auth, err := subscriberAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	filter, err := r.buildOperationFilter(ctx, auth, &operationID)
+	filter, err := r.buildOperationFilter(ctx, auth, operationID)
 	if err != nil {
 		return nil, err
 	}

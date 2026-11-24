@@ -1067,6 +1067,8 @@ export type MinionListener = {
   openedAt: Scalars['String']['output'];
   openedBy: Scalars['ID']['output'];
   openedByName?: Maybe<Scalars['String']['output']>;
+  operationId: Scalars['ID']['output'];
+  operationName: Scalars['String']['output'];
   sessionId: Scalars['ID']['output'];
   sessionNumber: Scalars['Int']['output'];
   stopsAt?: Maybe<Scalars['String']['output']>;
@@ -2769,6 +2771,8 @@ export type OperationalPort = {
   openedAt: Scalars['String']['output'];
   openedBy: Scalars['ID']['output'];
   openedByName?: Maybe<Scalars['String']['output']>;
+  operationId: Scalars['ID']['output'];
+  operationName: Scalars['String']['output'];
   path?: Maybe<Scalars['String']['output']>;
   port: Scalars['Int']['output'];
   program?: Maybe<Scalars['String']['output']>;
@@ -3149,7 +3153,7 @@ export type QueryMinionListenersArgs = {
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
   search?: InputMaybe<Scalars['String']['input']>;
 };
 
@@ -3362,7 +3366,7 @@ export type QueryOperationalPortsArgs = {
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
   search?: InputMaybe<Scalars['String']['input']>;
 };
 
@@ -3524,7 +3528,7 @@ export type QueryVpnTunnelsArgs = {
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
   search?: InputMaybe<Scalars['String']['input']>;
 };
 
@@ -4018,7 +4022,7 @@ export type SubscriptionHostChangedArgs = {
 
 
 export type SubscriptionMinionListenerChangedArgs = {
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -4064,7 +4068,7 @@ export type SubscriptionOperationMemberChangedArgs = {
 
 
 export type SubscriptionOperationalPortChangedArgs = {
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -4084,7 +4088,7 @@ export type SubscriptionTimelineEventAddedArgs = {
 
 
 export type SubscriptionVpnTunnelChangedArgs = {
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -4339,6 +4343,8 @@ export type VpnTunnel = {
   openedAt: Scalars['String']['output'];
   openedBy: Scalars['ID']['output'];
   openedByName?: Maybe<Scalars['String']['output']>;
+  operationId: Scalars['ID']['output'];
+  operationName: Scalars['String']['output'];
   routes: Array<Scalars['String']['output']>;
   sessionId: Scalars['ID']['output'];
   sessionNumber: Scalars['Int']['output'];
@@ -5196,24 +5202,24 @@ export type HostChangedSubscriptionVariables = Exact<{
 
 export type HostChangedSubscription = { hostChanged: { action: EventAction, hostId: string, host?: { id: string, rev: number, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } | null } };
 
-export type MinionListenerFieldsFragment = { id: string, bind: string, listen: number, bound?: string | null, udp: boolean, front: string, to?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null };
+export type MinionListenerFieldsFragment = { id: string, operationId: string, operationName: string, bind: string, listen: number, bound?: string | null, udp: boolean, front: string, to?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null };
 
 export type MinionListenersQueryVariables = Exact<{
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
   search?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   after?: InputMaybe<Scalars['String']['input']>;
 }>;
 
 
-export type MinionListenersQuery = { minionListeners: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, bind: string, listen: number, bound?: string | null, udp: boolean, front: string, to?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MinionListenersQuery = { minionListeners: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, operationName: string, bind: string, listen: number, bound?: string | null, udp: boolean, front: string, to?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type MinionListenerChangedSubscriptionVariables = Exact<{
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
 }>;
 
 
-export type MinionListenerChangedSubscription = { minionListenerChanged: { action: EventAction, id: string, operationId: string, listener?: { id: string, bind: string, listen: number, bound?: string | null, udp: boolean, front: string, to?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } | null } };
+export type MinionListenerChangedSubscription = { minionListenerChanged: { action: EventAction, id: string, operationId: string, listener?: { id: string, operationId: string, operationName: string, bind: string, listen: number, bound?: string | null, udp: boolean, front: string, to?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } | null } };
 
 export type MinionSessionFieldsFragment = { id: string, rev: number, state: string, archived: boolean, folderId?: string | null, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, viaSince?: string | null, version?: string | null, roundtripTime?: number | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, codecDownSince?: string | null, conn?: number | null, connKind?: string | null, connCount: number, connectionsChangedAt?: string | null, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, feedbackErrors: number, feedbackAt?: string | null, feedbackReadAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, acting?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, via: Array<{ sessionId: string, number: number, taskId: string }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> };
 
@@ -5817,24 +5823,24 @@ export type ModuleLogsSubscriptionVariables = Exact<{
 
 export type ModuleLogsSubscription = { moduleLogs: { backlog: boolean, dropped: number, lost: boolean, state?: ModuleLogStreamState | null, reason?: string | null, records: Array<{ time: string, level: ModuleLogLevel, message: string, attrs?: unknown | null }> } };
 
-export type OperationalPortFieldsFragment = { id: string, port: number, front: string, to?: string | null, path?: string | null, program?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null };
+export type OperationalPortFieldsFragment = { id: string, operationId: string, operationName: string, port: number, front: string, to?: string | null, path?: string | null, program?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null };
 
 export type OperationalPortsQueryVariables = Exact<{
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
   search?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   after?: InputMaybe<Scalars['String']['input']>;
 }>;
 
 
-export type OperationalPortsQuery = { operationalPorts: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, port: number, front: string, to?: string | null, path?: string | null, program?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type OperationalPortsQuery = { operationalPorts: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, operationName: string, port: number, front: string, to?: string | null, path?: string | null, program?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type OperationalPortChangedSubscriptionVariables = Exact<{
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
 }>;
 
 
-export type OperationalPortChangedSubscription = { operationalPortChanged: { action: EventAction, id: string, operationId: string, port?: { id: string, port: number, front: string, to?: string | null, path?: string | null, program?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } | null } };
+export type OperationalPortChangedSubscription = { operationalPortChanged: { action: EventAction, id: string, operationId: string, port?: { id: string, operationId: string, operationName: string, port: number, front: string, to?: string | null, path?: string | null, program?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } | null } };
 
 export type OperationMemberFieldsFragment = { role: OperationRole, user: { id: string, username: string, roles: Array<string>, active: boolean, createdAt: string, updatedAt: string } };
 
@@ -6375,24 +6381,24 @@ export type UserChangedSubscriptionVariables = Exact<{ [key: string]: never; }>;
 
 export type UserChangedSubscription = { userChanged: { action: EventAction, userId: string, username?: string | null, user?: { id: string, username: string, roles: Array<string>, active: boolean, authSource: string, createdAt: string, updatedAt: string } | null } };
 
-export type VpnTunnelFieldsFragment = { id: string, routes: Array<string>, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, clients: number, open: number, streams: number, stopsAt?: string | null };
+export type VpnTunnelFieldsFragment = { id: string, operationId: string, operationName: string, routes: Array<string>, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, clients: number, open: number, streams: number, stopsAt?: string | null };
 
 export type VpnTunnelsQueryVariables = Exact<{
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
   search?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   after?: InputMaybe<Scalars['String']['input']>;
 }>;
 
 
-export type VpnTunnelsQuery = { vpnTunnels: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, routes: Array<string>, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, clients: number, open: number, streams: number, stopsAt?: string | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type VpnTunnelsQuery = { vpnTunnels: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, operationName: string, routes: Array<string>, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, clients: number, open: number, streams: number, stopsAt?: string | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type VpnTunnelChangedSubscriptionVariables = Exact<{
-  operationId: Scalars['ID']['input'];
+  operationId?: InputMaybe<Scalars['ID']['input']>;
 }>;
 
 
-export type VpnTunnelChangedSubscription = { vpnTunnelChanged: { action: EventAction, id: string, operationId: string, tunnel?: { id: string, routes: Array<string>, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, clients: number, open: number, streams: number, stopsAt?: string | null } | null } };
+export type VpnTunnelChangedSubscription = { vpnTunnelChanged: { action: EventAction, id: string, operationId: string, tunnel?: { id: string, operationId: string, operationName: string, routes: Array<string>, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, clients: number, open: number, streams: number, stopsAt?: string | null } | null } };
 
 export type WikiDocumentTreeFieldsFragment = { id: string, operationId: string, parentDocumentId?: string | null, title: string, emoji: string, icon: string, color: string, sortOrder: string, childCount: number, hasContent: boolean, kind: WikiDocumentKind, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, pageType?: string | null, tags: Array<string>, status: WikiDocumentStatus, lastUpdatedAt?: string | null, updatedAt: string };
 
@@ -7187,6 +7193,8 @@ export const HostFieldsFragmentDoc = new TypedDocumentString(`
 export const MinionListenerFieldsFragmentDoc = new TypedDocumentString(`
     fragment MinionListenerFields on MinionListener {
   id
+  operationId
+  operationName
   bind
   listen
   bound
@@ -8003,6 +8011,8 @@ export const ModuleActionInvocationFieldsFragmentDoc = new TypedDocumentString(`
 export const OperationalPortFieldsFragmentDoc = new TypedDocumentString(`
     fragment OperationalPortFields on OperationalPort {
   id
+  operationId
+  operationName
   port
   front
   to
@@ -8255,6 +8265,8 @@ export const UserFieldsFragmentDoc = new TypedDocumentString(`
 export const VpnTunnelFieldsFragmentDoc = new TypedDocumentString(`
     fragment VPNTunnelFields on VPNTunnel {
   id
+  operationId
+  operationName
   routes
   sessionId
   sessionNumber
@@ -11167,7 +11179,7 @@ export const HostChangedDocument = new TypedDocumentString(`
   updatedAt
 }`) as unknown as TypedDocumentString<HostChangedSubscription, HostChangedSubscriptionVariables>;
 export const MinionListenersDocument = new TypedDocumentString(`
-    query MinionListeners($operationId: ID!, $search: String, $first: Int, $after: String) {
+    query MinionListeners($operationId: ID, $search: String, $first: Int, $after: String) {
   minionListeners(
     operationId: $operationId
     search: $search
@@ -11189,6 +11201,8 @@ export const MinionListenersDocument = new TypedDocumentString(`
 }
     fragment MinionListenerFields on MinionListener {
   id
+  operationId
+  operationName
   bind
   listen
   bound
@@ -11207,7 +11221,7 @@ export const MinionListenersDocument = new TypedDocumentString(`
   stopsAt
 }`) as unknown as TypedDocumentString<MinionListenersQuery, MinionListenersQueryVariables>;
 export const MinionListenerChangedDocument = new TypedDocumentString(`
-    subscription MinionListenerChanged($operationId: ID!) {
+    subscription MinionListenerChanged($operationId: ID) {
   minionListenerChanged(operationId: $operationId) {
     action
     id
@@ -11219,6 +11233,8 @@ export const MinionListenerChangedDocument = new TypedDocumentString(`
 }
     fragment MinionListenerFields on MinionListener {
   id
+  operationId
+  operationName
   bind
   listen
   bound
@@ -15122,7 +15138,7 @@ export const ModuleLogsDocument = new TypedDocumentString(`
 }
     `) as unknown as TypedDocumentString<ModuleLogsSubscription, ModuleLogsSubscriptionVariables>;
 export const OperationalPortsDocument = new TypedDocumentString(`
-    query OperationalPorts($operationId: ID!, $search: String, $first: Int, $after: String) {
+    query OperationalPorts($operationId: ID, $search: String, $first: Int, $after: String) {
   operationalPorts(
     operationId: $operationId
     search: $search
@@ -15144,6 +15160,8 @@ export const OperationalPortsDocument = new TypedDocumentString(`
 }
     fragment OperationalPortFields on OperationalPort {
   id
+  operationId
+  operationName
   port
   front
   to
@@ -15162,7 +15180,7 @@ export const OperationalPortsDocument = new TypedDocumentString(`
   stopsAt
 }`) as unknown as TypedDocumentString<OperationalPortsQuery, OperationalPortsQueryVariables>;
 export const OperationalPortChangedDocument = new TypedDocumentString(`
-    subscription OperationalPortChanged($operationId: ID!) {
+    subscription OperationalPortChanged($operationId: ID) {
   operationalPortChanged(operationId: $operationId) {
     action
     id
@@ -15174,6 +15192,8 @@ export const OperationalPortChangedDocument = new TypedDocumentString(`
 }
     fragment OperationalPortFields on OperationalPort {
   id
+  operationId
+  operationName
   port
   front
   to
@@ -17042,7 +17062,7 @@ export const UserChangedDocument = new TypedDocumentString(`
   updatedAt
 }`) as unknown as TypedDocumentString<UserChangedSubscription, UserChangedSubscriptionVariables>;
 export const VpnTunnelsDocument = new TypedDocumentString(`
-    query VPNTunnels($operationId: ID!, $search: String, $first: Int, $after: String) {
+    query VPNTunnels($operationId: ID, $search: String, $first: Int, $after: String) {
   vpnTunnels(
     operationId: $operationId
     search: $search
@@ -17064,6 +17084,8 @@ export const VpnTunnelsDocument = new TypedDocumentString(`
 }
     fragment VPNTunnelFields on VPNTunnel {
   id
+  operationId
+  operationName
   routes
   sessionId
   sessionNumber
@@ -17078,7 +17100,7 @@ export const VpnTunnelsDocument = new TypedDocumentString(`
   stopsAt
 }`) as unknown as TypedDocumentString<VpnTunnelsQuery, VpnTunnelsQueryVariables>;
 export const VpnTunnelChangedDocument = new TypedDocumentString(`
-    subscription VPNTunnelChanged($operationId: ID!) {
+    subscription VPNTunnelChanged($operationId: ID) {
   vpnTunnelChanged(operationId: $operationId) {
     action
     id
@@ -17090,6 +17112,8 @@ export const VpnTunnelChangedDocument = new TypedDocumentString(`
 }
     fragment VPNTunnelFields on VPNTunnel {
   id
+  operationId
+  operationName
   routes
   sessionId
   sessionNumber

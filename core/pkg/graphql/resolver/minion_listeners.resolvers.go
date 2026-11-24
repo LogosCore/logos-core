@@ -13,17 +13,17 @@ import (
 )
 
 // MinionListeners is the resolver for the minionListeners field.
-func (r *queryResolver) MinionListeners(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error) {
+func (r *queryResolver) MinionListeners(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error) {
 	return r.MinionTaskResolver.MinionListeners(ctx, operationID, search, first, after, last, before)
 }
 
 // MinionListenerChanged is the resolver for the minionListenerChanged field.
-func (r *subscriptionResolver) MinionListenerChanged(ctx context.Context, operationID string) (<-chan *model.MinionListenerEvent, error) {
+func (r *subscriptionResolver) MinionListenerChanged(ctx context.Context, operationID *string) (<-chan *model.MinionListenerEvent, error) {
 	auth, err := subscriberAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	filter, err := r.buildOperationFilter(ctx, auth, &operationID)
+	filter, err := r.buildOperationFilter(ctx, auth, operationID)
 	if err != nil {
 		return nil, err
 	}

@@ -6,6 +6,8 @@ import { graphql } from "@/graphql/gql"
 export const OperationalPortFields = graphql(`
   fragment OperationalPortFields on OperationalPort {
     id
+    operationId
+    operationName
     port
     front
     to
@@ -26,7 +28,7 @@ export const OperationalPortFields = graphql(`
 `)
 
 export const OperationalPortsQuery = graphql(`
-  query OperationalPorts($operationId: ID!, $search: String, $first: Int, $after: String) {
+  query OperationalPorts($operationId: ID, $search: String, $first: Int, $after: String) {
     operationalPorts(operationId: $operationId, search: $search, first: $first, after: $after) {
       edges {
         node {
@@ -44,7 +46,7 @@ export const OperationalPortsQuery = graphql(`
 `)
 
 export const OperationalPortChangedSubscription = graphql(`
-  subscription OperationalPortChanged($operationId: ID!) {
+  subscription OperationalPortChanged($operationId: ID) {
     operationalPortChanged(operationId: $operationId) {
       action
       id

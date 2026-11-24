@@ -841,6 +841,8 @@ type MinionIdentityPage struct {
 
 type MinionListener struct {
 	ID            string  `json:"id"`
+	OperationID   string  `json:"operationId"`
+	OperationName string  `json:"operationName"`
 	Bind          string  `json:"bind"`
 	Listen        int     `json:"listen"`
 	Bound         *string `json:"bound,omitempty"`
@@ -1612,6 +1614,8 @@ type OperationMemberEvent struct {
 
 type OperationalPort struct {
 	ID            string  `json:"id"`
+	OperationID   string  `json:"operationId"`
+	OperationName string  `json:"operationName"`
 	Port          int     `json:"port"`
 	Front         string  `json:"front"`
 	To            *string `json:"to,omitempty"`
@@ -2112,6 +2116,8 @@ type UserSuggestion struct {
 
 type VPNTunnel struct {
 	ID            string   `json:"id"`
+	OperationID   string   `json:"operationId"`
+	OperationName string   `json:"operationName"`
 	Routes        []string `json:"routes"`
 	SessionID     string   `json:"sessionId"`
 	SessionNumber int      `json:"sessionNumber"`

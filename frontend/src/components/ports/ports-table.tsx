@@ -4,11 +4,14 @@ import type { OperationalPortFieldsFragment } from "@/graphql/gql/graphql"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { formatDateTime } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
+import { OperationCell } from "./operation-cell"
 import { frontLabel, hostPort } from "@/components/minion-sessions/tunnel-values"
 
 export type OperationalPort = OperationalPortFieldsFragment
 
 const GRID_COLS = "grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]"
+// With the Operation column, when the page lists every operation the user is in.
+const GRID_COLS_ALL = "grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,0.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]"
 
 
 
@@ -24,6 +27,7 @@ export function PortsTable({
   hasNextPage,
   fetchNextPage,
   emptyState,
+  showOperation = false,
 }: {
   ports: OperationalPort[]
   isLoading: boolean
@@ -31,7 +35,10 @@ export function PortsTable({
   hasNextPage: boolean
   fetchNextPage: () => void
   emptyState: ReactNode
+  /** An Operation column: the page lists every operation the user is a member of. */
+  showOperation?: boolean
 }) {
+  const cols = showOperation ? GRID_COLS_ALL : GRID_COLS
   const modals = useRecordModals()
   return (
     <VirtualizedDataTable
@@ -40,12 +47,13 @@ export function PortsTable({
       isFetchingNextPage={isFetchingNextPage}
       hasNextPage={hasNextPage}
       fetchNextPage={fetchNextPage}
-      gridCols={GRID_COLS}
+      gridCols={cols}
       entityNoun="ports"
       header={
         <>
           <div>Port</div>
           <div>Serves</div>
+          {showOperation && <div>Operation</div>}
           <div>Session</div>
           <div>Opened by</div>
           <div>Since</div>
@@ -58,7 +66,7 @@ export function PortsTable({
         // Where it goes: a forward's destination, a terminal's program.
         const to = p.to ?? p.path ?? (p.front === "terminal" ? (p.program ?? "the host's shell") : null)
         return (
-          <button type="button" className={dataTableRowClass(GRID_COLS, "cursor-pointer")} onClick={() => modals.open({ kind: "session", id: p.sessionId })}
+          <button type="button" className={dataTableRowClass(cols, "cursor-pointer")} onClick={() => modals.open({ kind: "session", id: p.sessionId })}
             title={`Open session #${p.sessionNumber}`}>
             <span className="flex min-w-0 flex-col">
               <span className="font-mono text-sm tabular-nums">{p.port}</span>
@@ -75,6 +83,7 @@ export function PortsTable({
                 {p.listening ? "listening" : "opening again"}
               </span>
             </span>
+            {showOperation && <OperationCell name={p.operationName} />}
             <span className="font-mono text-sm">#{p.sessionNumber}</span>
             <span className="truncate">{p.openedByName ?? <span className="text-muted-foreground">someone gone</span>}</span>
             <span className="truncate text-sm tabular-nums">{formatDateTime(p.openedAt)}</span>

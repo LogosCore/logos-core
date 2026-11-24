@@ -37,10 +37,10 @@ type IOperationalPortRepository interface {
 	Insert(ctx context.Context, p *models.OperationalPort) error
 	// All is every port in use, to open again after a restart.
 	All(ctx context.Context) ([]models.OperationalPort, error)
-	// FindByOperationIDWithCursor is a page of the operation's ports in
+	// FindByOperationIDsWithCursor is a page of the operations' ports in
 	// use, the latest opened first; search matches SearchText.
-	FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.OperationalPort, error)
-	CountByOperationID(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
+	FindByOperationIDsWithCursor(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.OperationalPort, error)
+	CountByOperationIDs(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error)
 	// FindByTaskID is the task's port; IsNotFound for none.
 	FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.OperationalPort, error)
 	// ReserveStreams takes n more stream numbers for the task: the last of
@@ -91,20 +91,20 @@ func OperationalPortCursor(p *models.OperationalPort) string {
 	return pagination.EncodeCursor(p.CreateAt, p.Id)
 }
 
-func operationalPortFilter(operationID uuid.UUID, search string) bson.M {
-	q := bson.M{"operation_id": operationID}
+func operationalPortFilter(operationIDs []uuid.UUID, search string) bson.M {
+	q := bson.M{"operation_id": bson.M{"$in": operationIDs}}
 	if search = strings.TrimSpace(search); search != "" {
 		q["search_text"] = bson.M{"$regex": searchPattern(search), "$options": "i"}
 	}
 	return q
 }
 
-func (r *operationalPortRepository) FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.OperationalPort, error) {
+func (r *operationalPortRepository) FindByOperationIDsWithCursor(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.OperationalPort, error) {
 	if err := operationalPortListSort.ValidateCursor(cursor); err != nil {
 		return nil, err
 	}
 	out := []models.OperationalPort{}
-	err := r.coll.Find(ctx, pagination.ApplyCursorFilterKey(operationalPortFilter(operationID, search), cursor, forward, operationalPortListSort)).
+	err := r.coll.Find(ctx, pagination.ApplyCursorFilterKey(operationalPortFilter(operationIDs, search), cursor, forward, operationalPortListSort)).
 		Sort(pagination.SortFieldsKey(forward, operationalPortListSort)...).Limit(limit).All(&out)
 	if err != nil {
 		return nil, err
@@ -115,8 +115,8 @@ func (r *operationalPortRepository) FindByOperationIDWithCursor(ctx context.Cont
 	return out, nil
 }
 
-func (r *operationalPortRepository) CountByOperationID(ctx context.Context, operationID uuid.UUID, search string) (int64, error) {
-	return r.coll.Find(ctx, operationalPortFilter(operationID, search)).Count()
+func (r *operationalPortRepository) CountByOperationIDs(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error) {
+	return r.coll.Find(ctx, operationalPortFilter(operationIDs, search)).Count()
 }
 
 func (r *operationalPortRepository) FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.OperationalPort, error) {

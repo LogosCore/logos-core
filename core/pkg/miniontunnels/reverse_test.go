@@ -46,11 +46,11 @@ func (f *fakeListeners) All(context.Context) ([]models.MinionListener, error) {
 	return out, nil
 }
 
-func (f *fakeListeners) FindByOperationIDWithCursor(ctx context.Context, _ uuid.UUID, _ string, _ *pagination.Cursor, _ int64, _ bool) ([]models.MinionListener, error) {
+func (f *fakeListeners) FindByOperationIDsWithCursor(ctx context.Context, _ []uuid.UUID, _ string, _ *pagination.Cursor, _ int64, _ bool) ([]models.MinionListener, error) {
 	return f.All(ctx)
 }
 
-func (f *fakeListeners) CountByOperationID(ctx context.Context, _ uuid.UUID, _ string) (int64, error) {
+func (f *fakeListeners) CountByOperationIDs(ctx context.Context, _ []uuid.UUID, _ string) (int64, error) {
 	all, _ := f.All(ctx)
 	return int64(len(all)), nil
 }

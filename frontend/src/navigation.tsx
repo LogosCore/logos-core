@@ -24,6 +24,9 @@ export interface NavigationItem {
   // When set, render an external <a target="_blank"> instead of a SPA <Link>.
   // The `url` field is ignored for routing-active-state matching in this case.
   externalUrl?: string;
+  // An operation's entry that also shows with no operation scoped, after
+  // the global ones: its page then lists every operation the user is in.
+  unscoped?: boolean;
 }
 
 // Operation-scoped entries rendered ABOVE the global block: the operation's
@@ -56,7 +59,8 @@ export const navigationGlobalItems: NavigationItem[] = [
 ];
 
 // Operation-scoped entries rendered BELOW the global block. Hidden until
-// the user picks an operation via the switcher.
+// the user picks an operation via the switcher, but those marked unscoped
+// (Ports: every operation's, as Findings).
 export const navigationOperationItems: NavigationItem[] = [
   {
     title: "Tasks",
@@ -87,6 +91,7 @@ export const navigationOperationItems: NavigationItem[] = [
     url: "/ports",
     permission: null,
     icon: EthernetPortIcon,
+    unscoped: true,
   },
 ];
 

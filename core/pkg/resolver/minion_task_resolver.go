@@ -95,16 +95,16 @@ type IMinionTaskResolver interface {
 	MinionTaskProcesses(ctx context.Context, taskID string, search *string, order *model.MinionProcessOrder, desc *bool, first *int,
 		after *string, fold *model.MinionProcessFold, flip []int) (*model.MinionProcessConnection, error)
 	DeleteRecording(ctx context.Context, id string) (bool, error)
-	OperationalPorts(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error)
+	OperationalPorts(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error)
 	// LoadPort is a task's port, for a subscriber: nil when it has none.
 	LoadPort(ctx context.Context, taskID string) *model.OperationalPort
 	// MinionListeners is a page of the operation's reverse port forwards'
 	// listeners; LoadListener a task's, for a subscriber: nil for none.
-	MinionListeners(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error)
+	MinionListeners(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error)
 	LoadListener(ctx context.Context, taskID string) *model.MinionListener
 	// VPNTunnels is a page of an operation's VPN tunnels; LoadVPNTunnel a
 	// task's, for a subscriber: nil for none.
-	VPNTunnels(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.VPNTunnelConnection, error)
+	VPNTunnels(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.VPNTunnelConnection, error)
 	LoadVPNTunnel(ctx context.Context, taskID string) *model.VPNTunnel
 	// Load is one task as GraphQL, for a subscriber: nil when it cannot be
 	// read.
@@ -212,14 +212,14 @@ type TaskTunnels interface {
 	Summary(task uuid.UUID) (miniontunnels.Summary, bool)
 	Streams(ctx context.Context, task uuid.UUID, filter miniontunnels.StreamFilter, before uint64, limit int64) ([]models.MinionTunnelStream, error)
 	Port(ctx context.Context, task uuid.UUID) (*models.OperationalPort, error)
-	Ports(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.OperationalPort, error)
-	CountPorts(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
+	Ports(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.OperationalPort, error)
+	CountPorts(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error)
 	// OpenReverse keeps a reverse port forward's listener for a task about
 	// to be queued; Listener, Listeners and CountListeners read them.
 	OpenReverse(ctx context.Context, o miniontunnels.Opening) error
 	Listener(ctx context.Context, task uuid.UUID) (*models.MinionListener, error)
-	Listeners(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionListener, error)
-	CountListeners(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
+	Listeners(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionListener, error)
+	CountListeners(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error)
 	// SetCap changes a running tunnel's bandwidth cap (0: none).
 	SetCap(ctx context.Context, task uuid.UUID, limit int64) error
 	// OpenVPN keeps a VPN tunnel for a task about to be queued (docs:
@@ -235,8 +235,8 @@ type TaskTunnels interface {
 	// operation's and CountVPNTunnels how many; VPNConnected its machines
 	// connected now.
 	VPNTunnel(ctx context.Context, task uuid.UUID) (*models.VPNTunnel, error)
-	VPNTunnels(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.VPNTunnel, error)
-	CountVPNTunnels(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
+	VPNTunnels(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.VPNTunnel, error)
+	CountVPNTunnels(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error)
 	VPNConnected(task uuid.UUID) int
 }
 

@@ -59,11 +59,11 @@ func (f *fakePorts) All(context.Context) ([]models.OperationalPort, error) {
 	return out, nil
 }
 
-func (f *fakePorts) FindByOperationIDWithCursor(ctx context.Context, _ uuid.UUID, _ string, _ *pagination.Cursor, _ int64, _ bool) ([]models.OperationalPort, error) {
+func (f *fakePorts) FindByOperationIDsWithCursor(ctx context.Context, _ []uuid.UUID, _ string, _ *pagination.Cursor, _ int64, _ bool) ([]models.OperationalPort, error) {
 	return f.All(ctx)
 }
 
-func (f *fakePorts) CountByOperationID(ctx context.Context, _ uuid.UUID, _ string) (int64, error) {
+func (f *fakePorts) CountByOperationIDs(ctx context.Context, _ []uuid.UUID, _ string) (int64, error) {
 	all, err := f.All(ctx)
 	return int64(len(all)), err
 }

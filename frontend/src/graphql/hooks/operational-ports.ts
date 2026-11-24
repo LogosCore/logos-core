@@ -18,7 +18,8 @@ export type PortPages = { pages: OperationalPortsQuery[]; pageParams: (string | 
 // events (lib/live-lists).
 
 export interface PortListParams {
-  operationId: string
+  /** null: every operation the caller is a member of. */
+  operationId: string | null
   search: string
 }
 
@@ -54,7 +55,7 @@ export function useOperationalPorts(params: PortListParams) {
  * where it belongs (a refresh), one whose streams' numbers changed is
  * patched in place, one closed goes.
  */
-export function useOperationalPortsSubscription(operationId: string) {
+export function useOperationalPortsSubscription(operationId: string | null) {
   const queryClient = useQueryClient()
   useSubscription(
     OperationalPortChangedDocument,

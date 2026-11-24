@@ -158,7 +158,7 @@ func TestTerminalModels(t *testing.T) {
 	if m = tunnelStreamModel(&models.MinionTunnelStream{Stream: 3, Host: "dc01", Port: 445}); m.Kind != nil {
 		t.Errorf("a TCP stream: %+v", m)
 	}
-	p := r.portModel(&models.OperationalPort{TaskID: uuid.New(), Purpose: models.OperationalPurposeTerminal, Program: "cmd.exe"})
+	p := r.portModel(context.Background(), &models.OperationalPort{TaskID: uuid.New(), Purpose: models.OperationalPurposeTerminal, Program: "cmd.exe"})
 	if p.Front != "terminal" || p.Program == nil || *p.Program != "cmd.exe" {
 		t.Errorf("a terminal's port: %+v", p)
 	}

@@ -7,6 +7,8 @@ import { graphql } from "@/graphql/gql"
 export const VPNTunnelFields = graphql(`
   fragment VPNTunnelFields on VPNTunnel {
     id
+    operationId
+    operationName
     routes
     sessionId
     sessionNumber
@@ -23,7 +25,7 @@ export const VPNTunnelFields = graphql(`
 `)
 
 export const VPNTunnelsQuery = graphql(`
-  query VPNTunnels($operationId: ID!, $search: String, $first: Int, $after: String) {
+  query VPNTunnels($operationId: ID, $search: String, $first: Int, $after: String) {
     vpnTunnels(operationId: $operationId, search: $search, first: $first, after: $after) {
       edges {
         node {
@@ -41,7 +43,7 @@ export const VPNTunnelsQuery = graphql(`
 `)
 
 export const VPNTunnelChangedSubscription = graphql(`
-  subscription VPNTunnelChanged($operationId: ID!) {
+  subscription VPNTunnelChanged($operationId: ID) {
     vpnTunnelChanged(operationId: $operationId) {
       action
       id

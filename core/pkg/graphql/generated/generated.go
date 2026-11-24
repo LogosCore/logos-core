@@ -844,6 +844,8 @@ type ComplexityRoot struct {
 		OpenedAt      func(childComplexity int) int
 		OpenedBy      func(childComplexity int) int
 		OpenedByName  func(childComplexity int) int
+		OperationID   func(childComplexity int) int
+		OperationName func(childComplexity int) int
 		SessionID     func(childComplexity int) int
 		SessionNumber func(childComplexity int) int
 		StopsAt       func(childComplexity int) int
@@ -1703,6 +1705,8 @@ type ComplexityRoot struct {
 		OpenedAt      func(childComplexity int) int
 		OpenedBy      func(childComplexity int) int
 		OpenedByName  func(childComplexity int) int
+		OperationID   func(childComplexity int) int
+		OperationName func(childComplexity int) int
 		Path          func(childComplexity int) int
 		Port          func(childComplexity int) int
 		Program       func(childComplexity int) int
@@ -1785,7 +1789,7 @@ type ComplexityRoot struct {
 		MinionFileStrings                  func(childComplexity int, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) int
 		MinionFiles                        func(childComplexity int, operationID string, kind string, last *int, before *string) int
 		MinionIdentities                   func(childComplexity int, sessionID string, after *string, first *int) int
-		MinionListeners                    func(childComplexity int, operationID string, search *string, first *int, after *string, last *int, before *string) int
+		MinionListeners                    func(childComplexity int, operationID *string, search *string, first *int, after *string, last *int, before *string) int
 		MinionSession                      func(childComplexity int, id string) int
 		MinionSessionCommands              func(childComplexity int, sessionID string) int
 		MinionSessionCount                 func(childComplexity int, operationID string) int
@@ -1817,7 +1821,7 @@ type ComplexityRoot struct {
 		MyOperatorFocus                    func(childComplexity int) int
 		MySessions                         func(childComplexity int, activeOnly *bool, first *int, after *string, last *int, before *string) int
 		Operation                          func(childComplexity int, id string) int
-		OperationalPorts                   func(childComplexity int, operationID string, search *string, first *int, after *string, last *int, before *string) int
+		OperationalPorts                   func(childComplexity int, operationID *string, search *string, first *int, after *string, last *int, before *string) int
 		Operations                         func(childComplexity int, search *string, sortBy *model.OperationSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
 		Recordings                         func(childComplexity int, taskID string, last *int, before *string) int
 		Session                            func(childComplexity int, id string) int
@@ -1841,7 +1845,7 @@ type ComplexityRoot struct {
 		User                               func(childComplexity int, id string) int
 		UserSuggestions                    func(childComplexity int, search string, first *int) int
 		Users                              func(childComplexity int, search *string, sortBy *model.UserSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
-		VpnTunnels                         func(childComplexity int, operationID string, search *string, first *int, after *string, last *int, before *string) int
+		VpnTunnels                         func(childComplexity int, operationID *string, search *string, first *int, after *string, last *int, before *string) int
 		WikiDocument                       func(childComplexity int, id string) int
 		WikiDocumentBacklinks              func(childComplexity int, documentID string) int
 		WikiDocumentBackup                 func(childComplexity int, id string) int
@@ -2149,7 +2153,7 @@ type ComplexityRoot struct {
 		FileBrowserChanged          func(childComplexity int, sessionID string) int
 		HashChanged                 func(childComplexity int, operationID string) int
 		HostChanged                 func(childComplexity int, operationID string) int
-		MinionListenerChanged       func(childComplexity int, operationID string) int
+		MinionListenerChanged       func(childComplexity int, operationID *string) int
 		MinionSessionChanged        func(childComplexity int, operationID string) int
 		MinionTargetChanged         func(childComplexity int, operationID string) int
 		MinionTaskChanged           func(childComplexity int, sessionID string) int
@@ -2161,13 +2165,13 @@ type ComplexityRoot struct {
 		MySessionChanged            func(childComplexity int) int
 		OperationChanged            func(childComplexity int, operationID *string) int
 		OperationMemberChanged      func(childComplexity int, operationID *string) int
-		OperationalPortChanged      func(childComplexity int, operationID string) int
+		OperationalPortChanged      func(childComplexity int, operationID *string) int
 		SessionChanged              func(childComplexity int, userID *string) int
 		SkillChanged                func(childComplexity int) int
 		TaskChanged                 func(childComplexity int, operationID string) int
 		TimelineEventAdded          func(childComplexity int, operationID string) int
 		UserChanged                 func(childComplexity int) int
-		VpnTunnelChanged            func(childComplexity int, operationID string) int
+		VpnTunnelChanged            func(childComplexity int, operationID *string) int
 		WikiDocumentChanged         func(childComplexity int, operationID string) int
 		WikiDocumentPresenceChanged func(childComplexity int, operationID string) int
 	}
@@ -2303,6 +2307,8 @@ type ComplexityRoot struct {
 		OpenedAt      func(childComplexity int) int
 		OpenedBy      func(childComplexity int) int
 		OpenedByName  func(childComplexity int) int
+		OperationID   func(childComplexity int) int
+		OperationName func(childComplexity int) int
 		Routes        func(childComplexity int) int
 		SessionID     func(childComplexity int) int
 		SessionNumber func(childComplexity int) int
@@ -2795,7 +2801,7 @@ type QueryResolver interface {
 	WikiDocumentsReferencingHash(ctx context.Context, hashID string) ([]*models.WikiDocument, error)
 	Host(ctx context.Context, id string) (*models.Host, error)
 	Hosts(ctx context.Context, operationID string, search *string, sortBy *model.HostSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.HostConnection, error)
-	MinionListeners(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error)
+	MinionListeners(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error)
 	MinionSessionFolders(ctx context.Context, operationID string) ([]*model.MinionSessionFolder, error)
 	MinionSessionCount(ctx context.Context, operationID string) (int, error)
 	MinionFeedback(ctx context.Context, sessionID string, level *string, search *string, after *string, first *int) (*model.MinionFeedbackPage, error)
@@ -2820,7 +2826,7 @@ type QueryResolver interface {
 	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
 	ModuleConfigChanges(ctx context.Context, instance string, limit *int) ([]*model.ModuleConfigChange, error)
 	Modules(ctx context.Context, search *string, status []string, typeArg []string, first *int, after *string, last *int, before *string) (*model.ModuleConnection, error)
-	OperationalPorts(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error)
+	OperationalPorts(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error)
 	MySessions(ctx context.Context, activeOnly *bool, first *int, after *string, last *int, before *string) (*model.SessionConnection, error)
 	Sessions(ctx context.Context, userID *string, search *string, activeOnly *bool, first *int, after *string, last *int, before *string) (*model.SessionConnection, error)
 	Session(ctx context.Context, id string) (*models.Session, error)
@@ -2840,7 +2846,7 @@ type QueryResolver interface {
 	TasksReferencingCredential(ctx context.Context, credentialID string) ([]*models.Task, error)
 	TimelineBuckets(ctx context.Context, operationID string, granularity *repository.TimelineGranularity, timezone string, from *string, to *string, types []string, actorIds []string) ([]*model.TimelineBucket, error)
 	TimelineEventsByDay(ctx context.Context, operationID string, date string, timezone string, granularity *repository.TimelineGranularity, types []string, actorIds []string, first *int, after *string) (*model.TimelineEventConnection, error)
-	VpnTunnels(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.VPNTunnelConnection, error)
+	VpnTunnels(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.VPNTunnelConnection, error)
 	WikiDocument(ctx context.Context, id string) (*models.WikiDocument, error)
 	WikiDocuments(ctx context.Context, operationID string, parentDocumentID *string, search *string, sort *model.WikiDocumentSort, first *int, after *string, last *int, before *string) (*model.WikiDocumentConnection, error)
 	WikiDocumentTree(ctx context.Context, operationID string) ([]*models.WikiDocument, error)
@@ -2887,19 +2893,19 @@ type SubscriptionResolver interface {
 	HashChanged(ctx context.Context, operationID string) (<-chan *model.HashEvent, error)
 	MyHashChanged(ctx context.Context, operationIds []string) (<-chan *model.HashEvent, error)
 	HostChanged(ctx context.Context, operationID string) (<-chan *model.HostEvent, error)
-	MinionListenerChanged(ctx context.Context, operationID string) (<-chan *model.MinionListenerEvent, error)
+	MinionListenerChanged(ctx context.Context, operationID *string) (<-chan *model.MinionListenerEvent, error)
 	MinionSessionChanged(ctx context.Context, operationID string) (<-chan *model.MinionSessionEvent, error)
 	MinionTargetChanged(ctx context.Context, operationID string) (<-chan *model.MinionTargetEvent, error)
 	MinionTaskChanged(ctx context.Context, sessionID string) (<-chan *model.MinionTask, error)
 	ModuleLogs(ctx context.Context, instance string, minLevel *model.ModuleLogLevel) (<-chan *model.ModuleLogEvent, error)
 	ModuleChanged(ctx context.Context) (<-chan *model.ModuleEvent, error)
-	OperationalPortChanged(ctx context.Context, operationID string) (<-chan *model.OperationalPortEvent, error)
+	OperationalPortChanged(ctx context.Context, operationID *string) (<-chan *model.OperationalPortEvent, error)
 	MySessionChanged(ctx context.Context) (<-chan *model.SessionEvent, error)
 	SessionChanged(ctx context.Context, userID *string) (<-chan *model.SessionEvent, error)
 	SkillChanged(ctx context.Context) (<-chan *model.SkillEvent, error)
 	TaskChanged(ctx context.Context, operationID string) (<-chan *model.TaskEvent, error)
 	TimelineEventAdded(ctx context.Context, operationID string) (<-chan *models.OperationEvent, error)
-	VpnTunnelChanged(ctx context.Context, operationID string) (<-chan *model.VPNTunnelEvent, error)
+	VpnTunnelChanged(ctx context.Context, operationID *string) (<-chan *model.VPNTunnelEvent, error)
 	WikiDocumentChanged(ctx context.Context, operationID string) (<-chan *model.WikiDocumentEvent, error)
 	WikiDocumentPresenceChanged(ctx context.Context, operationID string) (<-chan *model.WikiDocumentPresenceEvent, error)
 }
@@ -6296,6 +6302,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionListener.OpenedByName(childComplexity), true
+	case "MinionListener.operationId":
+		if e.ComplexityRoot.MinionListener.OperationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.OperationID(childComplexity), true
+	case "MinionListener.operationName":
+		if e.ComplexityRoot.MinionListener.OperationName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.OperationName(childComplexity), true
 	case "MinionListener.sessionId":
 		if e.ComplexityRoot.MinionListener.SessionID == nil {
 			break
@@ -10967,6 +10985,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OperationalPort.OpenedByName(childComplexity), true
+	case "OperationalPort.operationId":
+		if e.ComplexityRoot.OperationalPort.OperationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.OperationID(childComplexity), true
+	case "OperationalPort.operationName":
+		if e.ComplexityRoot.OperationalPort.OperationName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.OperationName(childComplexity), true
 	case "OperationalPort.path":
 		if e.ComplexityRoot.OperationalPort.Path == nil {
 			break
@@ -11488,7 +11518,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MinionListeners(childComplexity, args["operationId"].(string), args["search"].(*string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
+		return e.ComplexityRoot.Query.MinionListeners(childComplexity, args["operationId"].(*string), args["search"].(*string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.minionSession":
 		if e.ComplexityRoot.Query.MinionSession == nil {
 			break
@@ -11815,7 +11845,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.OperationalPorts(childComplexity, args["operationId"].(string), args["search"].(*string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
+		return e.ComplexityRoot.Query.OperationalPorts(childComplexity, args["operationId"].(*string), args["search"].(*string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.operations":
 		if e.ComplexityRoot.Query.Operations == nil {
 			break
@@ -12059,7 +12089,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.VpnTunnels(childComplexity, args["operationId"].(string), args["search"].(*string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
+		return e.ComplexityRoot.Query.VpnTunnels(childComplexity, args["operationId"].(*string), args["search"].(*string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.wikiDocument":
 		if e.ComplexityRoot.Query.WikiDocument == nil {
 			break
@@ -13525,7 +13555,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Subscription.MinionListenerChanged(childComplexity, args["operationId"].(string)), true
+		return e.ComplexityRoot.Subscription.MinionListenerChanged(childComplexity, args["operationId"].(*string)), true
 	case "Subscription.minionSessionChanged":
 		if e.ComplexityRoot.Subscription.MinionSessionChanged == nil {
 			break
@@ -13642,7 +13672,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Subscription.OperationalPortChanged(childComplexity, args["operationId"].(string)), true
+		return e.ComplexityRoot.Subscription.OperationalPortChanged(childComplexity, args["operationId"].(*string)), true
 	case "Subscription.sessionChanged":
 		if e.ComplexityRoot.Subscription.SessionChanged == nil {
 			break
@@ -13698,7 +13728,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Subscription.VpnTunnelChanged(childComplexity, args["operationId"].(string)), true
+		return e.ComplexityRoot.Subscription.VpnTunnelChanged(childComplexity, args["operationId"].(*string)), true
 	case "Subscription.wikiDocumentChanged":
 		if e.ComplexityRoot.Subscription.WikiDocumentChanged == nil {
 			break
@@ -14264,6 +14294,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.VPNTunnel.OpenedByName(childComplexity), true
+	case "VPNTunnel.operationId":
+		if e.ComplexityRoot.VPNTunnel.OperationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.OperationID(childComplexity), true
+	case "VPNTunnel.operationName":
+		if e.ComplexityRoot.VPNTunnel.OperationName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VPNTunnel.OperationName(childComplexity), true
 	case "VPNTunnel.routes":
 		if e.ComplexityRoot.VPNTunnel.Routes == nil {
 			break
@@ -17449,6 +17491,9 @@ extend type Subscription {
 type MinionListener {
   # The task's id: a listener serves one task.
   id: ID!
+  # The operation it is in: a list across operations has each row say it.
+  operationId: ID!
+  operationName: String!
   # Where the minion is to listen, as the task asked (listen 0: any free
   # port), and where it says it does: null until it says.
   bind: String!
@@ -17503,7 +17548,9 @@ type MinionListenerEvent {
 extend type Subscription {
   # An operation's reverse port forwards' listeners as they change. Needs
   # at least viewer.
-  minionListenerChanged(operationId: ID!): MinionListenerEvent!
+  # Without operationId: every operation the caller is a member of, as at
+  # subscribe time.
+  minionListenerChanged(operationId: ID): MinionListenerEvent!
     @hasPermission(permission: "operation:member")
 }
 
@@ -17511,7 +17558,9 @@ extend type Query {
   # An operation's reverse port forwards' listeners, the latest opened
   # first, a page at a time; search matches the port, the session's number,
   # who opened it, where it listens and what to. Needs at least viewer.
-  minionListeners(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): MinionListenerConnection!
+  # Without operationId: every operation the caller is a member of (the
+  # Ports page with no operation), each row saying its own.
+  minionListeners(operationId: ID, search: String, first: Int = 50, after: String, last: Int, before: String): MinionListenerConnection!
     @hasPermission(permission: "operation:member")
 }
 `, BuiltIn: false},
@@ -19730,6 +19779,9 @@ extend type Subscription {
 type OperationalPort {
   # The task's id: a port serves one task.
   id: ID!
+  # The operation it is in: a list across operations has each row say it.
+  operationId: ID!
+  operationName: String!
   port: Int!
   # What core puts in front of it, its task's front: socks (a SOCKS
   # proxy), http (an HTTP proxy), forward (a port forward to to,
@@ -19785,7 +19837,9 @@ type OperationalPortEvent {
 
 extend type Subscription {
   # An operation's operational ports as they change. Needs at least viewer.
-  operationalPortChanged(operationId: ID!): OperationalPortEvent!
+  # Without operationId: every operation the caller is a member of, as at
+  # subscribe time.
+  operationalPortChanged(operationId: ID): OperationalPortEvent!
     @hasPermission(permission: "operation:member")
 }
 
@@ -19793,7 +19847,9 @@ extend type Query {
   # An operation's operational ports in use, the latest opened first, a
   # page at a time; search matches the port, the session's number and who
   # opened it. Needs at least viewer.
-  operationalPorts(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): OperationalPortConnection!
+  # Without operationId: every operation the caller is a member of (the
+  # Ports page with no operation), each row saying its own.
+  operationalPorts(operationId: ID, search: String, first: Int = 50, after: String, last: Int, before: String): OperationalPortConnection!
     @hasPermission(permission: "operation:member")
 }
 `, BuiltIn: false},
@@ -21395,6 +21451,9 @@ extend type Mutation {
 type VPNTunnel {
   # The task's id: a VPN tunnel serves one task.
   id: ID!
+  # The operation it is in: a list across operations has each row say it.
+  operationId: ID!
+  operationName: String!
   # Its networks, CIDRs.
   routes: [String!]!
   sessionId: ID!
@@ -21440,7 +21499,9 @@ type VPNTunnelEvent {
 
 extend type Subscription {
   # An operation's VPN tunnels as they change. Needs at least viewer.
-  vpnTunnelChanged(operationId: ID!): VPNTunnelEvent!
+  # Without operationId: every operation the caller is a member of, as at
+  # subscribe time.
+  vpnTunnelChanged(operationId: ID): VPNTunnelEvent!
     @hasPermission(permission: "operation:member")
 }
 
@@ -21448,7 +21509,9 @@ extend type Query {
   # An operation's VPN tunnels, the latest opened first, a page at a time;
   # search matches the session's number, who opened it and the routes.
   # Needs at least viewer.
-  vpnTunnels(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): VPNTunnelConnection!
+  # Without operationId: every operation the caller is a member of (the
+  # Ports page with no operation), each row saying its own.
+  vpnTunnels(operationId: ID, search: String, first: Int = 50, after: String, last: Int, before: String): VPNTunnelConnection!
     @hasPermission(permission: "operation:member")
 }
 `, BuiltIn: false},
@@ -24471,7 +24534,7 @@ func (ec *executionContext) field_Query_minionIdentities_args(ctx context.Contex
 func (ec *executionContext) field_Query_minionListeners_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalOID2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
@@ -25158,7 +25221,7 @@ func (ec *executionContext) field_Query_operation_args(ctx context.Context, rawA
 func (ec *executionContext) field_Query_operationalPorts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalOID2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
@@ -25688,7 +25751,7 @@ func (ec *executionContext) field_Query_users_args(ctx context.Context, rawArgs 
 func (ec *executionContext) field_Query_vpnTunnels_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalOID2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
@@ -26147,7 +26210,7 @@ func (ec *executionContext) field_Subscription_hostChanged_args(ctx context.Cont
 func (ec *executionContext) field_Subscription_minionListenerChanged_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalOID2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
@@ -26251,7 +26314,7 @@ func (ec *executionContext) field_Subscription_operationMemberChanged_args(ctx c
 func (ec *executionContext) field_Subscription_operationalPortChanged_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalOID2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
@@ -26295,7 +26358,7 @@ func (ec *executionContext) field_Subscription_timelineEventAdded_args(ctx conte
 func (ec *executionContext) field_Subscription_vpnTunnelChanged_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalOID2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
@@ -43844,6 +43907,64 @@ func (ec *executionContext) fieldContext_MinionListener_id(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionListener_operationId(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_operationId,
+		func(ctx context.Context) (any, error) {
+			return obj.OperationID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_operationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_operationName(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_operationName,
+		func(ctx context.Context) (any, error) {
+			return obj.OperationName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_operationName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionListener_bind(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -44437,6 +44558,10 @@ func (ec *executionContext) fieldContext_MinionListenerEdge_node(_ context.Conte
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionListener_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionListener_operationId(ctx, field)
+			case "operationName":
+				return ec.fieldContext_MinionListener_operationName(ctx, field)
 			case "bind":
 				return ec.fieldContext_MinionListener_bind(ctx, field)
 			case "listen":
@@ -44618,6 +44743,10 @@ func (ec *executionContext) fieldContext_MinionListenerEvent_listener(_ context.
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionListener_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionListener_operationId(ctx, field)
+			case "operationName":
+				return ec.fieldContext_MinionListener_operationName(ctx, field)
 			case "bind":
 				return ec.fieldContext_MinionListener_bind(ctx, field)
 			case "listen":
@@ -73907,6 +74036,64 @@ func (ec *executionContext) fieldContext_OperationalPort_id(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _OperationalPort_operationId(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_operationId,
+		func(ctx context.Context) (any, error) {
+			return obj.OperationID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_operationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_operationName(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_operationName,
+		func(ctx context.Context) (any, error) {
+			return obj.OperationName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_operationName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _OperationalPort_port(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -74500,6 +74687,10 @@ func (ec *executionContext) fieldContext_OperationalPortEdge_node(_ context.Cont
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_OperationalPort_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_OperationalPort_operationId(ctx, field)
+			case "operationName":
+				return ec.fieldContext_OperationalPort_operationName(ctx, field)
 			case "port":
 				return ec.fieldContext_OperationalPort_port(ctx, field)
 			case "front":
@@ -74681,6 +74872,10 @@ func (ec *executionContext) fieldContext_OperationalPortEvent_port(_ context.Con
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_OperationalPort_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_OperationalPort_operationId(ctx, field)
+			case "operationName":
+				return ec.fieldContext_OperationalPort_operationName(ctx, field)
 			case "port":
 				return ec.fieldContext_OperationalPort_port(ctx, field)
 			case "front":
@@ -78078,7 +78273,7 @@ func (ec *executionContext) _Query_minionListeners(ctx context.Context, field gr
 		ec.fieldContext_Query_minionListeners,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MinionListeners(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+			return ec.Resolvers.Query().MinionListeners(ctx, fc.Args["operationId"].(*string), fc.Args["search"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -80125,7 +80320,7 @@ func (ec *executionContext) _Query_operationalPorts(ctx context.Context, field g
 		ec.fieldContext_Query_operationalPorts,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().OperationalPorts(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+			return ec.Resolvers.Query().OperationalPorts(ctx, fc.Args["operationId"].(*string), fc.Args["search"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -81615,7 +81810,7 @@ func (ec *executionContext) _Query_vpnTunnels(ctx context.Context, field graphql
 		ec.fieldContext_Query_vpnTunnels,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().VpnTunnels(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+			return ec.Resolvers.Query().VpnTunnels(ctx, fc.Args["operationId"].(*string), fc.Args["search"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -90321,7 +90516,7 @@ func (ec *executionContext) _Subscription_minionListenerChanged(ctx context.Cont
 		ec.fieldContext_Subscription_minionListenerChanged,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Subscription().MinionListenerChanged(ctx, fc.Args["operationId"].(string))
+			return ec.Resolvers.Subscription().MinionListenerChanged(ctx, fc.Args["operationId"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -90833,7 +91028,7 @@ func (ec *executionContext) _Subscription_operationalPortChanged(ctx context.Con
 		ec.fieldContext_Subscription_operationalPortChanged,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Subscription().OperationalPortChanged(ctx, fc.Args["operationId"].(string))
+			return ec.Resolvers.Subscription().OperationalPortChanged(ctx, fc.Args["operationId"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -91235,7 +91430,7 @@ func (ec *executionContext) _Subscription_vpnTunnelChanged(ctx context.Context, 
 		ec.fieldContext_Subscription_vpnTunnelChanged,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Subscription().VpnTunnelChanged(ctx, fc.Args["operationId"].(string))
+			return ec.Resolvers.Subscription().VpnTunnelChanged(ctx, fc.Args["operationId"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -94348,6 +94543,64 @@ func (ec *executionContext) fieldContext_VPNTunnel_id(_ context.Context, field g
 	return fc, nil
 }
 
+func (ec *executionContext) _VPNTunnel_operationId(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_operationId,
+		func(ctx context.Context) (any, error) {
+			return obj.OperationID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_operationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VPNTunnel_operationName(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_VPNTunnel_operationName,
+		func(ctx context.Context) (any, error) {
+			return obj.OperationName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_VPNTunnel_operationName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VPNTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _VPNTunnel_routes(ctx context.Context, field graphql.CollectedField, obj *model.VPNTunnel) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -94825,6 +95078,10 @@ func (ec *executionContext) fieldContext_VPNTunnelEdge_node(_ context.Context, f
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_VPNTunnel_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_VPNTunnel_operationId(ctx, field)
+			case "operationName":
+				return ec.fieldContext_VPNTunnel_operationName(ctx, field)
 			case "routes":
 				return ec.fieldContext_VPNTunnel_routes(ctx, field)
 			case "sessionId":
@@ -94998,6 +95255,10 @@ func (ec *executionContext) fieldContext_VPNTunnelEvent_tunnel(_ context.Context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_VPNTunnel_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_VPNTunnel_operationId(ctx, field)
+			case "operationName":
+				return ec.fieldContext_VPNTunnel_operationName(ctx, field)
 			case "routes":
 				return ec.fieldContext_VPNTunnel_routes(ctx, field)
 			case "sessionId":
@@ -109640,6 +109901,16 @@ func (ec *executionContext) _MinionListener(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "operationId":
+			out.Values[i] = ec._MinionListener_operationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "operationName":
+			out.Values[i] = ec._MinionListener_operationName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "bind":
 			out.Values[i] = ec._MinionListener_bind(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -115728,6 +115999,16 @@ func (ec *executionContext) _OperationalPort(ctx context.Context, sel ast.Select
 			out.Values[i] = graphql.MarshalString("OperationalPort")
 		case "id":
 			out.Values[i] = ec._OperationalPort_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "operationId":
+			out.Values[i] = ec._OperationalPort_operationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "operationName":
+			out.Values[i] = ec._OperationalPort_operationName(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -122483,6 +122764,16 @@ func (ec *executionContext) _VPNTunnel(ctx context.Context, sel ast.SelectionSet
 			out.Values[i] = graphql.MarshalString("VPNTunnel")
 		case "id":
 			out.Values[i] = ec._VPNTunnel_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "operationId":
+			out.Values[i] = ec._VPNTunnel_operationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "operationName":
+			out.Values[i] = ec._VPNTunnel_operationName(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

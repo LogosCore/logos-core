@@ -15,7 +15,8 @@ import {
 // operation's listener events (lib/live-lists).
 
 export interface ListenerListParams {
-  operationId: string
+  /** null: every operation the caller is a member of. */
+  operationId: string | null
   search: string
 }
 
@@ -52,7 +53,7 @@ export function useMinionListeners(params: ListenerListParams) {
  * where it belongs (a refresh), one whose minion said where it listens or
  * whose streams' numbers changed is patched in place, one closed goes.
  */
-export function useMinionListenersSubscription(operationId: string) {
+export function useMinionListenersSubscription(operationId: string | null) {
   const queryClient = useQueryClient()
   useSubscription(
     MinionListenerChangedDocument,

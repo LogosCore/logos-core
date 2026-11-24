@@ -7,6 +7,8 @@ import { graphql } from "@/graphql/gql"
 export const MinionListenerFields = graphql(`
   fragment MinionListenerFields on MinionListener {
     id
+    operationId
+    operationName
     bind
     listen
     bound
@@ -27,7 +29,7 @@ export const MinionListenerFields = graphql(`
 `)
 
 export const MinionListenersQuery = graphql(`
-  query MinionListeners($operationId: ID!, $search: String, $first: Int, $after: String) {
+  query MinionListeners($operationId: ID, $search: String, $first: Int, $after: String) {
     minionListeners(operationId: $operationId, search: $search, first: $first, after: $after) {
       edges {
         node {
@@ -45,7 +47,7 @@ export const MinionListenersQuery = graphql(`
 `)
 
 export const MinionListenerChangedSubscription = graphql(`
-  subscription MinionListenerChanged($operationId: ID!) {
+  subscription MinionListenerChanged($operationId: ID) {
     minionListenerChanged(operationId: $operationId) {
       action
       id

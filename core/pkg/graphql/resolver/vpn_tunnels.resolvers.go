@@ -13,17 +13,17 @@ import (
 )
 
 // VpnTunnels is the resolver for the vpnTunnels field.
-func (r *queryResolver) VpnTunnels(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.VPNTunnelConnection, error) {
+func (r *queryResolver) VpnTunnels(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.VPNTunnelConnection, error) {
 	return r.MinionTaskResolver.VPNTunnels(ctx, operationID, search, first, after, last, before)
 }
 
 // VpnTunnelChanged is the resolver for the vpnTunnelChanged field.
-func (r *subscriptionResolver) VpnTunnelChanged(ctx context.Context, operationID string) (<-chan *model.VPNTunnelEvent, error) {
+func (r *subscriptionResolver) VpnTunnelChanged(ctx context.Context, operationID *string) (<-chan *model.VPNTunnelEvent, error) {
 	auth, err := subscriberAuth(ctx)
 	if err != nil {
 		return nil, err
 	}
-	filter, err := r.buildOperationFilter(ctx, auth, &operationID)
+	filter, err := r.buildOperationFilter(ctx, auth, operationID)
 	if err != nil {
 		return nil, err
 	}

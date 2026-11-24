@@ -379,10 +379,28 @@ func tunnelStreamModel(s *models.MinionTunnelStream) *model.MinionTunnelStream {
 	return m
 }
 
-// OperationalPorts is a page of an operation's operational ports in use,
-// for a member of it: each one's task's tunnel as it is now.
-func (r *minionTaskResolver) OperationalPorts(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error) {
-	opID, err := uuid.Parse(operationID)
+// portOperations are the operations a Ports list covers: the one named,
+// for a viewer of it at least; none named, every operation the caller is a
+// member of (the Ports page with no operation, as Findings without one).
+// Its rows say their operation.
+func (r *minionTaskResolver) portOperations(ctx context.Context, operationID *string) ([]uuid.UUID, error) {
+	if operationID == nil || *operationID == "" {
+		uid, err := uuid.Parse(gqlctx.AuthFromContext(ctx).UserID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid caller ID: %w", err)
+		}
+		ops, err := r.operationRepo.FindByMemberID(ctx, uid)
+		if err != nil {
+			return nil, fmt.Errorf("list the caller's operations: %w", err)
+		}
+		gqlctx.PrimeOperations(ctx, ops)
+		ids := make([]uuid.UUID, len(ops))
+		for i := range ops {
+			ids[i] = ops[i].OperationID
+		}
+		return ids, nil
+	}
+	opID, err := uuid.Parse(*operationID)
 	if err != nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid operation ID")
 	}
@@ -391,6 +409,31 @@ func (r *minionTaskResolver) OperationalPorts(ctx context.Context, operationID s
 		return nil, fmt.Errorf("operation not found: %w", err)
 	}
 	if err := authorization.AuthorizeOperationRole(ctx, &op, models.OperationRoleViewer); err != nil {
+		return nil, err
+	}
+	return []uuid.UUID{opID}, nil
+}
+
+// operationName is the name of a Ports row's operation, from the
+// request's operation cache (portOperations fills it for a page); "" for
+// one that cannot be read, or without operations to read.
+func (r *minionTaskResolver) operationName(ctx context.Context, id uuid.UUID) string {
+	if r.operationRepo == nil {
+		return ""
+	}
+	op, err := gqlctx.LoadOperation(ctx, r.operationRepo, id)
+	if err != nil {
+		return ""
+	}
+	return op.Name
+}
+
+// OperationalPorts is a page of the operational ports in use of an
+// operation, or of every operation the caller is a member of
+// (portOperations): each one's task's tunnel as it is now.
+func (r *minionTaskResolver) OperationalPorts(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error) {
+	opIDs, err := r.portOperations(ctx, operationID)
+	if err != nil {
 		return nil, err
 	}
 	empty := &model.OperationalPortConnection{Edges: []*model.OperationalPortEdge{}, PageInfo: &pagination.PageInfo{}}
@@ -405,30 +448,30 @@ func (r *minionTaskResolver) OperationalPorts(ctx context.Context, operationID s
 	if search != nil {
 		q = strings.TrimSpace(*search)
 	}
-	total, err := r.tunnels.CountPorts(ctx, opID, q)
+	total, err := r.tunnels.CountPorts(ctx, opIDs, q)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.tunnels.Ports(ctx, opID, q, args.Cursor, args.Limit+1, args.Forward)
+	rows, err := r.tunnels.Ports(ctx, opIDs, q, args.Cursor, args.Limit+1, args.Forward)
 	if err != nil {
 		return nil, err
 	}
 	edges, pageInfo := pagination.BuildEdges(rows, args,
 		func(p *models.OperationalPort) string { return repository.OperationalPortCursor(p) },
 		func(p *models.OperationalPort, cursor string) *model.OperationalPortEdge {
-			return &model.OperationalPortEdge{Node: r.portModel(p), Cursor: cursor}
+			return &model.OperationalPortEdge{Node: r.portModel(ctx, p), Cursor: cursor}
 		})
 	return &model.OperationalPortConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
 }
 
 // portModel is a port as GraphQL has it: its task's tunnel as it is now.
-func (r *minionTaskResolver) portModel(p *models.OperationalPort) *model.OperationalPort {
+func (r *minionTaskResolver) portModel(ctx context.Context, p *models.OperationalPort) *model.OperationalPort {
 	var to *string
 	if p.Host != "" {
 		dest := net.JoinHostPort(p.Host, strconv.Itoa(p.HostPort))
 		to = &dest
 	}
-	node := &model.OperationalPort{ID: p.TaskID.String(), Port: p.Port, Front: p.Purpose, To: to, Path: strPtr(p.Path), Program: strPtr(p.Program), Address: strPtr(r.tunnels.Address()),
+	node := &model.OperationalPort{ID: p.TaskID.String(), OperationID: p.OperationID.String(), OperationName: r.operationName(ctx, p.OperationID), Port: p.Port, Front: p.Purpose, To: to, Path: strPtr(p.Path), Program: strPtr(p.Program), Address: strPtr(r.tunnels.Address()),
 		SessionID: p.SessionID.String(), SessionNumber: p.SessionNumber, TaskID: p.TaskID.String(), OpenedBy: p.OpenedBy.String(),
 		OpenedByName: strPtr(p.OpenedByName), OpenedAt: p.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(p.Opened)}
 	if sum, ok := r.tunnels.Summary(p.TaskID); ok {
@@ -447,18 +490,12 @@ func stopsAt(sum miniontunnels.Summary) *time.Time {
 	return &sum.StopsAt
 }
 
-// MinionListeners is a page of an operation's reverse port forwards'
-// listeners, for a member of it: each one's task's tunnel as it is now.
-func (r *minionTaskResolver) MinionListeners(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error) {
-	opID, err := uuid.Parse(operationID)
+// MinionListeners is a page of the reverse port forwards' listeners of an
+// operation, or of every operation the caller is a member of
+// (portOperations): each one's task's tunnel as it is now.
+func (r *minionTaskResolver) MinionListeners(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error) {
+	opIDs, err := r.portOperations(ctx, operationID)
 	if err != nil {
-		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid operation ID")
-	}
-	op, err := gqlctx.LoadOperation(ctx, r.operationRepo, opID)
-	if err != nil {
-		return nil, fmt.Errorf("operation not found: %w", err)
-	}
-	if err := authorization.AuthorizeOperationRole(ctx, &op, models.OperationRoleViewer); err != nil {
 		return nil, err
 	}
 	empty := &model.MinionListenerConnection{Edges: []*model.MinionListenerEdge{}, PageInfo: &pagination.PageInfo{}}
@@ -473,25 +510,25 @@ func (r *minionTaskResolver) MinionListeners(ctx context.Context, operationID st
 	if search != nil {
 		q = strings.TrimSpace(*search)
 	}
-	total, err := r.tunnels.CountListeners(ctx, opID, q)
+	total, err := r.tunnels.CountListeners(ctx, opIDs, q)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.tunnels.Listeners(ctx, opID, q, args.Cursor, args.Limit+1, args.Forward)
+	rows, err := r.tunnels.Listeners(ctx, opIDs, q, args.Cursor, args.Limit+1, args.Forward)
 	if err != nil {
 		return nil, err
 	}
 	edges, pageInfo := pagination.BuildEdges(rows, args,
 		func(l *models.MinionListener) string { return repository.MinionListenerCursor(l) },
 		func(l *models.MinionListener, cursor string) *model.MinionListenerEdge {
-			return &model.MinionListenerEdge{Node: r.listenerModel(l), Cursor: cursor}
+			return &model.MinionListenerEdge{Node: r.listenerModel(ctx, l), Cursor: cursor}
 		})
 	return &model.MinionListenerConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
 }
 
 // listenerModel is a listener as GraphQL has it: its task's tunnel as it is
 // now.
-func (r *minionTaskResolver) listenerModel(l *models.MinionListener) *model.MinionListener {
+func (r *minionTaskResolver) listenerModel(ctx context.Context, l *models.MinionListener) *model.MinionListener {
 	var to *string
 	if l.Host != "" {
 		dest := net.JoinHostPort(l.Host, strconv.Itoa(l.HostPort))
@@ -501,7 +538,7 @@ func (r *minionTaskResolver) listenerModel(l *models.MinionListener) *model.Mini
 	if front == "" {
 		front = protocol.FrontForward
 	}
-	node := &model.MinionListener{ID: l.TaskID.String(), Bind: l.Bind, Listen: l.Listen, Bound: strPtr(l.Bound), UDP: l.UDP, Front: front,
+	node := &model.MinionListener{ID: l.TaskID.String(), OperationID: l.OperationID.String(), OperationName: r.operationName(ctx, l.OperationID), Bind: l.Bind, Listen: l.Listen, Bound: strPtr(l.Bound), UDP: l.UDP, Front: front,
 		To: to, SessionID: l.SessionID.String(), SessionNumber: l.SessionNumber,
 		TaskID: l.TaskID.String(), OpenedBy: l.OpenedBy.String(), OpenedByName: strPtr(l.OpenedByName),
 		OpenedAt: l.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(l.Opened)}
@@ -528,7 +565,7 @@ func (r *minionTaskResolver) LoadListener(ctx context.Context, taskID string) *m
 	if err != nil {
 		return nil
 	}
-	return r.listenerModel(l)
+	return r.listenerModel(ctx, l)
 }
 
 // LoadPort is a task's port as GraphQL has it, for a subscriber (whose
@@ -542,21 +579,15 @@ func (r *minionTaskResolver) LoadPort(ctx context.Context, taskID string) *model
 	if err != nil {
 		return nil
 	}
-	return r.portModel(p)
+	return r.portModel(ctx, p)
 }
 
-// VPNTunnels is a page of an operation's VPN tunnels, for a member of it:
-// each one's task's tunnel as it is now.
-func (r *minionTaskResolver) VPNTunnels(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.VPNTunnelConnection, error) {
-	opID, err := uuid.Parse(operationID)
+// VPNTunnels is a page of the VPN tunnels of an operation, or of every
+// operation the caller is a member of (portOperations): each one's task's
+// tunnel as it is now.
+func (r *minionTaskResolver) VPNTunnels(ctx context.Context, operationID *string, search *string, first *int, after *string, last *int, before *string) (*model.VPNTunnelConnection, error) {
+	opIDs, err := r.portOperations(ctx, operationID)
 	if err != nil {
-		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid operation ID")
-	}
-	op, err := gqlctx.LoadOperation(ctx, r.operationRepo, opID)
-	if err != nil {
-		return nil, fmt.Errorf("operation not found: %w", err)
-	}
-	if err := authorization.AuthorizeOperationRole(ctx, &op, models.OperationRoleViewer); err != nil {
 		return nil, err
 	}
 	empty := &model.VPNTunnelConnection{Edges: []*model.VPNTunnelEdge{}, PageInfo: &pagination.PageInfo{}}
@@ -571,26 +602,26 @@ func (r *minionTaskResolver) VPNTunnels(ctx context.Context, operationID string,
 	if search != nil {
 		q = strings.TrimSpace(*search)
 	}
-	total, err := r.tunnels.CountVPNTunnels(ctx, opID, q)
+	total, err := r.tunnels.CountVPNTunnels(ctx, opIDs, q)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.tunnels.VPNTunnels(ctx, opID, q, args.Cursor, args.Limit+1, args.Forward)
+	rows, err := r.tunnels.VPNTunnels(ctx, opIDs, q, args.Cursor, args.Limit+1, args.Forward)
 	if err != nil {
 		return nil, err
 	}
 	edges, pageInfo := pagination.BuildEdges(rows, args,
 		func(v *models.VPNTunnel) string { return repository.VPNTunnelCursor(v) },
 		func(v *models.VPNTunnel, cursor string) *model.VPNTunnelEdge {
-			return &model.VPNTunnelEdge{Node: r.vpnTunnelModel(v), Cursor: cursor}
+			return &model.VPNTunnelEdge{Node: r.vpnTunnelModel(ctx, v), Cursor: cursor}
 		})
 	return &model.VPNTunnelConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
 }
 
 // vpnTunnelModel is a VPN tunnel as GraphQL has it: its task's tunnel as
 // it is now.
-func (r *minionTaskResolver) vpnTunnelModel(v *models.VPNTunnel) *model.VPNTunnel {
-	node := &model.VPNTunnel{ID: v.TaskID.String(), Routes: v.Routes, SessionID: v.SessionID.String(), SessionNumber: v.SessionNumber,
+func (r *minionTaskResolver) vpnTunnelModel(ctx context.Context, v *models.VPNTunnel) *model.VPNTunnel {
+	node := &model.VPNTunnel{ID: v.TaskID.String(), OperationID: v.OperationID.String(), OperationName: r.operationName(ctx, v.OperationID), Routes: v.Routes, SessionID: v.SessionID.String(), SessionNumber: v.SessionNumber,
 		TaskID: v.TaskID.String(), OpenedBy: v.OpenedBy.String(), OpenedByName: strPtr(v.OpenedByName),
 		OpenedAt: v.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(v.Opened)}
 	if node.Routes == nil {
@@ -618,7 +649,7 @@ func (r *minionTaskResolver) LoadVPNTunnel(ctx context.Context, taskID string) *
 	if err != nil {
 		return nil
 	}
-	return r.vpnTunnelModel(v)
+	return r.vpnTunnelModel(ctx, v)
 }
 
 // desktopLogin is the credential a desktop's args name (its login), as

@@ -751,14 +751,14 @@ func (s *Service) Port(ctx context.Context, task uuid.UUID) (*models.Operational
 	return s.ports.FindByTaskID(ctx, task)
 }
 
-// Ports is a page of the operation's ports in use, the latest opened
+// Ports is a page of the operations' ports in use, the latest opened
 // first; CountPorts counts them.
-func (s *Service) Ports(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.OperationalPort, error) {
-	return s.ports.FindByOperationIDWithCursor(ctx, operationID, search, cursor, limit, forward)
+func (s *Service) Ports(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.OperationalPort, error) {
+	return s.ports.FindByOperationIDsWithCursor(ctx, operationIDs, search, cursor, limit, forward)
 }
 
-func (s *Service) CountPorts(ctx context.Context, operationID uuid.UUID, search string) (int64, error) {
-	return s.ports.CountByOperationID(ctx, operationID, search)
+func (s *Service) CountPorts(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error) {
+	return s.ports.CountByOperationIDs(ctx, operationIDs, search)
 }
 
 // wake tells the waker the session has tunnel items, without waiting.

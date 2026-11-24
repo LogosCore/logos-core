@@ -2,7 +2,6 @@ import { useState } from "react"
 import { EthernetPortIcon, NetworkIcon, SearchXIcon, ServerIcon } from "lucide-react"
 import { SearchInput } from "@/components/ui/search-input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { ListenersTable } from "@/components/ports/listeners-table"
 import { PortsTable } from "@/components/ports/ports-table"
 import { VPNTunnelsTable } from "@/components/ports/vpn-tunnels-table"
@@ -14,7 +13,9 @@ import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 
 /**
- * The scoped operation's ports in use (docs:
+ * The ports in use of the scoped operation, or with none scoped of every
+ * operation the user is a member of, each row saying its operation (as
+ * Findings without an operation) (docs:
  * contracts/minion-messages/tunnels.md): core's operational ports, which
  * its tunnel tasks' SOCKS proxies and port forwards listen on, and the
  * ports its reverse port forwards' minions listen on, each until its task
@@ -27,13 +28,17 @@ export function PortsPage() {
     title: scopedOperation ? `Ports · ${scopedOperation.name}` : "Ports",
     icon: { kind: "lucide", component: EthernetPortIcon },
   })
-  if (!scopedOperation) return <GettingStartedPanel />
-  return <PortsPageInner operationId={scopedOperation.id} />
+  // A list each scope: its search and tab start afresh with it.
+  return <PortsPageInner key={scopedOperation?.id ?? "all"} operationId={scopedOperation?.id ?? null} />
 }
 
 type Tab = "core" | "minions" | "vpns"
 
-function PortsPageInner({ operationId }: { operationId: string }) {
+/** operationId null: every operation the user is a member of. */
+function PortsPageInner({ operationId }: { operationId: string | null }) {
+  const all = operationId === null
+  // How an empty list names where it looked.
+  const where = all ? "in your operations" : "in this operation"
   // The server searches both lists (see the operationalPorts and
   // minionListeners queries).
   const [search, setSearch] = useState("")
@@ -93,13 +98,14 @@ function PortsPageInner({ operationId }: { operationId: string }) {
               isFetchingNextPage={portsQ.isFetchingNextPage}
               hasNextPage={portsQ.hasNextPage}
               fetchNextPage={() => void portsQ.fetchNextPage()}
+              showOperation={all}
               emptyState={
                 q !== "" ? (
                   noMatch
                 ) : (
                   <>
                     <EthernetPortIcon className="size-8 opacity-50" />
-                    <p className="text-sm">No port of core&apos;s in use in this operation.</p>
+                    <p className="text-sm">No port of core&apos;s in use {where}.</p>
                     <p className="max-w-md text-center text-xs">
                       A SOCKS proxy or a port forward task on a session takes one of core&apos;s operational ports while it
                       runs: what a tool reaches through it, the session&apos;s minion connects to from its host.
@@ -120,13 +126,14 @@ function PortsPageInner({ operationId }: { operationId: string }) {
               isFetchingNextPage={listenersQ.isFetchingNextPage}
               hasNextPage={listenersQ.hasNextPage}
               fetchNextPage={() => void listenersQ.fetchNextPage()}
+              showOperation={all}
               emptyState={
                 q !== "" ? (
                   noMatch
                 ) : (
                   <>
                     <ServerIcon className="size-8 opacity-50" />
-                    <p className="text-sm">No minion listens for this operation.</p>
+                    <p className="text-sm">No minion listens {all ? "for your operations" : "for this operation"}.</p>
                     <p className="max-w-md text-center text-xs">
                       A reverse port forward task on a session has its minion listen on its host while it runs: core
                       connects each connection that comes there to the task&apos;s destination, from core&apos;s network.
@@ -147,13 +154,14 @@ function PortsPageInner({ operationId }: { operationId: string }) {
               isFetchingNextPage={vpnsQ.isFetchingNextPage}
               hasNextPage={vpnsQ.hasNextPage}
               fetchNextPage={() => void vpnsQ.fetchNextPage()}
+              showOperation={all}
               emptyState={
                 q !== "" ? (
                   noMatch
                 ) : (
                   <>
                     <NetworkIcon className="size-8 opacity-50" />
-                    <p className="text-sm">No VPN in this operation.</p>
+                    <p className="text-sm">No VPN {where}.</p>
                     <p className="max-w-md text-center text-xs">
                       A tunnel task whose front is VPN routes operators&apos; machines into its networks while it runs:
                       each machine runs logos-vpn, and what it reaches there, the session&apos;s minion connects to from

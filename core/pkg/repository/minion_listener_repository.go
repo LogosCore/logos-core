@@ -22,10 +22,10 @@ type IMinionListenerRepository interface {
 	Insert(ctx context.Context, l *models.MinionListener) error
 	// All is every listener kept, to take up again after a restart.
 	All(ctx context.Context) ([]models.MinionListener, error)
-	// FindByOperationIDWithCursor is a page of the operation's listeners,
+	// FindByOperationIDsWithCursor is a page of the operations' listeners,
 	// the latest opened first; search matches SearchText.
-	FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionListener, error)
-	CountByOperationID(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
+	FindByOperationIDsWithCursor(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionListener, error)
+	CountByOperationIDs(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error)
 	// FindByTaskID is the task's listener; IsNotFound for none.
 	FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.MinionListener, error)
 	// SetBound keeps where the minion says it listens.
@@ -72,20 +72,20 @@ func MinionListenerCursor(l *models.MinionListener) string {
 	return pagination.EncodeCursor(l.CreateAt, l.Id)
 }
 
-func minionListenerFilter(operationID uuid.UUID, search string) bson.M {
-	q := bson.M{"operation_id": operationID}
+func minionListenerFilter(operationIDs []uuid.UUID, search string) bson.M {
+	q := bson.M{"operation_id": bson.M{"$in": operationIDs}}
 	if search = strings.TrimSpace(search); search != "" {
 		q["search_text"] = bson.M{"$regex": searchPattern(search), "$options": "i"}
 	}
 	return q
 }
 
-func (r *minionListenerRepository) FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionListener, error) {
+func (r *minionListenerRepository) FindByOperationIDsWithCursor(ctx context.Context, operationIDs []uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionListener, error) {
 	if err := minionListenerListSort.ValidateCursor(cursor); err != nil {
 		return nil, err
 	}
 	out := []models.MinionListener{}
-	err := r.coll.Find(ctx, pagination.ApplyCursorFilterKey(minionListenerFilter(operationID, search), cursor, forward, minionListenerListSort)).
+	err := r.coll.Find(ctx, pagination.ApplyCursorFilterKey(minionListenerFilter(operationIDs, search), cursor, forward, minionListenerListSort)).
 		Sort(pagination.SortFieldsKey(forward, minionListenerListSort)...).Limit(limit).All(&out)
 	if err != nil {
 		return nil, err
@@ -96,8 +96,8 @@ func (r *minionListenerRepository) FindByOperationIDWithCursor(ctx context.Conte
 	return out, nil
 }
 
-func (r *minionListenerRepository) CountByOperationID(ctx context.Context, operationID uuid.UUID, search string) (int64, error) {
-	return r.coll.Find(ctx, minionListenerFilter(operationID, search)).Count()
+func (r *minionListenerRepository) CountByOperationIDs(ctx context.Context, operationIDs []uuid.UUID, search string) (int64, error) {
+	return r.coll.Find(ctx, minionListenerFilter(operationIDs, search)).Count()
 }
 
 func (r *minionListenerRepository) FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.MinionListener, error) {

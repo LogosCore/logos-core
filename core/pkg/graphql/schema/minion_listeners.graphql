@@ -5,6 +5,9 @@
 type MinionListener {
   # The task's id: a listener serves one task.
   id: ID!
+  # The operation it is in: a list across operations has each row say it.
+  operationId: ID!
+  operationName: String!
   # Where the minion is to listen, as the task asked (listen 0: any free
   # port), and where it says it does: null until it says.
   bind: String!
@@ -59,7 +62,9 @@ type MinionListenerEvent {
 extend type Subscription {
   # An operation's reverse port forwards' listeners as they change. Needs
   # at least viewer.
-  minionListenerChanged(operationId: ID!): MinionListenerEvent!
+  # Without operationId: every operation the caller is a member of, as at
+  # subscribe time.
+  minionListenerChanged(operationId: ID): MinionListenerEvent!
     @hasPermission(permission: "operation:member")
 }
 
@@ -67,6 +72,8 @@ extend type Query {
   # An operation's reverse port forwards' listeners, the latest opened
   # first, a page at a time; search matches the port, the session's number,
   # who opened it, where it listens and what to. Needs at least viewer.
-  minionListeners(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): MinionListenerConnection!
+  # Without operationId: every operation the caller is a member of (the
+  # Ports page with no operation), each row saying its own.
+  minionListeners(operationId: ID, search: String, first: Int = 50, after: String, last: Int, before: String): MinionListenerConnection!
     @hasPermission(permission: "operation:member")
 }

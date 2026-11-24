@@ -77,6 +77,8 @@ export function OperationSwitcher() {
             <div
               role="button"
               tabIndex={0}
+              aria-label={`Leave ${scopedOperation.name}`}
+              title="Leave the operation: no operation"
               onClick={(e) => {
                 e.stopPropagation();
                 unscopeOperation();

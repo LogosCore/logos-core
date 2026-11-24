@@ -48,11 +48,11 @@ func (f *fakeVPNTunnels) All(context.Context) ([]models.VPNTunnel, error) {
 	return out, nil
 }
 
-func (f *fakeVPNTunnels) FindByOperationIDWithCursor(ctx context.Context, _ uuid.UUID, _ string, _ *pagination.Cursor, _ int64, _ bool) ([]models.VPNTunnel, error) {
+func (f *fakeVPNTunnels) FindByOperationIDsWithCursor(ctx context.Context, _ []uuid.UUID, _ string, _ *pagination.Cursor, _ int64, _ bool) ([]models.VPNTunnel, error) {
 	return f.All(ctx)
 }
 
-func (f *fakeVPNTunnels) CountByOperationID(ctx context.Context, _ uuid.UUID, _ string) (int64, error) {
+func (f *fakeVPNTunnels) CountByOperationIDs(ctx context.Context, _ []uuid.UUID, _ string) (int64, error) {
 	all, err := f.All(ctx)
 	return int64(len(all)), err
 }
