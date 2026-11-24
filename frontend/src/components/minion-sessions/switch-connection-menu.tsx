@@ -1,7 +1,7 @@
 import { ArrowRightLeftIcon, CheckIcon } from "lucide-react"
 import { ContextMenuItem, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger } from "@/components/ui/context-menu"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
-import { choiceDetail } from "./connection-choices"
+import { choiceDetail, choiceTitle } from "./connection-choices"
 import { useSessionConnectionChoices, useSwitchConnection } from "./use-connection-choices"
 
 // Switch connection in a session row's menu: the session's connections, the
@@ -43,7 +43,7 @@ function Connections({ s }: { s: MinionSessionFieldsFragment }) {
     >
       {c.inUse ? <CheckIcon /> : <span className="size-4" />}
       <span className="flex min-w-0 flex-col">
-        <span className="font-mono">{c.name}</span>
+        <span className="font-mono">{choiceTitle(c)}</span>
         <span className="truncate text-xs text-muted-foreground">{choiceDetail(c)}</span>
       </span>
     </ContextMenuItem>

@@ -41,13 +41,13 @@ func TestPutConnections(t *testing.T) {
 		return wire
 	}
 
-	wire := args(map[string]any{"channel": "http", "kind": protocol.KindReverseCall, "name": "front",
+	wire := args(map[string]any{"channel": "http", "kind": protocol.KindReverseCall,
 		"params": map[string]any{"url": "https://a.example"}})
 	if err := r.putConnections(context.Background(), s, "", params, wire); err != nil {
 		t.Fatal(err)
 	}
 	c, ok := wire["conn"].(protocol.HelloConnection)
-	if !ok || c.Channel != "http" || c.Name != "front" || c.Version != 3 || c.Params[1] != "https://a.example" ||
+	if !ok || c.Channel != "http" || c.Version != 3 || c.Params[1] != "https://a.example" ||
 		c.Params[2] != uint64(30000) || c.Values[1] != "POST" {
 		t.Fatalf("the arg: %#v", wire["conn"])
 	}
@@ -55,6 +55,11 @@ func TestPutConnections(t *testing.T) {
 		t.Fatal("not in the wire args")
 	}
 
+	// A session's connections have no names: one given is refused with the args.
+	if _, problems := protocol.TaskArgs(params, map[string]any{"conn": map[string]any{"channel": "http",
+		"kind": protocol.KindReverseCall, "name": "front"}}); !strings.Contains(problems["conn"], `has no "name"`) {
+		t.Errorf("a name: %v", problems)
+	}
 	for want, v := range map[string]map[string]any{
 		"not one core knows": {"channel": "smoke", "kind": protocol.KindReverseCall},
 		"does not carry":     {"channel": "http", "kind": protocol.KindBindCall},
@@ -84,7 +89,7 @@ func TestPutConnectionsEditPatch(t *testing.T) {
 				{Key: "path_prefix", Num: 2, Type: protocol.FieldString, Default: "/"}}}}}}}}},
 	}
 	s := &models.MinionSession{ModuleName: "bob", Connections: []models.MinionSessionConnSpec{{Channel: "http", Kind: protocol.KindReverseCall,
-		Name: "front", Version: 3, Params: map[string]any{"url": "https://a.example", "timeout": uint64(30000)}, Values: map[string]any{"2": "/new"}}}}
+		Version: 3, Params: map[string]any{"url": "https://a.example", "timeout": uint64(30000)}, Values: map[string]any{"2": "/new"}}}}
 	params := []protocol.FieldSpec{{Key: "conn", Num: 1, Type: protocol.FieldInt, Format: protocol.FormatConnection},
 		{Key: "connection", Num: 2, Type: protocol.FieldStructured, Format: protocol.FormatConnection}}
 	edit := func(v map[string]any) (map[string]any, error) {
@@ -95,7 +100,7 @@ func TestPutConnectionsEditPatch(t *testing.T) {
 		return wire, r.putConnections(context.Background(), s, protocol.ActionEditConnection, params, wire)
 	}
 	front := func(path, kind string) map[string]any {
-		return map[string]any{"channel": "http", "kind": kind, "name": "front",
+		return map[string]any{"channel": "http", "kind": kind,
 			"params": map[string]any{"url": "https://a.example", "timeout": "30s"}, "values": map[string]any{"path_prefix": path}}
 	}
 
@@ -104,7 +109,7 @@ func TestPutConnectionsEditPatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, ok := wire["connection"].(protocol.ConnectionPatch)
-	if !ok || p.Whole() || len(p.Values) != 1 || p.Values[2] != "/new/2" || p.Params != nil || p.Name != "" {
+	if !ok || p.Whole() || len(p.Values) != 1 || p.Values[2] != "/new/2" || p.Params != nil {
 		t.Fatalf("the patch: %#v", wire["connection"])
 	}
 	if _, err := edit(front("/new", protocol.KindReverseCall)); err == nil || !strings.Contains(err.Error(), "connection 1: nothing changed") {
@@ -122,7 +127,7 @@ func TestPutConnectionsEditPatch(t *testing.T) {
 }
 
 // add_connection's connection goes whole (no patch: nothing to compare it
-// with), and a name one of the session's connections has is refused.
+// with), even one like a connection the session has.
 func TestPutConnectionsAdd(t *testing.T) {
 	r := &minionTaskResolver{
 		channels: fakeChannelSchemas{"http": {Version: 3, Kinds: map[string]protocol.ConnectionKind{
@@ -130,26 +135,26 @@ func TestPutConnectionsAdd(t *testing.T) {
 		schemas: fakeTaskSchemas{s: &models.ModuleBuildSchema{}},
 	}
 	s := &models.MinionSession{ModuleName: "bob", Connections: []models.MinionSessionConnSpec{{Channel: "http", Kind: protocol.KindReverseCall,
-		Name: "front", Params: map[string]any{"url": "https://a.example"}}}}
+		Params: map[string]any{"url": "https://a.example"}}}}
 	params := []protocol.FieldSpec{{Key: "connection", Num: 1, Type: protocol.FieldStructured, Format: protocol.FormatConnection}}
-	add := func(name string) (map[string]any, error) {
+	add := func(url string) (map[string]any, error) {
 		wire, problems := protocol.TaskArgs(params, map[string]any{"connection": map[string]any{"channel": "http",
-			"kind": protocol.KindReverseCall, "name": name, "params": map[string]any{"url": "https://b.example"}}})
+			"kind": protocol.KindReverseCall, "params": map[string]any{"url": url}}})
 		if problems != nil {
 			t.Fatal(problems)
 		}
 		return wire, r.putConnections(context.Background(), s, protocol.ActionAddConnection, params, wire)
 	}
 
-	wire, err := add("back")
+	wire, err := add("https://b.example")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c, ok := wire["connection"].(protocol.HelloConnection); !ok || c.Name != "back" || c.Params[1] != "https://b.example" || c.Version != 3 {
+	if c, ok := wire["connection"].(protocol.HelloConnection); !ok || c.Params[1] != "https://b.example" || c.Version != 3 {
 		t.Fatalf("the arg: %#v", wire["connection"])
 	}
-	if _, err := add("front"); err == nil || !strings.Contains(err.Error(), "a connection called front exists") {
-		t.Fatalf("a name the session has: %v", err)
+	if _, err := add("https://a.example"); err != nil {
+		t.Fatalf("one like the session's: %v", err)
 	}
 }
 
@@ -162,7 +167,7 @@ func (o oneTarget) FindBySessionID(context.Context, uuid.UUID) (*models.MinionTa
 // remove_connection is refused when it is queued for the connection in use,
 // the minion's only one, a place past them, and the one its target names.
 func TestCheckRemoval(t *testing.T) {
-	s := &models.MinionSession{Conn: 1, Connections: []models.MinionSessionConnSpec{{Name: "front"}, {Name: "ws"}, {Name: "dial"}}}
+	s := &models.MinionSession{Conn: 1, Connections: []models.MinionSessionConnSpec{{Channel: "http"}, {Channel: "http"}, {Channel: "tcp"}}}
 	r := &minionTaskResolver{targets: oneTarget{t: &models.MinionTarget{Conn: 3, Name: "office"}}}
 	params := []protocol.FieldSpec{{Key: "conn", Num: 1, Type: protocol.FieldInt, Format: protocol.FormatConnection}}
 	check := func(place int) error {

@@ -2,7 +2,7 @@ import { useMemo } from "react"
 import { toast } from "sonner"
 import { initialParamDrafts, type Draft } from "@/components/modules/management/field-values"
 import { useMinionSession } from "@/graphql/hooks/minion-sessions"
-import { withConnection, type ConnectionChoice } from "./connection-choices"
+import { choiceTitle, withConnection, type ConnectionChoice } from "./connection-choices"
 import { useEditConnectionCommand } from "./use-connection-choices"
 import { ConnectionChoicesProvider } from "./session-connection-choices"
 import { SessionCommandDialog } from "./session-command-dialog"
@@ -43,7 +43,7 @@ export function EditConnectionDialog({ sessionId, connection: c, connections, on
         formKey={`${command.id}-${c?.place ?? 0}`}
         connections={connections}
         connKind={connKind}
-        onQueued={() => toast.success(`Edit of ${c?.name ?? "the connection"} queued (${command.id})`)}
+        onQueued={() => toast.success(`Edit of connection ${c ? choiceTitle(c) : "?"} queued (${command.id})`)}
       />
     </ConnectionChoicesProvider>
   )

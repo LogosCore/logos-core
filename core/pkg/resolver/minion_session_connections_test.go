@@ -32,7 +32,7 @@ func (b buildSchemas) LatestBuildSchemas(context.Context) (map[string]*models.Mo
 func TestSessionOwnConnectionValuesNamed(t *testing.T) {
 	sid := uuid.New()
 	sess := &models.MinionSession{SessionID: sid, ModuleName: "bob", Connections: []models.MinionSessionConnSpec{{
-		Channel: "http", Kind: protocol.KindReverseCall, Name: "front",
+		Channel: "http", Kind: protocol.KindReverseCall,
 		Params: map[string]any{"url": "https://x"}, Values: map[string]any{"1": "POST", "9": "kept"},
 	}}}
 	schema := &models.ModuleBuildSchema{BuildSchema: protocol.BuildSchema{Channels: []protocol.BuildChannel{{
@@ -57,7 +57,7 @@ func TestSessionOwnConnectionValuesNamed(t *testing.T) {
 func TestSessionOwnConnectionValuesAsJSON(t *testing.T) {
 	sid := uuid.New()
 	sess := &models.MinionSession{SessionID: sid, ModuleName: "bob", Connections: []models.MinionSessionConnSpec{{
-		Channel: "http", Kind: protocol.KindReverseCall, Name: "front",
+		Channel: "http", Kind: protocol.KindReverseCall,
 		Params: map[string]any{"base_url": "http://x", "checkin_interval": uint64(1000), "request_timeout": int64(40000)},
 		Values: map[string]any{"1": "/new", "2": uint64(90000)},
 	}}}

@@ -725,7 +725,6 @@ type MinionConnChange struct {
 
 type MinionConnection struct {
 	Place      int    `json:"place"`
-	Name       string `json:"name"`
 	ModuleName string `json:"moduleName"`
 	Kind       string `json:"kind"`
 	Params     any    `json:"params"`
@@ -974,7 +973,6 @@ type MinionSession struct {
 	CodecDownSince       *string                 `json:"codecDownSince,omitempty"`
 	Conn                 *int                    `json:"conn,omitempty"`
 	ConnKind             *string                 `json:"connKind,omitempty"`
-	ConnName             *string                 `json:"connName,omitempty"`
 	ConnCount            int                     `json:"connCount"`
 	ConnectionsChangedAt *string                 `json:"connectionsChangedAt,omitempty"`
 	ConnChanges          []*MinionConnChange     `json:"connChanges"`

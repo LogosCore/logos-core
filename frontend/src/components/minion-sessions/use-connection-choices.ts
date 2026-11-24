@@ -7,12 +7,12 @@ import { kindsByName } from "@/components/endpoints/endpoint-values"
 import { settingsSummary } from "@/components/builds/build-values"
 import { useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { useMinionSession, useMinionSessionConnections } from "@/graphql/hooks/minion-sessions"
-import { connectionText, type ConnectionChoice } from "./connection-choices"
+import { choiceTitle, type ConnectionChoice } from "./connection-choices"
 import { useConsoleCommands } from "./console-commands"
 
 /**
- * A session's connections as choices (connection-choices.ts): its build's,
- * with each one's address and the one the minion uses now. Empty while
+ * A session's connections as choices (connection-choices.ts): its own, else
+ * its build's, with each one's address and the one the minion uses now. Empty while
  * loading, and for a session whose build is gone.
  */
 export function useSessionConnectionChoices(sessionId: string): ConnectionChoice[] {
@@ -24,14 +24,13 @@ export function useSessionConnectionChoices(sessionId: string): ConnectionChoice
     const channels = kindsByName(kinds.data?.channelKinds ?? [])
     return (data?.minionSession?.connections ?? []).map((c) => ({
       place: c.place,
-      name: c.name,
+      channel: c.moduleName,
       kind: c.kind,
       address: settingsSummary(channels.get(c.moduleName), c.kind, c.params, 1) || undefined,
       inUse: c.place === conn,
       value: {
         channel: c.moduleName,
         kind: c.kind,
-        name: c.name,
         params: isRecord(c.params) ? c.params : undefined,
         values: isRecord(c.values) ? c.values : undefined,
       },
@@ -86,10 +85,10 @@ export function useSwitchConnection(sessionId: string) {
   const queue = useQueueMinionTask()
   async function switchTo(place: number, connections: readonly ConnectionChoice[] = []) {
     if (!command) return
-    const name = connections.length > 0 ? connectionText(place, connections) : String(place)
+    const c = connections.find((x) => x.place === place)
     try {
       await queue.mutateAsync({ sessionId, command: command.id, args: { conn: place } })
-      toast.success(`Switch to ${name} queued (${command.id})`)
+      toast.success(`Switch to connection ${c ? choiceTitle(c) : place} queued (${command.id})`)
     } catch (err) {
       toast.error(errorMessage(err, "Failed to queue the switch"))
     }

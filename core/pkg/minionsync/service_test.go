@@ -168,7 +168,7 @@ func (f *fakeSessions) SetConn(_ context.Context, id uuid.UUID, conn models.Mini
 	defer f.mu.Unlock()
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
-			f.rows[i].Conn, f.rows[i].ConnKind, f.rows[i].ConnName = conn.Place, conn.Kind, conn.Name
+			f.rows[i].Conn, f.rows[i].ConnKind = conn.Place, conn.Kind
 			f.rows[i].ConnMaxMessage = conn.MaxMessage
 			if !models.LateBySchedule(conn.Kind) {
 				f.rows[i].LateAt, f.rows[i].LostAt = nil, nil
@@ -1016,8 +1016,8 @@ func TestSessionConnection(t *testing.T) {
 	h.Conn = 1
 	reply, _ := r.send(t, protocol.NewMessageID(), h)
 	sid := sessionID(t, r.open(t, reply))
-	if s := r.sessions.rows[0]; s.Conn != 1 || s.ConnKind != protocol.KindReverseCall || s.ConnName != "poll" || s.ConnCount != 2 {
-		t.Fatalf("at hello: %d %q %q of %d", s.Conn, s.ConnKind, s.ConnName, s.ConnCount)
+	if s := r.sessions.rows[0]; s.Conn != 1 || s.ConnKind != protocol.KindReverseCall || s.ConnCount != 2 {
+		t.Fatalf("at hello: %d %q of %d", s.Conn, s.ConnKind, s.ConnCount)
 	}
 
 	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(),
@@ -1025,7 +1025,7 @@ func TestSessionConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := r.sessions.rows[0]
-	if s.Conn != 2 || s.ConnKind != protocol.KindReversePersistent || s.ConnName != "ws" || len(s.ConnChanges) != 1 ||
+	if s.Conn != 2 || s.ConnKind != protocol.KindReversePersistent || len(s.ConnChanges) != 1 ||
 		s.ConnChanges[0].From != 1 || s.ConnChanges[0].To != 2 || s.ConnChanges[0].Reason != "operator" {
 		t.Fatalf("after conn_update: %d %+v", s.Conn, s.ConnChanges)
 	}
@@ -1048,8 +1048,8 @@ func TestSessionConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A place past the build's: no kind or name known.
-	if s := r.sessions.rows[0]; s.Conn != 3 || s.ConnKind != "" || s.ConnName != "" || len(s.ConnChanges) != 1 {
-		t.Fatalf("after a rehello: %d %q %q %+v", s.Conn, s.ConnKind, s.ConnName, s.ConnChanges)
+	if s := r.sessions.rows[0]; s.Conn != 3 || s.ConnKind != "" || len(s.ConnChanges) != 1 {
+		t.Fatalf("after a rehello: %d %q %+v", s.Conn, s.ConnKind, s.ConnChanges)
 	}
 }
 

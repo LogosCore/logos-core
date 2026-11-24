@@ -14,7 +14,7 @@ import { actionCommands } from "./action-commands"
 import { TaskFilesProvider } from "./task-files"
 import { commandOf, lineTexts, paramApplies, parseCommandLine, usage, valueCompletion, words, type CommandDef } from "./command-line"
 import { SCHEDULE_KEY, takeSchedule } from "./task-schedule"
-import { choiceDetail, connectionText, isConnectionPlace, withConnection, type ConnectionChoice } from "./connection-choices"
+import { choiceDetail, choiceTitle, connectionText, isConnectionPlace, withConnection, type ConnectionChoice } from "./connection-choices"
 import { ConnectionChoicesProvider } from "./session-connection-choices"
 import { useSessionConnectionChoices } from "./use-connection-choices"
 import { resolveCredentialArgs } from "./console-credentials"
@@ -287,12 +287,10 @@ export function CommandBar({
 
   const complete = (c: CommandDef) => completeWith(`${c.id} `, 0, c.id.length)
 
-  // A value picked: the word being typed becomes its name (its place when
-  // the name is not its alone).
+  // A value picked: the word being typed becomes its place.
   const completeValue = (c: ConnectionChoice) => {
     if (!valueHint) return
-    const text = connectionText(c.place, connections)
-    const word = /\s/.test(text) ? JSON.stringify(text) : text
+    const word = connectionText(c.place)
     completeWith(`${line.slice(0, valueHint.start)}${word} `, valueHint.start, valueHint.start + word.length)
   }
 
@@ -347,7 +345,7 @@ export function CommandBar({
     !suggestingBuiltins &&
     valueHint !== null &&
     valueHint.options.length > 0 &&
-    !(valueHint.options.length === 1 && (valueHint.options[0].name.toLowerCase() === partial || String(valueHint.options[0].place) === partial))
+    !(valueHint.options.length === 1 && String(valueHint.options[0].place) === partial)
   // Nothing while the first word is no command yet: it is being typed.
   const message =
     error ??
@@ -537,7 +535,7 @@ export function CommandBar({
               onClick={() => completeValue(c)}
               className={cn("flex w-full cursor-pointer items-baseline gap-3 px-3 py-1.5 text-left text-sm", i === pick && "bg-muted")}
             >
-              <code className="font-mono text-xs">{c.name}</code>
+              <code className="font-mono text-xs">{choiceTitle(c)}</code>
               <span className="truncate text-xs text-muted-foreground">{choiceDetail(c)}</span>
               {c.inUse && <span className="ml-auto shrink-0 text-xs text-muted-foreground">in use</span>}
             </button>
@@ -643,13 +641,13 @@ export function CommandBar({
   )
 }
 
-/** How a parsed line reads: each param's value that applies, defaults marked; a connection's with its name. */
+/** How a parsed line reads: each param's value that applies, defaults marked; a connection's with its channel and address. */
 function readsAs(command: CommandDef, args: Record<string, unknown>, connections: readonly ConnectionChoice[]): string {
   const parts = command.params.map((p) => {
     if (!paramApplies(p, command.params, args)) return null
     if (p.key in args && isConnectionPlace(p)) {
       const c = connections.find((x) => x.place === args[p.key])
-      return `${p.key}=${JSON.stringify(args[p.key])}${c ? ` (${c.name}, ${choiceDetail(c)}${c.inUse ? ", in use" : ""})` : ""}`
+      return `${p.key}=${JSON.stringify(args[p.key])}${c ? ` (${c.channel}, ${choiceDetail(c)}${c.inUse ? ", in use" : ""})` : ""}`
     }
     if (p.key in args) return `${p.key}=${JSON.stringify(args[p.key])}`
     if (p.default !== null && p.default !== undefined) return `${p.key}=${JSON.stringify(p.default)} (default)`

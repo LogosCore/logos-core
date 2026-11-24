@@ -651,14 +651,14 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 	}
 	// The minion's own connections when its hello says them, else the
 	// build's.
-	own := s.ownConns(ctx, hello.Connections, namesOf(b, nil))
+	own := s.ownConns(ctx, hello.Connections)
 	place := helloPlace(hello, from, own)
 	conn := connOf(b, own, place)
 	session.Connections = own
 	if own != nil {
 		session.ConnectionsAt = &now
 	}
-	session.Conn, session.ConnKind, session.ConnName, session.ConnCount = conn.Place, conn.Kind, conn.Name, len(connsOf(b, own))
+	session.Conn, session.ConnKind, session.ConnCount = conn.Place, conn.Kind, len(connsOf(b, own))
 	session.ConnMaxMessage = conn.MaxMessage
 	session.Compression, session.Envelope, session.Codec = b.Compression, b.Envelope, b.Codec
 	if peer != "" {
@@ -740,7 +740,7 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	// replace the session's), else the ones the session kept, else the
 	// build's.
 	own := sess.Connections
-	if said := s.ownConns(ctx, hello.Connections, namesOf(b, sess.Connections)); said != nil {
+	if said := s.ownConns(ctx, hello.Connections); said != nil {
 		own = said
 		if err := s.sessions.SetConnections(ctx, sid, own); err != nil {
 			return nil, false, fmt.Errorf("claim the session: %w", err)
@@ -859,7 +859,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			// rehello without keeps them.
 			replaced := false
 			if len(hello.Connections) > 0 {
-				own := s.ownConns(ctx, hello.Connections, s.sessionNames(ctx, session))
+				own := s.ownConns(ctx, hello.Connections)
 				if err = s.sessions.SetConnections(ctx, session.SessionID, own); err != nil {
 					return nil, fmt.Errorf("rehello: %w", err)
 				}
@@ -1128,17 +1128,13 @@ func (s *Service) takeConnectionUpdate(ctx context.Context, session *models.Mini
 	if err == nil {
 		err = s.checkConns(ctx, "connection_update", u.Connections)
 	}
-	// A connection taken out (removed, its place before): the names kept
-	// for unnamed entries skip its, and the place in use, after it, is one
-	// less: the same connection, no move.
-	kept, place := s.sessionNames(ctx, session), session.Conn
+	// A connection taken out (removed, its place before): the place in use,
+	// after it, is one less: the same connection, no move.
+	place := session.Conn
 	if err == nil && u.Removed > 0 {
 		r := int(u.Removed) //nolint:gosec // within the list before (Validate)
-		switch {
-		case r == session.Conn:
+		if r == session.Conn {
 			err = fmt.Errorf("connection_update: removed %d is the connection in use: switch first", r)
-		case r <= len(kept):
-			kept = slices.Delete(slices.Clone(kept), r-1, r)
 		}
 		if place > r {
 			place--
@@ -1151,7 +1147,7 @@ func (s *Service) takeConnectionUpdate(ctx context.Context, session *models.Mini
 	if err != nil {
 		return errItem(protocol.ErrItemBadMessage, err.Error(), i)
 	}
-	own := s.ownConns(ctx, u.Connections, kept)
+	own := s.ownConns(ctx, u.Connections)
 	if err := s.sessions.SetConnections(ctx, session.SessionID, own); err != nil {
 		return nil, fmt.Errorf("record a connection_update: %w", err)
 	}
@@ -1161,7 +1157,7 @@ func (s *Service) takeConnectionUpdate(ctx context.Context, session *models.Mini
 		if err := s.sessions.SetConn(ctx, session.SessionID, conn, nil); err != nil {
 			return nil, fmt.Errorf("record a connection_update: %w", err)
 		}
-		session.Conn, session.ConnKind, session.ConnName, session.ConnMaxMessage = place, conn.Kind, conn.Name, conn.MaxMessage
+		session.Conn, session.ConnKind, session.ConnMaxMessage = place, conn.Kind, conn.MaxMessage
 	}
 	s.logger.Info("minion connections refreshed", zap.String("session_id", session.SessionID.String()), zap.Int("connections", len(own)))
 	return nil, nil
@@ -1178,8 +1174,8 @@ func readConnUpdate(raw cbor.RawMessage) (protocol.ConnUpdateItem, error) {
 // connEntry is one of a minion's connections as core matches messages to
 // it: a build's, or one its hello said.
 type connEntry struct {
-	kind, name, module string
-	maxMessage         int
+	kind, module string
+	maxMessage   int
 }
 
 // connsOf are a minion's connections: own, the ones its hello said, when
@@ -1188,7 +1184,7 @@ func connsOf(b *models.Build, own []models.MinionSessionConnSpec) []connEntry {
 	if own != nil {
 		out := make([]connEntry, len(own))
 		for i, c := range own {
-			out[i] = connEntry{kind: c.Kind, name: c.Name, module: c.Channel, maxMessage: c.MaxMessage}
+			out[i] = connEntry{kind: c.Kind, module: c.Channel, maxMessage: c.MaxMessage}
 		}
 		return out
 	}
@@ -1198,42 +1194,18 @@ func connsOf(b *models.Build, own []models.MinionSessionConnSpec) []connEntry {
 	out := make([]connEntry, len(b.Connections.Items))
 	for i := range b.Connections.Items {
 		bc := &b.Connections.Items[i]
-		out[i] = connEntry{kind: bc.ConnectionKind(), name: bc.Endpoint.Name, module: bc.Endpoint.Channel.ModuleName, maxMessage: bc.MaxMessage}
+		out[i] = connEntry{kind: bc.ConnectionKind(), module: bc.Endpoint.Channel.ModuleName, maxMessage: bc.MaxMessage}
 	}
 	return out
 }
 
-// namesOf are the names of a minion's connections (connsOf), by place: what
-// an unnamed one of a list it says keeps (models.ConnSpecsOf).
-func namesOf(b *models.Build, own []models.MinionSessionConnSpec) []string {
-	conns := connsOf(b, own)
-	names := make([]string, len(conns))
-	for i, c := range conns {
-		names[i] = c.name
-	}
-	return names
-}
-
-// sessionNames are the names of session's connections: its own list's,
-// else its build's; none when the build is gone.
-func (s *Service) sessionNames(ctx context.Context, session *models.MinionSession) []string {
-	if session.Connections != nil {
-		return namesOf(nil, session.Connections)
-	}
-	b, err := s.builds.FindByBuildID(ctx, session.BuildID)
-	if err != nil {
-		return nil
-	}
-	return namesOf(b, nil)
-}
-
 // connOf is the connection at place in the minion's connections (connsOf):
-// its kind and name, empty when there is no such one.
+// its kind, empty when there is no such one.
 func connOf(b *models.Build, own []models.MinionSessionConnSpec, place int) models.MinionSessionConn {
 	c := models.MinionSessionConn{Place: place}
 	if conns := connsOf(b, own); place >= 1 && place <= len(conns) {
 		e := conns[place-1]
-		c.Kind, c.Name, c.MaxMessage = e.kind, e.name, e.maxMessage
+		c.Kind, c.MaxMessage = e.kind, e.maxMessage
 	}
 	return c
 }
@@ -1253,10 +1225,10 @@ func helloPlace(hello protocol.HelloItem, from *sender, own []models.MinionSessi
 
 // ownConns are a minion's own connections (a hello's or a
 // connection_update's) as core keeps them, their params named by the
-// channel's fields (a param its schema does not number keeps its number),
-// an unnamed one keeping kept's name at its place; nil for none.
-func (s *Service) ownConns(ctx context.Context, conns []protocol.HelloConnection, kept []string) []models.MinionSessionConnSpec {
-	own := models.ConnSpecsOf(conns, kept)
+// channel's fields (a param its schema does not number keeps its number);
+// nil for none.
+func (s *Service) ownConns(ctx context.Context, conns []protocol.HelloConnection) []models.MinionSessionConnSpec {
+	own := models.ConnSpecsOf(conns)
 	if s.channels == nil {
 		return own
 	}

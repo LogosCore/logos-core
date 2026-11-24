@@ -78,7 +78,6 @@ export const MinionSessionFields = graphql(`
     codecDownSince
     conn
     connKind
-    connName
     connCount
     connectionsChangedAt
     connChanges {
@@ -301,7 +300,6 @@ export const MinionSessionConnectionsQuery = graphql(`
       id
       connections {
         place
-        name
         moduleName
         kind
         params

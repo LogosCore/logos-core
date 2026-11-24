@@ -233,7 +233,6 @@ describe("live updates", () => {
     connected: false,
     conn: null,
     connKind: null,
-    connName: null,
     connCount: 0,
     connChanges: [],
     maxTasksSettable: false,

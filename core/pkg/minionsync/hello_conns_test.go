@@ -24,7 +24,7 @@ func errCodeIn(t *testing.T, msg protocol.CoreMessage) int {
 }
 
 // A hello that says its own connections: core uses them for the session in
-// place of the build's (conn, its kind, name and size limit, the carrier
+// place of the build's (conn, its kind and size limit, the carrier
 // guess), a rehello without them keeps them, one with them replaces them;
 // a channel core does not know, or a kind it does not carry, is refused.
 func TestHelloOwnConnections(t *testing.T) {
@@ -36,7 +36,7 @@ func TestHelloOwnConnections(t *testing.T) {
 	})
 	ctx := ViaChannel(context.Background(), "dns")
 	own := []protocol.HelloConnection{
-		{Channel: "http", Kind: protocol.KindReverseCall, Name: "front"},
+		{Channel: "http", Kind: protocol.KindReverseCall},
 		{Channel: "dns", Kind: protocol.KindReversePersistent, MaxMessage: 2048},
 	}
 
@@ -46,9 +46,9 @@ func TestHelloOwnConnections(t *testing.T) {
 	_, c := newSock("ws")
 	sid := r.helloOver(t, ctx, c, h)
 	s := r.sessionRow(t, sid)
-	if s.Conn != 2 || s.ConnKind != protocol.KindReversePersistent || s.ConnName != "dns-2" || s.ConnCount != 2 ||
+	if s.Conn != 2 || s.ConnKind != protocol.KindReversePersistent || s.ConnCount != 2 ||
 		s.MessageLimit() != 2048 || len(s.Connections) != 2 {
-		t.Fatalf("session conn %d %q %q, count %d, limit %d, own %d", s.Conn, s.ConnKind, s.ConnName, s.ConnCount,
+		t.Fatalf("session conn %d %q, count %d, limit %d, own %d", s.Conn, s.ConnKind, s.ConnCount,
 			s.MessageLimit(), len(s.Connections))
 	}
 
@@ -56,13 +56,13 @@ func TestHelloOwnConnections(t *testing.T) {
 	re := hello("ws01")
 	re.Conn = 1
 	r.say(t, ctx, c, sid, re)
-	if s = r.sessionRow(t, sid); len(s.Connections) != 2 || s.Conn != 1 || s.ConnName != "front" {
-		t.Fatalf("after a rehello without: own %d, conn %d %q", len(s.Connections), s.Conn, s.ConnName)
+	if s = r.sessionRow(t, sid); len(s.Connections) != 2 || s.Conn != 1 || s.ConnKind != protocol.KindReverseCall {
+		t.Fatalf("after a rehello without: own %d, conn %d %q", len(s.Connections), s.Conn, s.ConnKind)
 	}
 	// A conn_update is a place in them too.
 	r.say(t, ctx, c, sid, protocol.ConnUpdateItem{T: protocol.ItemConnUpdate, Conn: 2})
-	if s = r.sessionRow(t, sid); s.Conn != 2 || s.ConnName != "dns-2" {
-		t.Fatalf("after a conn_update: conn %d %q", s.Conn, s.ConnName)
+	if s = r.sessionRow(t, sid); s.Conn != 2 || s.ConnKind != protocol.KindReversePersistent {
+		t.Fatalf("after a conn_update: conn %d %q", s.Conn, s.ConnKind)
 	}
 	// A conn_update past them is refused, and nothing is recorded.
 	if code := errCodeIn(t, r.openUnder(t, sid, r.keys, r.say(t, ctx, c, sid, protocol.ConnUpdateItem{T: protocol.ItemConnUpdate, Conn: 3}))); code != protocol.ErrItemBadMessage {
@@ -71,14 +71,14 @@ func TestHelloOwnConnections(t *testing.T) {
 	if s = r.sessionRow(t, sid); s.Conn != 2 || len(s.ConnChanges) != 1 {
 		t.Fatalf("after a refused conn_update: conn %d, changes %d", s.Conn, len(s.ConnChanges))
 	}
-	// One with connections replaces them; an unnamed one keeps the name
-	// the session had at its place.
+	// One with connections replaces them.
 	re = hello("ws01")
 	re.Conn = 1
 	re.Connections = own[1:]
 	r.say(t, ctx, c, sid, re)
-	if s = r.sessionRow(t, sid); len(s.Connections) != 1 || s.ConnCount != 1 || s.Conn != 1 || s.ConnName != "front" {
-		t.Fatalf("after a rehello with: own %d, count %d, conn %d %q", len(s.Connections), s.ConnCount, s.Conn, s.ConnName)
+	if s = r.sessionRow(t, sid); len(s.Connections) != 1 || s.ConnCount != 1 || s.Conn != 1 ||
+		s.ConnKind != protocol.KindReversePersistent || s.Connections[0].Channel != "dns" {
+		t.Fatalf("after a rehello with: own %+v, count %d, conn %d %q", s.Connections, s.ConnCount, s.Conn, s.ConnKind)
 	}
 
 	// Refused: a channel core does not know, a kind the channel does not
@@ -106,8 +106,8 @@ func TestHelloWithoutOwnConnections(t *testing.T) {
 		t.Fatal(err)
 	}
 	sid := sessionID(t, r.open(t, reply))
-	if s := r.sessionRow(t, sid); s.Connections != nil || s.Conn != 1 || s.ConnCount != 1 || s.ConnName != "http-reverse-call" {
-		t.Fatalf("session own %v, conn %d %q, count %d", s.Connections, s.Conn, s.ConnName, s.ConnCount)
+	if s := r.sessionRow(t, sid); s.Connections != nil || s.Conn != 1 || s.ConnCount != 1 || s.ConnKind != protocol.KindReverseCall {
+		t.Fatalf("session own %v, conn %d %q, count %d", s.Connections, s.Conn, s.ConnKind, s.ConnCount)
 	}
 }
 
@@ -129,8 +129,8 @@ func TestConnectionUpdate(t *testing.T) {
 	h.Conn = 2
 	_, c := newSock("ws")
 	sid := r.helloOver(t, ctx, c, h)
-	if s := r.sessionRow(t, sid); s.Connections != nil || s.Conn != 2 || s.ConnName != "dns-reverse-persistent" {
-		t.Fatalf("build's: own %v, conn %d %q", s.Connections, s.Conn, s.ConnName)
+	if s := r.sessionRow(t, sid); s.Connections != nil || s.Conn != 2 || s.ConnKind != protocol.KindReversePersistent {
+		t.Fatalf("build's: own %v, conn %d %q", s.Connections, s.Conn, s.ConnKind)
 	}
 	update := func(conns ...protocol.HelloConnection) protocol.ConnectionUpdateItem {
 		return protocol.ConnectionUpdateItem{T: protocol.ItemConnectionUpdate, Connections: conns}
@@ -141,14 +141,14 @@ func TestConnectionUpdate(t *testing.T) {
 
 	// Replaced: the one in use (2) keeps its place, with its new details.
 	if code := say(update(protocol.HelloConnection{Channel: "http", Kind: protocol.KindReverseCall},
-		protocol.HelloConnection{Channel: "dns", Kind: protocol.KindReversePersistent, Name: "tunnel", MaxMessage: 1024})); code != 0 {
+		protocol.HelloConnection{Channel: "dns", Kind: protocol.KindReversePersistent, MaxMessage: 1024})); code != 0 {
 		t.Fatalf("err %d", code)
 	}
 	s := r.sessionRow(t, sid)
-	if len(s.Connections) != 2 || s.ConnCount != 2 || s.Conn != 2 || s.ConnName != "tunnel" || s.MessageLimit() != 1024 ||
-		len(s.ConnChanges) != 0 {
+	if len(s.Connections) != 2 || s.ConnCount != 2 || s.Conn != 2 || s.ConnKind != protocol.KindReversePersistent ||
+		s.MessageLimit() != 1024 || len(s.ConnChanges) != 0 {
 		t.Fatalf("replaced: own %d, count %d, conn %d %q, limit %d, changes %d", len(s.Connections), s.ConnCount, s.Conn,
-			s.ConnName, s.MessageLimit(), len(s.ConnChanges))
+			s.ConnKind, s.MessageLimit(), len(s.ConnChanges))
 	}
 
 	// Refused, nothing changed: too short for the one in use, an unknown
@@ -161,78 +161,24 @@ func TestConnectionUpdate(t *testing.T) {
 			t.Errorf("%s: err %d", name, code)
 		}
 	}
-	if s = r.sessionRow(t, sid); len(s.Connections) != 2 || s.ConnName != "tunnel" {
-		t.Fatalf("after refusals: own %d, conn %q", len(s.Connections), s.ConnName)
+	if s = r.sessionRow(t, sid); len(s.Connections) != 2 || s.MessageLimit() != 1024 {
+		t.Fatalf("after refusals: own %d, limit %d", len(s.Connections), s.MessageLimit())
 	}
 
 	// The move first, then the shorter list, in one message: items are
 	// taken in their order.
 	if code := say(protocol.ConnUpdateItem{T: protocol.ItemConnUpdate, Conn: 1},
-		update(protocol.HelloConnection{Channel: "http", Kind: protocol.KindReverseCall, Name: "only"})); code != 0 {
+		update(protocol.HelloConnection{Channel: "http", Kind: protocol.KindReverseCall})); code != 0 {
 		t.Fatalf("move then shorten: err %d", code)
 	}
-	if s = r.sessionRow(t, sid); len(s.Connections) != 1 || s.Conn != 1 || s.ConnName != "only" {
-		t.Fatalf("after move then shorten: own %d, conn %d %q", len(s.Connections), s.Conn, s.ConnName)
-	}
-}
-
-// A connection_update's unnamed entries keep the names the session has at
-// their places: the build's, then its own list's; a name another entry
-// takes, or a place past them, falls back to "<channel>-<place>".
-func TestConnectionUpdateKeepsNames(t *testing.T) {
-	r := newRig(t)
-	r.build.Connections.Items = []protocol.BuildConnection{endpoint(protocol.KindReverseCall, "http"),
-		endpoint(protocol.KindReversePersistent, "dns")}
-	r.svc.WithChannelSchemas(fakeSchemas{
-		"http": {Kinds: map[string]protocol.ConnectionKind{protocol.KindReverseCall: {}, protocol.KindReversePersistent: {}}},
-		"dns":  {Kinds: map[string]protocol.ConnectionKind{protocol.KindReversePersistent: {}}},
-	})
-	ctx := ViaChannel(context.Background(), "dns")
-	h := hello("ws01")
-	h.Conn = 1
-	_, c := newSock("ws")
-	sid := r.helloOver(t, ctx, c, h)
-	names := func() []string {
-		var out []string
-		for _, sc := range r.sessionRow(t, sid).Connections {
-			out = append(out, sc.Name)
-		}
-		return out
-	}
-	update := func(conns ...protocol.HelloConnection) {
-		t.Helper()
-		reply := r.say(t, ctx, c, sid, protocol.ConnectionUpdateItem{T: protocol.ItemConnectionUpdate, Connections: conns})
-		if code := errCodeIn(t, r.openUnder(t, sid, r.keys, reply)); code != 0 {
-			t.Fatalf("err %d", code)
-		}
-	}
-	http := protocol.HelloConnection{Channel: "http", Kind: protocol.KindReverseCall}
-	dns := protocol.HelloConnection{Channel: "dns", Kind: protocol.KindReversePersistent}
-
-	// The build's names; the third, past them, its own.
-	update(http, dns, dns)
-	if got := names(); !slices.Equal(got, []string{"http-reverse-call", "dns-reverse-persistent", "dns-3"}) {
-		t.Fatalf("from the build's: %v", got)
-	}
-	// Then the session's own: the second edited, named; the others keep theirs.
-	named := dns
-	named.Name = "tunnel"
-	update(http, named, dns)
-	if got := names(); !slices.Equal(got, []string{"http-reverse-call", "tunnel", "dns-3"}) {
-		t.Fatalf("one renamed: %v", got)
-	}
-	// A kept name another entry takes falls back.
-	taken := dns
-	taken.Name = "http-reverse-call"
-	update(http, dns, taken)
-	if got := names(); !slices.Equal(got, []string{"http-1", "tunnel", "http-reverse-call"}) {
-		t.Fatalf("a kept name taken: %v", got)
+	if s = r.sessionRow(t, sid); len(s.Connections) != 1 || s.Conn != 1 || s.ConnKind != protocol.KindReverseCall {
+		t.Fatalf("after move then shorten: own %d, conn %d %q", len(s.Connections), s.Conn, s.ConnKind)
 	}
 }
 
 // A connection taken out (remove_connection): the update says its place
-// before (removed), and core moves the names it keeps and the place in use
-// with the list, recording no move; an update that removed the one in use
+// before (removed), and core moves the place in use with the list,
+// recording no move; an update that removed the one in use
 // is refused.
 func TestConnectionUpdateRemoved(t *testing.T) {
 	r := newRig(t)
@@ -259,17 +205,17 @@ func TestConnectionUpdateRemoved(t *testing.T) {
 	if code := update(3, dns, ws); code != protocol.ErrItemBadMessage {
 		t.Fatalf("the one in use removed: err %d", code)
 	}
-	// The first taken out: the others keep their names, the one in use moves up.
+	// The first taken out: the one in use moves up.
 	if code := update(1, dns, ws); code != 0 {
 		t.Fatalf("err %d", code)
 	}
 	s := r.sessionRow(t, sid)
-	var names []string
+	var channels []string
 	for _, sc := range s.Connections {
-		names = append(names, sc.Name)
+		channels = append(channels, sc.Channel)
 	}
-	if !slices.Equal(names, []string{"dns-reverse-persistent", "http-reverse-persistent"}) || s.Conn != 2 ||
-		s.ConnName != "http-reverse-persistent" || len(s.ConnChanges) != 0 {
-		t.Fatalf("names %v, conn %d %q, changes %d", names, s.Conn, s.ConnName, len(s.ConnChanges))
+	if !slices.Equal(channels, []string{"dns", "http"}) || s.Conn != 2 || s.ConnKind != protocol.KindReversePersistent ||
+		len(s.ConnChanges) != 0 {
+		t.Fatalf("channels %v, conn %d %q, changes %d", channels, s.Conn, s.ConnKind, len(s.ConnChanges))
 	}
 }

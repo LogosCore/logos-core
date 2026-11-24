@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { lineOf, type CommandDef, type CommandParam } from "./command-line"
-import { CONNECTION_FORMAT, type ConnectionChoice } from "./connection-choices"
+import { CONNECTION_FORMAT } from "./connection-choices"
 
 // Core keeps each task's line as a search text (models.MinionTaskSearchText),
 // for the task list's search to find what a row shows. Its cases, in core's
@@ -15,8 +15,6 @@ interface TaskLine {
   line: string
   /** Its params of the connection format. */
   connectionParams?: string[]
-  /** The session's build's connections' names, in order. */
-  connections?: string[]
   /** Its structured params. */
   json?: string[]
 }
@@ -49,8 +47,7 @@ describe("a task's line, as core keeps it for the search", () => {
         ...(c.json ?? []).map((key) => ({ key, type: "structured", label: key, required: false })),
       ]
       const def: CommandDef | undefined = params.length > 0 ? { id: c.command, label: c.command, params } : undefined
-      const connections: ConnectionChoice[] = (c.connections ?? []).map((name, i) => ({ place: i + 1, name, kind: "" }))
-      expect(lineOf(c.command, sorted(c.args) as Record<string, unknown>, def, connections), c.why).toBe(c.line)
+      expect(lineOf(c.command, sorted(c.args) as Record<string, unknown>, def), c.why).toBe(c.line)
     }
   })
 })

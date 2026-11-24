@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"context"
 	"slices"
 	"testing"
 	"time"
@@ -148,72 +147,32 @@ func TestIntegrationMinionTaskFilters(t *testing.T) {
 	}
 }
 
-// A switch task's line says its connection by name: one queued with line
-// names is found by the name (and keeps it when an arg changes); one stored
-// before them gets them from its session's connections, once, and one of a
-// session gone keeps the place, done all the same.
-func TestIntegrationMinionTaskLineNames(t *testing.T) {
+// Tasks stored when their lines showed a connection by name lose the
+// names: their search text says the place again, and each is done once.
+func TestIntegrationMinionTaskDropLineNames(t *testing.T) {
 	db := integrationDB(t)
 	ctx := testCtx(t)
 	repo := NewMinionTaskRepository(db)
-	op, session, gone := uuid.New(), uuid.New(), uuid.New()
-	t0 := time.Now().UTC().Truncate(time.Millisecond)
-	add := func(i int, sid uuid.UUID, names map[string]string) uuid.UUID {
-		t.Helper()
-		id := uuid.New()
-		if err := repo.Insert(ctx, &models.MinionTask{TaskID: id, OperationID: op, SessionID: sid, Command: "switch",
-			Action: protocol.ActionSwitchConnection, Args: models.JSONMap{"conn": 2}, LineNames: names,
-			State: models.MinionTaskQueued, QueuedAt: t0.Add(time.Duration(i) * time.Second)}); err != nil {
-			t.Fatal(err)
-		}
-		return id
-	}
-	search := func(sid uuid.UUID, text string) []uuid.UUID {
-		t.Helper()
-		rows, err := repo.ListBySession(ctx, sid, MinionTaskFilter{Search: text}, nil, 10)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var out []uuid.UUID
-		for _, r := range rows {
-			out = append(out, r.TaskID)
-		}
-		return out
-	}
-	queued := add(0, session, map[string]string{"conn": "https"})
-	if got := search(session, "switch --conn=https"); !slices.Equal(got, []uuid.UUID{queued}) {
-		t.Fatalf("by name: %v", got)
-	}
-	if err := repo.SetArg(ctx, queued, "for", "1h"); err != nil {
+	op, session := uuid.New(), uuid.New()
+	id := uuid.New()
+	if err := repo.Insert(ctx, &models.MinionTask{TaskID: id, OperationID: op, SessionID: session, Command: "switch",
+		Action: protocol.ActionSwitchConnection, Args: models.JSONMap{"conn": 2}, State: models.MinionTaskQueued,
+		QueuedAt: time.Now().UTC().Truncate(time.Millisecond)}); err != nil {
 		t.Fatal(err)
 	}
-	if got := search(session, "--conn=https --for=1h"); !slices.Equal(got, []uuid.UUID{queued}) {
-		t.Fatalf("by name, an arg changed: %v", got)
+	// As stored before: a name in its line names and its search text.
+	if err := repo.(*minionTaskRepository).tasks.UpdateOne(ctx, bson.M{"task_id": id},
+		bson.M{"$set": bson.M{"line_names": bson.M{"conn": "https"}, "search_text": "switch --conn=https"}}); err != nil {
+		t.Fatal(err)
 	}
-
-	legacy := add(1, session, nil)
-	orphan := add(2, gone, nil)
-	if got := search(session, "https"); slices.Contains(got, legacy) {
-		t.Fatal("a task stored with the place matched the name")
+	if n, err := repo.DropLineNames(ctx); err != nil || n != 1 {
+		t.Fatalf("drop %d: %v", n, err)
 	}
-	asked := 0
-	names := func(_ context.Context, sid uuid.UUID) ([]string, error) {
-		asked++
-		if sid == session {
-			return []string{"ws", "https"}, nil
-		}
-		return nil, nil
+	if n, _ := repo.DropLineNames(ctx); n != 0 {
+		t.Fatalf("drop again %d", n)
 	}
-	if n, err := repo.BackfillLineNames(ctx, names); err != nil || n != 2 || asked != 2 {
-		t.Fatalf("backfill %d (sessions asked %d): %v", n, asked, err)
-	}
-	if n, _ := repo.BackfillLineNames(ctx, names); n != 0 {
-		t.Fatalf("backfill again %d", n)
-	}
-	if got := search(session, "switch --conn=https"); !slices.Contains(got, legacy) {
-		t.Fatalf("backfilled, by name: %v", got)
-	}
-	if stored, _ := repo.FindByTaskID(ctx, orphan); stored.SearchText != "switch --conn=2" {
-		t.Fatalf("a session gone: %q", stored.SearchText)
+	rows, err := repo.ListBySession(ctx, session, MinionTaskFilter{Search: "switch --conn=2"}, nil, 10)
+	if err != nil || len(rows) != 1 || rows[0].TaskID != id {
+		t.Fatalf("by place: %v %v", rows, err)
 	}
 }

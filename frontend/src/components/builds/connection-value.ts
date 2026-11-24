@@ -21,7 +21,6 @@ import { connectionFailoverErrors, connectionFailoverInput, type ConnectionFailo
 export interface ConnectionJSON {
   channel: string
   kind: string
-  name?: string
   version?: number
   params?: Record<string, unknown>
   values?: Record<string, unknown>
@@ -44,7 +43,6 @@ export function readConnectionJSON(text: string): ConnectionJSON | null {
   return {
     channel: o.channel,
     kind: typeof o.kind === "string" ? o.kind : "",
-    ...(typeof o.name === "string" ? { name: o.name } : {}),
     ...(typeof o.version === "number" ? { version: o.version } : {}),
     ...(rec(o.params) ? { params: rec(o.params) } : {}),
     ...(rec(o.values) ? { values: rec(o.values) } : {}),
@@ -55,7 +53,7 @@ export function readConnectionJSON(text: string): ConnectionJSON | null {
 
 /** A connection value as the build form edits it: every field there, set or at its default. */
 export function draftOfConnection(factory: FactoryKind, ch: ChannelKind | undefined, v: ConnectionJSON, target: Target | undefined): ConnectionDraft {
-  return connectionDraft(factory, ch, { moduleName: v.channel, kind: v.kind || null, name: v.name ?? null, settings: v.params, values: v.values, failover: v.failover }, target)
+  return connectionDraft(factory, ch, { moduleName: v.channel, kind: v.kind || null, settings: v.params, values: v.values, failover: v.failover }, target)
 }
 
 /**
@@ -74,7 +72,6 @@ export function connectionOfDraft(
   const errors: Record<string, string> = {}
   const kind = effectiveKind(c, target, ch)
   const value: ConnectionJSON = { channel: c.moduleName, kind }
-  if (c.name.trim()) value.name = c.name.trim()
   if (kept?.channel === c.moduleName && kept.version !== undefined) value.version = kept.version
   const params = evaluateFields("params.", settingFields(ch, kind), c.settings, errors)
   if (Object.keys(params).length > 0) value.params = params

@@ -72,7 +72,7 @@ func newRig(t *testing.T) *rig {
 		Acting:      &models.MinionIdentity{User: `CORP\svc_backup`, How: "impersonation", Since: seen},
 		Address:     "10.1.2.3",
 		PeerAddress: "203.0.113.7", Peers: []models.MinionSessionPeer{{Address: "203.0.113.7", FirstSeen: s0(now), LastSeen: seen, Count: 5}},
-		Sleep: &models.MinionSessionSleep{Interval: 30000, Jitter: 20}, Conn: 1, ConnKind: protocol.KindReverseCall, ConnName: "edge-eu",
+		Sleep: &models.MinionSessionSleep{Interval: 30000, Jitter: 20}, Conn: 1, ConnKind: protocol.KindReverseCall,
 		ConnCount: 1, Crypto: protocol.BuildCrypto{Suite: "aes-256-cbc-hmac-sha256", Material: json.RawMessage(`{"enc_key":"AA==","mac_key":"AA=="}`)}}
 	g := &rig{t: t, tasks: newFakeTasks(), mods: &fakeModules{}, rpc: &fakeRPC{}, files: newFakeFiles(), bus: &fakeBus{}, links: links,
 		session: s, build: b, buildFID: fid, clock: now}

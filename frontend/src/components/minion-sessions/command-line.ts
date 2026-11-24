@@ -16,14 +16,13 @@
 // A param that does not apply as the line stands (its when) takes no word.
 // Words may be quoted ("a b" or 'a b'). Values are converted to the param's
 // type here (a number, a list split at commas); core checks them again. A
-// param of the connection format takes a session's connection by name or
-// place (connection-choices.ts).
+// param of the connection format takes a session's connection by its place
+// (connection-choices.ts).
 
 import { conditionText, parseGoDuration } from "@/components/modules/management/field-values"
 import {
   isConnectionPlace,
   connectionFromText,
-  connectionText,
   matchConnections,
   type ConnectionChoice,
 } from "./connection-choices"
@@ -256,15 +255,10 @@ export function lineTexts(line: string, commands: readonly CommandDef[], connect
   const command = commandOf(line, commands)
   if (!command) return { texts: new Map(), extra: [] }
   const { texts, extra } = readWords(command, line, words(line).slice(1), connections)
-  // A duration typed in seconds opens the form as the duration it is; a
-  // connection typed by name, as its place, which the form's field holds.
+  // A duration typed in seconds opens the form as the duration it is.
   for (const p of command.params) {
     const t = texts.get(p.key)
     if (p.type === "duration" && t !== undefined) texts.set(p.key, promptDuration(t))
-    if (isConnectionPlace(p) && t !== undefined && connections.length > 0) {
-      const c = connectionFromText(p.key, t, connections)
-      if (c.ok) texts.set(p.key, String(c.value))
-    }
   }
   return { command, texts, extra }
 }
@@ -423,23 +417,12 @@ export function usage(command: CommandDef): string {
   return [command.id, ...parts].join(" ")
 }
 
-/**
- * A task as a line again: its command and args, as typed; a connection
- * param by its name, given the session's connections.
- */
-export function lineOf(
-  command: string,
-  args: Record<string, unknown> | null | undefined,
-  def?: CommandDef,
-  connections: readonly ConnectionChoice[] = [],
-): string {
+/** A task as a line again: its command and args, as typed; a connection param by its place. */
+export function lineOf(command: string, args: Record<string, unknown> | null | undefined, def?: CommandDef): string {
   const parts = [command]
   // A structured value as JSON (structuredText), quoted already.
   const json = new Set(def?.params.filter((x) => x.type === "structured").map((x) => x.key))
-  const entries = Object.entries(args ?? {}).map(([k, v]): [string, unknown] => {
-    const p = def?.params.find((x) => x.key === k)
-    return [k, p && isConnectionPlace(p) && connections.length > 0 ? connectionText(v, connections) : v]
-  })
+  const entries = Object.entries(args ?? {})
   const plain = (s: string) => (/[\s"']/.test(s) || s === "" ? JSON.stringify(s) : s)
   const show = (v: unknown) => (Array.isArray(v) ? v.join(",") : typeof v === "object" && v !== null ? Object.entries(v).map(([k, x]) => `${k}=${String(x)}`).join(",") : String(v))
   const valueText = (k: string, v: unknown) => (json.has(k) ? structuredText(v) : plain(show(v)))

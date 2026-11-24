@@ -94,14 +94,13 @@ type MinionSession struct {
 	LostAt *time.Time          `bson:"lost_at,omitempty" json:"lost_at,omitempty"`
 	// Conn is the connection the minion uses: its place in the build's
 	// connections, from 1, as its hello or its last conn_update said; 0
-	// when it never said. ConnKind and ConnName are that connection's kind
-	// and name, copied from the build when it is said (empty when the build
-	// does not have it), so a list shows them without the build; ConnCount
-	// is how many connections the build has. ConnChanges are the moves it
+	// when it never said. ConnKind is that connection's kind, copied when it
+	// is said (empty when there is no such one), so a list shows it without
+	// the build; ConnCount is how many connections the minion has. A
+	// session's connections have no names: a place says each. ConnChanges are the moves it
 	// reported, most recent first, at most MaxSessionConnChanges.
 	Conn      int    `bson:"conn,omitempty" json:"conn,omitempty"`
 	ConnKind  string `bson:"conn_kind,omitempty" json:"conn_kind,omitempty"`
-	ConnName  string `bson:"conn_name,omitempty" json:"conn_name,omitempty"`
 	ConnCount int    `bson:"conn_count,omitempty" json:"conn_count,omitempty"`
 	// Connections are the minion's own connections, as its hello said them
 	// (docs: Sessions, Connections): Conn and ConnChanges are places in
@@ -232,7 +231,6 @@ const (
 type MinionSessionConnSpec struct {
 	Channel      string         `bson:"channel" json:"channel"`
 	Kind         string         `bson:"kind" json:"kind"`
-	Name         string         `bson:"name" json:"name"`
 	Version      uint64         `bson:"version,omitempty" json:"version,omitempty"`
 	Params       map[string]any `bson:"params,omitempty" json:"params,omitempty"`
 	Values       map[string]any `bson:"values,omitempty" json:"values,omitempty"`
@@ -242,30 +240,14 @@ type MinionSessionConnSpec struct {
 }
 
 // ConnSpecsOf are a minion's own connections (a hello's or a
-// connection_update's) as core keeps them; nil for none. An entry without a name keeps kept's at its place (the names the session
-// has: its own list's, else the build's), unless another entry names it;
-// one past kept, or whose kept name is taken, is "<channel>-<place>".
-func ConnSpecsOf(conns []protocol.HelloConnection, kept []string) []MinionSessionConnSpec {
+// connection_update's) as core keeps them; nil for none.
+func ConnSpecsOf(conns []protocol.HelloConnection) []MinionSessionConnSpec {
 	if len(conns) == 0 {
 		return nil
 	}
-	taken := map[string]bool{}
-	for _, c := range conns {
-		if c.Name != "" {
-			taken[c.Name] = true
-		}
-	}
 	out := make([]MinionSessionConnSpec, len(conns))
 	for i, c := range conns {
-		name := c.Name
-		if name == "" && i < len(kept) && kept[i] != "" && !taken[kept[i]] {
-			name = kept[i]
-			taken[name] = true
-		}
-		if name == "" {
-			name = fmt.Sprintf("%s-%d", c.Channel, i+1)
-		}
-		spec := MinionSessionConnSpec{Channel: c.Channel, Kind: c.Kind, Name: name, Version: c.Version,
+		spec := MinionSessionConnSpec{Channel: c.Channel, Kind: c.Kind, Version: c.Version,
 			Params: numbered(c.Params), Values: numbered(c.Values), MaxMessage: int(c.MaxMessage)} //nolint:gosec // within the protocol's limit
 		if c.Failover != nil {
 			spec.FailoverAuto, spec.FailAfter = c.Failover.Auto, c.Failover.FailAfter
@@ -286,12 +268,11 @@ func numbered(m map[uint64]any) map[string]any {
 	return out
 }
 
-// MinionSessionConn is the connection a minion uses: its place in the
-// build's connections, its kind and its name.
+// MinionSessionConn is the connection a minion uses: its place in its
+// connections (its own, else the build's) and its kind.
 type MinionSessionConn struct {
 	Place int
 	Kind  string
-	Name  string
 	// MaxMessage is the largest message the connection carries
 	// (protocol.BuildConnection.MaxMessage); 0 for the protocol's limit.
 	MaxMessage int

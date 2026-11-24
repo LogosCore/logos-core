@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils"
 
 /**
  * One connection as a card that folds (a build's, a session's): its head
- * always shows what it is (its place, channel, name and kind), a badge
+ * always shows what it is (its place, its name, a build's, else its
+ * channel, and its kind; a session's connections have no names), a badge
  * ("in use"), its actions at the end, and lines under it (where it connects,
  * a note, a target); unfolded, its rows (the settings set, the factory's
  * values) as an InfoCard's table.
@@ -27,7 +28,8 @@ export function ConnectionFoldCard({
   children,
 }: {
   place: number
-  name: string
+  /** A build's connection's name; a session's have none, and show their channel. */
+  name?: string
   moduleName: string
   kind: string
   icon?: ModuleIconSvgs
@@ -42,7 +44,7 @@ export function ConnectionFoldCard({
   children: ReactNode
 }) {
   return (
-    <section className="min-w-0 rounded-xl border bg-card" aria-label={`Connection ${place}: ${name}`}>
+    <section className="min-w-0 rounded-xl border bg-card" aria-label={`Connection ${place}: ${name ?? moduleName}`}>
       <div className="flex flex-col gap-1 px-4 py-2">
         <div className="flex min-h-7 items-center gap-2">
           <button
@@ -55,7 +57,7 @@ export function ConnectionFoldCard({
             <ChevronRightIcon className={cn("size-4 shrink-0 self-center text-muted-foreground transition-transform", expanded && "rotate-90")} />
             <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{place}.</span>
             <ModuleIcon type="channel" icon={icon} className="size-4 shrink-0 self-center" />
-            <span className="truncate font-mono text-sm font-semibold">{name}</span>
+            <span className="truncate font-mono text-sm font-semibold">{name ?? moduleName}</span>
             <span className="shrink-0 text-xs text-muted-foreground" title={`${moduleName} · ${kind}`}>
               {KIND_FLOWS[kind]?.label ?? kind}
             </span>

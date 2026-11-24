@@ -53,7 +53,6 @@ import { FINISHED, markedBy, useTaskActions, type Task } from "./task-actions"
 import { desktopName, isDesktopFront } from "./desktop-values"
 import { STAR, StateLabel, TaskTimes } from "./task-state"
 import { useTaskWaiting } from "@/components/targets/use-task-waiting"
-import { useSessionConnectionChoices } from "./use-connection-choices"
 import { TaskAs } from "./task-as"
 import { CompositeView } from "./composite-view"
 import { subtaskText } from "./composite-values"
@@ -187,9 +186,8 @@ export function TaskDetail({
   /** The composite task the list shows with its subtasks now; "" for none. */
   showingComposite?: string
 }) {
-  const connections = useSessionConnectionChoices(t.sessionId)
   const held = useTaskWaiting(t.sessionId, { live: true })
-  const line = lineOf(t.command, t.args as Record<string, unknown> | null, command, connections)
+  const line = lineOf(t.command, t.args as Record<string, unknown> | null, command)
   const actions = useTaskActions(t, line, { canWrite, canMark, onQueued })
   // Read again when they change: more output, a part with data, its end.
   // Not on every part: a walk sends parts with listings alone, many a

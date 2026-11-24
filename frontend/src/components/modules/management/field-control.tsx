@@ -19,7 +19,7 @@ import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react"
 import { BuildFileControl } from "@/components/builds/build-file-control"
 import { CredentialFieldControl } from "@/components/findings/credential-field-control"
 import { StreamFieldControl } from "@/components/minion-sessions/stream-field-control"
-import { CONNECTION_FORMAT, choiceDetail, connectionJSON } from "@/components/minion-sessions/connection-choices"
+import { CONNECTION_FORMAT, choiceDetail, choiceTitle, connectionJSON } from "@/components/minion-sessions/connection-choices"
 import { useConnectionChoices } from "@/components/minion-sessions/use-connection-choices"
 import { useSessionFormId } from "@/components/minion-sessions/session-form-context"
 import { move } from "@/components/builds/build-values"
@@ -223,7 +223,7 @@ export function FieldControl({
               <SelectContent>
                 {connections.map((c) => (
                   <SelectItem key={c.place} value={String(c.place)} description={choiceDetail(c)}>
-                    {c.name}
+                    {choiceTitle(c)}
                     {c.inUse && <span className="text-xs text-muted-foreground"> · in use</span>}
                   </SelectItem>
                 ))}
@@ -326,7 +326,7 @@ export function FieldControl({
     }
 
     case "int":
-      // One of the session's connections, by name: the minion gets its place.
+      // One of the session's connections, picked by place, channel and address: the minion gets its place.
       if (field.format === CONNECTION_FORMAT && connections.length > 0) {
         return (
           <Select value={text.trim() === "" ? null : text.trim()} onValueChange={(v) => typeof v === "string" && setText(v)} disabled={disabled}>
@@ -334,14 +334,14 @@ export function FieldControl({
               <SelectValue placeholder="Pick a connection">
                 {(v: string | null) => {
                   const c = connections.find((x) => String(x.place) === v)
-                  return c ? c.name : v ? `connection ${v}` : "Pick a connection"
+                  return c ? choiceTitle(c) : v ? `connection ${v}` : "Pick a connection"
                 }}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {connections.map((c) => (
                 <SelectItem key={c.place} value={String(c.place)} description={choiceDetail(c)}>
-                  {c.name}
+                  {choiceTitle(c)}
                   {c.inUse && <span className="text-xs text-muted-foreground"> · in use</span>}
                 </SelectItem>
               ))}

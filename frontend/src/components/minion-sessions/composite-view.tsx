@@ -5,7 +5,6 @@ import { formatAbsolute } from "@/lib/relative-time"
 import { lineOf, type CommandDef } from "./command-line"
 import { compositeStands, ownOpText } from "./composite-values"
 import { FINISHED, type Task } from "./task-actions"
-import { useSessionConnectionChoices } from "./use-connection-choices"
 
 // A composite command's task, as its tab shows it (docs:
 // contracts/task-outsourcing): what its factory's code decided so far. Its
@@ -29,7 +28,6 @@ export function CompositeView({
   /** Shows the task with its subtasks in the list, pick picked there. */
   onShowComposite?: (id: string, pick?: string) => void
 }) {
-  const connections = useSessionConnectionChoices(t.sessionId)
   const c = t.composite
   if (!c) return null
   const ended = FINISHED.has(t.state)
@@ -49,7 +47,7 @@ export function CompositeView({
               <span className="mt-0.5 block text-xs text-muted-foreground">
                 ran with{" "}
                 <code className="font-mono break-all text-foreground">
-                  {lineOf(t.command, c.ownArgs as Record<string, unknown>, command, connections)}
+                  {lineOf(t.command, c.ownArgs as Record<string, unknown>, command)}
                 </code>
               </span>
             )}

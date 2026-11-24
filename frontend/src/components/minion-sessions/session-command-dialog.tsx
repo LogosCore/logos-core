@@ -66,7 +66,7 @@ export function SessionCommandDialog({
   // The params' values as a line, the time as its option.
   const sameAs = (values: Record<string, unknown>) => {
     const { args, at } = splitSchedule(values)
-    return command ? `${lineOf(command.id, args, command, connections)}${at ? ` ${atOption(at)}` : ""}` : ""
+    return command ? `${lineOf(command.id, args, command)}${at ? ` ${atOption(at)}` : ""}` : ""
   }
   return (
     // Its fields read the session by it (a connection param: connection-field.tsx).

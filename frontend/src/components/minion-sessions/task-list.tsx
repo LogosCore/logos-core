@@ -30,7 +30,6 @@ import { ImportantIcon, StateIcon } from "./task-state"
 import { FeedbackLevelIcon } from "./feedback-parts"
 import { feedbackSummary } from "./feedback-values"
 import { useTaskWaiting } from "@/components/targets/use-task-waiting"
-import { useSessionConnectionChoices } from "./use-connection-choices"
 import { TaskAs } from "./task-as"
 import { subtaskText } from "./composite-values"
 import { dayHeadings, type TaskTreePlace, type TaskTreeRow } from "./task-tree"
@@ -387,9 +386,8 @@ function TaskRow({
   onUnmark: () => void
   onShowComposite?: (id: string, pick?: string) => void
 }) {
-  const connections = useSessionConnectionChoices(t.sessionId)
   const held = useTaskWaiting(t.sessionId)
-  const line = lineOf(t.command, t.args as Record<string, unknown> | null, command, connections)
+  const line = lineOf(t.command, t.args as Record<string, unknown> | null, command)
   // A subtask's line as its composite's factory named it; a composite
   // task's status line, on hover.
   const sub = subtaskText(t)

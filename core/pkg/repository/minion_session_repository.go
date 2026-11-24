@@ -333,7 +333,7 @@ func (r *minionSessionRepository) SetActing(ctx context.Context, sessionID uuid.
 }
 
 func (r *minionSessionRepository) SetConn(ctx context.Context, sessionID uuid.UUID, conn models.MinionSessionConn, change *models.MinionSessionConnChange) error {
-	update := bson.M{"$set": bson.M{"conn": conn.Place, "conn_kind": conn.Kind, "conn_name": conn.Name,
+	update := bson.M{"$set": bson.M{"conn": conn.Place, "conn_kind": conn.Kind,
 		"conn_max_message": conn.MaxMessage}}
 	if !models.LateBySchedule(conn.Kind) {
 		// On a connection that says whether the minion is there: no

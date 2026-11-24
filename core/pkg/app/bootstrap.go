@@ -8,8 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/logoscore/logos-core/core/pkg/auth"
 	"github.com/logoscore/logos-core/core/pkg/auth/oidc"
 	"github.com/logoscore/logos-core/core/pkg/blob"
@@ -507,27 +505,12 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 		}
 	}
 
-	// Switch tasks' lines said their connection's place, not its name.
-	if n, err := repos.MinionTask.BackfillLineNames(ctx, func(ctx context.Context, sessionID uuid.UUID) ([]string, error) {
-		s, err := repos.MinionSession.FindBySessionID(ctx, sessionID)
-		if repository.IsNotFound(err) {
-			return nil, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		b, err := repos.Build.FindByBuildID(ctx, s.BuildID)
-		if repository.IsNotFound(err) {
-			return nil, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		return b.Connections.Names(), nil
-	}); err != nil {
-		l.Warn("minion task line names backfill failed", zap.Error(err))
+	// Tasks' lines once showed a connection by name; a session's
+	// connections have none now.
+	if n, err := repos.MinionTask.DropLineNames(ctx); err != nil {
+		l.Warn("minion task line names cleanup failed", zap.Error(err))
 	} else if n > 0 {
-		l.Info("minion task line names backfill complete", zap.Int64("rows", n))
+		l.Info("minion task line names removed", zap.Int64("rows", n))
 	}
 
 	// Not a backfill, a sweep: session marks outlive what they mark, as a

@@ -98,11 +98,11 @@ function connKindKey(s: MinionSessionFieldsFragment): string {
   return s.connKind === "bind-persistent" && !s.connected ? "bind-persistent:off" : (s.connKind ?? "")
 }
 
-/** The connection a session uses, for Last seen's hover: "Connection 2 of 2: ws · reverse-persistent (…)". */
+/** The connection a session uses, for Last seen's hover: "Connection 2 of 2 · reverse-persistent (…)". */
 function connNote(s: MinionSessionFieldsFragment, now: number): string[] {
   if (!s.conn) return []
   const kind = s.connKind ? ` · ${s.connKind}${kindLabels[s.connKind] ? ` (${kindLabels[s.connKind]})` : ""}` : ""
-  const lines = [`Connection ${s.conn} of ${s.connCount}: ${s.connName ?? "?"}${kind}`]
+  const lines = [`Connection ${s.conn} of ${s.connCount}${kind}`]
   const last = s.connChanges[0]
   if (last) {
     const ago = formatAgo(now - Date.parse(last.at)) ?? formatAbsolute(last.at)

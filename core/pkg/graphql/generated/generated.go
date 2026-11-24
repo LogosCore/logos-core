@@ -726,7 +726,6 @@ type ComplexityRoot struct {
 	MinionConnection struct {
 		Kind       func(childComplexity int) int
 		ModuleName func(childComplexity int) int
-		Name       func(childComplexity int) int
 		Params     func(childComplexity int) int
 		Place      func(childComplexity int) int
 		Values     func(childComplexity int) int
@@ -936,7 +935,6 @@ type ComplexityRoot struct {
 		ConnChanges          func(childComplexity int) int
 		ConnCount            func(childComplexity int) int
 		ConnKind             func(childComplexity int) int
-		ConnName             func(childComplexity int) int
 		Connected            func(childComplexity int) int
 		Connections          func(childComplexity int) int
 		ConnectionsChangedAt func(childComplexity int) int
@@ -5792,12 +5790,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionConnection.ModuleName(childComplexity), true
-	case "MinionConnection.name":
-		if e.ComplexityRoot.MinionConnection.Name == nil {
-			break
-		}
-
-		return e.ComplexityRoot.MinionConnection.Name(childComplexity), true
 	case "MinionConnection.params":
 		if e.ComplexityRoot.MinionConnection.Params == nil {
 			break
@@ -6712,12 +6704,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.ConnKind(childComplexity), true
-	case "MinionSession.connName":
-		if e.ComplexityRoot.MinionSession.ConnName == nil {
-			break
-		}
-
-		return e.ComplexityRoot.MinionSession.ConnName(childComplexity), true
 	case "MinionSession.connected":
 		if e.ComplexityRoot.MinionSession.Connected == nil {
 			break
@@ -17634,11 +17620,10 @@ type MinionSession {
   # The connection the minion uses: its place in connections, from 1, as
   # its hello or its last conn_update said. null when it never said.
   conn: Int
-  # That connection's kind ("reverse-call", ...) and name, from the build
-  # when the minion said it; null when it never said, or the build does not
-  # have it.
+  # That connection's kind ("reverse-call", ...) when the minion said it;
+  # null when it never said, or there is no such connection. A session's
+  # connections have no names: a place says each.
   connKind: String
-  connName: String
   # How many connections the build has.
   connCount: Int!
   # When the minion's own connections last changed (a hello's list, a
@@ -17756,8 +17741,6 @@ type MinionConnection {
   # it said them, else the build's): what a hello, a conn_update and
   # switch_connection name it by.
   place: Int!
-  # What the minion calls it (the endpoint export's name).
-  name: String!
   # The channel kind, e.g. "http".
   moduleName: String!
   # The connection kind, e.g. "reverse-call".
@@ -41457,35 +41440,6 @@ func (ec *executionContext) fieldContext_MinionConnection_place(_ context.Contex
 	return fc, nil
 }
 
-func (ec *executionContext) _MinionConnection_name(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnection) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_MinionConnection_name,
-		func(ctx context.Context) (any, error) {
-			return obj.Name, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_MinionConnection_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "MinionConnection",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _MinionConnection_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -42088,8 +42042,6 @@ func (ec *executionContext) fieldContext_MinionDelegateConnection_session(_ cont
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -47210,35 +47162,6 @@ func (ec *executionContext) fieldContext_MinionSession_connKind(_ context.Contex
 	return fc, nil
 }
 
-func (ec *executionContext) _MinionSession_connName(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_MinionSession_connName,
-		func(ctx context.Context) (any, error) {
-			return obj.ConnName, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_MinionSession_connName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "MinionSession",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _MinionSession_connCount(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -47362,8 +47285,6 @@ func (ec *executionContext) fieldContext_MinionSession_connections(_ context.Con
 			switch field.Name {
 			case "place":
 				return ec.fieldContext_MinionConnection_place(ctx, field)
-			case "name":
-				return ec.fieldContext_MinionConnection_name(ctx, field)
 			case "moduleName":
 				return ec.fieldContext_MinionConnection_moduleName(ctx, field)
 			case "kind":
@@ -48074,8 +47995,6 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -48347,8 +48266,6 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -49519,8 +49436,6 @@ func (ec *executionContext) fieldContext_MinionSessionVia_session(_ context.Cont
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -50590,8 +50505,6 @@ func (ec *executionContext) fieldContext_MinionTarget_session(_ context.Context,
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -50776,8 +50689,6 @@ func (ec *executionContext) fieldContext_MinionTarget_delegate(_ context.Context
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -65611,8 +65522,6 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -65857,8 +65766,6 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -66044,8 +65951,6 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -66290,8 +66195,6 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -66477,8 +66380,6 @@ func (ec *executionContext) fieldContext_Mutation_markMinionFeedbackRead(ctx con
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -66664,8 +66565,6 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMaxTasks(ctx c
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -78588,8 +78487,6 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_conn(ctx, field)
 			case "connKind":
 				return ec.fieldContext_MinionSession_connKind(ctx, field)
-			case "connName":
-				return ec.fieldContext_MinionSession_connName(ctx, field)
 			case "connCount":
 				return ec.fieldContext_MinionSession_connCount(ctx, field)
 			case "connectionsChangedAt":
@@ -108957,11 +108854,6 @@ func (ec *executionContext) _MinionConnection(ctx context.Context, sel ast.Selec
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "name":
-			out.Values[i] = ec._MinionConnection_name(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "moduleName":
 			out.Values[i] = ec._MinionConnection_moduleName(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -110355,8 +110247,6 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			out.Values[i] = ec._MinionSession_conn(ctx, field, obj)
 		case "connKind":
 			out.Values[i] = ec._MinionSession_connKind(ctx, field, obj)
-		case "connName":
-			out.Values[i] = ec._MinionSession_connName(ctx, field, obj)
 		case "connCount":
 			out.Values[i] = ec._MinionSession_connCount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

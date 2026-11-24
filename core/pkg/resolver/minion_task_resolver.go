@@ -707,7 +707,6 @@ func (r *minionTaskResolver) queue(ctx context.Context, s *models.MinionSession,
 		// (StartState: COMPOSING for a composite's, else QUEUED).
 		t.State, t.ScheduledAt = models.MinionTaskScheduled, q.at
 	}
-	t.LineNames = r.lineNames(ctx, s, cmd.Params, t.Args)
 	t.LineJSON = lineJSON(cmd.Params, t.Args)
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		if tunnel {
@@ -1723,8 +1722,7 @@ func decodeTimeIDCursor(s string) (time.Time, uuid.UUID, error) {
 // it was given: checked against its channel's fields for its kind and the
 // session's factory's connection parameters for that channel and kind,
 // defaults filled in, its version the channel schema's when it names none
-// (docs: Minion Build, Structured values). For add_connection (action), a
-// name the session's connections have is refused. For edit_connection,
+// (docs: Minion Build, Structured values). For edit_connection,
 // what changed of the session's connection at its conn param's place: a
 // protocol.ConnectionPatch, refused when it changes nothing (docs: Task
 // Results and Actions, edit_connection).
@@ -1737,10 +1735,6 @@ func (r *minionTaskResolver) putConnections(ctx context.Context, s *models.Minio
 		conn, err := r.numberedConnection(ctx, s, v)
 		if err != nil {
 			return fmt.Errorf("%s: %w", p.Key, err)
-		}
-		if action == protocol.ActionAddConnection && conn.Name != "" && slices.Contains(r.connectionNames(ctx, s), conn.Name) {
-			// The new one is named apart from the ones the session has.
-			return fmt.Errorf("%s: a connection called %s exists", p.Key, conn.Name)
 		}
 		if action != protocol.ActionEditConnection {
 			wire[p.Key] = conn
@@ -1773,7 +1767,7 @@ func (r *minionTaskResolver) checkRemoval(ctx context.Context, s *models.MinionS
 	if action != protocol.ActionRemoveConnection {
 		return nil
 	}
-	place, n := connPlaceArg(params, wire), len(r.connectionNames(ctx, s))
+	place, n := connPlaceArg(params, wire), r.connectionCount(ctx, s)
 	switch {
 	case place < 1 || (n > 0 && place > n):
 		return fmt.Errorf("the minion has %d connection(s): there is no connection %d", n, place)
@@ -1790,27 +1784,20 @@ func (r *minionTaskResolver) checkRemoval(ctx context.Context, s *models.MinionS
 	return nil
 }
 
-// connectionNames are the names of the session's connections: the
-// minion's own when it said them, else its build's.
-func (r *minionTaskResolver) connectionNames(ctx context.Context, s *models.MinionSession) []string {
-	var names []string
+// connectionCount is how many connections the session's minion has: its
+// own when it said them, else its build's; 0 when neither is known.
+func (r *minionTaskResolver) connectionCount(ctx context.Context, s *models.MinionSession) int {
 	if s.Connections != nil {
-		for _, c := range s.Connections {
-			names = append(names, c.Name)
-		}
-		return names
+		return len(s.Connections)
 	}
 	if r.builds == nil {
-		return nil
+		return 0
 	}
 	b, err := r.builds.FindByBuildID(ctx, s.BuildID)
 	if err != nil {
-		return nil
+		return 0
 	}
-	for _, c := range b.Connections.Items {
-		names = append(names, c.Endpoint.Name)
-	}
-	return names
+	return len(b.Connections.Items)
 }
 
 // connPlaceArg is the place a command's connection param (an int of format
@@ -1898,7 +1885,7 @@ func (r *minionTaskResolver) currentConnection(ctx context.Context, s *models.Mi
 		if err != nil {
 			return nil, false
 		}
-		v := map[string]any{"channel": c.Channel, "kind": c.Kind, "name": c.Name,
+		v := map[string]any{"channel": c.Channel, "kind": c.Kind,
 			"params": jsonValues(c.Params, channelFields, func(f protocol.FieldSpec) string { return f.Key }),
 			"values": jsonValues(c.Values, factory, func(f protocol.FieldSpec) string { return strconv.Itoa(f.Num) })}
 		// Numbers as JSON gives them (protocol.AsInt64 reads no uint64).
@@ -1928,7 +1915,7 @@ func (r *minionTaskResolver) currentConnection(ctx context.Context, s *models.Mi
 		return nil, false
 	}
 	c := b.Connections.Items[place-1]
-	v := map[string]any{"channel": c.Endpoint.Channel.ModuleName, "kind": c.ConnectionKind(), "name": c.Endpoint.Name,
+	v := map[string]any{"channel": c.Endpoint.Channel.ModuleName, "kind": c.ConnectionKind(),
 		"params": c.Endpoint.Params, "values": c.Values}
 	if c.Endpoint.Channel.SchemaVersion > 0 {
 		v["version"] = c.Endpoint.Channel.SchemaVersion

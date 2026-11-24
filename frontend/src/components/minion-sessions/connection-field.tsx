@@ -3,7 +3,6 @@ import { BookmarkIcon, BracesIcon, ListIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
-import { Input } from "@/components/ui/input"
 import { LazyJsonEditor } from "@/components/ui/lazy-json-editor"
 import { EndpointSettings } from "@/components/endpoints/endpoint-settings"
 import { kindsByName } from "@/components/endpoints/endpoint-values"
@@ -26,13 +25,13 @@ import { connectionOfDraft, draftOfConnection, readConnectionJSON, type Connecti
 import { useFactoryKinds } from "@/graphql/hooks/builds"
 import { useChannelEndpointCount, useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { useMinionSession } from "@/graphql/hooks/minion-sessions"
-import { choiceDetail, connectionJSON } from "./connection-choices"
+import { choiceDetail, choiceTitle, connectionJSON } from "./connection-choices"
 import { useConnectionChoices } from "./use-connection-choices"
 import { useSessionFormId } from "./session-form-context"
 
 // A command's connection param (a structured param of the connection
 // format: edit_connection's connection) as the build form edits a
-// connection: its channel, its kind, its name, every setting of the
+// connection: its channel, its kind, every setting of the
 // channel for that kind and every parameter the session's factory has for
 // it, set or not, and its failover. What it edits is the param's JSON,
 // written back on every change, so the command form checks and sends it as
@@ -104,8 +103,7 @@ export default function ConnectionField({ text, onChange, disabled, idPrefix, la
 
   const modules = (target?.channels ?? []).map((c) => c.moduleName).filter((m) => channels.has(m))
   // A saved endpoint's kind and settings in the form (the factory's
-  // parameters kept where the kind keeps them), its slug the name unless
-  // the connection has one: a name none of the session's others has.
+  // parameters kept where the kind keeps them).
   const fromEndpoint = (ep: Parameters<typeof fillFromEndpoint>[3] & { moduleName: string }) => {
     setPicking(false)
     const ch = channels.get(ep.moduleName)
@@ -113,9 +111,8 @@ export default function ConnectionField({ text, onChange, disabled, idPrefix, la
     const base =
       current?.moduleName === ep.moduleName
         ? current
-        : connectionDraft(factory, ch, { moduleName: ep.moduleName, name: current?.name || null }, target)
-    const taken = choices.map((c) => c.name).filter((n) => n !== current?.name)
-    write(fillFromEndpoint(base, ch, factory, ep, taken))
+        : connectionDraft(factory, ch, { moduleName: ep.moduleName }, target)
+    write(fillFromEndpoint(base, ch, factory, ep))
   }
   const savedEndpoint = endpointCount !== 0 && (
     <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={disabled} onClick={() => setPicking(true)}>
@@ -128,7 +125,7 @@ export default function ConnectionField({ text, onChange, disabled, idPrefix, la
       open={picking}
       onClose={() => setPicking(false)}
       title="Fill the connection from an endpoint"
-      description={`Its kind and settings become the endpoint's, and its name too unless the connection has one. The ${factory.name} parameters stay where the kind keeps them.`}
+      description={`Its kind and settings become the endpoint's. The ${factory.name} parameters stay where the kind keeps them.`}
       operationId={session?.operationId ?? ""}
       kinds={usable}
       connectionKinds={usableConnKinds}
@@ -158,7 +155,7 @@ export default function ConnectionField({ text, onChange, disabled, idPrefix, la
       <SelectContent>
         {choices.map((c) => (
           <SelectItem key={c.place} value={String(c.place)} description={choiceDetail(c)}>
-            {c.name}
+            {choiceTitle(c)}
             {c.inUse && <span className="text-xs text-muted-foreground"> · in use</span>}
           </SelectItem>
         ))}
@@ -236,21 +233,7 @@ export default function ConnectionField({ text, onChange, disabled, idPrefix, la
       </Select>
     </SettingRow>
   )
-  const general = current && (
-    <>
-      {channelPicker}
-      <SettingRow id={`${idPrefix}-name`} label="Name" help="What the minion calls this connection. Left empty, the session keeps the one it has.">
-        <Input
-          id={`${idPrefix}-name`}
-          value={current.name}
-          onChange={(e) => write({ ...current, name: e.target.value, named: true })}
-          autoComplete="off"
-          spellCheck={false}
-          disabled={disabled}
-        />
-      </SettingRow>
-    </>
-  )
+  const general = current && channelPicker
 
   return (
     <div className="flex flex-col gap-3">

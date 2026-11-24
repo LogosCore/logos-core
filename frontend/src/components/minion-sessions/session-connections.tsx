@@ -118,7 +118,6 @@ export function ConnectionCards({ s }: { s: Session }) {
           <ConnectionFoldCard
             key={c.place}
             place={c.place}
-            name={c.name}
             moduleName={c.moduleName}
             kind={c.kind}
             icon={channelIcons.get(c.moduleName)}
@@ -170,8 +169,9 @@ export function ConnectionCards({ s }: { s: Session }) {
             lines={
               <>
                 {address && (
+                  // The head says its channel already: a session's connections have no names.
                   <div className="truncate font-mono text-xs text-muted-foreground" title={address}>
-                    {c.moduleName} · {address}
+                    {address}
                   </div>
                 )}
                 {target && target.conn === c.place && <TargetLine target={target} />}

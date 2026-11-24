@@ -32,7 +32,6 @@ import type { UploadTarget } from "./upload-target"
 import { commandsFor } from "./action-commands"
 import type { Task } from "./task-actions"
 import { useWorkspaceActions } from "./workspace-tabs"
-import { useSessionConnectionChoices } from "./use-connection-choices"
 import { PromptFxLayer } from "./prompt-fx-layer"
 
 // A session's console, in its work pane tab: the tasks given its minion on
@@ -72,7 +71,6 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const { layout, setLayout } = useMinionSessionsLayout()
 
   const commands = commandsQ.commands
-  const connections = useSessionConnectionChoices(sessionId)
   const byId = useMemo(() => new Map(commands.map((c) => [c.id, c])), [commands])
   // Oldest first: the newest at the bottom, by the command line.
   const tasks = useMemo(() => (tasksQ.data?.pages ?? []).flatMap((p) => p.minionTasks.tasks).toReversed(), [tasksQ.data])
@@ -87,9 +85,9 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
         (allQ.data?.pages ?? [])
           .flatMap((p) => p.minionTasks.tasks)
           .toReversed()
-          .map((t) => lineOf(t.command, t.args as Record<string, unknown> | null, byId.get(t.command), connections)),
+          .map((t) => lineOf(t.command, t.args as Record<string, unknown> | null, byId.get(t.command))),
       ),
-    [allQ.data, byId, connections],
+    [allQ.data, byId],
   )
 
   // The selection is the list's it was made in: another filter's carries
@@ -125,7 +123,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const compositeQ = useMinionTask(composite && !listed ? composite : null)
   const compositeTask = listed ?? compositeQ.data?.minionTask ?? undefined
   const compositeLine = compositeTask
-    ? lineOf(compositeTask.command, compositeTask.args as Record<string, unknown> | null, byId.get(compositeTask.command), connections)
+    ? lineOf(compositeTask.command, compositeTask.args as Record<string, unknown> | null, byId.get(compositeTask.command))
     : null
   // A folder opened in a listing, with a list_dir command: the one picked
   // (an item's menu), else the listing's own when it is one (Up, a crumb),

@@ -108,7 +108,6 @@ func (r *minionTaskResolver) queueFactory(ctx context.Context, s *models.MinionS
 		// Offered once its time comes (its offer due then: StartState).
 		t.State, t.ScheduledAt = models.MinionTaskScheduled, at
 	}
-	t.LineNames = r.lineNames(ctx, s, fc.Params, t.Args)
 	t.LineJSON = lineJSON(fc.Params, t.Args)
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("queue the task: %w", err)

@@ -90,7 +90,7 @@ func sessionRecord(s *models.MinionSession) protocol.SessionRecord {
 		Hello: protocol.SessionHello{PID: h.PID, OS: h.OS, Arch: h.Arch, Host: h.Host, User: h.User, Domain: h.Domain, Proc: h.Proc,
 			Integrity: h.Integrity, Addrs: h.Addrs, Version: h.Version, MachineID: h.MachineID, X: h.X, RoundtripTime: h.RoundtripTime},
 		Address: s.Address, PeerAddress: s.PeerAddress, ViaSince: s.ViaSince, LateAt: s.LateAt, LostAt: s.LostAt,
-		Connected: s.Connected, Conn: s.Conn, ConnKind: s.ConnKind, ConnName: s.ConnName, ConnCount: s.ConnCount,
+		Connected: s.Connected, Conn: s.Conn, ConnKind: s.ConnKind, ConnCount: s.ConnCount,
 		ConnectionsAt: s.ConnectionsAt, MaxTasks: s.MaxTasks, MaxTasksSet: s.MaxTasksSet, FeedbackErrors: s.FeedbackErrors,
 		FeedbackAt: s.FeedbackAt, FeedbackReadAt: s.FeedbackReadAt, Persisted: s.Persisted, RestartCount: s.RestartCount,
 		Archived: s.Archived}
@@ -119,7 +119,7 @@ func sessionRecord(s *models.MinionSession) protocol.SessionRecord {
 		r.ConnChanges = append(r.ConnChanges, protocol.SessionConnChange{At: c.At, From: c.From, To: c.To, Reason: c.Reason})
 	}
 	for _, c := range s.Connections {
-		r.Connections = append(r.Connections, protocol.SessionConnection{Channel: c.Channel, Kind: c.Kind, Name: c.Name,
+		r.Connections = append(r.Connections, protocol.SessionConnection{Channel: c.Channel, Kind: c.Kind,
 			Version: c.Version, Params: c.Params, Values: c.Values, FailoverAuto: c.FailoverAuto, FailAfter: c.FailAfter,
 			MaxMessage: c.MaxMessage})
 	}

@@ -121,11 +121,10 @@ type MinionSession {
   # The connection the minion uses: its place in connections, from 1, as
   # its hello or its last conn_update said. null when it never said.
   conn: Int
-  # That connection's kind ("reverse-call", ...) and name, from the build
-  # when the minion said it; null when it never said, or the build does not
-  # have it.
+  # That connection's kind ("reverse-call", ...) when the minion said it;
+  # null when it never said, or there is no such connection. A session's
+  # connections have no names: a place says each.
   connKind: String
-  connName: String
   # How many connections the build has.
   connCount: Int!
   # When the minion's own connections last changed (a hello's list, a
@@ -243,8 +242,6 @@ type MinionConnection {
   # it said them, else the build's): what a hello, a conn_update and
   # switch_connection name it by.
   place: Int!
-  # What the minion calls it (the endpoint export's name).
-  name: String!
   # The channel kind, e.g. "http".
   moduleName: String!
   # The connection kind, e.g. "reverse-call".

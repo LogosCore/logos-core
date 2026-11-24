@@ -809,7 +809,6 @@ describe("a connection param as a connection form", () => {
   const text = JSON.stringify({
     channel: "http",
     kind: "reverse-call",
-    name: "front",
     version: 2,
     params: { base_url: "http://10.10.10.2:8090", request_timeout: "40s" },
     max_message: 4096,
@@ -823,7 +822,7 @@ describe("a connection param as a connection form", () => {
     const { value, errors } = connectionOfDraft(kind, http, c, dummy, v)
     expect(errors).toEqual({})
     // request_timeout at its default is left to core; version and max_message kept.
-    expect(value).toEqual({ channel: "http", kind: "reverse-call", name: "front", version: 2, params: { base_url: "http://10.10.10.2:8090" }, max_message: 4096 })
+    expect(value).toEqual({ channel: "http", kind: "reverse-call", version: 2, params: { base_url: "http://10.10.10.2:8090" }, max_message: 4096 })
   })
 
   it("takes a setting typed in, and says a wrong one", () => {

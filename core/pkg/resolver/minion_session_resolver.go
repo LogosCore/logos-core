@@ -165,7 +165,7 @@ func (r *minionSessionResolver) Connections(ctx context.Context, s *model.Minion
 				}
 				// The factory's values come by number: named by its fields.
 				values := jsonValues(c.Values, factoryFields, func(f protocol.FieldSpec) string { return strconv.Itoa(f.Num) })
-				out = append(out, &model.MinionConnection{Place: i + 1, Name: c.Name, ModuleName: c.Channel, Kind: c.Kind, Params: params,
+				out = append(out, &model.MinionConnection{Place: i + 1, ModuleName: c.Channel, Kind: c.Kind, Params: params,
 					Values: values})
 			}
 			return out, nil
@@ -194,7 +194,7 @@ func (r *minionSessionResolver) Connections(ctx context.Context, s *model.Minion
 		for k, v := range c.Values {
 			values[k] = v
 		}
-		out = append(out, &model.MinionConnection{Place: i + 1, Name: c.Endpoint.Name, ModuleName: c.Endpoint.Channel.ModuleName,
+		out = append(out, &model.MinionConnection{Place: i + 1, ModuleName: c.Endpoint.Channel.ModuleName,
 			Kind: c.ConnectionKind(), Params: params, Values: values})
 	}
 	return out, nil
@@ -871,7 +871,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 	out.FeedbackErrors = s.FeedbackErrors
 	out.FeedbackAt, out.FeedbackReadAt = timePtr(s.FeedbackAt), timePtr(s.FeedbackReadAt)
 	out.MaxTasksPending, out.MaxTasksNotTaken = s.MaxTasksDue(), s.MaxTasksNotTaken()
-	out.ConnKind, out.ConnName, out.ConnCount = strPtr(s.ConnKind), strPtr(s.ConnName), s.ConnCount
+	out.ConnKind, out.ConnCount = strPtr(s.ConnKind), s.ConnCount
 	out.ConnectionsChangedAt = timePtr(s.ConnectionsAt)
 	out.ConnChanges = make([]*model.MinionConnChange, len(s.ConnChanges))
 	for i, c := range s.ConnChanges {
