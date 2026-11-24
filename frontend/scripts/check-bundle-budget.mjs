@@ -63,8 +63,13 @@ import zlib from "node:zlib"
 // requests to 39, +1.2 KB served of chunk overhead. Measured: the same tree
 // with that import kept is 922.4 / 264.4, so the shell's own growth is
 // 0.1 KB served (the switcher's label, the sidebar's unscoped flag).
+// Served raised to 267 at 924.2 / 265.6 here, 266.0 on CI (whose gzip comes
+// out about 0.4 KB above this machine's: the last raise, measured here, left
+// CI at the line): MinionSessionFields carries outputEncoding, in every
+// first-paint document with the fragment, so a pick reaches every open
+// console with the session's live updates.
 const BUDGET_RAW_KB = 925
-const BUDGET_SERVED_KB = 266
+const BUDGET_SERVED_KB = 267
 
 const dist = path.resolve(import.meta.dirname, "..", "dist")
 const indexHtml = path.join(dist, "index.html")
