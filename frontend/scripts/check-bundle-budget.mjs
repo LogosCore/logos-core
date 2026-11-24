@@ -56,8 +56,15 @@ import zlib from "node:zlib"
 // raw, is under 1 KB); the skill prompts, the guide overlay and the
 // sidebar's phone sheet load when they show. Room for ordinary feature work
 // kept.
+// Served raised to 266 at 923.8 / 265.6 with the Ports page across
+// operations: Rollup grouped shared chunks anew when the lazy Ports page
+// stopped importing the onboarding panel (button's chunk became four,
+// react-query's useBaseQuery among them, all on first paint already): 35
+// requests to 39, +1.2 KB served of chunk overhead. Measured: the same tree
+// with that import kept is 922.4 / 264.4, so the shell's own growth is
+// 0.1 KB served (the switcher's label, the sidebar's unscoped flag).
 const BUDGET_RAW_KB = 925
-const BUDGET_SERVED_KB = 265
+const BUDGET_SERVED_KB = 266
 
 const dist = path.resolve(import.meta.dirname, "..", "dist")
 const indexHtml = path.join(dist, "index.html")
