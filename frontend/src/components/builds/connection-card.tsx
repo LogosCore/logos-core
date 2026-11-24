@@ -44,11 +44,13 @@ export interface EndpointOption {
 /**
  * One connection of the build form: its kind, its channel's settings for
  * that kind, filled in or from an endpoint, and the factory's parameters for
- * it, its sections a level below the form's. It folds to a line (the form
- * says when: open, it shows that connection's settings); one with errors
- * stays open. Its header names it (channel, name, kind); moving it up and
- * down are buttons there, once there is another to pass, the rest of its
- * actions in a menu. The settings' values are for the open card to show.
+ * it, its sections a level below the form's. Folded (the form says when),
+ * it shows its header and the factory's parameters, which never fold: a
+ * required one is in sight in every card. Open, the channel's settings and
+ * its failover too. One with errors the fold would hide stays open. Its
+ * header names it (channel, name, kind); moving it up and down are buttons
+ * there, once there is another to pass, the rest of its actions in a menu.
+ * The settings' values are for the open card to show.
  */
 export function ConnectionCard({
   id,
@@ -113,13 +115,17 @@ export function ConnectionCard({
   // the channel's, of a kind it can use.
   const endpointCount = useChannelEndpointCount(operationId, [c.moduleName], kinds)
   const at = `connections[${index}]`
-  const hasError = Object.keys(errors).some((k) => k === at || k.startsWith(`${at}.`))
-  const expanded = open || hasError
-  const defaultName = defaultConnectionName(c.moduleName, index)
-  const idPrefix = `connection-${c.key}`
   // The kind the build gets: the one picked, or the first both support.
   const effectiveKind = c.kind || kinds[0] || ""
   const params = paramFields(kind, c.moduleName, effectiveKind)
+  // Errors the fold would hide keep the card open; the factory's parameters,
+  // never folded, show their own.
+  const hasError = Object.keys(errors).some(
+    (k) => (k === at || k.startsWith(`${at}.`)) && !params.some((f) => k === `${at}.values.${f.key}`),
+  )
+  const expanded = open || hasError
+  const defaultName = defaultConnectionName(c.moduleName, index)
+  const idPrefix = `connection-${c.key}`
   // The header names the kind when there is a choice, or when the one
   // it has is no longer usable (another target, a channel that dropped it).
   const kindOptions = effectiveKind && !kinds.includes(effectiveKind) ? [effectiveKind, ...kinds] : kinds
@@ -260,29 +266,32 @@ export function ConnectionCard({
           ))}
         </div>
       )}
-      {expanded && (
-        <div className="flex flex-col gap-6 border-t px-4 pt-1 pb-4">
-          {channel ? (
-            // The connection's settings, as the endpoint form has them: its
-            // rows first, then the kind, then the channel's sections.
-            <EndpointSettings
-              channel={channel}
-              kind={effectiveKind}
-              onKind={onKind}
-              usable={kinds}
-              why={() => "This target's minions do not use it"}
-              kindError={errors[`${at}.kind`]}
-              drafts={c.settings}
-              onDraft={onSetting}
-              errorOf={(key) => errors[`${at}.settings.${key}`]}
-              disabled={disabled}
-              idPrefix={`${idPrefix}-setting`}
-              general={general}
-              sub
-            />
-          ) : (
-            <SettingsSection sub>{general}</SettingsSection>
-          )}
+      {/* Folded, the factory's parameters still show, in the same place, so
+          a field being typed in keeps its state as the card opens or folds. */}
+      {(expanded || params.length > 0) && (
+        <div className={cn("flex flex-col gap-6 border-t px-4 pb-4", expanded ? "pt-1" : "pt-3")}>
+          {expanded &&
+            (channel ? (
+              // The connection's settings, as the endpoint form has them: its
+              // rows first, then the kind, then the channel's sections.
+              <EndpointSettings
+                channel={channel}
+                kind={effectiveKind}
+                onKind={onKind}
+                usable={kinds}
+                why={() => "This target's minions do not use it"}
+                kindError={errors[`${at}.kind`]}
+                drafts={c.settings}
+                onDraft={onSetting}
+                errorOf={(key) => errors[`${at}.settings.${key}`]}
+                disabled={disabled}
+                idPrefix={`${idPrefix}-setting`}
+                general={general}
+                sub
+              />
+            ) : (
+              <SettingsSection sub>{general}</SettingsSection>
+            ))}
           {params.length > 0 && (
             <SettingsSection title={`${kind.name} parameters`} sub>
               {params.map((f) => (
@@ -298,7 +307,7 @@ export function ConnectionCard({
               ))}
             </SettingsSection>
           )}
-          {count > 1 && (
+          {expanded && count > 1 && (
             <ConnectionFailoverSettings
               idPrefix={`${idPrefix}-failover`}
               connKind={effectiveKind}
